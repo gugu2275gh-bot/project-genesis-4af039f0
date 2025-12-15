@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { differenceInHours, differenceInMinutes } from 'date-fns';
 
-const SLA_HOURS = 2;
+const DEFAULT_SLA_HOURS = 2;
 const CHECK_INTERVAL_MS = 60000; // 60 seconds
 const STORAGE_KEY = 'lead_sla_alerts_shown';
 
@@ -47,16 +47,35 @@ export function useLeadSLAAlerts() {
   const navigate = useNavigate();
   const shownAlertsRef = useRef<Set<string>>(new Set());
 
-  const { data: overdueLeads } = useQuery({
-    queryKey: ['overdue-leads-sla'],
+  // Fetch SLA configuration from system_config
+  const { data: slaConfig } = useQuery({
+    queryKey: ['sla-first-response-config'],
     queryFn: async () => {
-      const twoHoursAgo = new Date(Date.now() - SLA_HOURS * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from('system_config')
+        .select('value')
+        .eq('key', 'sla_first_response_hours')
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+
+  // Use configured value or default
+  const slaHours = slaConfig?.value ? parseInt(slaConfig.value, 10) : DEFAULT_SLA_HOURS;
+
+  const { data: overdueLeads } = useQuery({
+    queryKey: ['overdue-leads-sla', slaHours],
+    queryFn: async () => {
+      const cutoffTime = new Date(Date.now() - slaHours * 60 * 60 * 1000).toISOString();
       
       const { data, error } = await supabase
         .from('leads')
         .select('id, created_at, contacts(full_name)')
         .eq('status', 'NOVO')
-        .lt('created_at', twoHoursAgo)
+        .lt('created_at', cutoffTime)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
