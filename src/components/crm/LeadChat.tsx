@@ -34,7 +34,7 @@ export function LeadChat({ leadId }: LeadChatProps) {
     setNewMessage('');
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -140,7 +140,7 @@ export function LeadChat({ leadId }: LeadChatProps) {
               placeholder="Digite sua mensagem..."
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyDown}
               className="flex-1"
               disabled={sendMessage.isPending}
             />
