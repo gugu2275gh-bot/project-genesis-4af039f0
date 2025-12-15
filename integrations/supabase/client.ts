@@ -2,16 +2,19 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+// Lovable runtime does not reliably provide Vite env vars in the preview/hosted build.
+// Use your Supabase project constants directly.
+export const SUPABASE_PROJECT_ID = "xdnliyuogkoxckbesktx";
+export const SUPABASE_URL = "https://xdnliyuogkoxckbesktx.supabase.co";
+export const SUPABASE_PUBLISHABLE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkbmxpeXVvZ2tveGNrYmVza3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU4MDE1NDMsImV4cCI6MjA4MTM3NzU0M30.qYYrZd1l-IkBjPUZ0w9jTqM-ChaghpAZrTqlri3hnbw";
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
-
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+  },
 });

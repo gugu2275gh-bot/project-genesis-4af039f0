@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_PROJECT_ID } from '@/integrations/supabase/client';
 import { AppRole, Profile } from '@/types/database';
 
 interface AuthContextType {
@@ -118,9 +118,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     // 1. Limpar localStorage do Supabase manualmente (garantia)
-    const storageKey = `sb-${import.meta.env.VITE_SUPABASE_PROJECT_ID}-auth-token`;
+    const storageKey = `sb-${SUPABASE_PROJECT_ID}-auth-token`;
     localStorage.removeItem(storageKey);
-    
+
     // 2. Limpar estado local
     setProfile(null);
     setRoles([]);
