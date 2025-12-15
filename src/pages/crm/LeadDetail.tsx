@@ -7,12 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User } from 'lucide-react';
 import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, INTERACTION_CHANNEL_LABELS } from '@/types/database';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LeadChat } from '@/components/crm/LeadChat';
 
 export default function LeadDetail() {
   const { id } = useParams<{ id: string }>();
