@@ -15,10 +15,10 @@ export default function Contacts() {
   const { contacts, isLoading, createContact } = useContacts();
   const [search, setSearch] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [newContact, setNewContact] = useState<Partial<ContactInsert>>({
+  const [phoneInput, setPhoneInput] = useState('');
+  const [newContact, setNewContact] = useState<Omit<Partial<ContactInsert>, 'phone'>>({
     full_name: '',
     email: '',
-    phone: '',
     origin_channel: 'WHATSAPP',
     preferred_language: 'pt',
   });
@@ -26,17 +26,22 @@ export default function Contacts() {
   const filteredContacts = contacts.filter(c =>
     c.full_name.toLowerCase().includes(search.toLowerCase()) ||
     c.email?.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone?.includes(search)
+    c.phone?.toString().includes(search)
   );
 
   const handleCreate = async () => {
     if (!newContact.full_name) return;
-    await createContact.mutateAsync(newContact as ContactInsert);
+    // Convert phone string to number
+    const phoneNumber = phoneInput ? parseInt(phoneInput.replace(/\D/g, ''), 10) : null;
+    await createContact.mutateAsync({ 
+      ...newContact, 
+      phone: phoneNumber || undefined 
+    } as ContactInsert);
     setIsDialogOpen(false);
+    setPhoneInput('');
     setNewContact({
       full_name: '',
       email: '',
-      phone: '',
       origin_channel: 'WHATSAPP',
       preferred_language: 'pt',
     });
@@ -122,8 +127,8 @@ export default function Contacts() {
                   <div>
                     <Label>Telefone</Label>
                     <Input
-                      value={newContact.phone || ''}
-                      onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
+                      value={phoneInput}
+                      onChange={(e) => setPhoneInput(e.target.value)}
                       placeholder="+55 11 99999-9999"
                     />
                   </div>
