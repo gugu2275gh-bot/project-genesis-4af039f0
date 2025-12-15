@@ -23,7 +23,7 @@ export type Database = {
           id: string
           nationality: string | null
           origin_channel: Database["public"]["Enums"]["origin_channel"] | null
-          phone: string | null
+          phone: number | null
           preferred_language:
             | Database["public"]["Enums"]["language_code"]
             | null
@@ -37,7 +37,7 @@ export type Database = {
           id?: string
           nationality?: string | null
           origin_channel?: Database["public"]["Enums"]["origin_channel"] | null
-          phone?: string | null
+          phone?: number | null
           preferred_language?:
             | Database["public"]["Enums"]["language_code"]
             | null
@@ -51,7 +51,7 @@ export type Database = {
           id?: string
           nationality?: string | null
           origin_channel?: Database["public"]["Enums"]["origin_channel"] | null
-          phone?: string | null
+          phone?: number | null
           preferred_language?:
             | Database["public"]["Enums"]["language_code"]
             | null
