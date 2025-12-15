@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useEffect } from 'react';
+import { toast } from 'sonner';
 
 export interface LeadMessage {
   id: number;
@@ -49,6 +50,11 @@ export function useLeadMessages(leadId: string | undefined) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lead-messages', leadId] });
+      toast.success('Mensagem enviada');
+    },
+    onError: (error: Error) => {
+      console.error('Erro ao enviar mensagem:', error);
+      toast.error('Erro ao enviar mensagem: ' + error.message);
     },
   });
 
