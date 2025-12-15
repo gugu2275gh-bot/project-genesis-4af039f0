@@ -301,6 +301,36 @@ export type Database = {
           },
         ]
       }
+      mensagens_cliente: {
+        Row: {
+          created_at: string
+          id: number
+          id_lead: string | null
+          mensagem_cliente: string | null
+          mensagem_IA: string | null
+          origem: string | null
+          phone_id: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          id_lead?: string | null
+          mensagem_cliente?: string | null
+          mensagem_IA?: string | null
+          origem?: string | null
+          phone_id?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          id_lead?: string | null
+          mensagem_cliente?: string | null
+          mensagem_IA?: string | null
+          origem?: string | null
+          phone_id?: number | null
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string | null
