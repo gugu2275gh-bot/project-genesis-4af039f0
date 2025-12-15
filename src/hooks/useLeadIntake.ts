@@ -82,14 +82,16 @@ export function useLeadIntakeMutations() {
 
       if (fetchError) throw fetchError;
 
-      // Normalize phone
+      // Normalize phone - remove non-digits except leading +
       const normalizedPhone = intake.phone.replace(/\s+/g, "").replace(/[^+\d]/g, "");
+      // Convert to number for database query (remove + sign for numeric comparison)
+      const phoneNumber = parseInt(normalizedPhone.replace(/^\+/, ""), 10);
 
       // Check if contact exists
       const { data: existingContact } = await supabase
         .from("contacts")
         .select("id")
-        .eq("phone", normalizedPhone)
+        .eq("phone", phoneNumber)
         .maybeSingle();
 
       let contactId: string;
@@ -128,7 +130,7 @@ export function useLeadIntakeMutations() {
           .from("contacts")
           .insert({
             full_name: intake.full_name || `Cliente ${normalizedPhone}`,
-            phone: normalizedPhone,
+            phone: phoneNumber,
             email: intake.email || null,
             preferred_language: preferredLang,
             origin_channel: originChannel,

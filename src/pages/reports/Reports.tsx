@@ -45,7 +45,7 @@ const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accen
 
 type Lead = {
   id: string;
-  contacts?: { full_name?: string; email?: string; phone?: string; origin_channel?: string } | null;
+  contacts?: { full_name?: string; email?: string; phone?: number | null; origin_channel?: string } | null;
   service_interest?: string | null;
   status?: string | null;
   created_at?: string | null;

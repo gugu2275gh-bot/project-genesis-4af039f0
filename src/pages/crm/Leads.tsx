@@ -35,7 +35,7 @@ export default function Leads() {
     const matchesSearch = 
       l.contacts?.full_name.toLowerCase().includes(search.toLowerCase()) ||
       l.contacts?.email?.toLowerCase().includes(search.toLowerCase()) ||
-      l.contacts?.phone?.includes(search);
+      l.contacts?.phone?.toString().includes(search);
     const matchesStatus = statusFilter === 'all' || l.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -43,14 +43,17 @@ export default function Leads() {
   const handleCreate = async () => {
     if (!newLead.full_name) return;
     
+    // Convert phone string to number
+    const phoneNumber = newLead.phone ? parseInt(newLead.phone.replace(/\D/g, ''), 10) : undefined;
+    
     // First create contact
     const contact = await createContact.mutateAsync({
       full_name: newLead.full_name,
-      email: newLead.email,
-      phone: newLead.phone,
+      email: newLead.email || undefined,
+      phone: phoneNumber,
       origin_channel: 'WHATSAPP',
       preferred_language: 'pt',
-    } as ContactInsert);
+    });
 
     // Then create lead
     await createLead.mutateAsync({
