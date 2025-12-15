@@ -162,66 +162,81 @@ export default function LeadDetail() {
           </CardContent>
         </Card>
 
-        {/* Interactions */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-lg">Histórico de Interações</CardTitle>
-            <CardDescription>Registre todas as comunicações com o cliente</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                <Select value={interactionChannel} onValueChange={setInteractionChannel}>
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(INTERACTION_CHANNEL_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Textarea
-                  placeholder="Descreva a interação..."
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  className="flex-1"
-                  rows={2}
-                />
-                <Button onClick={handleAddInteraction} disabled={createInteraction.isPending}>
-                  <MessageSquare className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                {interactions.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    Nenhuma interação registrada
-                  </p>
-                ) : (
-                  interactions.map((interaction) => (
-                    <div 
-                      key={interaction.id}
-                      className="p-4 rounded-lg bg-muted/50 space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <StatusBadge 
-                          status={interaction.channel || 'OUTRO'} 
-                          label={INTERACTION_CHANNEL_LABELS[interaction.channel || 'OUTRO']}
-                        />
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Calendar className="h-3 w-3" />
-                          {format(new Date(interaction.created_at!), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
-                        </div>
-                      </div>
-                      <p className="text-sm">{interaction.content}</p>
+        {/* Chat and Interactions */}
+        <div className="lg:col-span-2">
+          <Tabs defaultValue="chat" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="chat">Chat WhatsApp</TabsTrigger>
+              <TabsTrigger value="interactions">Interações Sistema</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="chat" className="mt-4">
+              <LeadChat leadId={lead.id} />
+            </TabsContent>
+            
+            <TabsContent value="interactions" className="mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Histórico de Interações</CardTitle>
+                  <CardDescription>Registre todas as comunicações com o cliente</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex gap-2">
+                      <Select value={interactionChannel} onValueChange={setInteractionChannel}>
+                        <SelectTrigger className="w-[140px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(INTERACTION_CHANNEL_LABELS).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Textarea
+                        placeholder="Descreva a interação..."
+                        value={newNote}
+                        onChange={(e) => setNewNote(e.target.value)}
+                        className="flex-1"
+                        rows={2}
+                      />
+                      <Button onClick={handleAddInteraction} disabled={createInteraction.isPending}>
+                        <MessageSquare className="h-4 w-4" />
+                      </Button>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                      {interactions.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8">
+                          Nenhuma interação registrada
+                        </p>
+                      ) : (
+                        interactions.map((interaction) => (
+                          <div 
+                            key={interaction.id}
+                            className="p-4 rounded-lg bg-muted/50 space-y-2"
+                          >
+                            <div className="flex items-center justify-between">
+                              <StatusBadge 
+                                status={interaction.channel || 'OUTRO'} 
+                                label={INTERACTION_CHANNEL_LABELS[interaction.channel || 'OUTRO']}
+                              />
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Calendar className="h-3 w-3" />
+                                {format(new Date(interaction.created_at!), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                              </div>
+                            </div>
+                            <p className="text-sm">{interaction.content}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </div>
   );
