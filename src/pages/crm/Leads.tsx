@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLeads } from '@/hooks/useLeads';
 import { useContacts, ContactInsert } from '@/hooks/useContacts';
+import { useLeadSLAAlerts } from '@/hooks/useLeadSLAAlerts';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ export default function Leads() {
   const navigate = useNavigate();
   const { leads, isLoading, createLead } = useLeads();
   const { createContact } = useContacts();
+  useLeadSLAAlerts(); // Monitor leads waiting > 2h
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
