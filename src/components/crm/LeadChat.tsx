@@ -12,10 +12,11 @@ import { useQueryClient } from '@tanstack/react-query';
 
 interface LeadChatProps {
   leadId: string;
+  contactPhone: string | number | null;
 }
 
-export function LeadChat({ leadId }: LeadChatProps) {
-  const { messages, isLoading, sendMessage } = useLeadMessages(leadId);
+export function LeadChat({ leadId, contactPhone }: LeadChatProps) {
+  const { messages, isLoading, sendMessage } = useLeadMessages(leadId, contactPhone);
   const [newMessage, setNewMessage] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
