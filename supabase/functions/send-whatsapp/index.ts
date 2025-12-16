@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const WEBHOOK_URL = 'https://teste.robertobarros.ai/webhook-test/testepaulo';
+const WEBHOOK_URL = 'https://webhook.robertobarros.ai/webhook/enviamsgccse';
 
 serve(async (req) => {
   // Handle CORS preflight requests
