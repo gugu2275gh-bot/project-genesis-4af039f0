@@ -13,7 +13,7 @@ export interface LeadMessage {
   mensagem_IA: string | null;
 }
 
-export function useLeadMessages(leadId: string | undefined) {
+export function useLeadMessages(leadId: string | undefined, contactPhone: string | number | null = null) {
   const queryClient = useQueryClient();
 
   const { data: messages = [], isLoading } = useQuery({
@@ -35,6 +35,29 @@ export function useLeadMessages(leadId: string | undefined) {
 
   const sendMessage = useMutation({
     mutationFn: async ({ leadId, message }: { leadId: string; message: string }) => {
+      // First, call the webhook via Edge Function if we have a phone number
+      if (contactPhone) {
+        console.log('Sending WhatsApp via Edge Function:', { message, phone: contactPhone });
+        
+        const { data: webhookData, error: webhookError } = await supabase.functions.invoke('send-whatsapp', {
+          body: { 
+            mensagem: message, 
+            numero: String(contactPhone) 
+          }
+        });
+
+        if (webhookError) {
+          console.error('Webhook error:', webhookError);
+          toast.error('Erro ao enviar WhatsApp: ' + webhookError.message);
+          // Continue to save the message even if webhook fails
+        } else {
+          console.log('Webhook response:', webhookData);
+        }
+      } else {
+        console.warn('No contact phone available, skipping WhatsApp webhook');
+      }
+
+      // Then save the message to the database
       const { data, error } = await supabase
         .from('mensagens_cliente')
         .insert({

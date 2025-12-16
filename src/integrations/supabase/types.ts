@@ -301,6 +301,36 @@ export type Database = {
           },
         ]
       }
+      log_webhooks_falhados: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: number
+          lead_id: string | null
+          payload_sent: Json | null
+          phone_id: string | null
+          trigger_op: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: number
+          lead_id?: string | null
+          payload_sent?: Json | null
+          phone_id?: string | null
+          trigger_op?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: number
+          lead_id?: string | null
+          payload_sent?: Json | null
+          phone_id?: string | null
+          trigger_op?: string | null
+        }
+        Relationships: []
+      }
       mensagens_cliente: {
         Row: {
           created_at: string
