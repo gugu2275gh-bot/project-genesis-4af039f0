@@ -70,15 +70,15 @@ export function Sidebar() {
       )}
     >
       {/* Header */}
-      <div className="relative flex h-28 items-center justify-center border-b border-sidebar-border px-4">
+      <div className="relative flex h-16 items-center justify-center border-b border-sidebar-border px-4">
         {!collapsed && (
           <Link to="/dashboard" className="flex items-center justify-center">
-            <img src={logoCB} alt="CB Asesoría" className="h-24 w-auto" />
+            <img src={logoCB} alt="CB Asesoría" className="h-12 w-auto" />
           </Link>
         )}
         {collapsed && (
           <Link to="/dashboard" className="flex items-center justify-center">
-            <img src={logoCB} alt="CB Asesoría" className="h-14 w-auto" />
+            <img src={logoCB} alt="CB Asesoría" className="h-10 w-auto" />
           </Link>
         )}
         <Button
