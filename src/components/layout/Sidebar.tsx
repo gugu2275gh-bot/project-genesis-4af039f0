@@ -70,22 +70,22 @@ export function Sidebar() {
       )}
     >
       {/* Header */}
-      <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
+      <div className="relative flex h-24 items-center justify-center border-b border-sidebar-border px-4">
         {!collapsed && (
-          <Link to="/dashboard" className="flex items-center gap-2">
-            <img src={logoCB} alt="CB Asesoría" className="h-14 w-auto" />
+          <Link to="/dashboard" className="flex items-center justify-center">
+            <img src={logoCB} alt="CB Asesoría" className="h-20 w-auto" />
           </Link>
         )}
         {collapsed && (
-          <Link to="/dashboard" className="mx-auto">
-            <img src={logoCB} alt="CB Asesoría" className="h-10 w-auto" />
+          <Link to="/dashboard" className="flex items-center justify-center">
+            <img src={logoCB} alt="CB Asesoría" className="h-12 w-auto" />
           </Link>
         )}
         <Button
           variant="ghost"
           size="icon"
           onClick={() => setCollapsed(!collapsed)}
-          className="text-sidebar-foreground hover:bg-sidebar-accent"
+          className="absolute right-2 top-2 text-sidebar-foreground hover:bg-sidebar-accent"
         >
           {collapsed ? <Menu className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
         </Button>
