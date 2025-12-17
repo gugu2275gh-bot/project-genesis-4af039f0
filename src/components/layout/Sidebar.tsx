@@ -14,10 +14,10 @@ import {
   LogOut,
   ChevronLeft,
   Menu,
-  Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
+import logoCB from '@/assets/logo-cb-asesoria.png';
 
 interface NavItem {
   label: string;
@@ -72,10 +72,14 @@ export function Sidebar() {
       {/* Header */}
       <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <Building2 className="h-8 w-8 text-sidebar-primary" />
-            <span className="font-display font-bold text-lg">CB Asesoria</span>
-          </div>
+          <Link to="/dashboard" className="flex items-center gap-2">
+            <img src={logoCB} alt="CB Asesoría" className="h-10 w-auto" />
+          </Link>
+        )}
+        {collapsed && (
+          <Link to="/dashboard" className="mx-auto">
+            <img src={logoCB} alt="CB Asesoría" className="h-8 w-auto" />
+          </Link>
         )}
         <Button
           variant="ghost"
