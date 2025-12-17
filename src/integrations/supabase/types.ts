@@ -124,6 +124,30 @@ export type Database = {
           },
         ]
       }
+      documents: {
+        Row: {
+          content: string | null
+          embedding: string | null
+          fts: unknown
+          id: number
+          metadata: Json | null
+        }
+        Insert: {
+          content?: string | null
+          embedding?: string | null
+          fts?: unknown
+          id?: never
+          metadata?: Json | null
+        }
+        Update: {
+          content?: string | null
+          embedding?: string | null
+          fts?: unknown
+          id?: never
+          metadata?: Json | null
+        }
+        Relationships: []
+      }
       interactions: {
         Row: {
           channel: Database["public"]["Enums"]["interaction_channel"] | null
@@ -358,6 +382,24 @@ export type Database = {
           mensagem_IA?: string | null
           origem?: string | null
           phone_id?: number | null
+        }
+        Relationships: []
+      }
+      n8n_chat_histories: {
+        Row: {
+          id: number
+          message: Json
+          session_id: string
+        }
+        Insert: {
+          id?: number
+          message: Json
+          session_id: string
+        }
+        Update: {
+          id?: number
+          message?: Json
+          session_id?: string
         }
         Relationships: []
       }
@@ -1055,6 +1097,22 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      hybrid_search: {
+        Args: {
+          full_text_weight?: number
+          match_count: number
+          query_embedding: string
+          query_text: string
+          rrf_k?: number
+          semantic_weight?: number
+        }
+        Returns: {
+          content: string
+          id: number
+          rank: number
+          score: number
+        }[]
       }
     }
     Enums: {
