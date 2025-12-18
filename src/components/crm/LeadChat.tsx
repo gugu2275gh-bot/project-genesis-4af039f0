@@ -46,6 +46,16 @@ export function LeadChat({ leadId, contactPhone }: LeadChatProps) {
     queryClient.invalidateQueries({ queryKey: ['lead-messages', leadId] });
   };
 
+  const getSenderLabel = (type: 'client' | 'system', origem: string | null) => {
+    if (type === 'client') {
+      return 'Cliente';
+    }
+    if (origem === 'SISTEMA') {
+      return 'Atendente';
+    }
+    return 'Agente IA';
+  };
+
   // Transform messages into chat format (each row can have client and/or AI message)
   const chatMessages = messages.flatMap((msg) => {
     const items = [];
@@ -57,6 +67,7 @@ export function LeadChat({ leadId, contactPhone }: LeadChatProps) {
         type: 'client' as const,
         content: msg.mensagem_cliente,
         timestamp: msg.created_at,
+        origem: msg.origem,
       });
     }
     
@@ -67,6 +78,7 @@ export function LeadChat({ leadId, contactPhone }: LeadChatProps) {
         type: 'system' as const,
         content: msg.mensagem_IA,
         timestamp: msg.created_at,
+        origem: msg.origem,
       });
     }
     
@@ -116,6 +128,14 @@ export function LeadChat({ leadId, contactPhone }: LeadChatProps) {
                         : 'bg-primary/10 text-foreground rounded-br-none'
                     )}
                   >
+                    <p className={cn(
+                      'text-[10px] font-medium mb-1',
+                      msg.type === 'client'
+                        ? 'text-green-700 dark:text-green-300'
+                        : 'text-primary/70'
+                    )}>
+                      {getSenderLabel(msg.type, msg.origem)}
+                    </p>
                     <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
                     <p
                       className={cn(
