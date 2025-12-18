@@ -18,13 +18,13 @@ interface LeadChatProps {
 export function LeadChat({ leadId, contactPhone }: LeadChatProps) {
   const { messages, isLoading, sendMessage } = useLeadMessages(leadId, contactPhone);
   const [newMessage, setNewMessage] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
     }
   }, [messages]);
 
@@ -112,7 +112,7 @@ export function LeadChat({ leadId, contactPhone }: LeadChatProps) {
       
       <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
         {/* Messages Area */}
-        <ScrollArea className="flex-1 px-4" ref={scrollRef}>
+        <ScrollArea className="flex-1 px-4">
           <div className="space-y-3 py-4">
             {isLoading ? (
               <div className="text-center text-muted-foreground py-8">
@@ -162,6 +162,7 @@ export function LeadChat({ leadId, contactPhone }: LeadChatProps) {
                 </div>
               ))
             )}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
 
