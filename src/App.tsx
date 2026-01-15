@@ -16,10 +16,12 @@ import NotFound from "./pages/NotFound";
 
 // CRM Pages
 import Contacts from "./pages/crm/Contacts";
+import ContactDetail from "./pages/crm/ContactDetail";
 import Leads from "./pages/crm/Leads";
 import LeadDetail from "./pages/crm/LeadDetail";
 import LeadIntake from "./pages/crm/LeadIntake";
 import Opportunities from "./pages/crm/Opportunities";
+import OpportunityDetail from "./pages/crm/OpportunityDetail";
 
 // Legal Pages
 import ContractsList from "./pages/contracts/ContractsList";
@@ -40,6 +42,7 @@ import Reports from "./pages/reports/Reports";
 
 // Settings Pages
 import Settings from "./pages/settings/Settings";
+import WebhookLogs from "./pages/settings/WebhookLogs";
 
 // Portal Pages
 import PortalDashboard from "./pages/portal/PortalDashboard";
@@ -89,9 +92,11 @@ function AppRoutes() {
         <Route path="/crm" element={<Navigate to="/crm/lead-intake" replace />} />
         <Route path="/crm/lead-intake" element={<LeadIntake />} />
         <Route path="/crm/contacts" element={<Contacts />} />
+        <Route path="/crm/contacts/:id" element={<ContactDetail />} />
         <Route path="/crm/leads" element={<Leads />} />
         <Route path="/crm/leads/:id" element={<LeadDetail />} />
         <Route path="/crm/opportunities" element={<Opportunities />} />
+        <Route path="/crm/opportunities/:id" element={<OpportunityDetail />} />
         
         {/* Legal Module */}
         <Route path="/contracts" element={<ContractsList />} />
@@ -112,6 +117,7 @@ function AppRoutes() {
         
         {/* Settings */}
         <Route path="/settings" element={<Settings />} />
+        <Route path="/settings/webhook-logs" element={<WebhookLogs />} />
       </Route>
 
       {/* Portal do Cliente - Rota separada */}

@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string | null
+          id: string
+          new_data: Json | null
+          old_data: Json | null
+          record_id: string
+          table_name: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id: string
+          table_name: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id?: string
+          table_name?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       contacts: {
         Row: {
           country_of_origin: string | null
@@ -274,6 +307,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          assigned_to_user_id: string | null
           contact_id: string
           created_at: string | null
           created_by_user_id: string | null
@@ -288,6 +322,7 @@ export type Database = {
           updated_by_user_id: string | null
         }
         Insert: {
+          assigned_to_user_id?: string | null
           contact_id: string
           created_at?: string | null
           created_by_user_id?: string | null
@@ -302,6 +337,7 @@ export type Database = {
           updated_by_user_id?: string | null
         }
         Update: {
+          assigned_to_user_id?: string | null
           contact_id?: string
           created_at?: string | null
           created_by_user_id?: string | null
@@ -562,6 +598,44 @@ export type Database = {
             columns: ["opportunity_id"]
             isOneToOne: false
             referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          sender_type: string
+          sender_user_id: string
+          service_case_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          sender_type: string
+          sender_user_id: string
+          service_case_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          sender_type?: string
+          sender_user_id?: string
+          service_case_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_messages_service_case_id_fkey"
+            columns: ["service_case_id"]
+            isOneToOne: false
+            referencedRelation: "service_cases"
             referencedColumns: ["id"]
           },
         ]

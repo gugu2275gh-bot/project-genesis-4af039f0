@@ -1,16 +1,19 @@
 import { useAuth } from '@/contexts/AuthContext';
+import { useClientContracts } from '@/hooks/useClientContracts';
 import { useContracts } from '@/hooks/useContracts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 import { 
   FileText, 
   Download, 
   CheckCircle2, 
   Clock,
   PenTool,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -19,6 +22,7 @@ import {
   CONTRACT_STATUS_LABELS,
   LANGUAGE_LABELS 
 } from '@/types/database';
+import jsPDF from 'jspdf';
 
 const statusConfig: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
   EM_ELABORACAO: { icon: Clock, color: 'text-muted-foreground', bg: 'bg-muted' },
@@ -30,11 +34,120 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; bg:
 
 export default function PortalContracts() {
   const { user } = useAuth();
-  const { contracts, isLoading } = useContracts();
+  const { data: contracts = [], isLoading } = useClientContracts();
+  const { markAsSigned } = useContracts();
+  const { toast } = useToast();
 
-  // In a real app, you'd filter contracts by the client's opportunities
-  // For now, we'll show all contracts (you can add proper filtering later)
-  const myContracts = contracts;
+  const handleSignContract = async (contractId: string) => {
+    try {
+      await markAsSigned.mutateAsync(contractId);
+      toast({
+        title: 'Contrato assinado!',
+        description: 'Seu contrato foi assinado digitalmente com sucesso.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Erro ao assinar',
+        description: 'Não foi possível assinar o contrato. Tente novamente.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDownloadContract = (contract: typeof contracts[0]) => {
+    try {
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(20);
+      doc.setFont('helvetica', 'bold');
+      doc.text('CB ASESORIA', 105, 20, { align: 'center' });
+      
+      doc.setFontSize(16);
+      doc.text('CONTRATO DE PRESTAÇÃO DE SERVIÇOS', 105, 35, { align: 'center' });
+      
+      // Contract info
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      
+      let y = 55;
+      
+      doc.text(`Serviço: ${SERVICE_INTEREST_LABELS[contract.service_type]}`, 20, y);
+      y += 10;
+      
+      doc.text(`Data: ${format(new Date(contract.created_at!), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`, 20, y);
+      y += 10;
+      
+      if (contract.total_fee) {
+        doc.text(`Valor Total: ${contract.currency || 'EUR'} ${contract.total_fee.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 20, y);
+        y += 10;
+      }
+      
+      if (contract.installment_conditions) {
+        doc.text(`Condições: ${contract.installment_conditions}`, 20, y);
+        y += 10;
+      }
+      
+      if (contract.language) {
+        doc.text(`Idioma: ${LANGUAGE_LABELS[contract.language]}`, 20, y);
+        y += 10;
+      }
+      
+      // Scope
+      if (contract.scope_summary) {
+        y += 10;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Escopo do Serviço:', 20, y);
+        y += 8;
+        doc.setFont('helvetica', 'normal');
+        
+        const scopeLines = doc.splitTextToSize(contract.scope_summary, 170);
+        doc.text(scopeLines, 20, y);
+        y += scopeLines.length * 7;
+      }
+      
+      // Refund policy
+      if (contract.refund_policy_text) {
+        y += 10;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Política de Reembolso:', 20, y);
+        y += 8;
+        doc.setFont('helvetica', 'normal');
+        
+        const refundLines = doc.splitTextToSize(contract.refund_policy_text, 170);
+        doc.text(refundLines, 20, y);
+        y += refundLines.length * 7;
+      }
+      
+      // Signature
+      if (contract.signed_at) {
+        y += 20;
+        doc.setFont('helvetica', 'bold');
+        doc.text('ASSINADO DIGITALMENTE', 105, y, { align: 'center' });
+        y += 10;
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Data da assinatura: ${format(new Date(contract.signed_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, 105, y, { align: 'center' });
+      }
+      
+      // Footer
+      doc.setFontSize(10);
+      doc.text('CB Asesoria - Serviços de Imigração', 105, 280, { align: 'center' });
+      
+      // Save
+      doc.save(`contrato-${contract.id.slice(0, 8)}.pdf`);
+      
+      toast({
+        title: 'Download iniciado',
+        description: 'Seu contrato está sendo baixado.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Erro ao baixar',
+        description: 'Não foi possível gerar o PDF. Tente novamente.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -57,7 +170,7 @@ export default function PortalContracts() {
         </p>
       </div>
 
-      {myContracts.length === 0 ? (
+      {contracts.length === 0 ? (
         <Card>
           <CardContent className="text-center py-12">
             <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -69,7 +182,7 @@ export default function PortalContracts() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {myContracts.map((contract) => {
+          {contracts.map((contract) => {
             const status = contract.status || 'EM_ELABORACAO';
             const config = statusConfig[status];
             const StatusIcon = config.icon;
@@ -144,14 +257,24 @@ export default function PortalContracts() {
                   )}
 
                   <div className="flex gap-2 mt-4">
-                    {status === 'ENVIADO' && contract.external_signature_id && (
-                      <Button>
-                        <PenTool className="h-4 w-4 mr-2" />
+                    {status === 'ENVIADO' && (
+                      <Button 
+                        onClick={() => handleSignContract(contract.id)}
+                        disabled={markAsSigned.isPending}
+                      >
+                        {markAsSigned.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <PenTool className="h-4 w-4 mr-2" />
+                        )}
                         Assinar Contrato
                       </Button>
                     )}
-                    {status === 'ASSINADO' && (
-                      <Button variant="outline">
+                    {(status === 'ASSINADO' || status === 'ENVIADO') && (
+                      <Button 
+                        variant="outline"
+                        onClick={() => handleDownloadContract(contract)}
+                      >
                         <Download className="h-4 w-4 mr-2" />
                         Baixar Contrato
                       </Button>
