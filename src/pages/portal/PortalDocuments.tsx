@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCases } from '@/hooks/useCases';
 import { useDocuments } from '@/hooks/useDocuments';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
 import { 
   Select,
   SelectContent,
@@ -23,7 +24,8 @@ import {
   XCircle, 
   Clock,
   AlertTriangle,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import { SERVICE_INTEREST_LABELS, DOCUMENT_STATUS_LABELS } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
@@ -36,11 +38,16 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; bg:
   REJEITADO: { icon: XCircle, color: 'text-destructive', bg: 'bg-destructive/10' },
 };
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+
 export default function PortalDocuments() {
   const { user } = useAuth();
   const { cases, isLoading: casesLoading } = useCases();
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   
   // Filter cases for current client
   const myCases = cases.filter(c => c.client_user_id === user?.id);
@@ -51,30 +58,81 @@ export default function PortalDocuments() {
   const selectedCase = myCases.find(c => c.id === selectedCaseId);
 
   const handleFileUpload = async (documentId: string, file: File) => {
-    // In a real implementation, you would:
-    // 1. Upload to Supabase Storage
-    // 2. Get the public URL
-    // 3. Update the document record
-    
-    // For now, we'll simulate the upload
-    const fakeUrl = URL.createObjectURL(file);
-    
+    // Validate file type
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      toast({
+        title: 'Tipo de arquivo não permitido',
+        description: 'Por favor, envie apenas arquivos PDF, JPG ou PNG.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      toast({
+        title: 'Arquivo muito grande',
+        description: 'O tamanho máximo permitido é 10MB.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUploadingId(documentId);
+    setUploadProgress(0);
+
     try {
+      // Create unique file path: userId/caseId/documentId/filename
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${user?.id}/${selectedCaseId}/${documentId}/${Date.now()}.${fileExt}`;
+      
+      // Simulate progress for better UX
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => Math.min(prev + 10, 90));
+      }, 100);
+
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('client-documents')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+      clearInterval(progressInterval);
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('client-documents')
+        .getPublicUrl(filePath);
+
+      setUploadProgress(100);
+
+      // Update document record with file URL
       await updateDocument.mutateAsync({
         id: documentId,
-        file_url: fakeUrl,
+        file_url: urlData.publicUrl,
         status: 'ENVIADO',
       });
+
       toast({
         title: 'Documento enviado!',
         description: 'Seu documento foi enviado e está aguardando conferência.',
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Upload error:', error);
       toast({
         title: 'Erro ao enviar',
-        description: 'Não foi possível enviar o documento. Tente novamente.',
+        description: error.message || 'Não foi possível enviar o documento. Tente novamente.',
         variant: 'destructive',
       });
+    } finally {
+      setUploadingId(null);
+      setUploadProgress(0);
     }
   };
 
@@ -142,7 +200,9 @@ export default function PortalDocuments() {
             Documentos - {SERVICE_INTEREST_LABELS[selectedCase.service_type]}
           </CardTitle>
             <CardDescription>
-              Envie todos os documentos obrigatórios para dar andamento ao seu processo
+              Envie todos os documentos obrigatórios para dar andamento ao seu processo.
+              <br />
+              <span className="text-xs">Formatos aceitos: PDF, JPG, PNG (máx. 10MB)</span>
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -164,6 +224,7 @@ export default function PortalDocuments() {
                   const status = doc.status || 'NAO_ENVIADO';
                   const config = statusConfig[status];
                   const StatusIcon = config.icon;
+                  const isUploading = uploadingId === doc.id;
 
                   return (
                     <div
@@ -217,6 +278,15 @@ export default function PortalDocuments() {
                           </div>
                         )}
 
+                        {isUploading && (
+                          <div className="mt-3">
+                            <Progress value={uploadProgress} className="h-2" />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Enviando... {uploadProgress}%
+                            </p>
+                          </div>
+                        )}
+
                         <div className="flex items-center gap-2 mt-3">
                           {doc.file_url ? (
                             <Button
@@ -231,7 +301,7 @@ export default function PortalDocuments() {
                             </Button>
                           ) : null}
 
-                          {(status === 'NAO_ENVIADO' || status === 'REJEITADO') && (
+                          {(status === 'NAO_ENVIADO' || status === 'REJEITADO') && !isUploading && (
                             <div className="relative">
                               <Input
                                 type="file"
@@ -249,6 +319,13 @@ export default function PortalDocuments() {
                                 {doc.file_url ? 'Reenviar' : 'Enviar'}
                               </Button>
                             </div>
+                          )}
+
+                          {isUploading && (
+                            <Button variant="default" size="sm" disabled>
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              Enviando...
+                            </Button>
                           )}
                         </div>
                       </div>

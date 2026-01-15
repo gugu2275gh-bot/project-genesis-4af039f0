@@ -1,5 +1,5 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { usePayments } from '@/hooks/usePayments';
+import { useClientPayments } from '@/hooks/useClientPayments';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,13 +29,10 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; bg:
 
 export default function PortalPayments() {
   const { user } = useAuth();
-  const { payments, isLoading } = usePayments();
+  const { data: payments = [], isLoading } = useClientPayments();
 
-  // In a real app, you'd filter payments by the client's opportunities
-  const myPayments = payments;
-
-  const pendingPayments = myPayments.filter(p => p.status === 'PENDENTE' || p.status === 'PARCIAL');
-  const completedPayments = myPayments.filter(p => p.status === 'CONFIRMADO');
+  const pendingPayments = payments.filter(p => p.status === 'PENDENTE' || p.status === 'PARCIAL');
+  const completedPayments = payments.filter(p => p.status === 'CONFIRMADO');
   const totalPaid = completedPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const totalPending = pendingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
@@ -101,14 +98,14 @@ export default function PortalPayments() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {myPayments.length === 0 ? (
+          {payments.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <CreditCard className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>Você não possui pagamentos registrados.</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {myPayments.map((payment) => {
+              {payments.map((payment) => {
                 const status = payment.status || 'PENDENTE';
                 const config = statusConfig[status];
                 const StatusIcon = config.icon;
