@@ -5,3 +5,15 @@ verify_jwt = true
 
 [functions.send-whatsapp]
 verify_jwt = true
+
+[functions.sla-automations]
+verify_jwt = false
+
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+[functions.create-payment-link]
+verify_jwt = true
+
+[functions.stripe-webhook]
+verify_jwt = false
