@@ -1,7 +1,7 @@
 project_id = "xdnliyuogkoxckbesktx"
 
 [functions.admin-create-user]
-verify_jwt = true
+verify_jwt = false
 
 [functions.send-whatsapp]
 verify_jwt = true

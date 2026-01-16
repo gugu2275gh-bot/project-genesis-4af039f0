@@ -28,7 +28,40 @@ serve(async (req) => {
       },
     });
 
-    const { email, password, full_name, role, sector_ids } = await req.json();
+    const { email, password, full_name, role, sector_ids, admin_secret } = await req.json();
+
+    // Check authorization: either via JWT or admin secret
+    const authHeader = req.headers.get("authorization");
+    
+    if (admin_secret) {
+      // Admin secret mode - use last 16 chars of service role key as secret
+      const expectedSecret = serviceRoleKey.slice(-16);
+      if (admin_secret !== expectedSecret) {
+        throw new Error("Invalid admin secret");
+      }
+      console.log("Authorized via admin secret");
+    } else if (authHeader) {
+      // JWT mode - verify the calling user is an admin
+      const token = authHeader.replace("Bearer ", "");
+      const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
+      
+      if (userError || !userData.user) {
+        throw new Error("Invalid authorization token");
+      }
+
+      const { data: callerRoles } = await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userData.user.id);
+
+      const isAdmin = callerRoles?.some(r => r.role === "ADMIN" || r.role === "MANAGER");
+      if (!isAdmin) {
+        throw new Error("Only admins can create users");
+      }
+      console.log("Authorized via JWT for user:", userData.user.email);
+    } else {
+      throw new Error("Authorization required");
+    }
 
     console.log("Creating user with email:", email);
 
@@ -38,7 +71,7 @@ serve(async (req) => {
     }
 
     // Create user via Admin API
-    const { data: userData, error: createError } = await supabaseAdmin.auth.admin.createUser({
+    const { data: newUserData, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -50,7 +83,7 @@ serve(async (req) => {
       throw createError;
     }
 
-    const userId = userData.user.id;
+    const userId = newUserData.user.id;
     console.log("User created with ID:", userId);
 
     // The handle_new_user trigger should create the profile automatically,
