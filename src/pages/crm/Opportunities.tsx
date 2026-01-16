@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useOpportunities } from '@/hooks/useOpportunities';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
@@ -11,6 +12,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export default function Opportunities() {
+  const navigate = useNavigate();
   const { opportunities, isLoading } = useOpportunities();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -93,6 +95,7 @@ export default function Opportunities() {
         data={filteredOpportunities}
         loading={isLoading}
         emptyMessage="Nenhuma oportunidade encontrada"
+        onRowClick={(opp) => navigate(`/crm/opportunities/${opp.id}`)}
       />
     </div>
   );

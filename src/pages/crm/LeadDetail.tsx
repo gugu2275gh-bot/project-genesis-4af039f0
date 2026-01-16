@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLead, useLeads } from '@/hooks/useLeads';
 import { useInteractions } from '@/hooks/useInteractions';
+import { useProfiles } from '@/hooks/useProfiles';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User } from 'lucide-react';
+import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus } from 'lucide-react';
 import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, INTERACTION_CHANNEL_LABELS } from '@/types/database';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -22,6 +23,7 @@ export default function LeadDetail() {
   const { data: lead, isLoading } = useLead(id);
   const { updateLead, confirmInterest } = useLeads();
   const { interactions, createInteraction } = useInteractions(lead?.contact_id, id);
+  const { data: profiles } = useProfiles();
   
   const [newNote, setNewNote] = useState('');
   const [interactionChannel, setInteractionChannel] = useState<string>('WHATSAPP');
@@ -68,6 +70,10 @@ export default function LeadDetail() {
 
   const handleStatusChange = async (status: string) => {
     await updateLead.mutateAsync({ id: lead.id, status: status as any });
+  };
+
+  const handleAssign = async (userId: string) => {
+    await updateLead.mutateAsync({ id: lead.id, assigned_to_user_id: userId === 'unassigned' ? null : userId });
   };
 
   return (
@@ -140,6 +146,29 @@ export default function LeadDetail() {
                 <SelectContent>
                   {Object.entries(LEAD_STATUS_LABELS).map(([value, label]) => (
                     <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <p className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+                <UserPlus className="h-4 w-4" />
+                Responsável
+              </p>
+              <Select 
+                value={lead.assigned_to_user_id || 'unassigned'} 
+                onValueChange={handleAssign}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Não atribuído" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Não atribuído</SelectItem>
+                  {profiles?.map((profile) => (
+                    <SelectItem key={profile.id} value={profile.id}>
+                      {profile.full_name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>

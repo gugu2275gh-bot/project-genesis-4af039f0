@@ -171,10 +171,28 @@ export function useCases() {
           decision_date: new Date().toISOString().split('T')[0],
         })
         .eq('id', id)
-        .select()
+        .select(`
+          *,
+          client_user_id
+        `)
         .single();
       
       if (error) throw error;
+
+      // If approved, create a notification for NPS survey
+      if (result === 'APROVADO' && data.client_user_id) {
+        const npsLink = `${window.location.origin}/nps/${id}`;
+        
+        await supabase
+          .from('notifications')
+          .insert({
+            user_id: data.client_user_id,
+            type: 'nps_survey',
+            title: 'Avalie nosso atendimento!',
+            message: `Seu processo foi concluído. Clique aqui para nos contar como foi sua experiência.`,
+          });
+      }
+
       return data;
     },
     onSuccess: () => {

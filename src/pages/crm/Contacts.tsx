@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useContacts, ContactInsert } from '@/hooks/useContacts';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
@@ -12,6 +13,7 @@ import { ORIGIN_CHANNEL_LABELS, LANGUAGE_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 
 export default function Contacts() {
+  const navigate = useNavigate();
   const { contacts, isLoading, createContact } = useContacts();
   const [search, setSearch] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -224,6 +226,7 @@ export default function Contacts() {
         data={filteredContacts}
         loading={isLoading}
         emptyMessage="Nenhum contato encontrado"
+        onRowClick={(contact) => navigate(`/crm/contacts/${contact.id}`)}
       />
     </div>
   );

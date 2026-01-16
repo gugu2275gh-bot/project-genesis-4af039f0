@@ -71,8 +71,9 @@ export function useLeads() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['leads', variables.id] });
       toast({ title: 'Lead atualizado com sucesso' });
     },
     onError: (error) => {
