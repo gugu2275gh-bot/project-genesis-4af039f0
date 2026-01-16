@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { ReportTable, ReportColumn } from '@/components/reports/ReportTable';
 import SLAPerformanceReport from '@/components/reports/SLAPerformanceReport';
+import NPSReport from '@/components/reports/NPSReport';
 import {
   Users,
   TrendingUp,
@@ -24,6 +25,7 @@ import {
   CalendarIcon,
   Filter,
   Shield,
+  Star,
 } from 'lucide-react';
 import {
   SERVICE_INTEREST_LABELS,
@@ -530,11 +532,15 @@ export default function Reports() {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-7 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-8 lg:w-auto lg:inline-grid">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="sla" className="gap-1">
             <Shield className="h-3 w-3" />
             SLAs
+          </TabsTrigger>
+          <TabsTrigger value="nps" className="gap-1">
+            <Star className="h-3 w-3" />
+            NPS
           </TabsTrigger>
           <TabsTrigger value="leads">Leads</TabsTrigger>
           <TabsTrigger value="opportunities">Oportunidades</TabsTrigger>
@@ -718,6 +724,11 @@ export default function Reports() {
         {/* SLA Performance Tab */}
         <TabsContent value="sla" className="space-y-4">
           <SLAPerformanceReport />
+        </TabsContent>
+
+        {/* NPS Tab */}
+        <TabsContent value="nps" className="space-y-4">
+          <NPSReport />
         </TabsContent>
 
         {/* Leads Tab */}

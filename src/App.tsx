@@ -40,6 +40,9 @@ import TasksList from "./pages/tasks/TasksList";
 // Reports Pages
 import Reports from "./pages/reports/Reports";
 
+// NPS Pages
+import NPSSurvey from "./pages/nps/NPSSurvey";
+
 // Settings Pages
 import Settings from "./pages/settings/Settings";
 import WebhookLogs from "./pages/settings/WebhookLogs";
@@ -82,6 +85,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/auth" element={user ? <Navigate to="/dashboard" /> : <AuthPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/nps/:caseId" element={<NPSSurvey />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       
       <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
