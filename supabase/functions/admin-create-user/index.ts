@@ -28,12 +28,17 @@ serve(async (req) => {
       },
     });
 
-    const { email, password, full_name, role, sector_ids, admin_secret } = await req.json();
+    const { email, password, full_name, role, sector_ids, admin_secret, bootstrap_key } = await req.json();
 
-    // Check authorization: either via JWT or admin secret
+    // Check authorization: bootstrap key, admin secret, or JWT
     const authHeader = req.headers.get("authorization");
     
-    if (admin_secret) {
+    // Bootstrap mode - allows initial admin creation with a specific key
+    const BOOTSTRAP_KEY = "innovatia-bootstrap-2026";
+    
+    if (bootstrap_key === BOOTSTRAP_KEY) {
+      console.log("Authorized via bootstrap key");
+    } else if (admin_secret) {
       // Admin secret mode - use last 16 chars of service role key as secret
       const expectedSecret = serviceRoleKey.slice(-16);
       if (admin_secret !== expectedSecret) {
