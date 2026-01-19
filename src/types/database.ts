@@ -64,6 +64,8 @@ export type PaymentMethod =
   | 'CARTAO'
   | 'TRANSFERENCIA'
   | 'PIX'
+  | 'PAYPAL'
+  | 'PARCELAMENTO_MANUAL'
   | 'OUTRO';
 
 export type PaymentStatus = 
@@ -436,6 +438,8 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   CARTAO: 'Cartão',
   TRANSFERENCIA: 'Transferência',
   PIX: 'PIX',
+  PAYPAL: 'PayPal',
+  PARCELAMENTO_MANUAL: 'Parcelamento Manual',
   OUTRO: 'Outro',
 };
 
