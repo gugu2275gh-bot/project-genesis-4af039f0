@@ -1242,7 +1242,13 @@ export type Database = {
         | "EMAIL"
         | "INDICACAO"
         | "OUTRO"
-      payment_method: "CARTAO" | "TRANSFERENCIA" | "PIX" | "OUTRO"
+      payment_method:
+        | "CARTAO"
+        | "TRANSFERENCIA"
+        | "PIX"
+        | "OUTRO"
+        | "PAYPAL"
+        | "PARCELAMENTO_MANUAL"
       payment_status:
         | "PENDENTE"
         | "EM_ANALISE"
@@ -1457,7 +1463,14 @@ export const Constants = {
         "INDICACAO",
         "OUTRO",
       ],
-      payment_method: ["CARTAO", "TRANSFERENCIA", "PIX", "OUTRO"],
+      payment_method: [
+        "CARTAO",
+        "TRANSFERENCIA",
+        "PIX",
+        "OUTRO",
+        "PAYPAL",
+        "PARCELAMENTO_MANUAL",
+      ],
       payment_status: [
         "PENDENTE",
         "EM_ANALISE",
