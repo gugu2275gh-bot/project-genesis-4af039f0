@@ -19,6 +19,7 @@ interface SLAConfig {
 }
 
 const DEFAULT_SLAS: SLAConfig[] = [
+  // Gestão de Leads
   {
     key: 'sla_first_response_hours',
     value: '2',
@@ -47,20 +48,52 @@ const DEFAULT_SLAS: SLAConfig[] = [
     description: 'Dias sem resposta para arquivar lead automaticamente',
     unit: 'dias',
   },
+  
+  // Contratos - SLAs de Assinatura (conforme tabela do usuário)
   {
-    key: 'sla_contract_signature_reminder_1_days',
-    value: '2',
-    label: 'Lembrete de Assinatura (1º)',
-    description: 'Primeiro lembrete de assinatura de contrato',
-    unit: 'dias',
+    key: 'sla_contract_reminder_d_hours',
+    value: '24',
+    label: 'Lembrete D (Contrato)',
+    description: 'Primeira notificação ao cliente após envio do contrato',
+    unit: 'horas',
   },
   {
-    key: 'sla_contract_signature_reminder_2_days',
+    key: 'sla_contract_reminder_d1_hours',
+    value: '48',
+    label: 'Lembrete D+1 (Contrato)',
+    description: 'Segunda notificação + alerta ao atendente',
+    unit: 'horas',
+  },
+  {
+    key: 'sla_contract_reminder_d3_hours',
+    value: '72',
+    label: 'Lembrete D+3 (Contrato)',
+    description: 'Terceira notificação + alerta ao atendente',
+    unit: 'horas',
+  },
+  {
+    key: 'sla_contract_escalation_days',
     value: '5',
-    label: 'Lembrete de Assinatura (2º)',
-    description: 'Segundo lembrete de assinatura de contrato',
+    label: 'Escalação ao Gerente',
+    description: 'Dias sem assinatura para escalar ao gerente',
     unit: 'dias',
   },
+  {
+    key: 'sla_contract_cancellation_notice_days',
+    value: '7',
+    label: 'Aviso de Cancelamento',
+    description: 'Dias para notificar sobre cancelamento iminente',
+    unit: 'dias',
+  },
+  {
+    key: 'sla_contract_auto_cancel_days',
+    value: '8',
+    label: 'Cancelamento Automático',
+    description: 'Dias para cancelar contrato automaticamente sem assinatura',
+    unit: 'dias',
+  },
+  
+  // Pagamentos
   {
     key: 'sla_payment_reminder_1_days',
     value: '1',
@@ -75,25 +108,13 @@ const DEFAULT_SLAS: SLAConfig[] = [
     description: 'Segundo lembrete de pagamento pendente',
     unit: 'dias',
   },
-  {
-    key: 'sla_payment_risk_days',
-    value: '7',
-    label: 'Pagamento em Risco',
-    description: 'Dias para mover oportunidade para pipeline de risco',
-    unit: 'dias',
-  },
+  
+  // Operação Técnica
   {
     key: 'sla_authority_requirement_response_hours',
     value: '48',
-    label: 'Resposta a Exigência (Mínimo)',
-    description: 'Prazo mínimo interno para responder exigências de órgãos',
-    unit: 'horas',
-  },
-  {
-    key: 'sla_authority_requirement_max_hours',
-    value: '72',
-    label: 'Resposta a Exigência (Máximo)',
-    description: 'Prazo máximo interno para responder exigências de órgãos',
+    label: 'Resposta a Exigência',
+    description: 'Prazo interno para responder exigências de órgãos',
     unit: 'horas',
   },
   {

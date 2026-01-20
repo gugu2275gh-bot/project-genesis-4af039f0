@@ -95,6 +95,38 @@ export type Database = {
         }
         Relationships: []
       }
+      contract_reminders: {
+        Row: {
+          contract_id: string
+          created_at: string
+          id: string
+          reminder_type: string
+          sent_at: string
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          id?: string
+          reminder_type: string
+          sent_at?: string
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          id?: string
+          reminder_type?: string
+          sent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_reminders_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contracts: {
         Row: {
           created_at: string | null
