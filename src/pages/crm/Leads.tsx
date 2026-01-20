@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLeads } from '@/hooks/useLeads';
-import { useContacts, ContactInsert } from '@/hooks/useContacts';
+import { useContacts } from '@/hooks/useContacts';
 import { useLeadSLAAlerts } from '@/hooks/useLeadSLAAlerts';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Search, Eye } from 'lucide-react';
-import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS } from '@/types/database';
+import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -29,6 +29,8 @@ export default function Leads() {
     email: '',
     phone: '',
     service_interest: 'VISTO_ESTUDANTE' as any,
+    origin_channel: 'WHATSAPP' as OriginChannel,
+    referral_name: '',
   });
 
   const filteredLeads = leads.filter(l => {
@@ -51,7 +53,8 @@ export default function Leads() {
       full_name: newLead.full_name,
       email: newLead.email || undefined,
       phone: phoneNumber,
-      origin_channel: 'WHATSAPP',
+      origin_channel: newLead.origin_channel,
+      referral_name: newLead.origin_channel === 'COLABORADOR' ? newLead.referral_name : undefined,
       preferred_language: 'pt',
     });
 
@@ -68,6 +71,8 @@ export default function Leads() {
       email: '',
       phone: '',
       service_interest: 'VISTO_ESTUDANTE',
+      origin_channel: 'WHATSAPP',
+      referral_name: '',
     });
   };
 
@@ -189,6 +194,32 @@ export default function Leads() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div>
+                  <Label>Canal de Origem</Label>
+                  <Select
+                    value={newLead.origin_channel}
+                    onValueChange={(v: OriginChannel) => setNewLead({ ...newLead, origin_channel: v, referral_name: '' })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(ORIGIN_CHANNEL_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {newLead.origin_channel === 'COLABORADOR' && (
+                  <div>
+                    <Label>Nome do Colaborador</Label>
+                    <Input
+                      value={newLead.referral_name}
+                      onChange={(e) => setNewLead({ ...newLead, referral_name: e.target.value })}
+                      placeholder="Nome do colaborador que indicou"
+                    />
+                  </div>
+                )}
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancelar
