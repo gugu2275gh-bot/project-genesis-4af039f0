@@ -60,6 +60,7 @@ export type Database = {
           preferred_language:
             | Database["public"]["Enums"]["language_code"]
             | null
+          referral_name: string | null
           updated_at: string | null
         }
         Insert: {
@@ -74,6 +75,7 @@ export type Database = {
           preferred_language?:
             | Database["public"]["Enums"]["language_code"]
             | null
+          referral_name?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -88,6 +90,7 @@ export type Database = {
           preferred_language?:
             | Database["public"]["Enums"]["language_code"]
             | null
+          referral_name?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -1242,6 +1245,7 @@ export type Database = {
         | "EMAIL"
         | "INDICACAO"
         | "OUTRO"
+        | "COLABORADOR"
       payment_method:
         | "CARTAO"
         | "TRANSFERENCIA"
@@ -1462,6 +1466,7 @@ export const Constants = {
         "EMAIL",
         "INDICACAO",
         "OUTRO",
+        "COLABORADOR",
       ],
       payment_method: [
         "CARTAO",

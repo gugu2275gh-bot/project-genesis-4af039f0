@@ -16,6 +16,7 @@ export type OriginChannel =
   | 'FACEBOOK'
   | 'EMAIL'
   | 'INDICACAO'
+  | 'COLABORADOR'
   | 'OUTRO';
 
 export type ServiceInterest = 
@@ -371,6 +372,7 @@ export const ORIGIN_CHANNEL_LABELS: Record<OriginChannel, string> = {
   FACEBOOK: 'Facebook',
   EMAIL: 'Email',
   INDICACAO: 'Indicação',
+  COLABORADOR: 'Colaborador',
   OUTRO: 'Outro',
 };
 

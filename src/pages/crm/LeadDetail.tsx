@@ -9,8 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus } from 'lucide-react';
-import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, INTERACTION_CHANNEL_LABELS } from '@/types/database';
+import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe } from 'lucide-react';
+import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, INTERACTION_CHANNEL_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useState } from 'react';
@@ -128,6 +128,26 @@ export default function LeadDetail() {
                 <p className="font-medium">{lead.contacts?.email || 'Não informado'}</p>
               </div>
             </div>
+
+            <div className="flex items-center gap-3">
+              <Globe className="h-4 w-4 text-muted-foreground" />
+              <div>
+                <p className="text-sm text-muted-foreground">Canal de Origem</p>
+                <p className="font-medium">
+                  {ORIGIN_CHANNEL_LABELS[(lead.contacts?.origin_channel as OriginChannel) || 'OUTRO']}
+                </p>
+              </div>
+            </div>
+            
+            {lead.contacts?.origin_channel === 'COLABORADOR' && (
+              <div className="flex items-center gap-3">
+                <UserPlus className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Nome do Colaborador</p>
+                  <p className="font-medium">{lead.contacts?.referral_name || 'Não informado'}</p>
+                </div>
+              </div>
+            )}
 
             <div className="pt-4 border-t">
               <p className="text-sm text-muted-foreground mb-2">Serviço de Interesse</p>
