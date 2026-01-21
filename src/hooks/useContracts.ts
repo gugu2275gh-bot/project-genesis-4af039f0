@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { addMonths } from 'date-fns';
 
 export type Contract = Tables<'contracts'>;
 export type ContractInsert = TablesInsert<'contracts'>;
@@ -124,7 +125,8 @@ export function useContracts() {
 
   const markAsSigned = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase
+      // 1. Update contract status
+      const { data: contract, error } = await supabase
         .from('contracts')
         .update({
           status: 'ASSINADO',
@@ -137,21 +139,95 @@ export function useContracts() {
       
       if (error) throw error;
 
-      // Update opportunity status
+      // 2. Update opportunity status
       await supabase
         .from('opportunities')
         .update({ status: 'CONTRATO_ASSINADO' })
-        .eq('id', data.opportunity_id);
+        .eq('id', contract.opportunity_id);
 
-      return data;
+      // 3. Generate installment payments if configured
+      if (contract.installment_count && contract.installment_count > 0 && contract.first_due_date) {
+        const installmentAmount = contract.installment_amount || (contract.total_fee ? contract.total_fee / contract.installment_count : 0);
+        const firstDueDate = new Date(contract.first_due_date);
+
+        const payments = [];
+        for (let i = 0; i < contract.installment_count; i++) {
+          const dueDate = addMonths(firstDueDate, i);
+          payments.push({
+            contract_id: contract.id,
+            opportunity_id: contract.opportunity_id,
+            amount: installmentAmount,
+            installment_number: i + 1,
+            due_date: dueDate.toISOString().split('T')[0],
+            status: 'PENDENTE' as const,
+            currency: contract.currency || 'EUR',
+          });
+        }
+
+        const { error: paymentsError } = await supabase
+          .from('payments')
+          .insert(payments);
+
+        if (paymentsError) {
+          console.error('Error creating installment payments:', paymentsError);
+        }
+      }
+
+      return contract;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contracts'] });
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
-      toast({ title: 'Contrato marcado como assinado' });
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      toast({ title: 'Contrato assinado! Pagamentos gerados.' });
     },
     onError: (error) => {
       toast({ title: 'Erro ao marcar contrato como assinado', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const cancelContract = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      // 1. Update contract status to CANCELADO
+      const { data: contract, error } = await supabase
+        .from('contracts')
+        .update({
+          status: 'CANCELADO',
+          cancellation_reason: reason,
+          updated_by_user_id: user?.id,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+
+      // 2. Update opportunity status to FECHADA_PERDIDA
+      await supabase
+        .from('opportunities')
+        .update({ 
+          status: 'FECHADA_PERDIDA',
+          reason_lost: `Contrato cancelado: ${reason}`,
+        })
+        .eq('id', contract.opportunity_id);
+
+      // 3. Delete all pending payments for this contract (they won't be collected)
+      await supabase
+        .from('payments')
+        .delete()
+        .eq('contract_id', contract.id)
+        .eq('status', 'PENDENTE');
+
+      return contract;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contracts'] });
+      queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      toast({ title: 'Contrato cancelado' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao cancelar contrato', description: error.message, variant: 'destructive' });
     },
   });
 
@@ -163,6 +239,7 @@ export function useContracts() {
     updateContract,
     sendForSignature,
     markAsSigned,
+    cancelContract,
   };
 }
 

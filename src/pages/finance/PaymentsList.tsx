@@ -8,11 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Check, DollarSign } from 'lucide-react';
+import { Plus, Search, Check, DollarSign, AlertTriangle } from 'lucide-react';
 import { PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { format } from 'date-fns';
+import { format, differenceInDays, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 export default function PaymentsList() {
   const { payments, isLoading, createPayment, confirmPayment } = usePayments();
@@ -64,6 +65,20 @@ export default function PaymentsList() {
     setTransactionId('');
   };
 
+  // Helper to check if payment is overdue
+  const getOverdueInfo = (payment: typeof payments[0]) => {
+    if (payment.status !== 'PENDENTE' || !payment.due_date) return null;
+    const dueDate = new Date(payment.due_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (isBefore(dueDate, today)) {
+      const daysOverdue = differenceInDays(today, dueDate);
+      return { isOverdue: true, daysOverdue };
+    }
+    return null;
+  };
+
   const columns: Column<typeof payments[0]>[] = [
     {
       key: 'client',
@@ -74,6 +89,22 @@ export default function PaymentsList() {
           <div className="text-sm text-muted-foreground">{payment.opportunities?.leads?.contacts?.email}</div>
         </div>
       ),
+    },
+    {
+      key: 'installment',
+      header: 'Parcela',
+      cell: (payment) => {
+        if (!payment.installment_number) return '-';
+        // Get total installments from contract
+        const total = payments.filter(p => 
+          p.contract_id === payment.contract_id
+        ).length;
+        return (
+          <span className="font-medium">
+            {payment.installment_number}/{total || payment.installment_number}
+          </span>
+        );
+      },
     },
     {
       key: 'amount',
@@ -88,6 +119,32 @@ export default function PaymentsList() {
       ),
     },
     {
+      key: 'due_date',
+      header: 'Vencimento',
+      cell: (payment) => {
+        if (!payment.due_date) return '-';
+        const overdueInfo = getOverdueInfo(payment);
+        return (
+          <div className={cn(
+            "flex items-center gap-2",
+            overdueInfo?.isOverdue && "text-destructive font-medium"
+          )}>
+            {overdueInfo?.isOverdue && (
+              <AlertTriangle className="h-4 w-4" />
+            )}
+            <span>
+              {format(new Date(payment.due_date), 'dd/MM/yyyy', { locale: ptBR })}
+            </span>
+            {overdueInfo?.isOverdue && (
+              <span className="text-xs">
+                ({overdueInfo.daysOverdue}d atraso)
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
       key: 'payment_method',
       header: 'Método',
       cell: (payment) => PAYMENT_METHOD_LABELS[payment.payment_method || 'OUTRO'],
@@ -95,12 +152,23 @@ export default function PaymentsList() {
     {
       key: 'status',
       header: 'Status',
-      cell: (payment) => (
-        <StatusBadge 
-          status={payment.status || 'PENDENTE'} 
-          label={PAYMENT_STATUS_LABELS[payment.status || 'PENDENTE']} 
-        />
-      ),
+      cell: (payment) => {
+        const overdueInfo = getOverdueInfo(payment);
+        if (overdueInfo?.isOverdue) {
+          return (
+            <StatusBadge 
+              status="CRITICAL" 
+              label={`Vencido há ${overdueInfo.daysOverdue}d`} 
+            />
+          );
+        }
+        return (
+          <StatusBadge 
+            status={payment.status || 'PENDENTE'} 
+            label={PAYMENT_STATUS_LABELS[payment.status || 'PENDENTE']} 
+          />
+        );
+      },
     },
     {
       key: 'paid_at',
@@ -127,6 +195,17 @@ export default function PaymentsList() {
       ),
     },
   ];
+
+  // Highlight overdue rows
+  const getRowClassName = (payment: typeof payments[0]) => {
+    const overdueInfo = getOverdueInfo(payment);
+    if (overdueInfo?.isOverdue) {
+      if (overdueInfo.daysOverdue >= 7) return 'bg-destructive/10';
+      if (overdueInfo.daysOverdue >= 3) return 'bg-warning/10';
+      return 'bg-warning/5';
+    }
+    return '';
+  };
 
   return (
     <div className="space-y-6">
@@ -284,6 +363,7 @@ export default function PaymentsList() {
         data={filteredPayments}
         loading={isLoading}
         emptyMessage="Nenhum pagamento encontrado"
+        rowClassName={getRowClassName}
       />
     </div>
   );

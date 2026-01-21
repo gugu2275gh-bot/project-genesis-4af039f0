@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useContract, useContracts } from '@/hooks/useContracts';
 import { PageHeader } from '@/components/ui/page-header';
@@ -8,18 +8,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { ArrowLeft, Send, Check, Save } from 'lucide-react';
+import { ArrowLeft, Send, Check, Save, X, Calendar } from 'lucide-react';
 import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, LANGUAGE_LABELS } from '@/types/database';
-import { format } from 'date-fns';
+import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: contract, isLoading } = useContract(id);
-  const { updateContract, sendForSignature, markAsSigned } = useContracts();
+  const { updateContract, sendForSignature, markAsSigned, cancelContract } = useContracts();
   
   const [formData, setFormData] = useState({
     scope_summary: '',
@@ -27,11 +29,16 @@ export default function ContractDetail() {
     installment_conditions: '',
     refund_policy_text: '',
     language: 'pt',
+    installment_count: '1',
+    installment_amount: '',
+    first_due_date: '',
   });
   const [isEditing, setIsEditing] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState('');
 
   // Initialize form data when contract loads
-  useState(() => {
+  useEffect(() => {
     if (contract) {
       setFormData({
         scope_summary: contract.scope_summary || '',
@@ -39,9 +46,22 @@ export default function ContractDetail() {
         installment_conditions: contract.installment_conditions || '',
         refund_policy_text: contract.refund_policy_text || '',
         language: contract.language || 'pt',
+        installment_count: contract.installment_count?.toString() || '1',
+        installment_amount: contract.installment_amount?.toString() || '',
+        first_due_date: contract.first_due_date || '',
       });
     }
-  });
+  }, [contract]);
+
+  // Auto-calculate installment amount when total or count changes
+  useEffect(() => {
+    const total = parseFloat(formData.total_fee);
+    const count = parseInt(formData.installment_count);
+    if (total > 0 && count > 0) {
+      const amount = (total / count).toFixed(2);
+      setFormData(prev => ({ ...prev, installment_amount: amount }));
+    }
+  }, [formData.total_fee, formData.installment_count]);
 
   if (isLoading) {
     return (
@@ -74,6 +94,9 @@ export default function ContractDetail() {
       installment_conditions: formData.installment_conditions,
       refund_policy_text: formData.refund_policy_text,
       language: formData.language as any,
+      installment_count: parseInt(formData.installment_count) || 1,
+      installment_amount: formData.installment_amount ? parseFloat(formData.installment_amount) : null,
+      first_due_date: formData.first_due_date || null,
       status: 'EM_REVISAO',
     });
     setIsEditing(false);
@@ -87,12 +110,41 @@ export default function ContractDetail() {
     await markAsSigned.mutateAsync(contract.id);
   };
 
+  const handleCancel = async () => {
+    if (!cancellationReason.trim()) return;
+    await cancelContract.mutateAsync({ 
+      id: contract.id, 
+      reason: cancellationReason 
+    });
+    setShowCancelDialog(false);
+    setCancellationReason('');
+  };
+
   const canEdit = contract.status === 'EM_ELABORACAO' || contract.status === 'EM_REVISAO';
   const canSend = contract.status === 'EM_REVISAO' && 
     contract.scope_summary && 
     contract.total_fee && 
-    contract.installment_conditions;
+    contract.installment_conditions &&
+    contract.installment_count &&
+    contract.first_due_date;
   const canSign = contract.status === 'ENVIADO';
+  const canCancel = contract.status !== 'ASSINADO' && contract.status !== 'CANCELADO';
+
+  // Generate preview of installments
+  const installmentCount = parseInt(formData.installment_count) || 1;
+  const installmentAmount = parseFloat(formData.installment_amount) || 0;
+  const firstDueDate = formData.first_due_date ? new Date(formData.first_due_date) : null;
+  
+  const plannedInstallments = [];
+  if (firstDueDate && installmentAmount > 0) {
+    for (let i = 0; i < installmentCount; i++) {
+      plannedInstallments.push({
+        number: i + 1,
+        amount: installmentAmount,
+        dueDate: addMonths(firstDueDate, i),
+      });
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -108,6 +160,12 @@ export default function ContractDetail() {
         description={`Criado em ${format(new Date(contract.created_at!), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
         actions={
           <div className="flex gap-2">
+            {canCancel && (
+              <Button variant="outline" onClick={() => setShowCancelDialog(true)}>
+                <X className="h-4 w-4 mr-2" />
+                Cancelar Contrato
+              </Button>
+            )}
             {canEdit && !isEditing && (
               <Button variant="outline" onClick={() => setIsEditing(true)}>
                 Editar
@@ -128,6 +186,41 @@ export default function ContractDetail() {
           </div>
         }
       />
+
+      {/* Cancel Contract Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancelar Contrato</DialogTitle>
+            <DialogDescription>
+              Esta ação irá cancelar o contrato e todos os pagamentos pendentes associados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Motivo do Cancelamento *</Label>
+              <Textarea
+                value={cancellationReason}
+                onChange={(e) => setCancellationReason(e.target.value)}
+                placeholder="Informe o motivo do cancelamento..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCancelDialog(false)}>
+              Voltar
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleCancel}
+              disabled={!cancellationReason.trim() || cancelContract.isPending}
+            >
+              {cancelContract.isPending ? 'Cancelando...' : 'Confirmar Cancelamento'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Contract Info */}
@@ -151,6 +244,12 @@ export default function ContractDetail() {
                 label={CONTRACT_STATUS_LABELS[contract.status || 'EM_ELABORACAO']} 
               />
             </div>
+            {contract.cancellation_reason && (
+              <div>
+                <p className="text-sm text-muted-foreground">Motivo do Cancelamento</p>
+                <p className="text-sm text-destructive">{contract.cancellation_reason}</p>
+              </div>
+            )}
             {contract.signed_at && (
               <div>
                 <p className="text-sm text-muted-foreground">Assinado em</p>
@@ -167,6 +266,17 @@ export default function ContractDetail() {
                     style: 'currency', 
                     currency: contract.currency || 'EUR' 
                   }).format(contract.total_fee)}
+                </p>
+              </div>
+            )}
+            {contract.installment_count && contract.installment_count > 1 && (
+              <div>
+                <p className="text-sm text-muted-foreground">Parcelamento</p>
+                <p className="font-medium">
+                  {contract.installment_count}x de {new Intl.NumberFormat('pt-BR', { 
+                    style: 'currency', 
+                    currency: contract.currency || 'EUR' 
+                  }).format(contract.installment_amount || 0)}
                 </p>
               </div>
             )}
@@ -220,8 +330,82 @@ export default function ContractDetail() {
                     </Select>
                   </div>
                 </div>
+
+                {/* Installment Configuration */}
+                <div className="p-4 border rounded-lg bg-muted/50 space-y-4">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Configuração de Parcelamento
+                  </h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <Label>Número de Parcelas *</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="24"
+                        value={formData.installment_count}
+                        onChange={(e) => setFormData({ ...formData, installment_count: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label>Valor da Parcela (€)</Label>
+                      <Input
+                        type="number"
+                        value={formData.installment_amount}
+                        onChange={(e) => setFormData({ ...formData, installment_amount: e.target.value })}
+                        placeholder="Calculado automaticamente"
+                      />
+                    </div>
+                    <div>
+                      <Label>Data 1º Vencimento *</Label>
+                      <Input
+                        type="date"
+                        value={formData.first_due_date}
+                        onChange={(e) => setFormData({ ...formData, first_due_date: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Installment Preview */}
+                  {plannedInstallments.length > 0 && (
+                    <div className="mt-4">
+                      <Label className="text-sm text-muted-foreground mb-2 block">
+                        Prévia das Parcelas
+                      </Label>
+                      <div className="rounded-lg border overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="hover:bg-transparent">
+                              <TableHead className="w-20">Parcela</TableHead>
+                              <TableHead>Valor</TableHead>
+                              <TableHead>Vencimento</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {plannedInstallments.map((inst) => (
+                              <TableRow key={inst.number} className="hover:bg-transparent">
+                                <TableCell className="font-medium">{inst.number}/{installmentCount}</TableCell>
+                                <TableCell>
+                                  {new Intl.NumberFormat('pt-BR', { 
+                                    style: 'currency', 
+                                    currency: contract.currency || 'EUR' 
+                                  }).format(inst.amount)}
+                                </TableCell>
+                                <TableCell>
+                                  {format(inst.dueDate, 'dd/MM/yyyy', { locale: ptBR })}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div>
-                  <Label>Condições de Parcelamento *</Label>
+                  <Label>Condições de Parcelamento (texto adicional)</Label>
                   <Textarea
                     value={formData.installment_conditions}
                     onChange={(e) => setFormData({ ...formData, installment_conditions: e.target.value })}
@@ -254,6 +438,41 @@ export default function ContractDetail() {
                   <p className="text-sm text-muted-foreground mb-1">Resumo do Escopo</p>
                   <p className="text-sm whitespace-pre-wrap">{contract.scope_summary || 'Não definido'}</p>
                 </div>
+                
+                {/* Show installments when not editing */}
+                {contract.installment_count && contract.installment_count > 0 && contract.first_due_date && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Parcelas Programadas</p>
+                    <div className="rounded-lg border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead className="w-20">Parcela</TableHead>
+                            <TableHead>Valor</TableHead>
+                            <TableHead>Vencimento</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {Array.from({ length: contract.installment_count }, (_, i) => (
+                            <TableRow key={i} className="hover:bg-transparent">
+                              <TableCell className="font-medium">{i + 1}/{contract.installment_count}</TableCell>
+                              <TableCell>
+                                {new Intl.NumberFormat('pt-BR', { 
+                                  style: 'currency', 
+                                  currency: contract.currency || 'EUR' 
+                                }).format(contract.installment_amount || 0)}
+                              </TableCell>
+                              <TableCell>
+                                {format(addMonths(new Date(contract.first_due_date), i), 'dd/MM/yyyy', { locale: ptBR })}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Condições de Parcelamento</p>
                   <p className="text-sm whitespace-pre-wrap">{contract.installment_conditions || 'Não definido'}</p>

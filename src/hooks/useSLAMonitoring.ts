@@ -114,28 +114,30 @@ export function useSLAMonitoring() {
         }
       });
 
-      // 4. Pending payments
-      const paymentDeadline = new Date(
-        now.getTime() - slaMap.sla_payment_reminder_1_days * 24 * 60 * 60 * 1000
-      );
+      // 4. Pending payments - now based on due_date instead of created_at
       const { data: pendingPayments, count: paymentsPending } = await supabase
         .from('payments')
-        .select('id, created_at, amount, currency, opportunity_id', { count: 'exact' })
+        .select('id, due_date, amount, currency, opportunity_id, installment_number', { count: 'exact' })
         .eq('status', 'PENDENTE')
-        .lt('created_at', paymentDeadline.toISOString());
+        .not('due_date', 'is', null);
 
       pendingPayments?.forEach((payment) => {
-        const daysOverdue = Math.round(
-          (now.getTime() - new Date(payment.created_at).getTime()) / (24 * 60 * 60 * 1000) -
-            slaMap.sla_payment_reminder_1_days
+        if (!payment.due_date) return;
+        const dueDate = new Date(payment.due_date);
+        const daysOverdue = Math.floor(
+          (now.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000)
         );
+        
         if (daysOverdue > 0) {
+          const installmentLabel = payment.installment_number 
+            ? ` (Parcela ${payment.installment_number})` 
+            : '';
           breaches.push({
             id: `payment-${payment.id}`,
             type: 'payment',
-            title: 'Pagamento pendente',
-            description: `${payment.amount} ${payment.currency} pendente há ${daysOverdue + 1} dias`,
-            severity: daysOverdue > 5 ? 'critical' : 'warning',
+            title: `Pagamento vencido${installmentLabel}`,
+            description: `${payment.amount} ${payment.currency} vencido há ${daysOverdue} dia(s)`,
+            severity: daysOverdue >= 7 ? 'critical' : 'warning',
             hoursOverdue: daysOverdue * 24,
             relatedId: payment.opportunity_id,
           });

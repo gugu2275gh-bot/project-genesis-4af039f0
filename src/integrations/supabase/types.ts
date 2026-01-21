@@ -129,12 +129,16 @@ export type Database = {
       }
       contracts: {
         Row: {
+          cancellation_reason: string | null
           created_at: string | null
           created_by_user_id: string | null
           currency: string | null
           external_signature_id: string | null
+          first_due_date: string | null
           id: string
+          installment_amount: number | null
           installment_conditions: string | null
+          installment_count: number | null
           language: Database["public"]["Enums"]["language_code"] | null
           opportunity_id: string
           refund_policy_text: string | null
@@ -147,12 +151,16 @@ export type Database = {
           updated_by_user_id: string | null
         }
         Insert: {
+          cancellation_reason?: string | null
           created_at?: string | null
           created_by_user_id?: string | null
           currency?: string | null
           external_signature_id?: string | null
+          first_due_date?: string | null
           id?: string
+          installment_amount?: number | null
           installment_conditions?: string | null
+          installment_count?: number | null
           language?: Database["public"]["Enums"]["language_code"] | null
           opportunity_id: string
           refund_policy_text?: string | null
@@ -165,12 +173,16 @@ export type Database = {
           updated_by_user_id?: string | null
         }
         Update: {
+          cancellation_reason?: string | null
           created_at?: string | null
           created_by_user_id?: string | null
           currency?: string | null
           external_signature_id?: string | null
+          first_due_date?: string | null
           id?: string
+          installment_amount?: number | null
           installment_conditions?: string | null
+          installment_count?: number | null
           language?: Database["public"]["Enums"]["language_code"] | null
           opportunity_id?: string
           refund_policy_text?: string | null
@@ -577,13 +589,47 @@ export type Database = {
           },
         ]
       }
+      payment_reminders: {
+        Row: {
+          created_at: string
+          id: string
+          payment_id: string
+          reminder_type: string
+          sent_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          payment_id: string
+          reminder_type: string
+          sent_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          payment_id?: string
+          reminder_type?: string
+          sent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_reminders_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount: number
           contract_id: string | null
           created_at: string | null
           currency: string | null
+          due_date: string | null
           id: string
+          installment_number: number | null
           opportunity_id: string
           paid_at: string | null
           payment_link: string | null
@@ -597,7 +643,9 @@ export type Database = {
           contract_id?: string | null
           created_at?: string | null
           currency?: string | null
+          due_date?: string | null
           id?: string
+          installment_number?: number | null
           opportunity_id: string
           paid_at?: string | null
           payment_link?: string | null
@@ -611,7 +659,9 @@ export type Database = {
           contract_id?: string | null
           created_at?: string | null
           currency?: string | null
+          due_date?: string | null
           id?: string
+          installment_number?: number | null
           opportunity_id?: string
           paid_at?: string | null
           payment_link?: string | null
