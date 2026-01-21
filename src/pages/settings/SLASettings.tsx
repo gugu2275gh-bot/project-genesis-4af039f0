@@ -93,19 +93,33 @@ const DEFAULT_SLAS: SLAConfig[] = [
     unit: 'dias',
   },
   
-  // Pagamentos
+  // Pagamentos - SLAs de Cobrança por Vencimento
   {
-    key: 'sla_payment_reminder_1_days',
-    value: '1',
-    label: 'Lembrete de Pagamento (1º)',
-    description: 'Primeiro lembrete de pagamento pendente',
+    key: 'sla_payment_overdue_d1_hours',
+    value: '24',
+    label: 'Lembrete D+1 (Pagamento)',
+    description: 'Notificação ao cliente 24h após vencimento',
+    unit: 'horas',
+  },
+  {
+    key: 'sla_payment_overdue_d3_hours',
+    value: '72',
+    label: 'Lembrete D+3 (Pagamento)',
+    description: 'Notificação cliente + alerta ao financeiro',
+    unit: 'horas',
+  },
+  {
+    key: 'sla_payment_overdue_escalation_days',
+    value: '7',
+    label: 'Escalação D+7 (Pagamento)',
+    description: 'Alerta ao cliente + gerente, possível cancelamento',
     unit: 'dias',
   },
   {
-    key: 'sla_payment_reminder_2_days',
-    value: '3',
-    label: 'Lembrete de Pagamento (2º)',
-    description: 'Segundo lembrete de pagamento pendente',
+    key: 'sla_payment_overdue_cancel_days',
+    value: '8',
+    label: 'Cancelamento Automático',
+    description: 'Cancelar contrato após dias sem pagamento',
     unit: 'dias',
   },
   
