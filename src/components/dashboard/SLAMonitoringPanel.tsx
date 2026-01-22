@@ -15,7 +15,7 @@ import {
   Shield,
   ChevronRight,
 } from 'lucide-react';
-import { useSLAMonitoring } from '@/hooks/useSLAMonitoring';
+import { useSLAMonitoring, SLABreachItem } from '@/hooks/useSLAMonitoring';
 import { cn } from '@/lib/utils';
 
 const TYPE_ICONS = {
@@ -26,12 +26,20 @@ const TYPE_ICONS = {
   document: FileCheck,
 };
 
-const TYPE_ROUTES = {
-  lead: '/leads',
-  contract: '/contracts',
-  payment: '/payments',
-  requirement: '/cases',
-  document: '/cases',
+const getBreachRoute = (breach: SLABreachItem): string => {
+  switch (breach.type) {
+    case 'lead':
+      return breach.relatedId ? `/crm/leads/${breach.relatedId}` : '/crm/leads';
+    case 'contract':
+      return breach.relatedId ? `/contracts/${breach.relatedId}` : '/contracts';
+    case 'payment':
+      return '/payments';
+    case 'requirement':
+    case 'document':
+      return breach.relatedId ? `/cases/${breach.relatedId}` : '/cases';
+    default:
+      return '/dashboard';
+  }
 };
 
 export default function SLAMonitoringPanel() {
@@ -204,7 +212,7 @@ export default function SLAMonitoringPanel() {
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {slaData.breaches.map((breach) => {
                 const Icon = TYPE_ICONS[breach.type];
-                const route = TYPE_ROUTES[breach.type];
+                const route = getBreachRoute(breach);
                 return (
                   <div
                     key={breach.id}
