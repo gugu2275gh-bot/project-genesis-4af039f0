@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-interface SLABreachItem {
+export interface SLABreachItem {
   id: string;
   type: 'lead' | 'contract' | 'payment' | 'requirement' | 'document';
   title: string;
@@ -107,9 +107,9 @@ export function useSLAMonitoring() {
             type: 'contract',
             title: 'Contrato pendente assinatura',
             description: `Contrato enviado há ${daysOverdue + slaMap.sla_contract_signature_reminder_1_days} dias`,
+            relatedId: contract.id,
             severity: daysOverdue > 3 ? 'critical' : 'warning',
             hoursOverdue: daysOverdue * 24,
-            relatedId: contract.opportunity_id,
           });
         }
       });
