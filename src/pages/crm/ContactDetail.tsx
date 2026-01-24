@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Select,
   SelectContent,
@@ -28,7 +30,10 @@ import {
   Save,
   AlertCircle,
   FileText,
-  Loader2
+  Loader2,
+  MapPin,
+  Users,
+  CreditCard
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -37,6 +42,7 @@ import {
   LANGUAGE_LABELS,
   LEAD_STATUS_LABELS,
   SERVICE_INTEREST_LABELS,
+  DOCUMENT_TYPE_LABELS,
 } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 
@@ -65,6 +71,11 @@ export default function ContactDetail() {
         nationality: contact.nationality,
         origin_channel: contact.origin_channel,
         preferred_language: contact.preferred_language,
+        document_type: contact.document_type,
+        document_number: contact.document_number,
+        address: contact.address,
+        referral_name: contact.referral_name,
+        referral_confirmed: contact.referral_confirmed,
       });
       setPhoneInput(contact.phone?.toString() || '');
       setIsEditing(true);
@@ -237,6 +248,67 @@ export default function ContactDetail() {
                       />
                     </div>
                   </div>
+
+                  <Separator className="my-4" />
+
+                  {/* Documento */}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <Label>Tipo de Documento</Label>
+                      <Select
+                        value={editedContact.document_type || ''}
+                        onValueChange={(v) => setEditedContact({ ...editedContact, document_type: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Número do Documento</Label>
+                      <Input
+                        value={editedContact.document_number || ''}
+                        onChange={(e) => setEditedContact({ ...editedContact, document_number: e.target.value })}
+                        placeholder="Ex: Y1234567X"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Endereço */}
+                  <div>
+                    <Label>Endereço</Label>
+                    <Textarea
+                      value={editedContact.address || ''}
+                      onChange={(e) => setEditedContact({ ...editedContact, address: e.target.value })}
+                      placeholder="Endereço completo"
+                      rows={2}
+                    />
+                  </div>
+
+                  {/* Indicação */}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <Label>Indicado por (Colaborador/Parceiro)</Label>
+                      <Input
+                        value={editedContact.referral_name || ''}
+                        onChange={(e) => setEditedContact({ ...editedContact, referral_name: e.target.value })}
+                        placeholder="Nome do colaborador"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 pt-6">
+                      <Checkbox
+                        id="referral_confirmed"
+                        checked={editedContact.referral_confirmed || false}
+                        onCheckedChange={(c) => setEditedContact({ ...editedContact, referral_confirmed: !!c })}
+                      />
+                      <Label htmlFor="referral_confirmed" className="cursor-pointer">Indicação confirmada</Label>
+                    </div>
+                  </div>
                   
                   <div className="flex justify-end gap-2 pt-4">
                     <Button variant="outline" onClick={() => setIsEditing(false)}>
@@ -303,6 +375,41 @@ export default function ContactDetail() {
                     <div>
                       <p className="text-sm text-muted-foreground">Nacionalidade</p>
                       <p className="font-medium">{contact.nationality || '-'}</p>
+                    </div>
+                  </div>
+
+                  {/* Documento */}
+                  <div className="flex items-center gap-3">
+                    <CreditCard className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">Documento</p>
+                      <p className="font-medium">
+                        {contact.document_type ? DOCUMENT_TYPE_LABELS[contact.document_type] : '-'}
+                        {contact.document_number && ` - ${contact.document_number}`}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Endereço */}
+                  <div className="flex items-start gap-3 col-span-2">
+                    <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">Endereço</p>
+                      <p className="font-medium">{contact.address || '-'}</p>
+                    </div>
+                  </div>
+
+                  {/* Indicação */}
+                  <div className="flex items-center gap-3 col-span-2">
+                    <Users className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">Indicado por</p>
+                      <p className="font-medium">
+                        {contact.referral_name || '-'}
+                        {contact.referral_confirmed && contact.referral_name && (
+                          <Badge variant="outline" className="ml-2">Confirmado</Badge>
+                        )}
+                      </p>
                     </div>
                   </div>
                 </div>

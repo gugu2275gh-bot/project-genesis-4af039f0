@@ -460,6 +460,11 @@ export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
   ca: 'Catalão',
 };
 
+export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  PASSAPORTE: 'Passaporte',
+  NIE: 'NIE',
+};
+
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   CARTAO: 'Cartão',
   TRANSFERENCIA: 'Transferência',
