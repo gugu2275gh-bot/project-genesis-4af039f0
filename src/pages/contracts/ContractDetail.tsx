@@ -35,6 +35,7 @@ export default function ContractDetail() {
     installment_amount: '',
     first_due_date: '',
     contract_template: 'GENERICO',
+    status: 'EM_ELABORACAO',
   });
   const [isEditing, setIsEditing] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -53,6 +54,7 @@ export default function ContractDetail() {
         installment_amount: contract.installment_amount?.toString() || '',
         first_due_date: contract.first_due_date || '',
         contract_template: (contract as any).contract_template || 'GENERICO',
+        status: contract.status || 'EM_ELABORACAO',
       });
     }
   }, [contract]);
@@ -102,7 +104,7 @@ export default function ContractDetail() {
       installment_amount: formData.installment_amount ? parseFloat(formData.installment_amount) : null,
       first_due_date: formData.first_due_date || null,
       contract_template: formData.contract_template,
-      status: 'EM_REVISAO',
+      status: formData.status,
     } as any);
     setIsEditing(false);
   };
@@ -347,21 +349,39 @@ export default function ContractDetail() {
                     </Select>
                   </div>
                 </div>
-                <div>
-                  <Label>Modelo do Contrato</Label>
-                  <Select
-                    value={formData.contract_template}
-                    onValueChange={(v) => setFormData({ ...formData, contract_template: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(CONTRACT_TEMPLATE_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Modelo do Contrato</Label>
+                    <Select
+                      value={formData.contract_template}
+                      onValueChange={(v) => setFormData({ ...formData, contract_template: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(CONTRACT_TEMPLATE_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Status do Contrato</Label>
+                    <Select
+                      value={formData.status}
+                      onValueChange={(v) => setFormData({ ...formData, status: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="EM_ELABORACAO">Em Elaboração</SelectItem>
+                        <SelectItem value="EM_REVISAO">Em Revisão</SelectItem>
+                        <SelectItem value="ENVIADO">Enviado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 {/* Installment Configuration */}
