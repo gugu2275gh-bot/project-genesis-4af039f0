@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { usePayments } from '@/hooks/usePayments';
 import { useOpportunities } from '@/hooks/useOpportunities';
 import { PageHeader } from '@/components/ui/page-header';
@@ -8,12 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Check, DollarSign, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText } from 'lucide-react';
 import { PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format, differenceInDays, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { RescheduleDialog } from '@/components/payments/RescheduleDialog';
+import { RefinanceDialog } from '@/components/payments/RefinanceDialog';
+import { downloadReceipt, generateReceiptNumber } from '@/lib/generate-receipt';
 
 export default function PaymentsList() {
   const { payments, isLoading, createPayment, confirmPayment } = usePayments();
@@ -29,6 +32,9 @@ export default function PaymentsList() {
   });
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState('');
+  const [reschedulePayment, setReschedulePayment] = useState<typeof payments[0] | null>(null);
+  const [showRefinanceDialog, setShowRefinanceDialog] = useState(false);
+  const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
 
   const availableOpportunities = opportunities.filter(o => 
     o.status === 'CONTRATO_ASSINADO' || o.status === 'PAGAMENTO_PENDENTE'
@@ -180,21 +186,75 @@ export default function PaymentsList() {
     {
       key: 'actions',
       header: '',
-      cell: (payment) => payment.status === 'PENDENTE' && (
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            setConfirmingId(payment.id);
-          }}
-        >
-          <Check className="h-4 w-4 mr-1" />
-          Confirmar
-        </Button>
+      cell: (payment) => (
+        <div className="flex items-center gap-1">
+          {payment.status === 'PENDENTE' && (
+            <>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmingId(payment.id);
+                }}
+              >
+                <Check className="h-4 w-4 mr-1" />
+                Confirmar
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setReschedulePayment(payment);
+                }}
+                title="Prorrogar"
+              >
+                <CalendarClock className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+          {payment.status === 'CONFIRMADO' && (
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                const clientName = payment.opportunities?.leads?.contacts?.full_name || 'Cliente';
+                downloadReceipt({
+                  receiptNumber: generateReceiptNumber(),
+                  clientName,
+                  clientDocument: payment.opportunities?.leads?.contacts?.document_number || undefined,
+                  amount: payment.amount,
+                  currency: payment.currency || 'EUR',
+                  paymentMethod: PAYMENT_METHOD_LABELS[payment.payment_method || 'OUTRO'],
+                  paymentDate: payment.paid_at ? format(new Date(payment.paid_at), 'dd/MM/yyyy') : format(new Date(), 'dd/MM/yyyy'),
+                  transactionId: payment.transaction_id || undefined,
+                  description: 'Serviços de assessoria em extranjería',
+                });
+              }}
+              title="Gerar Recibo"
+            >
+              <FileText className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       ),
     },
   ];
+
+  // Calculate outstanding balance for refinancing
+  const getOutstandingBalance = (contractId: string) => {
+    return payments
+      .filter(p => p.contract_id === contractId && p.status === 'PENDENTE')
+      .reduce((sum, p) => sum + p.amount, 0);
+  };
+
+  const getPendingPaymentIds = (contractId: string) => {
+    return payments
+      .filter(p => p.contract_id === contractId && p.status === 'PENDENTE')
+      .map(p => p.id);
+  };
 
   // Highlight overdue rows
   const getRowClassName = (payment: typeof payments[0]) => {
@@ -365,6 +425,28 @@ export default function PaymentsList() {
         emptyMessage="Nenhum pagamento encontrado"
         rowClassName={getRowClassName}
       />
+
+      {/* Reschedule Dialog */}
+      {reschedulePayment && (
+        <RescheduleDialog
+          open={!!reschedulePayment}
+          onOpenChange={(open) => !open && setReschedulePayment(null)}
+          payment={reschedulePayment}
+        />
+      )}
+
+      {/* Refinance Dialog */}
+      {showRefinanceDialog && selectedContractId && (
+        <RefinanceDialog
+          open={showRefinanceDialog}
+          onOpenChange={setShowRefinanceDialog}
+          outstandingBalance={getOutstandingBalance(selectedContractId)}
+          opportunityId={payments.find(p => p.contract_id === selectedContractId)?.opportunity_id || ''}
+          contractId={selectedContractId}
+          clientName={payments.find(p => p.contract_id === selectedContractId)?.opportunities?.leads?.contacts?.full_name || 'Cliente'}
+          pendingPaymentIds={getPendingPaymentIds(selectedContractId)}
+        />
+      )}
     </div>
   );
 }

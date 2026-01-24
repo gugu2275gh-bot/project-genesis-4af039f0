@@ -397,6 +397,7 @@ export type Database = {
           installment_count: number | null
           language: Database["public"]["Enums"]["language_code"] | null
           opportunity_id: string
+          payment_status: string | null
           refund_policy_text: string | null
           scope_summary: string | null
           service_type: Database["public"]["Enums"]["service_interest"]
@@ -419,6 +420,7 @@ export type Database = {
           installment_count?: number | null
           language?: Database["public"]["Enums"]["language_code"] | null
           opportunity_id: string
+          payment_status?: string | null
           refund_policy_text?: string | null
           scope_summary?: string | null
           service_type: Database["public"]["Enums"]["service_interest"]
@@ -441,6 +443,7 @@ export type Database = {
           installment_count?: number | null
           language?: Database["public"]["Enums"]["language_code"] | null
           opportunity_id?: string
+          payment_status?: string | null
           refund_policy_text?: string | null
           scope_summary?: string | null
           service_type?: Database["public"]["Enums"]["service_interest"]
@@ -1053,9 +1056,14 @@ export type Database = {
           id: string
           installment_number: number | null
           opportunity_id: string
+          original_due_date: string | null
           paid_at: string | null
           payment_link: string | null
           payment_method: Database["public"]["Enums"]["payment_method"] | null
+          receipt_available_in_portal: boolean | null
+          receipt_url: string | null
+          rescheduled_at: string | null
+          rescheduled_reason: string | null
           status: Database["public"]["Enums"]["payment_status"] | null
           transaction_id: string | null
           updated_at: string | null
@@ -1069,9 +1077,14 @@ export type Database = {
           id?: string
           installment_number?: number | null
           opportunity_id: string
+          original_due_date?: string | null
           paid_at?: string | null
           payment_link?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          receipt_available_in_portal?: boolean | null
+          receipt_url?: string | null
+          rescheduled_at?: string | null
+          rescheduled_reason?: string | null
           status?: Database["public"]["Enums"]["payment_status"] | null
           transaction_id?: string | null
           updated_at?: string | null
@@ -1085,9 +1098,14 @@ export type Database = {
           id?: string
           installment_number?: number | null
           opportunity_id?: string
+          original_due_date?: string | null
           paid_at?: string | null
           payment_link?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          receipt_available_in_portal?: boolean | null
+          receipt_url?: string | null
+          rescheduled_at?: string | null
+          rescheduled_reason?: string | null
           status?: Database["public"]["Enums"]["payment_status"] | null
           transaction_id?: string | null
           updated_at?: string | null
@@ -1229,6 +1247,7 @@ export type Database = {
           created_at: string | null
           decision_date: string | null
           decision_result: Database["public"]["Enums"]["decision_result"] | null
+          documents_completed_at: string | null
           expected_protocol_date: string | null
           huellas_completed: boolean | null
           huellas_date: string | null
@@ -1240,13 +1259,18 @@ export type Database = {
           juridical_notes: string | null
           juridical_review_status: string | null
           opportunity_id: string
+          protocol_instructions_sent: boolean | null
           protocol_number: string | null
+          requirement_deadline: string | null
+          requirement_received_at: string | null
           resource_deadline: string | null
           resource_notes: string | null
           resource_status: string | null
           sector: Database["public"]["Enums"]["service_sector"]
+          sent_to_legal_at: string | null
           service_type: Database["public"]["Enums"]["service_interest"]
           submission_date: string | null
+          technical_approved_at: string | null
           technical_status:
             | Database["public"]["Enums"]["technical_status"]
             | null
@@ -1266,6 +1290,7 @@ export type Database = {
           decision_result?:
             | Database["public"]["Enums"]["decision_result"]
             | null
+          documents_completed_at?: string | null
           expected_protocol_date?: string | null
           huellas_completed?: boolean | null
           huellas_date?: string | null
@@ -1277,13 +1302,18 @@ export type Database = {
           juridical_notes?: string | null
           juridical_review_status?: string | null
           opportunity_id: string
+          protocol_instructions_sent?: boolean | null
           protocol_number?: string | null
+          requirement_deadline?: string | null
+          requirement_received_at?: string | null
           resource_deadline?: string | null
           resource_notes?: string | null
           resource_status?: string | null
           sector: Database["public"]["Enums"]["service_sector"]
+          sent_to_legal_at?: string | null
           service_type: Database["public"]["Enums"]["service_interest"]
           submission_date?: string | null
+          technical_approved_at?: string | null
           technical_status?:
             | Database["public"]["Enums"]["technical_status"]
             | null
@@ -1303,6 +1333,7 @@ export type Database = {
           decision_result?:
             | Database["public"]["Enums"]["decision_result"]
             | null
+          documents_completed_at?: string | null
           expected_protocol_date?: string | null
           huellas_completed?: boolean | null
           huellas_date?: string | null
@@ -1314,13 +1345,18 @@ export type Database = {
           juridical_notes?: string | null
           juridical_review_status?: string | null
           opportunity_id?: string
+          protocol_instructions_sent?: boolean | null
           protocol_number?: string | null
+          requirement_deadline?: string | null
+          requirement_received_at?: string | null
           resource_deadline?: string | null
           resource_notes?: string | null
           resource_status?: string | null
           sector?: Database["public"]["Enums"]["service_sector"]
+          sent_to_legal_at?: string | null
           service_type?: Database["public"]["Enums"]["service_interest"]
           submission_date?: string | null
+          technical_approved_at?: string | null
           technical_status?:
             | Database["public"]["Enums"]["technical_status"]
             | null

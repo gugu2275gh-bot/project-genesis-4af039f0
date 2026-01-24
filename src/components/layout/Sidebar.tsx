@@ -8,6 +8,7 @@ import {
   CreditCard,
   Briefcase,
   Settings,
+  Scale,
   Bell,
   CheckSquare,
   BarChart3,
@@ -42,6 +43,7 @@ const navItems: NavItem[] = [
     ]
   },
   { label: 'Contratos', href: '/contracts', icon: FileText, roles: ['ADMIN', 'MANAGER', 'JURIDICO', 'ATENCAO_CLIENTE'] },
+  { label: 'Jurídico', href: '/legal', icon: Scale, roles: ['ADMIN', 'MANAGER', 'JURIDICO'] },
   { 
     label: 'Financeiro', 
     href: '/finance', 

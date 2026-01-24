@@ -19,10 +19,13 @@ import {
   Clock, 
   CheckCircle,
   AlertCircle,
-  FileText
+  FileText,
+  Download
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { downloadEX17 } from '@/lib/generate-ex17';
+import { downloadTaxa790 } from '@/lib/generate-taxa790';
 
 interface HuellasSectionProps {
   serviceCase: {
@@ -32,6 +35,15 @@ interface HuellasSectionProps {
     huellas_location?: string | null;
     huellas_completed?: boolean;
     technical_status?: string;
+    service_type?: string;
+  };
+  clientData?: {
+    fullName: string;
+    nie?: string;
+    nationality?: string;
+    address?: string;
+    phone?: string;
+    email?: string;
   };
   onUpdate: (data: {
     huellas_date?: string;
@@ -42,7 +54,7 @@ interface HuellasSectionProps {
   isUpdating?: boolean;
 }
 
-export function HuellasSection({ serviceCase, onUpdate, isUpdating }: HuellasSectionProps) {
+export function HuellasSection({ serviceCase, clientData, onUpdate, isUpdating }: HuellasSectionProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     huellas_date: serviceCase.huellas_date || '',
@@ -224,7 +236,7 @@ export function HuellasSection({ serviceCase, onUpdate, isUpdating }: HuellasSec
         {isScheduled && !isCompleted && (
           <>
             <Separator />
-            <div className="space-y-2">
+            <div className="space-y-3">
               <h4 className="text-sm font-medium flex items-center gap-2">
                 <FileText className="h-4 w-4" />
                 Documentos para levar
@@ -236,6 +248,52 @@ export function HuellasSection({ serviceCase, onUpdate, isUpdating }: HuellasSec
                 <li>Comprovante de pagamento Taxa 790/012</li>
                 <li>Foto 3x4 fundo branco (2 unidades)</li>
               </ul>
+
+              {/* PDF Generation Buttons */}
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (clientData) {
+                      downloadEX17({
+                        fullName: clientData.fullName,
+                        nie: clientData.nie,
+                        nationality: clientData.nationality,
+                        address: clientData.address,
+                        phone: clientData.phone,
+                        email: clientData.email,
+                        requestType: 'INICIAL',
+                        serviceType: serviceCase.service_type || 'Residencia Temporal',
+                      });
+                    }
+                  }}
+                  disabled={!clientData}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Gerar EX17
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (clientData) {
+                      downloadTaxa790({
+                        fullName: clientData.fullName,
+                        nie: clientData.nie,
+                        address: clientData.address,
+                        taxCode: '790',
+                        taxAmount: 16.08,
+                        concept: 'Expedición de Tarjeta de Identidad de Extranjero (TIE)',
+                      });
+                    }
+                  }}
+                  disabled={!clientData}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Gerar Taxa 790
+                </Button>
+              </div>
             </div>
           </>
         )}
