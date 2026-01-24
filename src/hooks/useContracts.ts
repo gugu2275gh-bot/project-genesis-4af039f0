@@ -33,7 +33,9 @@ export function useContracts() {
             *,
             leads (
               *,
-              contacts (*)
+              contacts (
+                id, full_name, email, phone, address, document_type, document_number
+              )
             )
           )
         `)
@@ -256,7 +258,9 @@ export function useContract(id: string | undefined) {
             *,
             leads (
               *,
-              contacts (*)
+              contacts (
+                id, full_name, email, phone, address, document_type, document_number
+              )
             )
           )
         `)

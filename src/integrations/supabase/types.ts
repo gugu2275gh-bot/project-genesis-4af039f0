@@ -385,11 +385,15 @@ export type Database = {
       }
       contracts: {
         Row: {
+          assigned_to_user_id: string | null
           cancellation_reason: string | null
+          contract_number: string | null
           contract_template: string | null
           created_at: string | null
           created_by_user_id: string | null
           currency: string | null
+          down_payment: number | null
+          down_payment_date: string | null
           external_signature_id: string | null
           first_due_date: string | null
           id: string
@@ -398,6 +402,8 @@ export type Database = {
           installment_count: number | null
           language: Database["public"]["Enums"]["language_code"] | null
           opportunity_id: string
+          payment_account: string | null
+          payment_method: string | null
           payment_status: string | null
           refund_policy_text: string | null
           scope_summary: string | null
@@ -410,11 +416,15 @@ export type Database = {
           updated_by_user_id: string | null
         }
         Insert: {
+          assigned_to_user_id?: string | null
           cancellation_reason?: string | null
+          contract_number?: string | null
           contract_template?: string | null
           created_at?: string | null
           created_by_user_id?: string | null
           currency?: string | null
+          down_payment?: number | null
+          down_payment_date?: string | null
           external_signature_id?: string | null
           first_due_date?: string | null
           id?: string
@@ -423,6 +433,8 @@ export type Database = {
           installment_count?: number | null
           language?: Database["public"]["Enums"]["language_code"] | null
           opportunity_id: string
+          payment_account?: string | null
+          payment_method?: string | null
           payment_status?: string | null
           refund_policy_text?: string | null
           scope_summary?: string | null
@@ -435,11 +447,15 @@ export type Database = {
           updated_by_user_id?: string | null
         }
         Update: {
+          assigned_to_user_id?: string | null
           cancellation_reason?: string | null
+          contract_number?: string | null
           contract_template?: string | null
           created_at?: string | null
           created_by_user_id?: string | null
           currency?: string | null
+          down_payment?: number | null
+          down_payment_date?: string | null
           external_signature_id?: string | null
           first_due_date?: string | null
           id?: string
@@ -448,6 +464,8 @@ export type Database = {
           installment_count?: number | null
           language?: Database["public"]["Enums"]["language_code"] | null
           opportunity_id?: string
+          payment_account?: string | null
+          payment_method?: string | null
           payment_status?: string | null
           refund_policy_text?: string | null
           scope_summary?: string | null
@@ -460,6 +478,13 @@ export type Database = {
           updated_by_user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "contracts_assigned_to_user_id_fkey"
+            columns: ["assigned_to_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contracts_opportunity_id_fkey"
             columns: ["opportunity_id"]
