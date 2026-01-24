@@ -48,6 +48,11 @@ export default function ContractDetail() {
   const [isUploading, setIsUploading] = useState(false);
   const [signedDocumentUrl, setSignedDocumentUrl] = useState<string | null>(null);
   const { toast } = useToast();
+  
+  // State for sign with upload dialog
+  const [showSignDialog, setShowSignDialog] = useState(false);
+  const [signDialogFile, setSignDialogFile] = useState<File | null>(null);
+  const [isSigningWithUpload, setIsSigningWithUpload] = useState(false);
 
   // Initialize form data when contract loads
   useEffect(() => {
@@ -168,8 +173,53 @@ export default function ContractDetail() {
     await sendForSignature.mutateAsync(contract.id);
   };
 
-  const handleMarkAsSigned = async () => {
-    await markAsSigned.mutateAsync(contract.id);
+  const handleMarkAsSignedWithUpload = async () => {
+    if (!signDialogFile) {
+      toast({
+        title: 'Documento obrigatório',
+        description: 'É necessário anexar o contrato assinado.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSigningWithUpload(true);
+    
+    try {
+      // 1. Upload do documento
+      const fileExt = signDialogFile.name.split('.').pop();
+      const filePath = `contracts/${contract.id}/signed-${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('signed-contracts')
+        .upload(filePath, signDialogFile);
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('signed-contracts')
+        .getPublicUrl(filePath);
+
+      // 2. Atualizar contrato com URL do documento
+      await updateContract.mutateAsync({
+        id: contract.id,
+        signed_document_url: urlData.publicUrl,
+      } as any);
+
+      // 3. Marcar como assinado (gera pagamentos)
+      await markAsSigned.mutateAsync(contract.id);
+      
+      setShowSignDialog(false);
+      setSignDialogFile(null);
+    } catch (error: any) {
+      toast({
+        title: 'Erro ao processar assinatura',
+        description: error.message || 'Não foi possível completar a operação.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSigningWithUpload(false);
+    }
   };
 
   const handleCancel = async () => {
@@ -240,9 +290,9 @@ export default function ContractDetail() {
               </Button>
             )}
             {canSign && (
-              <Button onClick={handleMarkAsSigned} disabled={markAsSigned.isPending}>
+              <Button onClick={() => setShowSignDialog(true)}>
                 <Check className="h-4 w-4 mr-2" />
-                {markAsSigned.isPending ? 'Marcando...' : 'Marcar como Assinado'}
+                Marcar como Assinado
               </Button>
             )}
           </div>
@@ -279,6 +329,97 @@ export default function ContractDetail() {
               disabled={!cancellationReason.trim() || cancelContract.isPending}
             >
               {cancelContract.isPending ? 'Cancelando...' : 'Confirmar Cancelamento'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para Marcar como Assinado com Upload Obrigatório */}
+      <Dialog open={showSignDialog} onOpenChange={(open) => {
+        setShowSignDialog(open);
+        if (!open) setSignDialogFile(null);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Marcar Contrato como Assinado</DialogTitle>
+            <DialogDescription>
+              Para marcar o contrato como assinado, é obrigatório anexar o documento assinado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="p-4 border-2 border-dashed border-primary/50 rounded-lg bg-primary/5 space-y-3">
+              <div className="flex items-center gap-2">
+                <Upload className="h-5 w-5 text-primary" />
+                <Label className="text-primary font-medium">
+                  Contrato Assinado (obrigatório)
+                </Label>
+              </div>
+              
+              {signDialogFile ? (
+                <div className="flex items-center justify-between p-3 bg-background rounded-md border">
+                  <div className="flex items-center gap-2">
+                    <FileCheck className="h-4 w-4 text-primary" />
+                    <span className="text-sm">{signDialogFile.name}</span>
+                  </div>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setSignDialogFile(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div>
+                  <Input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 10 * 1024 * 1024) {
+                          toast({ 
+                            title: 'Arquivo muito grande', 
+                            description: 'Máximo 10MB', 
+                            variant: 'destructive' 
+                          });
+                          return;
+                        }
+                        setSignDialogFile(file);
+                      }
+                    }}
+                    className="cursor-pointer"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Formatos aceitos: PDF, JPG, PNG (máx. 10MB)
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowSignDialog(false);
+              setSignDialogFile(null);
+            }}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleMarkAsSignedWithUpload}
+              disabled={!signDialogFile || isSigningWithUpload}
+            >
+              {isSigningWithUpload ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processando...
+                </>
+              ) : (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  Confirmar Assinatura
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -460,7 +601,7 @@ export default function ContractDetail() {
                     {signedDocumentUrl || signedDocumentFile ? (
                       <div className="flex items-center justify-between p-3 bg-background rounded-md border">
                         <div className="flex items-center gap-2">
-                          <FileCheck className="h-4 w-4 text-green-600" />
+                          <FileCheck className="h-4 w-4 text-primary" />
                           <span className="text-sm">
                             {signedDocumentFile?.name || 'Documento anexado'}
                           </span>
