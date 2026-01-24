@@ -48,6 +48,22 @@ export default function ContractsList() {
     setSelectedOpportunity('');
   };
 
+  const calculatePaymentStatus = (contract: typeof contracts[0]) => {
+    const totalFee = contract.total_fee || 0;
+    const payments = contract.payments || [];
+    
+    const paidAmount = payments
+      .filter(p => p.status === 'CONFIRMADO')
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+    
+    const balance = totalFee - paidAmount;
+    
+    return { totalFee, paidAmount, balance };
+  };
+
+  const formatCurrency = (value: number, currency: string = 'EUR') => 
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(value);
+
   const columns: Column<typeof contracts[0]>[] = [
     {
       key: 'client',
@@ -76,10 +92,36 @@ export default function ContractsList() {
     },
     {
       key: 'total_fee',
-      header: 'Valor',
-      cell: (contract) => contract.total_fee 
-        ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: contract.currency || 'EUR' }).format(contract.total_fee)
-        : '-',
+      header: 'Valor Total',
+      cell: (contract) => {
+        const { totalFee } = calculatePaymentStatus(contract);
+        return totalFee > 0 ? formatCurrency(totalFee, contract.currency || 'EUR') : '-';
+      },
+    },
+    {
+      key: 'paid_amount',
+      header: 'Pago',
+      cell: (contract) => {
+        const { paidAmount } = calculatePaymentStatus(contract);
+        return (
+          <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+            {formatCurrency(paidAmount, contract.currency || 'EUR')}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'balance',
+      header: 'Saldo',
+      cell: (contract) => {
+        const { balance } = calculatePaymentStatus(contract);
+        const isFullyPaid = balance <= 0;
+        return (
+          <span className={isFullyPaid ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-amber-600 dark:text-amber-400 font-medium'}>
+            {isFullyPaid ? 'Quitado' : formatCurrency(balance, contract.currency || 'EUR')}
+          </span>
+        );
+      },
     },
     {
       key: 'signed_at',

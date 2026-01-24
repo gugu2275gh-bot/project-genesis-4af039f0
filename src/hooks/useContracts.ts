@@ -15,6 +15,13 @@ export type ContractWithOpportunity = Contract & {
       contacts: Tables<'contacts'> | null;
     };
   };
+  payments?: Array<{
+    id: string;
+    amount: number;
+    status: string;
+    paid_at: string | null;
+    installment_number: number | null;
+  }>;
 };
 
 export function useContracts() {
@@ -37,6 +44,9 @@ export function useContracts() {
                 id, full_name, email, phone, address, document_type, document_number
               )
             )
+          ),
+          payments (
+            id, amount, status, paid_at, installment_number
           )
         `)
         .order('created_at', { ascending: false });
