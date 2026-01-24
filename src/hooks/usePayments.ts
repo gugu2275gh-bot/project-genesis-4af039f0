@@ -89,14 +89,33 @@ export function usePayments() {
 
       let isFirstPayment = false;
       let caseCreated = false;
+      let contractId = payment.contract_id;
 
-      // 2. Check if payment has a linked contract
-      if (payment.contract_id) {
-        // 3. Get contract to check current payment_status
+      // 2. If payment has no contract_id, try to find contract by opportunity_id
+      if (!contractId && payment.opportunity_id) {
+        const { data: contractByOpp } = await supabase
+          .from('contracts')
+          .select('id')
+          .eq('opportunity_id', payment.opportunity_id)
+          .maybeSingle();
+        
+        if (contractByOpp) {
+          contractId = contractByOpp.id;
+          // Update payment with contract_id for future reference
+          await supabase
+            .from('payments')
+            .update({ contract_id: contractId })
+            .eq('id', payment.id);
+        }
+      }
+
+      // 3. Check if payment has a linked contract
+      if (contractId) {
+        // 4. Get contract to check current payment_status
         const { data: contract } = await supabase
           .from('contracts')
           .select('id, payment_status, opportunity_id')
-          .eq('id', payment.contract_id)
+          .eq('id', contractId)
           .single();
 
         // 4. If payment_status is NAO_INICIADO, this is the FIRST payment
@@ -188,7 +207,7 @@ export function usePayments() {
         const { data: allPayments } = await supabase
           .from('payments')
           .select('status')
-          .eq('contract_id', payment.contract_id);
+          .eq('contract_id', contractId);
 
         const allConfirmed = allPayments?.every(p => p.status === 'CONFIRMADO');
 
@@ -197,7 +216,7 @@ export function usePayments() {
           await supabase
             .from('contracts')
             .update({ payment_status: 'QUITADO' })
-            .eq('id', payment.contract_id);
+            .eq('id', contractId);
         }
       } else {
         // Payment without linked contract - legacy behavior
