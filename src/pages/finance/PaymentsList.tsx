@@ -32,6 +32,7 @@ export default function PaymentsList() {
   });
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState('');
+  const [paidAtDate, setPaidAtDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [reschedulePayment, setReschedulePayment] = useState<typeof payments[0] | null>(null);
   const [showRefinanceDialog, setShowRefinanceDialog] = useState(false);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
@@ -66,9 +67,11 @@ export default function PaymentsList() {
   };
 
   const handleConfirm = async (id: string) => {
-    await confirmPayment.mutateAsync({ id, transactionId });
+    const paidAtDateTime = new Date(paidAtDate + 'T' + format(new Date(), 'HH:mm:ss'));
+    await confirmPayment.mutateAsync({ id, transactionId, paidAt: paidAtDateTime.toISOString() });
     setConfirmingId(null);
     setTransactionId('');
+    setPaidAtDate(format(new Date(), 'yyyy-MM-dd'));
   };
 
   // Helper to check if payment is overdue
@@ -371,6 +374,14 @@ export default function PaymentsList() {
             <DialogTitle>Confirmar Pagamento</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div>
+              <Label>Data do Pagamento</Label>
+              <Input
+                type="date"
+                value={paidAtDate}
+                onChange={(e) => setPaidAtDate(e.target.value)}
+              />
+            </div>
             <div>
               <Label>ID da Transação (opcional)</Label>
               <Input

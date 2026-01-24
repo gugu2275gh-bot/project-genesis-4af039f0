@@ -72,13 +72,13 @@ export function usePayments() {
   });
 
   const confirmPayment = useMutation({
-    mutationFn: async ({ id, transactionId }: { id: string; transactionId?: string }) => {
+    mutationFn: async ({ id, transactionId, paidAt }: { id: string; transactionId?: string; paidAt?: string }) => {
       // 1. Update payment
       const { data: payment, error: paymentError } = await supabase
         .from('payments')
         .update({
           status: 'CONFIRMADO',
-          paid_at: new Date().toISOString(),
+          paid_at: paidAt || new Date().toISOString(),
           transaction_id: transactionId,
         })
         .eq('id', id)
