@@ -26,6 +26,7 @@ import OpportunityDetail from "./pages/crm/OpportunityDetail";
 // Legal Pages
 import ContractsList from "./pages/contracts/ContractsList";
 import ContractDetail from "./pages/contracts/ContractDetail";
+import LegalDashboard from "./pages/legal/LegalDashboard";
 
 // Finance Pages
 import PaymentsList from "./pages/finance/PaymentsList";
@@ -107,6 +108,7 @@ function AppRoutes() {
         <Route path="/crm/opportunities/:id" element={<OpportunityDetail />} />
         
         {/* Legal Module */}
+        <Route path="/legal" element={<LegalDashboard />} />
         <Route path="/contracts" element={<ContractsList />} />
         <Route path="/contracts/:id" element={<ContractDetail />} />
         

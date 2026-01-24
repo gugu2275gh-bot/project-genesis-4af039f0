@@ -18,6 +18,7 @@ import {
   PAYMENT_STATUS_LABELS,
   PAYMENT_METHOD_LABELS 
 } from '@/types/database';
+import { downloadReceipt, generateReceiptNumber } from '@/lib/generate-receipt';
 
 const statusConfig: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
   PENDENTE: { icon: Clock, color: 'text-warning', bg: 'bg-warning/10' },
@@ -171,7 +172,22 @@ export default function PortalPayments() {
                           </Button>
                         )}
                         {status === 'CONFIRMADO' && (
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              downloadReceipt({
+                                receiptNumber: generateReceiptNumber(),
+                                clientName: user?.email || 'Cliente',
+                                amount: payment.amount,
+                                currency: payment.currency || 'EUR',
+                                paymentMethod: PAYMENT_METHOD_LABELS[payment.payment_method || 'OUTRO'],
+                                paymentDate: payment.paid_at ? format(new Date(payment.paid_at), 'dd/MM/yyyy') : format(new Date(), 'dd/MM/yyyy'),
+                                transactionId: payment.transaction_id || undefined,
+                                description: 'Serviços de assessoria em extranjería',
+                              });
+                            }}
+                          >
                             <Receipt className="h-4 w-4 mr-2" />
                             Ver Recibo
                           </Button>

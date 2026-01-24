@@ -35,6 +35,12 @@ serve(async (req) => {
       onboardingReminders: 0,
       tiePickupReminders: 0,
       contractsCancelled: 0,
+      technicalReviewAlerts: 0,
+      sendToLegalAlerts: 0,
+      requirementAlerts: 0,
+      preProtocolReminders: 0,
+      postProtocolAlerts: 0,
+      protocolInstructionsSent: 0,
     }
 
     // Fetch SLA configurations
@@ -561,6 +567,225 @@ serve(async (req) => {
           })
         }
         results.onboardingReminders++
+      }
+    }
+
+    // =====================================================
+    // 10. TECHNICAL REVIEW ALERTS (2, 5, 7 days after docs complete)
+    // =====================================================
+    const { data: casesAwaitingTechReview } = await supabase
+      .from('service_cases')
+      .select(`
+        id, documents_completed_at, assigned_to_user_id,
+        opportunities!inner (leads!inner (contacts!inner (full_name)))
+      `)
+      .eq('technical_status', 'EM_REVISAO_TECNICA')
+      .not('documents_completed_at', 'is', null)
+
+    for (const sc of casesAwaitingTechReview || []) {
+      if (!sc.documents_completed_at) continue
+      const daysSinceDocsComplete = Math.floor((now.getTime() - new Date(sc.documents_completed_at).getTime()) / (1000 * 60 * 60 * 24))
+      const oppData = sc.opportunities as unknown as { leads: { contacts: { full_name: string } } }
+      const clientName = oppData?.leads?.contacts?.full_name || 'Cliente'
+      
+      // Alert at 2, 5, 7 days
+      if ([2, 5, 7].includes(daysSinceDocsComplete)) {
+        const alertLevel = daysSinceDocsComplete >= 7 ? 'ADM' : daysSinceDocsComplete >= 5 ? 'COORDENADOR' : 'TÉCNICO'
+        
+        // Create notification for the assigned technician
+        if (sc.assigned_to_user_id) {
+          await supabase.from('notifications').insert({
+            user_id: sc.assigned_to_user_id,
+            title: `Revisão Técnica Pendente - ${daysSinceDocsComplete} dias`,
+            message: `O caso de ${clientName} aguarda revisão técnica há ${daysSinceDocsComplete} dias. Nível: ${alertLevel}`,
+            type: 'sla_technical_review',
+          })
+        }
+        
+        results.technicalReviewAlerts++
+      }
+    }
+
+    // =====================================================
+    // 11. SEND TO LEGAL ALERTS (3, 5, 8 days after technical approval)
+    // =====================================================
+    const { data: casesAwaitingSendToLegal } = await supabase
+      .from('service_cases')
+      .select(`
+        id, technical_approved_at, assigned_to_user_id,
+        opportunities!inner (leads!inner (contacts!inner (full_name)))
+      `)
+      .eq('technical_status', 'DOCUMENTACAO_APROVADA')
+      .not('technical_approved_at', 'is', null)
+
+    for (const sc of casesAwaitingSendToLegal || []) {
+      if (!sc.technical_approved_at) continue
+      const daysSinceApproval = Math.floor((now.getTime() - new Date(sc.technical_approved_at).getTime()) / (1000 * 60 * 60 * 24))
+      const oppData = sc.opportunities as unknown as { leads: { contacts: { full_name: string } } }
+      const clientName = oppData?.leads?.contacts?.full_name || 'Cliente'
+      
+      // Alert at 3, 5, 8 days
+      if ([3, 5, 8].includes(daysSinceApproval)) {
+        const alertLevel = daysSinceApproval >= 8 ? 'ADM' : daysSinceApproval >= 5 ? 'COORDENADOR' : 'TÉCNICO'
+        
+        if (sc.assigned_to_user_id) {
+          await supabase.from('notifications').insert({
+            user_id: sc.assigned_to_user_id,
+            title: `Enviar ao Jurídico - ${daysSinceApproval} dias`,
+            message: `O caso de ${clientName} precisa ser enviado ao Jurídico. ${daysSinceApproval} dias desde aprovação. Nível: ${alertLevel}`,
+            type: 'sla_send_to_legal',
+          })
+        }
+        
+        results.sendToLegalAlerts++
+      }
+    }
+
+    // =====================================================
+    // 12. REQUIREMENT ALERTS (10 day legal deadline)
+    // =====================================================
+    const { data: casesWithRequirement } = await supabase
+      .from('service_cases')
+      .select(`
+        id, requirement_received_at, requirement_deadline, assigned_to_user_id,
+        opportunities!inner (leads!inner (contacts!inner (full_name, phone)))
+      `)
+      .eq('technical_status', 'EXIGENCIA_ORGAO')
+      .not('requirement_deadline', 'is', null)
+
+    for (const sc of casesWithRequirement || []) {
+      if (!sc.requirement_deadline) continue
+      const daysUntilDeadline = Math.ceil((new Date(sc.requirement_deadline).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      const oppData = sc.opportunities as unknown as { leads: { contacts: { full_name: string; phone: number | null } } }
+      const clientName = oppData?.leads?.contacts?.full_name || 'Cliente'
+      
+      // Alert at 5, 2, 1, 0 days before deadline
+      if ([5, 2, 1, 0].includes(daysUntilDeadline)) {
+        const alertLevel = daysUntilDeadline <= 1 ? 'CRÍTICO' : daysUntilDeadline <= 2 ? 'ADM' : 'TÉCNICO'
+        
+        if (sc.assigned_to_user_id) {
+          await supabase.from('notifications').insert({
+            user_id: sc.assigned_to_user_id,
+            title: `⚠️ Exigência - ${daysUntilDeadline} dias para prazo`,
+            message: `O caso de ${clientName} tem exigência com prazo em ${daysUntilDeadline} dias. Nível: ${alertLevel}`,
+            type: 'sla_requirement_deadline',
+          })
+        }
+        
+        results.requirementAlerts++
+      }
+    }
+
+    // =====================================================
+    // 13. PRE-PROTOCOL REMINDERS (1 day before)
+    // =====================================================
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    const { data: casesPreProtocol } = await supabase
+      .from('service_cases')
+      .select(`
+        id, expected_protocol_date, is_urgent, assigned_to_user_id,
+        opportunities!inner (leads!inner (contacts!inner (full_name)))
+      `)
+      .eq('expected_protocol_date', tomorrow)
+      .in('technical_status', ['ENVIADO_JURIDICO', 'DOCUMENTACAO_APROVADA'])
+
+    for (const sc of casesPreProtocol || []) {
+      const oppData = sc.opportunities as unknown as { leads: { contacts: { full_name: string } } }
+      const clientName = oppData?.leads?.contacts?.full_name || 'Cliente'
+      const urgentPrefix = sc.is_urgent ? '🚨 URGENTE: ' : ''
+      
+      // Notify legal department (would need to fetch legal team users)
+      await supabase.from('notifications').insert({
+        user_id: sc.assigned_to_user_id || '00000000-0000-0000-0000-000000000000', // Placeholder
+        title: `${urgentPrefix}Protocolo amanhã - ${clientName}`,
+        message: `O processo de ${clientName} está agendado para protocolo amanhã.`,
+        type: 'sla_pre_protocol',
+      })
+      
+      results.preProtocolReminders++
+    }
+
+    // =====================================================
+    // 14. POST-PROTOCOL FOLLOW-UP (14, 21, 35 days)
+    // =====================================================
+    const { data: casesPostProtocol } = await supabase
+      .from('service_cases')
+      .select(`
+        id, submission_date, assigned_to_user_id,
+        opportunities!inner (leads!inner (contacts!inner (full_name, phone)))
+      `)
+      .eq('technical_status', 'PROTOCOLADO')
+      .not('submission_date', 'is', null)
+
+    for (const sc of casesPostProtocol || []) {
+      if (!sc.submission_date) continue
+      const daysSinceProtocol = Math.floor((now.getTime() - new Date(sc.submission_date).getTime()) / (1000 * 60 * 60 * 24))
+      const oppData = sc.opportunities as unknown as { leads: { contacts: { full_name: string; phone: number | null } } }
+      const clientName = oppData?.leads?.contacts?.full_name || 'Cliente'
+      
+      // Alert at 14, 21, 35 days
+      if ([14, 21, 35].includes(daysSinceProtocol)) {
+        const alertLevel = daysSinceProtocol >= 35 ? 'ADM' : daysSinceProtocol >= 21 ? 'COORDENADOR' : 'TÉCNICO'
+        
+        if (sc.assigned_to_user_id) {
+          await supabase.from('notifications').insert({
+            user_id: sc.assigned_to_user_id,
+            title: `Follow-up Pós-Protocolo - ${daysSinceProtocol} dias`,
+            message: `O caso de ${clientName} foi protocolado há ${daysSinceProtocol} dias. Verificar documentos pendentes. Nível: ${alertLevel}`,
+            type: 'sla_post_protocol',
+          })
+        }
+        
+        results.postProtocolAlerts++
+      }
+    }
+
+    // =====================================================
+    // 15. PROTOCOL INSTRUCTIONS (send once when protocolado)
+    // =====================================================
+    const { data: newlyProtocoled } = await supabase
+      .from('service_cases')
+      .select(`
+        id, protocol_number, protocol_instructions_sent, client_user_id,
+        opportunities!inner (leads!inner (contacts!inner (full_name, phone)))
+      `)
+      .eq('technical_status', 'PROTOCOLADO')
+      .eq('protocol_instructions_sent', false)
+      .not('protocol_number', 'is', null)
+
+    for (const sc of newlyProtocoled || []) {
+      const oppData = sc.opportunities as unknown as { leads: { contacts: { full_name: string; phone: number | null } } }
+      const contact = oppData?.leads?.contacts
+      
+      if (contact?.phone && sc.protocol_number) {
+        const instructionMsg = `Olá ${contact.full_name}! 🎉 Seu processo foi protocolado com sucesso.
+
+Número de Expediente: ${sc.protocol_number}
+
+Para acompanhar o andamento:
+1. Acesse https://extranjeria.inclusion.gob.es
+2. Clique em "Consulta de expedientes"
+3. Insira seu NIE e número de expediente
+
+Entraremos em contato quando houver novidades.`
+        
+        await sendWhatsApp(contact.phone, instructionMsg)
+        
+        // Mark as sent
+        await supabase.from('service_cases')
+          .update({ protocol_instructions_sent: true })
+          .eq('id', sc.id)
+        
+        if (sc.client_user_id) {
+          await supabase.from('notifications').insert({
+            user_id: sc.client_user_id,
+            title: 'Processo Protocolado!',
+            message: `Seu processo foi protocolado. Número: ${sc.protocol_number}`,
+            type: 'protocol_confirmed',
+          })
+        }
+        
+        results.protocolInstructionsSent++
       }
     }
 
