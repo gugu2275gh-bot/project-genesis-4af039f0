@@ -351,6 +351,51 @@ export type Database = {
           },
         ]
       }
+      contract_costs: {
+        Row: {
+          amount: number
+          contract_id: string
+          created_at: string | null
+          created_by_user_id: string | null
+          description: string
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          contract_id: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          description: string
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          contract_id?: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          description?: string
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_costs_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_costs_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_reminders: {
         Row: {
           contract_id: string

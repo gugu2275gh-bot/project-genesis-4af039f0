@@ -19,6 +19,7 @@ import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BeneficiariesTab } from '@/components/contracts/BeneficiariesTab';
+import { ContractCostsSection } from '@/components/contracts/ContractCostsSection';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
@@ -1041,6 +1042,13 @@ export default function ContractDetail() {
           </Tabs>
         </Card>
       </div>
+
+      {/* Costs Section - Available for all statuses except CANCELADO */}
+      <ContractCostsSection 
+        contractId={contract.id}
+        canEdit={contract.status !== 'CANCELADO'}
+        currency={contract.currency || 'EUR'}
+      />
     </div>
   );
 }
