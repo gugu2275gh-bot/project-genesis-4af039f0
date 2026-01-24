@@ -386,6 +386,7 @@ export type Database = {
       contracts: {
         Row: {
           cancellation_reason: string | null
+          contract_template: string | null
           created_at: string | null
           created_by_user_id: string | null
           currency: string | null
@@ -409,6 +410,7 @@ export type Database = {
         }
         Insert: {
           cancellation_reason?: string | null
+          contract_template?: string | null
           created_at?: string | null
           created_by_user_id?: string | null
           currency?: string | null
@@ -432,6 +434,7 @@ export type Database = {
         }
         Update: {
           cancellation_reason?: string | null
+          contract_template?: string | null
           created_at?: string | null
           created_by_user_id?: string | null
           currency?: string | null

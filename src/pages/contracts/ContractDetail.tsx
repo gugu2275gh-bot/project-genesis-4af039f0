@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Send, Check, Save, X, Calendar, FileText, Users } from 'lucide-react';
-import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, LANGUAGE_LABELS } from '@/types/database';
+import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, LANGUAGE_LABELS, CONTRACT_TEMPLATE_LABELS, ContractTemplate } from '@/types/database';
 import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,6 +34,7 @@ export default function ContractDetail() {
     installment_count: '1',
     installment_amount: '',
     first_due_date: '',
+    contract_template: 'GENERICO',
   });
   const [isEditing, setIsEditing] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -51,6 +52,7 @@ export default function ContractDetail() {
         installment_count: contract.installment_count?.toString() || '1',
         installment_amount: contract.installment_amount?.toString() || '',
         first_due_date: contract.first_due_date || '',
+        contract_template: (contract as any).contract_template || 'GENERICO',
       });
     }
   }, [contract]);
@@ -99,8 +101,9 @@ export default function ContractDetail() {
       installment_count: parseInt(formData.installment_count) || 1,
       installment_amount: formData.installment_amount ? parseFloat(formData.installment_amount) : null,
       first_due_date: formData.first_due_date || null,
+      contract_template: formData.contract_template,
       status: 'EM_REVISAO',
-    });
+    } as any);
     setIsEditing(false);
   };
 
@@ -240,6 +243,10 @@ export default function ContractDetail() {
               <p className="font-medium">{SERVICE_INTEREST_LABELS[contract.service_type]}</p>
             </div>
             <div>
+              <p className="text-sm text-muted-foreground">Modelo do Contrato</p>
+              <p className="font-medium">{CONTRACT_TEMPLATE_LABELS[((contract as any).contract_template || 'GENERICO') as ContractTemplate]}</p>
+            </div>
+            <div>
               <p className="text-sm text-muted-foreground">Status</p>
               <StatusBadge 
                 status={contract.status || 'EM_ELABORACAO'} 
@@ -339,6 +346,22 @@ export default function ContractDetail() {
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+                <div>
+                  <Label>Modelo do Contrato</Label>
+                  <Select
+                    value={formData.contract_template}
+                    onValueChange={(v) => setFormData({ ...formData, contract_template: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(CONTRACT_TEMPLATE_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Installment Configuration */}

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Search, Eye, FileText } from 'lucide-react';
-import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS } from '@/types/database';
+import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, CONTRACT_TEMPLATE_LABELS, ContractTemplate } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -23,6 +23,7 @@ export default function ContractsList() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedOpportunity, setSelectedOpportunity] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('GENERICO');
 
   const availableOpportunities = opportunities.filter(o => 
     (o.status === 'ABERTA' || o.status === 'CONTRATO_EM_ELABORACAO') &&
@@ -43,9 +44,11 @@ export default function ContractsList() {
       opportunity_id: selectedOpportunity,
       service_type: opp?.leads?.service_interest || 'OUTRO',
       status: 'EM_ELABORACAO',
-    });
+      contract_template: selectedTemplate,
+    } as any);
     setIsDialogOpen(false);
     setSelectedOpportunity('');
+    setSelectedTemplate('GENERICO');
   };
 
   const columns: Column<typeof contracts[0]>[] = [
@@ -147,6 +150,28 @@ export default function ContractsList() {
                       </SelectContent>
                     </Select>
                   )}
+                </div>
+                <div>
+                  <Label>Modelo do Contrato</Label>
+                  <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o modelo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NACIONALIDADE">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Contrato de Nacionalidade
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="GENERICO">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Contrato Genérico
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
