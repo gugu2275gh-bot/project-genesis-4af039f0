@@ -240,7 +240,7 @@ export default function ContractDetail() {
     contract.installment_count &&
     contract.first_due_date;
   const canSign = contract.status === 'ENVIADO';
-  const canCancel = contract.status !== 'ASSINADO' && contract.status !== 'CANCELADO';
+  const canCancel = contract.status !== 'CANCELADO';
 
   // Generate preview of installments
   const installmentCount = parseInt(formData.installment_count) || 1;
