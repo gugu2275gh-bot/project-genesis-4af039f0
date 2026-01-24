@@ -73,7 +73,7 @@ export function usePayments() {
 
   const confirmPayment = useMutation({
     mutationFn: async ({ id, transactionId, paidAt }: { id: string; transactionId?: string; paidAt?: string }) => {
-      // 1. Update payment
+      // 1. Update payment to CONFIRMADO
       const { data: payment, error: paymentError } = await supabase
         .from('payments')
         .update({
@@ -87,68 +87,144 @@ export function usePayments() {
       
       if (paymentError) throw paymentError;
 
-      // 2. Update opportunity status
-      await supabase
-        .from('opportunities')
-        .update({ status: 'FECHADA_GANHA' })
-        .eq('id', payment.opportunity_id);
+      let isFirstPayment = false;
+      let caseCreated = false;
 
-      // 3. Get opportunity to find service type from lead
-      const { data: opportunity } = await supabase
-        .from('opportunities')
-        .select(`
-          *,
-          leads (*)
-        `)
-        .eq('id', payment.opportunity_id)
-        .single();
+      // 2. Check if payment has a linked contract
+      if (payment.contract_id) {
+        // 3. Get contract to check current payment_status
+        const { data: contract } = await supabase
+          .from('contracts')
+          .select('id, payment_status, opportunity_id')
+          .eq('id', payment.contract_id)
+          .single();
 
-      if (opportunity?.leads) {
-        // 4. Create service case
-        const serviceType = opportunity.leads.service_interest || 'OUTRO';
-        type ServiceSector = 'ESTUDANTE' | 'TRABALHO' | 'REAGRUPAMENTO' | 'RENOVACAO' | 'NACIONALIDADE';
-        const sectorMap: Record<string, ServiceSector> = {
-          'VISTO_ESTUDANTE': 'ESTUDANTE',
-          'VISTO_TRABALHO': 'TRABALHO',
-          'REAGRUPAMENTO': 'REAGRUPAMENTO',
-          'RENOVACAO_RESIDENCIA': 'RENOVACAO',
-          'NACIONALIDADE_RESIDENCIA': 'NACIONALIDADE',
-          'NACIONALIDADE_CASAMENTO': 'NACIONALIDADE',
-          'OUTRO': 'ESTUDANTE',
-        };
+        // 4. If payment_status is NAO_INICIADO, this is the FIRST payment
+        if (contract && contract.payment_status === 'NAO_INICIADO') {
+          isFirstPayment = true;
 
-        const sector: ServiceSector = sectorMap[serviceType] || 'ESTUDANTE';
+          // 4a. Update contract payment_status to INICIADO
+          await supabase
+            .from('contracts')
+            .update({ payment_status: 'INICIADO' })
+            .eq('id', contract.id);
 
-        const { error: caseError } = await supabase
-          .from('service_cases')
-          .insert([{
-            opportunity_id: payment.opportunity_id,
-            service_type: serviceType,
-            sector: sector,
-            technical_status: 'CONTATO_INICIAL' as const,
-          }]);
-        
-        if (caseError) console.error('Error creating service case:', caseError);
+          // 4b. Update opportunity to FECHADA_GANHA
+          await supabase
+            .from('opportunities')
+            .update({ status: 'FECHADA_GANHA' })
+            .eq('id', payment.opportunity_id);
 
-        // 5. Create task for internal routing
+          // 4c. Get lead data for service type
+          const { data: opportunity } = await supabase
+            .from('opportunities')
+            .select('*, leads (*)')
+            .eq('id', payment.opportunity_id)
+            .single();
+
+          if (opportunity?.leads) {
+            const serviceType = opportunity.leads.service_interest || 'OUTRO';
+            type ServiceSector = 'ESTUDANTE' | 'TRABALHO' | 'REAGRUPAMENTO' | 'RENOVACAO' | 'NACIONALIDADE';
+            const sectorMap: Record<string, ServiceSector> = {
+              'VISTO_ESTUDANTE': 'ESTUDANTE',
+              'VISTO_TRABALHO': 'TRABALHO',
+              'REAGRUPAMENTO': 'REAGRUPAMENTO',
+              'RENOVACAO_RESIDENCIA': 'RENOVACAO',
+              'NACIONALIDADE_RESIDENCIA': 'NACIONALIDADE',
+              'NACIONALIDADE_CASAMENTO': 'NACIONALIDADE',
+              'OUTRO': 'ESTUDANTE',
+            };
+            const sector: ServiceSector = sectorMap[serviceType] || 'ESTUDANTE';
+
+            // 4d. Create technical case linked to opportunity
+            const { data: newCase, error: caseError } = await supabase
+              .from('service_cases')
+              .insert([{
+                opportunity_id: payment.opportunity_id,
+                service_type: serviceType,
+                sector: sector,
+                technical_status: 'CONTATO_INICIAL' as const,
+              }])
+              .select()
+              .single();
+
+            if (!caseError && newCase) {
+              caseCreated = true;
+
+              // 4e. Create routing task linked to the case
+              await supabase
+                .from('tasks')
+                .insert([{
+                  title: 'Encaminhamento Interno',
+                  description: 'Caso técnico criado após confirmação do primeiro pagamento do contrato. Atribuir ao setor técnico responsável.',
+                  related_opportunity_id: payment.opportunity_id,
+                  related_service_case_id: newCase.id,
+                  created_by_user_id: user?.id,
+                }]);
+
+              // 4f. Create notifications for TECNICO users
+              const { data: techUsers } = await supabase
+                .from('user_roles')
+                .select('user_id')
+                .eq('role', 'TECNICO');
+
+              if (techUsers?.length) {
+                const notifications = techUsers.map(u => ({
+                  user_id: u.user_id,
+                  type: 'case_status_changed',
+                  title: 'Novo Caso Técnico',
+                  message: 'Um novo caso foi criado após confirmação de pagamento e está aguardando atribuição.',
+                }));
+
+                await supabase.from('notifications').insert(notifications);
+              }
+            } else if (caseError) {
+              console.error('Error creating service case:', caseError);
+            }
+          }
+        }
+
+        // 5. Check if ALL payments of this contract are confirmed
+        const { data: allPayments } = await supabase
+          .from('payments')
+          .select('status')
+          .eq('contract_id', payment.contract_id);
+
+        const allConfirmed = allPayments?.every(p => p.status === 'CONFIRMADO');
+
+        if (allConfirmed) {
+          // Update contract to QUITADO (fully paid)
+          await supabase
+            .from('contracts')
+            .update({ payment_status: 'QUITADO' })
+            .eq('id', payment.contract_id);
+        }
+      } else {
+        // Payment without linked contract - legacy behavior
+        // Just update opportunity status
         await supabase
-          .from('tasks')
-          .insert([{
-            title: 'Encaminhamento Interno',
-            description: 'Atribuir caso ao setor técnico responsável',
-            related_opportunity_id: payment.opportunity_id,
-            created_by_user_id: user?.id,
-          }]);
+          .from('opportunities')
+          .update({ status: 'FECHADA_GANHA' })
+          .eq('id', payment.opportunity_id);
       }
 
-      return payment;
+      return { payment, isFirstPayment, caseCreated };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['payments'] });
+      queryClient.invalidateQueries({ queryKey: ['contracts'] });
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
       queryClient.invalidateQueries({ queryKey: ['service-cases'] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast({ title: 'Pagamento confirmado! Caso técnico criado.' });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      
+      if (result.isFirstPayment && result.caseCreated) {
+        toast({ title: 'Pagamento confirmado! Contrato iniciado e caso técnico criado.' });
+      } else if (result.isFirstPayment) {
+        toast({ title: 'Pagamento confirmado! Contrato iniciado.' });
+      } else {
+        toast({ title: 'Pagamento confirmado!' });
+      }
     },
     onError: (error) => {
       toast({ title: 'Erro ao confirmar pagamento', description: error.message, variant: 'destructive' });
