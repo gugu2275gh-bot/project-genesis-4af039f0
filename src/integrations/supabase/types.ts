@@ -403,6 +403,7 @@ export type Database = {
           scope_summary: string | null
           service_type: Database["public"]["Enums"]["service_interest"]
           signed_at: string | null
+          signed_document_url: string | null
           status: Database["public"]["Enums"]["contract_status"] | null
           total_fee: number | null
           updated_at: string | null
@@ -427,6 +428,7 @@ export type Database = {
           scope_summary?: string | null
           service_type: Database["public"]["Enums"]["service_interest"]
           signed_at?: string | null
+          signed_document_url?: string | null
           status?: Database["public"]["Enums"]["contract_status"] | null
           total_fee?: number | null
           updated_at?: string | null
@@ -451,6 +453,7 @@ export type Database = {
           scope_summary?: string | null
           service_type?: Database["public"]["Enums"]["service_interest"]
           signed_at?: string | null
+          signed_document_url?: string | null
           status?: Database["public"]["Enums"]["contract_status"] | null
           total_fee?: number | null
           updated_at?: string | null
