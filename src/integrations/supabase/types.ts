@@ -511,6 +511,54 @@ export type Database = {
         }
         Relationships: []
       }
+      generated_documents: {
+        Row: {
+          created_at: string | null
+          document_type: string
+          file_url: string | null
+          generated_at: string | null
+          generated_by_user_id: string | null
+          id: string
+          notes: string | null
+          service_case_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          document_type: string
+          file_url?: string | null
+          generated_at?: string | null
+          generated_by_user_id?: string | null
+          id?: string
+          notes?: string | null
+          service_case_id: string
+        }
+        Update: {
+          created_at?: string | null
+          document_type?: string
+          file_url?: string | null
+          generated_at?: string | null
+          generated_by_user_id?: string | null
+          id?: string
+          notes?: string | null
+          service_case_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_documents_generated_by_user_id_fkey"
+            columns: ["generated_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "generated_documents_service_case_id_fkey"
+            columns: ["service_case_id"]
+            isOneToOne: false
+            referencedRelation: "service_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       interactions: {
         Row: {
           channel: Database["public"]["Enums"]["interaction_channel"] | null
@@ -1185,6 +1233,7 @@ export type Database = {
           huellas_completed: boolean | null
           huellas_date: string | null
           huellas_location: string | null
+          huellas_resguardo_url: string | null
           huellas_time: string | null
           id: string
           is_urgent: boolean | null
@@ -1204,6 +1253,7 @@ export type Database = {
           tie_lot_number: string | null
           tie_picked_up: boolean | null
           tie_pickup_date: string | null
+          tie_resguardo_url: string | null
           tie_validity_date: string | null
           updated_at: string | null
         }
@@ -1220,6 +1270,7 @@ export type Database = {
           huellas_completed?: boolean | null
           huellas_date?: string | null
           huellas_location?: string | null
+          huellas_resguardo_url?: string | null
           huellas_time?: string | null
           id?: string
           is_urgent?: boolean | null
@@ -1239,6 +1290,7 @@ export type Database = {
           tie_lot_number?: string | null
           tie_picked_up?: boolean | null
           tie_pickup_date?: string | null
+          tie_resguardo_url?: string | null
           tie_validity_date?: string | null
           updated_at?: string | null
         }
@@ -1255,6 +1307,7 @@ export type Database = {
           huellas_completed?: boolean | null
           huellas_date?: string | null
           huellas_location?: string | null
+          huellas_resguardo_url?: string | null
           huellas_time?: string | null
           id?: string
           is_urgent?: boolean | null
@@ -1274,6 +1327,7 @@ export type Database = {
           tie_lot_number?: string | null
           tie_picked_up?: boolean | null
           tie_pickup_date?: string | null
+          tie_resguardo_url?: string | null
           tie_validity_date?: string | null
           updated_at?: string | null
         }
@@ -1790,6 +1844,18 @@ export type Database = {
         | "AGUARDANDO_RECURSO"
         | "ENCERRADO_APROVADO"
         | "ENCERRADO_NEGADO"
+        | "DOCUMENTACAO_PARCIAL_APROVADA"
+        | "EM_ORGANIZACAO"
+        | "ENVIADO_JURIDICO"
+        | "PROTOCOLADO"
+        | "EM_RECURSO"
+        | "AGENDAR_HUELLAS"
+        | "AGUARDANDO_CITA_HUELLAS"
+        | "HUELLAS_REALIZADO"
+        | "DISPONIVEL_RETIRADA_TIE"
+        | "AGUARDANDO_CITA_RETIRADA"
+        | "TIE_RETIRADO"
+        | "DENEGADO"
       webhook_source: "ASSINATURA" | "PAGAMENTO" | "IA_WHATSAPP" | "OUTRO"
     }
     CompositeTypes: {
@@ -2016,6 +2082,18 @@ export const Constants = {
         "AGUARDANDO_RECURSO",
         "ENCERRADO_APROVADO",
         "ENCERRADO_NEGADO",
+        "DOCUMENTACAO_PARCIAL_APROVADA",
+        "EM_ORGANIZACAO",
+        "ENVIADO_JURIDICO",
+        "PROTOCOLADO",
+        "EM_RECURSO",
+        "AGENDAR_HUELLAS",
+        "AGUARDANDO_CITA_HUELLAS",
+        "HUELLAS_REALIZADO",
+        "DISPONIVEL_RETIRADA_TIE",
+        "AGUARDANDO_CITA_RETIRADA",
+        "TIE_RETIRADO",
+        "DENEGADO",
       ],
       webhook_source: ["ASSINATURA", "PAGAMENTO", "IA_WHATSAPP", "OUTRO"],
     },

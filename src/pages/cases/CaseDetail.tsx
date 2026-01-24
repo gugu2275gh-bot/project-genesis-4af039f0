@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, FileText, AlertTriangle, Check, X, Plus, Send, User } from 'lucide-react';
+import { ArrowLeft, FileText, AlertTriangle, Check, X, Plus, Send, User, Scale, Fingerprint, CreditCard } from 'lucide-react';
 import { 
   TECHNICAL_STATUS_LABELS, 
   SERVICE_INTEREST_LABELS, 
@@ -25,12 +25,15 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
+import { HuellasSection } from '@/components/cases/HuellasSection';
+import { TiePickupSection } from '@/components/cases/TiePickupSection';
+import { Switch } from '@/components/ui/switch';
 
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: serviceCase, isLoading } = useCase(id);
-  const { updateStatus, assignCase, submitCase, closeCase } = useCases();
+  const { updateStatus, assignCase, submitCase, closeCase, updateCase } = useCases();
   const { documents, approveDocument, rejectDocument } = useDocuments(id);
   const { requirements, createRequirement, updateRequirement } = useRequirements(id);
   const { data: profiles } = useProfiles();
@@ -47,6 +50,9 @@ export default function CaseDetail() {
     official_deadline_date: '',
     internal_deadline_date: '',
   });
+  const [showRecursoDialog, setShowRecursoDialog] = useState(false);
+  const [recursoDeadline, setRecursoDeadline] = useState('');
+  const [recursoNotes, setRecursoNotes] = useState('');
 
   if (isLoading) {
     return (
@@ -114,7 +120,69 @@ export default function CaseDetail() {
     setNewRequirement({ description: '', official_deadline_date: '', internal_deadline_date: '' });
   };
 
-  const isEncerrado = serviceCase.technical_status?.startsWith('ENCERRADO');
+  const handleSendToJuridico = async () => {
+    await updateStatus.mutateAsync({ id: serviceCase.id, status: 'ENVIADO_JURIDICO' });
+  };
+
+  const handleMarkProtocolado = async () => {
+    await updateStatus.mutateAsync({ id: serviceCase.id, status: 'PROTOCOLADO' });
+  };
+
+  const handleStartRecurso = async () => {
+    await updateCase.mutateAsync({
+      id: serviceCase.id,
+      technical_status: 'EM_RECURSO' as any,
+      resource_deadline: recursoDeadline || null,
+      resource_notes: recursoNotes || null,
+    });
+    setShowRecursoDialog(false);
+  };
+
+  const handleSetPriority = async (priority: string) => {
+    await updateCase.mutateAsync({
+      id: serviceCase.id,
+      case_priority: priority,
+    });
+  };
+
+  const handleToggleUrgent = async (isUrgent: boolean) => {
+    await updateCase.mutateAsync({
+      id: serviceCase.id,
+      is_urgent: isUrgent,
+      case_priority: isUrgent ? 'URGENTE' : 'NORMAL',
+    });
+  };
+
+  const isEncerrado = serviceCase.technical_status?.startsWith('ENCERRADO') || serviceCase.technical_status === 'TIE_RETIRADO';
+  const showHuellasSection = ['AGENDAR_HUELLAS', 'AGUARDANDO_CITA_HUELLAS', 'HUELLAS_REALIZADO', 'DISPONIVEL_RETIRADA_TIE', 'AGUARDANDO_CITA_RETIRADA', 'TIE_RETIRADO', 'ENCERRADO_APROVADO'].includes(serviceCase.technical_status || '');
+  const showTieSection = ['HUELLAS_REALIZADO', 'DISPONIVEL_RETIRADA_TIE', 'AGUARDANDO_CITA_RETIRADA', 'TIE_RETIRADO', 'ENCERRADO_APROVADO'].includes(serviceCase.technical_status || '');
+
+  // Fluxo de ações baseado no status
+  const getAvailableActions = () => {
+    const status = serviceCase.technical_status;
+    const actions = [];
+
+    if (status === 'DOCUMENTOS_EM_CONFERENCIA') {
+      actions.push({ label: 'Aprovar Documentação', action: () => handleStatusChange('PRONTO_PARA_SUBMISSAO'), icon: Check });
+      actions.push({ label: 'Aprovar Parcial', action: () => handleStatusChange('DOCUMENTACAO_PARCIAL_APROVADA'), icon: Check });
+    }
+    if (status === 'DOCUMENTACAO_PARCIAL_APROVADA' || status === 'PRONTO_PARA_SUBMISSAO') {
+      actions.push({ label: 'Enviar ao Jurídico', action: handleSendToJuridico, icon: Scale });
+    }
+    if (status === 'ENVIADO_JURIDICO') {
+      actions.push({ label: 'Marcar Protocolado', action: handleMarkProtocolado, icon: Send });
+    }
+    if (status === 'PROTOCOLADO' || status === 'EM_ACOMPANHAMENTO') {
+      actions.push({ label: 'Registrar Aprovação', action: () => handleStatusChange('AGENDAR_HUELLAS'), icon: Check });
+    }
+    if (status === 'DENEGADO') {
+      actions.push({ label: 'Entrar com Recurso', action: () => setShowRecursoDialog(true), icon: Scale });
+    }
+    
+    return actions;
+  };
+
+  const availableActions = getAvailableActions();
 
   return (
     <div className="space-y-6">
@@ -129,7 +197,15 @@ export default function CaseDetail() {
         }
         description={`${SERVICE_INTEREST_LABELS[serviceCase.service_type]} • ${SERVICE_SECTOR_LABELS[serviceCase.sector]}`}
         actions={
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            {/* Ações disponíveis baseadas no status */}
+            {availableActions.map((action, idx) => (
+              <Button key={idx} variant="outline" onClick={action.action}>
+                <action.icon className="h-4 w-4 mr-2" />
+                {action.label}
+              </Button>
+            ))}
+
             {!isEncerrado && serviceCase.technical_status === 'PRONTO_PARA_SUBMISSAO' && (
               <Dialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
                 <DialogTrigger asChild>
@@ -163,7 +239,7 @@ export default function CaseDetail() {
                 </DialogContent>
               </Dialog>
             )}
-            {!isEncerrado && serviceCase.technical_status === 'EM_ACOMPANHAMENTO' && (
+            {!isEncerrado && (serviceCase.technical_status === 'EM_ACOMPANHAMENTO' || serviceCase.technical_status === 'TIE_RETIRADO') && (
               <Dialog open={showCloseDialog} onOpenChange={setShowCloseDialog}>
                 <DialogTrigger asChild>
                   <Button>Encerrar Caso</Button>
@@ -262,6 +338,44 @@ export default function CaseDetail() {
               </Select>
             </div>
 
+            {/* Prioridade / Urgência */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Caso Urgente</p>
+                <p className="text-xs text-muted-foreground">Ativa lembretes a cada 24h</p>
+              </div>
+              <Switch
+                checked={serviceCase.is_urgent || false}
+                onCheckedChange={handleToggleUrgent}
+              />
+            </div>
+
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">Prioridade</p>
+              <Select 
+                value={serviceCase.case_priority || 'NORMAL'} 
+                onValueChange={handleSetPriority}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NORMAL">Normal</SelectItem>
+                  <SelectItem value="URGENTE">Urgente</SelectItem>
+                  <SelectItem value="EM_ESPERA">Em Espera</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {serviceCase.expected_protocol_date && (
+              <div>
+                <p className="text-sm text-muted-foreground">Data Prevista de Protocolo</p>
+                <p className="font-medium">
+                  {format(new Date(serviceCase.expected_protocol_date), 'dd/MM/yyyy', { locale: ptBR })}
+                </p>
+              </div>
+            )}
+
             {serviceCase.protocol_number && (
               <div>
                 <p className="text-sm text-muted-foreground">Protocolo</p>
@@ -296,14 +410,29 @@ export default function CaseDetail() {
                 />
               </div>
             )}
+
+            {/* Info de Recurso */}
+            {serviceCase.resource_status && (
+              <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                <p className="text-sm font-medium text-amber-800">Em Recurso</p>
+                {serviceCase.resource_deadline && (
+                  <p className="text-xs text-amber-600">
+                    Prazo: {format(new Date(serviceCase.resource_deadline), 'dd/MM/yyyy', { locale: ptBR })}
+                  </p>
+                )}
+                {serviceCase.resource_notes && (
+                  <p className="text-xs text-amber-600 mt-1">{serviceCase.resource_notes}</p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Tabs for Documents and Requirements */}
+        {/* Tabs for Documents, Requirements, Huellas, TIE */}
         <Card className="lg:col-span-2">
           <Tabs defaultValue="documents">
             <CardHeader>
-              <TabsList>
+              <TabsList className="flex-wrap">
                 <TabsTrigger value="documents">
                   <FileText className="h-4 w-4 mr-2" />
                   Documentos ({documents.length})
@@ -312,6 +441,18 @@ export default function CaseDetail() {
                   <AlertTriangle className="h-4 w-4 mr-2" />
                   Exigências ({requirements.length})
                 </TabsTrigger>
+                {showHuellasSection && (
+                  <TabsTrigger value="huellas">
+                    <Fingerprint className="h-4 w-4 mr-2" />
+                    Huellas
+                  </TabsTrigger>
+                )}
+                {showTieSection && (
+                  <TabsTrigger value="tie">
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    TIE
+                  </TabsTrigger>
+                )}
               </TabsList>
             </CardHeader>
             <CardContent>
@@ -456,6 +597,26 @@ export default function CaseDetail() {
                   )}
                 </div>
               </TabsContent>
+
+              {showHuellasSection && (
+                <TabsContent value="huellas" className="m-0">
+                  <HuellasSection 
+                    serviceCase={serviceCase} 
+                    onUpdate={(data) => updateCase.mutateAsync({ id: serviceCase.id, ...data })}
+                    isUpdating={updateCase.isPending}
+                  />
+                </TabsContent>
+              )}
+
+              {showTieSection && (
+                <TabsContent value="tie" className="m-0">
+                  <TiePickupSection 
+                    serviceCase={serviceCase} 
+                    onUpdate={(data) => updateCase.mutateAsync({ id: serviceCase.id, ...data })}
+                    isUpdating={updateCase.isPending}
+                  />
+                </TabsContent>
+              )}
             </CardContent>
           </Tabs>
         </Card>
@@ -482,6 +643,41 @@ export default function CaseDetail() {
               </Button>
               <Button onClick={handleRejectDoc} disabled={!rejectReason}>
                 Rejeitar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Recurso Dialog */}
+      <Dialog open={showRecursoDialog} onOpenChange={setShowRecursoDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Iniciar Recurso</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Prazo do Recurso</Label>
+              <Input
+                type="date"
+                value={recursoDeadline}
+                onChange={(e) => setRecursoDeadline(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Observações</Label>
+              <Textarea
+                value={recursoNotes}
+                onChange={(e) => setRecursoNotes(e.target.value)}
+                placeholder="Detalhes sobre o recurso..."
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowRecursoDialog(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleStartRecurso}>
+                Confirmar
               </Button>
             </div>
           </div>

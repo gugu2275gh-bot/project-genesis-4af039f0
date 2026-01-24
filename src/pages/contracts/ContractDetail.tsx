@@ -10,12 +10,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { ArrowLeft, Send, Check, Save, X, Calendar } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowLeft, Send, Check, Save, X, Calendar, FileText, Users } from 'lucide-react';
 import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, LANGUAGE_LABELS } from '@/types/database';
 import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { BeneficiariesTab } from '@/components/contracts/BeneficiariesTab';
 
 export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
@@ -283,15 +285,23 @@ export default function ContractDetail() {
           </CardContent>
         </Card>
 
-        {/* Contract Details */}
+        {/* Contract Details with Tabs */}
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-lg">Detalhes do Contrato</CardTitle>
-            <CardDescription>
-              {isEditing ? 'Edite os campos abaixo' : 'Visualize os detalhes do contrato'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <Tabs defaultValue="details">
+            <CardHeader>
+              <TabsList>
+                <TabsTrigger value="details">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Detalhes
+                </TabsTrigger>
+                <TabsTrigger value="beneficiaries">
+                  <Users className="h-4 w-4 mr-2" />
+                  Beneficiários
+                </TabsTrigger>
+              </TabsList>
+            </CardHeader>
+            <CardContent>
+              <TabsContent value="details" className="m-0 space-y-4">
             {isEditing ? (
               <>
                 <div>
@@ -487,7 +497,13 @@ export default function ContractDetail() {
                 </div>
               </>
             )}
-          </CardContent>
+              </TabsContent>
+              
+              <TabsContent value="beneficiaries" className="m-0">
+                <BeneficiariesTab contractId={contract.id} />
+              </TabsContent>
+            </CardContent>
+          </Tabs>
         </Card>
       </div>
     </div>
