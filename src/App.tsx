@@ -29,6 +29,9 @@ import ContractDetail from "./pages/contracts/ContractDetail";
 
 // Finance Pages
 import PaymentsList from "./pages/finance/PaymentsList";
+import Commissions from "./pages/finance/Commissions";
+import CashFlow from "./pages/finance/CashFlow";
+import Invoices from "./pages/finance/Invoices";
 
 // Cases Pages
 import CasesList from "./pages/cases/CasesList";
@@ -53,6 +56,7 @@ import PortalDocuments from "./pages/portal/PortalDocuments";
 import PortalContracts from "./pages/portal/PortalContracts";
 import PortalPayments from "./pages/portal/PortalPayments";
 import PortalMessages from "./pages/portal/PortalMessages";
+import PortalOnboarding from "./pages/portal/PortalOnboarding";
 
 const queryClient = new QueryClient();
 
@@ -108,6 +112,9 @@ function AppRoutes() {
         
         {/* Finance Module */}
         <Route path="/finance" element={<PaymentsList />} />
+        <Route path="/finance/commissions" element={<Commissions />} />
+        <Route path="/finance/cashflow" element={<CashFlow />} />
+        <Route path="/finance/invoices" element={<Invoices />} />
         
         {/* Cases Module */}
         <Route path="/cases" element={<CasesList />} />
@@ -125,6 +132,7 @@ function AppRoutes() {
       </Route>
 
       {/* Portal do Cliente - Rota separada */}
+      <Route path="/portal/onboarding" element={<ProtectedRoute><PortalOnboarding /></ProtectedRoute>} />
       <Route path="/portal" element={<ProtectedRoute><PortalLayout /></ProtectedRoute>}>
         <Route index element={<PortalDashboard />} />
         <Route path="documents" element={<PortalDocuments />} />
