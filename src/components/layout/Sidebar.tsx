@@ -42,14 +42,14 @@ const navItems: NavItem[] = [
       { label: 'Oportunidades', href: '/crm/opportunities' },
     ]
   },
-  { label: 'Contratos', href: '/contracts', icon: FileText, roles: ['ADMIN', 'MANAGER', 'JURIDICO', 'ATENCAO_CLIENTE'] },
   { label: 'Jurídico', href: '/legal', icon: Scale, roles: ['ADMIN', 'MANAGER', 'JURIDICO'] },
   { 
     label: 'Financeiro', 
     href: '/finance', 
     icon: CreditCard, 
-    roles: ['ADMIN', 'MANAGER', 'FINANCEIRO'],
+    roles: ['ADMIN', 'MANAGER', 'FINANCEIRO', 'JURIDICO', 'ATENCAO_CLIENTE'],
     children: [
+      { label: 'Contratos', href: '/contracts' },
       { label: 'Pagamentos', href: '/finance' },
       { label: 'Comissões', href: '/finance/commissions' },
       { label: 'Fluxo de Caixa', href: '/finance/cashflow' },
@@ -108,9 +108,10 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto py-4">
         <ul className="space-y-1 px-2">
           {filteredNavItems.map((item) => {
-            const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
             const hasChildren = item.children && item.children.length > 0;
-            const showChildren = hasChildren && location.pathname.startsWith(item.href);
+            const childActive = hasChildren && item.children?.some(child => location.pathname.startsWith(child.href));
+            const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/') || childActive;
+            const showChildren = hasChildren && (location.pathname.startsWith(item.href) || childActive);
             
             return (
               <li key={item.href}>
