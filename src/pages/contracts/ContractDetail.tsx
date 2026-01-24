@@ -11,13 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Send, Check, Save, X, Calendar, FileText, Users } from 'lucide-react';
+import { ArrowLeft, Send, Check, Save, X, Calendar, FileText, Users, Upload, FileCheck, Loader2 } from 'lucide-react';
 import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, LANGUAGE_LABELS, CONTRACT_TEMPLATE_LABELS, ContractTemplate } from '@/types/database';
 import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BeneficiariesTab } from '@/components/contracts/BeneficiariesTab';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +42,12 @@ export default function ContractDetail() {
   const [isEditing, setIsEditing] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
+  
+  // State for signed document upload
+  const [signedDocumentFile, setSignedDocumentFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [signedDocumentUrl, setSignedDocumentUrl] = useState<string | null>(null);
+  const { toast } = useToast();
 
   // Initialize form data when contract loads
   useEffect(() => {
@@ -56,6 +64,7 @@ export default function ContractDetail() {
         contract_template: (contract as any).contract_template || 'GENERICO',
         status: contract.status || 'EM_ELABORACAO',
       });
+      setSignedDocumentUrl((contract as any).signed_document_url || null);
     }
   }, [contract]);
 
@@ -93,6 +102,48 @@ export default function ContractDetail() {
   }
 
   const handleSave = async () => {
+    // Validação: se status é ASSINADO, precisa ter documento
+    if (formData.status === 'ASSINADO' && !signedDocumentFile && !signedDocumentUrl) {
+      toast({
+        title: 'Documento obrigatório',
+        description: 'É necessário anexar o contrato assinado para marcar como "Assinado".',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    let documentUrl = signedDocumentUrl;
+
+    // Se tem arquivo novo para upload
+    if (signedDocumentFile && formData.status === 'ASSINADO') {
+      setIsUploading(true);
+      try {
+        const fileExt = signedDocumentFile.name.split('.').pop();
+        const filePath = `contracts/${contract.id}/signed-${Date.now()}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('signed-contracts')
+          .upload(filePath, signedDocumentFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from('signed-contracts')
+          .getPublicUrl(filePath);
+
+        documentUrl = urlData.publicUrl;
+      } catch (error: any) {
+        toast({
+          title: 'Erro no upload',
+          description: error.message || 'Não foi possível enviar o documento. Tente novamente.',
+          variant: 'destructive',
+        });
+        setIsUploading(false);
+        return;
+      }
+      setIsUploading(false);
+    }
+
     await updateContract.mutateAsync({
       id: contract.id,
       scope_summary: formData.scope_summary,
@@ -105,7 +156,11 @@ export default function ContractDetail() {
       first_due_date: formData.first_due_date || null,
       contract_template: formData.contract_template,
       status: formData.status,
+      signed_document_url: documentUrl,
+      signed_at: formData.status === 'ASSINADO' ? new Date().toISOString() : contract.signed_at,
     } as any);
+    
+    setSignedDocumentFile(null);
     setIsEditing(false);
   };
 
@@ -370,7 +425,13 @@ export default function ContractDetail() {
                     <Label>Status do Contrato</Label>
                     <Select
                       value={formData.status}
-                      onValueChange={(v) => setFormData({ ...formData, status: v })}
+                      onValueChange={(v) => {
+                        // Se mudar de ASSINADO para outro status, limpar o arquivo
+                        if (formData.status === 'ASSINADO' && v !== 'ASSINADO') {
+                          setSignedDocumentFile(null);
+                        }
+                        setFormData({ ...formData, status: v });
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -379,10 +440,68 @@ export default function ContractDetail() {
                         <SelectItem value="EM_ELABORACAO">Em Elaboração</SelectItem>
                         <SelectItem value="EM_REVISAO">Em Revisão</SelectItem>
                         <SelectItem value="ENVIADO">Enviado</SelectItem>
+                        {/* ASSINADO só aparece quando status original é ENVIADO */}
+                        {contract.status === 'ENVIADO' && (
+                          <SelectItem value="ASSINADO">Assinado</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
+
+                {/* Upload de Contrato Assinado - aparece quando status é ASSINADO */}
+                {formData.status === 'ASSINADO' && (
+                  <div className="p-4 border-2 border-dashed border-primary/50 rounded-lg bg-primary/5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Upload className="h-5 w-5 text-primary" />
+                      <Label className="text-primary font-medium">Upload do Contrato Assinado *</Label>
+                    </div>
+                    
+                    {signedDocumentUrl || signedDocumentFile ? (
+                      <div className="flex items-center justify-between p-3 bg-background rounded-md border">
+                        <div className="flex items-center gap-2">
+                          <FileCheck className="h-4 w-4 text-green-600" />
+                          <span className="text-sm">
+                            {signedDocumentFile?.name || 'Documento anexado'}
+                          </span>
+                        </div>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => {
+                            setSignedDocumentFile(null);
+                            setSignedDocumentUrl(null);
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div>
+                        <Input
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              // Validar tamanho (10MB max)
+                              if (file.size > 10 * 1024 * 1024) {
+                                toast({ title: 'Arquivo muito grande', description: 'Máximo 10MB', variant: 'destructive' });
+                                return;
+                              }
+                              setSignedDocumentFile(file);
+                            }
+                          }}
+                          className="cursor-pointer"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Formatos aceitos: PDF, JPG, PNG (máx. 10MB)
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Installment Configuration */}
                 <div className="p-4 border rounded-lg bg-muted/50 space-y-4">
@@ -479,9 +598,25 @@ export default function ContractDetail() {
                   <Button variant="outline" onClick={() => setIsEditing(false)}>
                     Cancelar
                   </Button>
-                  <Button onClick={handleSave} disabled={updateContract.isPending}>
-                    <Save className="h-4 w-4 mr-2" />
-                    {updateContract.isPending ? 'Salvando...' : 'Salvar'}
+                  <Button 
+                    onClick={handleSave} 
+                    disabled={
+                      updateContract.isPending || 
+                      isUploading ||
+                      (formData.status === 'ASSINADO' && !signedDocumentFile && !signedDocumentUrl)
+                    }
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        {updateContract.isPending ? 'Salvando...' : 'Salvar'}
+                      </>
+                    )}
                   </Button>
                 </div>
               </>
