@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useContract, useContracts } from '@/hooks/useContracts';
+import { useProfiles } from '@/hooks/useProfiles';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,8 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Send, Check, Save, X, Calendar, FileText, Users, Upload, FileCheck, Loader2 } from 'lucide-react';
-import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, LANGUAGE_LABELS, CONTRACT_TEMPLATE_LABELS, ContractTemplate } from '@/types/database';
+import { ArrowLeft, Send, Check, Save, X, Calendar, FileText, Users, Upload, FileCheck, Loader2, User, Phone, MapPin, CreditCard } from 'lucide-react';
+import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, LANGUAGE_LABELS, CONTRACT_TEMPLATE_LABELS, ContractTemplate, PAYMENT_METHOD_LABELS, PAYMENT_ACCOUNT_LABELS, PaymentAccount } from '@/types/database';
 import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,12 +21,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { BeneficiariesTab } from '@/components/contracts/BeneficiariesTab';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-
+import { Separator } from '@/components/ui/separator';
 export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: contract, isLoading } = useContract(id);
   const { updateContract, sendForSignature, markAsSigned, cancelContract } = useContracts();
+  const { data: profiles = [] } = useProfiles();
   
   const [formData, setFormData] = useState({
     scope_summary: '',
@@ -38,6 +40,13 @@ export default function ContractDetail() {
     first_due_date: '',
     contract_template: 'GENERICO',
     status: 'EM_ELABORACAO',
+    // New fields
+    contract_number: '',
+    assigned_to_user_id: '',
+    down_payment: '',
+    down_payment_date: '',
+    payment_method: 'TRANSFERENCIA',
+    payment_account: '',
   });
   const [isEditing, setIsEditing] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -53,10 +62,14 @@ export default function ContractDetail() {
   const [showSignDialog, setShowSignDialog] = useState(false);
   const [signDialogFile, setSignDialogFile] = useState<File | null>(null);
   const [isSigningWithUpload, setIsSigningWithUpload] = useState(false);
+  
+  // Get assigned user name for display
+  const assignedUser = profiles.find(p => p.id === (contract as any)?.assigned_to_user_id);
 
   // Initialize form data when contract loads
   useEffect(() => {
     if (contract) {
+      const c = contract as any;
       setFormData({
         scope_summary: contract.scope_summary || '',
         total_fee: contract.total_fee?.toString() || '',
@@ -66,10 +79,17 @@ export default function ContractDetail() {
         installment_count: contract.installment_count?.toString() || '1',
         installment_amount: contract.installment_amount?.toString() || '',
         first_due_date: contract.first_due_date || '',
-        contract_template: (contract as any).contract_template || 'GENERICO',
+        contract_template: c.contract_template || 'GENERICO',
         status: contract.status || 'EM_ELABORACAO',
+        // New fields
+        contract_number: c.contract_number || '',
+        assigned_to_user_id: c.assigned_to_user_id || '',
+        down_payment: c.down_payment?.toString() || '',
+        down_payment_date: c.down_payment_date || '',
+        payment_method: c.payment_method || 'TRANSFERENCIA',
+        payment_account: c.payment_account || '',
       });
-      setSignedDocumentUrl((contract as any).signed_document_url || null);
+      setSignedDocumentUrl(c.signed_document_url || null);
     }
   }, [contract]);
 
@@ -163,6 +183,13 @@ export default function ContractDetail() {
       status: formData.status,
       signed_document_url: documentUrl,
       signed_at: formData.status === 'ASSINADO' ? new Date().toISOString() : contract.signed_at,
+      // New fields
+      contract_number: formData.contract_number || null,
+      assigned_to_user_id: formData.assigned_to_user_id || null,
+      down_payment: formData.down_payment ? parseFloat(formData.down_payment) : null,
+      down_payment_date: formData.down_payment_date || null,
+      payment_method: formData.payment_method,
+      payment_account: formData.payment_account || null,
     } as any);
     
     setSignedDocumentFile(null);
@@ -426,69 +453,156 @@ export default function ContractDetail() {
       </Dialog>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Contract Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Informações</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Cliente</p>
-              <p className="font-medium">{contract.opportunities?.leads?.contacts?.full_name}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Serviço</p>
-              <p className="font-medium">{SERVICE_INTEREST_LABELS[contract.service_type]}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Modelo do Contrato</p>
-              <p className="font-medium">{CONTRACT_TEMPLATE_LABELS[((contract as any).contract_template || 'GENERICO') as ContractTemplate]}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Status</p>
-              <StatusBadge 
-                status={contract.status || 'EM_ELABORACAO'} 
-                label={CONTRACT_STATUS_LABELS[contract.status || 'EM_ELABORACAO']} 
-              />
-            </div>
-            {contract.cancellation_reason && (
+        {/* Left Column: Contract Info + Client Data */}
+        <div className="space-y-6">
+          {/* Contract Info */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Informações do Contrato</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {(contract as any).contract_number && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Número do Contrato</p>
+                  <p className="font-medium font-mono">{(contract as any).contract_number}</p>
+                </div>
+              )}
               <div>
-                <p className="text-sm text-muted-foreground">Motivo do Cancelamento</p>
-                <p className="text-sm text-destructive">{contract.cancellation_reason}</p>
+                <p className="text-sm text-muted-foreground">Serviço</p>
+                <p className="font-medium">{SERVICE_INTEREST_LABELS[contract.service_type]}</p>
               </div>
-            )}
-            {contract.signed_at && (
               <div>
-                <p className="text-sm text-muted-foreground">Assinado em</p>
+                <p className="text-sm text-muted-foreground">Modelo do Contrato</p>
+                <p className="font-medium">{CONTRACT_TEMPLATE_LABELS[((contract as any).contract_template || 'GENERICO') as ContractTemplate]}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Status</p>
+                <StatusBadge 
+                  status={contract.status || 'EM_ELABORACAO'} 
+                  label={CONTRACT_STATUS_LABELS[contract.status || 'EM_ELABORACAO']} 
+                />
+              </div>
+              {assignedUser && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Responsável</p>
+                  <p className="font-medium">{assignedUser.full_name}</p>
+                </div>
+              )}
+              {contract.cancellation_reason && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Motivo do Cancelamento</p>
+                  <p className="text-sm text-destructive">{contract.cancellation_reason}</p>
+                </div>
+              )}
+              {contract.signed_at && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Assinado em</p>
+                  <p className="font-medium">
+                    {format(new Date(contract.signed_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Client Data Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Dados do Cliente
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-sm text-muted-foreground">Nome Completo</p>
+                <p className="font-medium">{contract.opportunities?.leads?.contacts?.full_name}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Telefone</p>
+                <p className="font-medium flex items-center gap-2">
+                  <Phone className="h-3 w-3 text-muted-foreground" />
+                  {contract.opportunities?.leads?.contacts?.phone || '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Endereço</p>
+                <p className="font-medium flex items-center gap-2">
+                  <MapPin className="h-3 w-3 text-muted-foreground" />
+                  {(contract.opportunities?.leads?.contacts as any)?.address || '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Documento</p>
                 <p className="font-medium">
-                  {format(new Date(contract.signed_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                  {(contract.opportunities?.leads?.contacts as any)?.document_type || 'Documento'}: {(contract.opportunities?.leads?.contacts as any)?.document_number || '-'}
                 </p>
               </div>
-            )}
-            {contract.total_fee && (
-              <div>
-                <p className="text-sm text-muted-foreground">Valor Total</p>
-                <p className="font-medium text-lg">
-                  {new Intl.NumberFormat('pt-BR', { 
-                    style: 'currency', 
-                    currency: contract.currency || 'EUR' 
-                  }).format(contract.total_fee)}
-                </p>
-              </div>
-            )}
-            {contract.installment_count && contract.installment_count > 1 && (
-              <div>
-                <p className="text-sm text-muted-foreground">Parcelamento</p>
-                <p className="font-medium">
-                  {contract.installment_count}x de {new Intl.NumberFormat('pt-BR', { 
-                    style: 'currency', 
-                    currency: contract.currency || 'EUR' 
-                  }).format(contract.installment_amount || 0)}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          {/* Financial Summary Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                Resumo Financeiro
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {contract.total_fee && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Valor Total</p>
+                  <p className="font-medium text-lg">
+                    {new Intl.NumberFormat('pt-BR', { 
+                      style: 'currency', 
+                      currency: contract.currency || 'EUR' 
+                    }).format(contract.total_fee)}
+                  </p>
+                </div>
+              )}
+              {(contract as any).down_payment && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Entrada (Sinal)</p>
+                  <p className="font-medium">
+                    {new Intl.NumberFormat('pt-BR', { 
+                      style: 'currency', 
+                      currency: contract.currency || 'EUR' 
+                    }).format((contract as any).down_payment)}
+                    {(contract as any).down_payment_date && (
+                      <span className="text-sm text-muted-foreground ml-2">
+                        em {format(new Date((contract as any).down_payment_date), 'dd/MM/yyyy', { locale: ptBR })}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
+              {contract.installment_count && contract.installment_count > 1 && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Parcelamento</p>
+                  <p className="font-medium">
+                    {contract.installment_count}x de {new Intl.NumberFormat('pt-BR', { 
+                      style: 'currency', 
+                      currency: contract.currency || 'EUR' 
+                    }).format(contract.installment_amount || 0)}
+                  </p>
+                </div>
+              )}
+              {(contract as any).payment_method && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Forma de Pagamento</p>
+                  <p className="font-medium">{PAYMENT_METHOD_LABELS[(contract as any).payment_method as keyof typeof PAYMENT_METHOD_LABELS] || (contract as any).payment_method}</p>
+                </div>
+              )}
+              {(contract as any).payment_account && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Conta de Recebimento</p>
+                  <p className="font-medium">{PAYMENT_ACCOUNT_LABELS[(contract as any).payment_account as PaymentAccount] || (contract as any).payment_account}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Contract Details with Tabs */}
         <Card className="lg:col-span-2">
@@ -509,6 +623,43 @@ export default function ContractDetail() {
               <TabsContent value="details" className="m-0 space-y-4">
             {isEditing ? (
               <>
+                {/* Contract Identification */}
+                <div className="p-4 border rounded-lg bg-muted/50 space-y-4">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Identificação do Contrato
+                  </h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Número do Contrato</Label>
+                      <Input
+                        value={formData.contract_number}
+                        onChange={(e) => setFormData({ ...formData, contract_number: e.target.value })}
+                        placeholder="Gerado automaticamente"
+                        disabled={!!formData.contract_number}
+                      />
+                    </div>
+                    <div>
+                      <Label>Responsável pelo Trâmite</Label>
+                      <Select
+                        value={formData.assigned_to_user_id}
+                        onValueChange={(v) => setFormData({ ...formData, assigned_to_user_id: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o responsável" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {profiles.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>{user.full_name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
                 <div>
                   <Label>Resumo do Escopo *</Label>
                   <Textarea
@@ -644,11 +795,76 @@ export default function ContractDetail() {
                   </div>
                 )}
 
-                {/* Installment Configuration */}
+                {/* Payment Configuration */}
                 <div className="p-4 border rounded-lg bg-muted/50 space-y-4">
                   <h4 className="font-medium flex items-center gap-2">
+                    <CreditCard className="h-4 w-4" />
+                    Pagamento e Parcelamento
+                  </h4>
+                  
+                  {/* Down Payment */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Valor de Entrada (Sinal) €</Label>
+                      <Input
+                        type="number"
+                        value={formData.down_payment}
+                        onChange={(e) => setFormData({ ...formData, down_payment: e.target.value })}
+                        placeholder="500.00"
+                      />
+                    </div>
+                    <div>
+                      <Label>Data da Entrada</Label>
+                      <Input
+                        type="date"
+                        value={formData.down_payment_date}
+                        onChange={(e) => setFormData({ ...formData, down_payment_date: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Payment Method and Account */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Forma de Pagamento</Label>
+                      <Select
+                        value={formData.payment_method}
+                        onValueChange={(v) => setFormData({ ...formData, payment_method: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Conta de Recebimento</Label>
+                      <Select
+                        value={formData.payment_account}
+                        onValueChange={(v) => setFormData({ ...formData, payment_account: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione a conta" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(PAYMENT_ACCOUNT_LABELS).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Installment Configuration */}
+                  <h4 className="font-medium flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
-                    Configuração de Parcelamento
+                    Configuração de Parcelas
                   </h4>
                   <div className="grid grid-cols-3 gap-4">
                     <div>

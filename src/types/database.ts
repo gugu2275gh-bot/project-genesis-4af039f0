@@ -493,6 +493,23 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   OUTRO: 'Outro',
 };
 
+export type PaymentAccount = 
+  | 'BRUCKSCHEN_ASSOCIADOS_ES'
+  | 'BRUCKSCHEN_ASESORIA_ES'
+  | 'CONTA_CAMILA'
+  | 'PIX_BRASIL'
+  | 'PAYPAL'
+  | 'DINHEIRO';
+
+export const PAYMENT_ACCOUNT_LABELS: Record<PaymentAccount, string> = {
+  BRUCKSCHEN_ASSOCIADOS_ES: 'Bruckschen & Associados (Espanha)',
+  BRUCKSCHEN_ASESORIA_ES: 'Bruckschen Asesoria (Espanha)',
+  CONTA_CAMILA: 'Conta Camila (Excepcional)',
+  PIX_BRASIL: 'PIX Brasil',
+  PAYPAL: 'PayPal',
+  DINHEIRO: 'Dinheiro (Efetivo)',
+};
+
 export const INTERACTION_CHANNEL_LABELS: Record<InteractionChannel, string> = {
   WHATSAPP: 'WhatsApp',
   EMAIL: 'Email',
