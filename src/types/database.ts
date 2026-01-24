@@ -80,11 +80,23 @@ export type TechnicalStatus =
   | 'CONTATO_INICIAL'
   | 'AGUARDANDO_DOCUMENTOS'
   | 'DOCUMENTOS_EM_CONFERENCIA'
+  | 'DOCUMENTACAO_PARCIAL_APROVADA'
+  | 'EM_ORGANIZACAO'
+  | 'ENVIADO_JURIDICO'
   | 'PRONTO_PARA_SUBMISSAO'
   | 'SUBMETIDO'
+  | 'PROTOCOLADO'
   | 'EM_ACOMPANHAMENTO'
   | 'EXIGENCIA_ORGAO'
+  | 'EM_RECURSO'
   | 'AGUARDANDO_RECURSO'
+  | 'DENEGADO'
+  | 'AGENDAR_HUELLAS'
+  | 'AGUARDANDO_CITA_HUELLAS'
+  | 'HUELLAS_REALIZADO'
+  | 'DISPONIVEL_RETIRADA_TIE'
+  | 'AGUARDANDO_CITA_RETIRADA'
+  | 'TIE_RETIRADO'
   | 'ENCERRADO_APROVADO'
   | 'ENCERRADO_NEGADO';
 
@@ -380,11 +392,23 @@ export const TECHNICAL_STATUS_LABELS: Record<TechnicalStatus, string> = {
   CONTATO_INICIAL: 'Contato Inicial',
   AGUARDANDO_DOCUMENTOS: 'Aguardando Documentos',
   DOCUMENTOS_EM_CONFERENCIA: 'Documentos em Conferência',
+  DOCUMENTACAO_PARCIAL_APROVADA: 'Documentação Parcial Aprovada',
+  EM_ORGANIZACAO: 'Em Organização',
+  ENVIADO_JURIDICO: 'Enviado ao Jurídico',
   PRONTO_PARA_SUBMISSAO: 'Pronto para Submissão',
   SUBMETIDO: 'Submetido',
+  PROTOCOLADO: 'Protocolado',
   EM_ACOMPANHAMENTO: 'Em Acompanhamento',
   EXIGENCIA_ORGAO: 'Exigência do Órgão',
+  EM_RECURSO: 'Em Recurso',
   AGUARDANDO_RECURSO: 'Aguardando Recurso',
+  DENEGADO: 'Denegado',
+  AGENDAR_HUELLAS: 'Agendar Tomada de Huellas',
+  AGUARDANDO_CITA_HUELLAS: 'Aguardando Cita de Huellas',
+  HUELLAS_REALIZADO: 'Huellas Realizado',
+  DISPONIVEL_RETIRADA_TIE: 'TIE Disponível para Retirada',
+  AGUARDANDO_CITA_RETIRADA: 'Aguardando Cita de Retirada',
+  TIE_RETIRADO: 'TIE Retirado',
   ENCERRADO_APROVADO: 'Encerrado (Aprovado)',
   ENCERRADO_NEGADO: 'Encerrado (Negado)',
 };
