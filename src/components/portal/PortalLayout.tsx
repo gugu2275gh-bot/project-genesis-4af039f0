@@ -1,6 +1,8 @@
 import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 import { 
   Home, 
   FileText, 
@@ -23,6 +25,33 @@ export function PortalLayout() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Check if onboarding is completed
+  const { data: onboardingStatus, isLoading: checkingOnboarding } = useQuery({
+    queryKey: ['portal-onboarding-status', user?.id],
+    queryFn: async () => {
+      if (!user) return { completed: true };
+      
+      const { data: serviceCase } = await supabase
+        .from('service_cases')
+        .select(`
+          opportunity_id,
+          opportunities (
+            leads (
+              contacts (
+                onboarding_completed
+              )
+            )
+          )
+        `)
+        .eq('client_user_id', user.id)
+        .maybeSingle();
+      
+      const contact = serviceCase?.opportunities?.leads?.contacts;
+      return { completed: contact?.onboarding_completed ?? true };
+    },
+    enabled: !!user,
+  });
+
   const portalNavItems = [
     { path: '/portal', label: t.portal.myCases, icon: Home, end: true },
     { path: '/portal/documents', label: t.portal.documents, icon: Upload },
@@ -31,7 +60,7 @@ export function PortalLayout() {
     { path: '/portal/messages', label: t.portal.messages, icon: MessageSquare },
   ];
 
-  if (loading) {
+  if (loading || checkingOnboarding) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -41,6 +70,11 @@ export function PortalLayout() {
 
   if (!user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  // Redirect to onboarding if not completed (except if already on onboarding page)
+  if (!onboardingStatus?.completed && location.pathname !== '/portal/onboarding') {
+    return <Navigate to="/portal/onboarding" replace />;
   }
 
   return (

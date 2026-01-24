@@ -42,7 +42,18 @@ const navItems: NavItem[] = [
     ]
   },
   { label: 'Contratos', href: '/contracts', icon: FileText, roles: ['ADMIN', 'MANAGER', 'JURIDICO', 'ATENCAO_CLIENTE'] },
-  { label: 'Financeiro', href: '/finance', icon: CreditCard, roles: ['ADMIN', 'MANAGER', 'FINANCEIRO'] },
+  { 
+    label: 'Financeiro', 
+    href: '/finance', 
+    icon: CreditCard, 
+    roles: ['ADMIN', 'MANAGER', 'FINANCEIRO'],
+    children: [
+      { label: 'Pagamentos', href: '/finance' },
+      { label: 'Comissões', href: '/finance/commissions' },
+      { label: 'Fluxo de Caixa', href: '/finance/cashflow' },
+      { label: 'Faturas', href: '/finance/invoices' },
+    ]
+  },
   { label: 'Casos Técnicos', href: '/cases', icon: Briefcase, roles: ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'TECNICO'] },
   { label: 'Tarefas', href: '/tasks', icon: CheckSquare },
   { label: 'Relatórios', href: '/reports', icon: BarChart3, roles: ['ADMIN', 'MANAGER'] },

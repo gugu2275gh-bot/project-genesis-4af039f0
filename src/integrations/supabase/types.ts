@@ -47,53 +47,309 @@ export type Database = {
         }
         Relationships: []
       }
+      cash_flow: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string | null
+          created_by_user_id: string | null
+          description: string | null
+          id: string
+          invoice_number: string | null
+          is_invoiced: boolean | null
+          payment_account: string | null
+          reference_date: string | null
+          related_commission_id: string | null
+          related_contract_id: string | null
+          related_payment_id: string | null
+          subcategory: string | null
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          description?: string | null
+          id?: string
+          invoice_number?: string | null
+          is_invoiced?: boolean | null
+          payment_account?: string | null
+          reference_date?: string | null
+          related_commission_id?: string | null
+          related_contract_id?: string | null
+          related_payment_id?: string | null
+          subcategory?: string | null
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          description?: string | null
+          id?: string
+          invoice_number?: string | null
+          is_invoiced?: boolean | null
+          payment_account?: string | null
+          reference_date?: string | null
+          related_commission_id?: string | null
+          related_contract_id?: string | null
+          related_payment_id?: string | null
+          subcategory?: string | null
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_flow_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_flow_related_contract_id_fkey"
+            columns: ["related_contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_flow_related_payment_id_fkey"
+            columns: ["related_payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commissions: {
+        Row: {
+          base_amount: number
+          collaborator_name: string
+          collaborator_type: string
+          commission_amount: number | null
+          commission_rate: number | null
+          contract_id: string
+          created_at: string | null
+          created_by_user_id: string | null
+          has_invoice: boolean | null
+          id: string
+          notes: string | null
+          paid_at: string | null
+          payment_method: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          base_amount: number
+          collaborator_name: string
+          collaborator_type: string
+          commission_amount?: number | null
+          commission_rate?: number | null
+          contract_id: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          has_invoice?: boolean | null
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          payment_method?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          base_amount?: number
+          collaborator_name?: string
+          collaborator_type?: string
+          commission_amount?: number | null
+          commission_rate?: number | null
+          contract_id?: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          has_invoice?: boolean | null
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          payment_method?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commissions_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commissions_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
+          address: string | null
+          civil_status: string | null
           country_of_origin: string | null
+          cpf: string | null
           created_at: string | null
+          document_number: string | null
+          document_type: string | null
+          education_level: string | null
           email: string | null
+          empadronamiento_address: string | null
+          eu_entry_last_6_months: boolean | null
+          expulsion_history: boolean | null
+          father_name: string | null
           full_name: string
           id: string
+          mother_name: string | null
           nationality: string | null
+          onboarding_completed: boolean | null
           origin_channel: Database["public"]["Enums"]["origin_channel"] | null
           phone: number | null
           preferred_language:
             | Database["public"]["Enums"]["language_code"]
             | null
+          previous_official_relationship: boolean | null
+          profession: string | null
+          referral_confirmed: boolean | null
           referral_name: string | null
+          spain_arrival_date: string | null
           updated_at: string | null
         }
         Insert: {
+          address?: string | null
+          civil_status?: string | null
           country_of_origin?: string | null
+          cpf?: string | null
           created_at?: string | null
+          document_number?: string | null
+          document_type?: string | null
+          education_level?: string | null
           email?: string | null
+          empadronamiento_address?: string | null
+          eu_entry_last_6_months?: boolean | null
+          expulsion_history?: boolean | null
+          father_name?: string | null
           full_name: string
           id?: string
+          mother_name?: string | null
           nationality?: string | null
+          onboarding_completed?: boolean | null
           origin_channel?: Database["public"]["Enums"]["origin_channel"] | null
           phone?: number | null
           preferred_language?:
             | Database["public"]["Enums"]["language_code"]
             | null
+          previous_official_relationship?: boolean | null
+          profession?: string | null
+          referral_confirmed?: boolean | null
           referral_name?: string | null
+          spain_arrival_date?: string | null
           updated_at?: string | null
         }
         Update: {
+          address?: string | null
+          civil_status?: string | null
           country_of_origin?: string | null
+          cpf?: string | null
           created_at?: string | null
+          document_number?: string | null
+          document_type?: string | null
+          education_level?: string | null
           email?: string | null
+          empadronamiento_address?: string | null
+          eu_entry_last_6_months?: boolean | null
+          expulsion_history?: boolean | null
+          father_name?: string | null
           full_name?: string
           id?: string
+          mother_name?: string | null
           nationality?: string | null
+          onboarding_completed?: boolean | null
           origin_channel?: Database["public"]["Enums"]["origin_channel"] | null
           phone?: number | null
           preferred_language?:
             | Database["public"]["Enums"]["language_code"]
             | null
+          previous_official_relationship?: boolean | null
+          profession?: string | null
+          referral_confirmed?: boolean | null
           referral_name?: string | null
+          spain_arrival_date?: string | null
           updated_at?: string | null
         }
         Relationships: []
+      }
+      contract_beneficiaries: {
+        Row: {
+          birth_date: string | null
+          contract_id: string
+          created_at: string | null
+          document_number: string | null
+          document_type: string | null
+          full_name: string
+          id: string
+          is_primary: boolean | null
+          nationality: string | null
+          relationship: string | null
+          service_case_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          birth_date?: string | null
+          contract_id: string
+          created_at?: string | null
+          document_number?: string | null
+          document_type?: string | null
+          full_name: string
+          id?: string
+          is_primary?: boolean | null
+          nationality?: string | null
+          relationship?: string | null
+          service_case_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          birth_date?: string | null
+          contract_id?: string
+          created_at?: string | null
+          document_number?: string | null
+          document_type?: string | null
+          full_name?: string
+          id?: string
+          is_primary?: boolean | null
+          nationality?: string | null
+          relationship?: string | null
+          service_case_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_beneficiaries_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_beneficiaries_service_case_id_fkey"
+            columns: ["service_case_id"]
+            isOneToOne: false
+            referencedRelation: "service_cases"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       contract_reminders: {
         Row: {
@@ -228,6 +484,33 @@ export type Database = {
         }
         Relationships: []
       }
+      expense_categories: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          type: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          type: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          type?: string
+        }
+        Relationships: []
+      }
       interactions: {
         Row: {
           channel: Database["public"]["Enums"]["interaction_channel"] | null
@@ -279,6 +562,97 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          additional_costs: Json | null
+          amount_without_vat: number
+          client_address: string | null
+          client_document: string | null
+          client_name: string
+          contract_id: string | null
+          created_at: string | null
+          created_by_user_id: string | null
+          file_url: string | null
+          id: string
+          invoice_number: string
+          issued_at: string | null
+          payment_id: string | null
+          sent_at: string | null
+          service_description: string
+          status: string | null
+          total_amount: number | null
+          updated_at: string | null
+          vat_amount: number | null
+          vat_rate: number | null
+        }
+        Insert: {
+          additional_costs?: Json | null
+          amount_without_vat: number
+          client_address?: string | null
+          client_document?: string | null
+          client_name: string
+          contract_id?: string | null
+          created_at?: string | null
+          created_by_user_id?: string | null
+          file_url?: string | null
+          id?: string
+          invoice_number: string
+          issued_at?: string | null
+          payment_id?: string | null
+          sent_at?: string | null
+          service_description: string
+          status?: string | null
+          total_amount?: number | null
+          updated_at?: string | null
+          vat_amount?: number | null
+          vat_rate?: number | null
+        }
+        Update: {
+          additional_costs?: Json | null
+          amount_without_vat?: number
+          client_address?: string | null
+          client_document?: string | null
+          client_name?: string
+          contract_id?: string | null
+          created_at?: string | null
+          created_by_user_id?: string | null
+          file_url?: string | null
+          id?: string
+          invoice_number?: string
+          issued_at?: string | null
+          payment_id?: string | null
+          sent_at?: string | null
+          service_description?: string
+          status?: string | null
+          total_amount?: number | null
+          updated_at?: string | null
+          vat_amount?: number | null
+          vat_rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
             referencedColumns: ["id"]
           },
         ]
@@ -802,57 +1176,105 @@ export type Database = {
       service_cases: {
         Row: {
           assigned_to_user_id: string | null
+          case_priority: string | null
           client_user_id: string | null
           created_at: string | null
           decision_date: string | null
           decision_result: Database["public"]["Enums"]["decision_result"] | null
+          expected_protocol_date: string | null
+          huellas_completed: boolean | null
+          huellas_date: string | null
+          huellas_location: string | null
+          huellas_time: string | null
           id: string
+          is_urgent: boolean | null
+          juridical_notes: string | null
+          juridical_review_status: string | null
           opportunity_id: string
           protocol_number: string | null
+          resource_deadline: string | null
+          resource_notes: string | null
+          resource_status: string | null
           sector: Database["public"]["Enums"]["service_sector"]
           service_type: Database["public"]["Enums"]["service_interest"]
           submission_date: string | null
           technical_status:
             | Database["public"]["Enums"]["technical_status"]
             | null
+          tie_lot_number: string | null
+          tie_picked_up: boolean | null
+          tie_pickup_date: string | null
+          tie_validity_date: string | null
           updated_at: string | null
         }
         Insert: {
           assigned_to_user_id?: string | null
+          case_priority?: string | null
           client_user_id?: string | null
           created_at?: string | null
           decision_date?: string | null
           decision_result?:
             | Database["public"]["Enums"]["decision_result"]
             | null
+          expected_protocol_date?: string | null
+          huellas_completed?: boolean | null
+          huellas_date?: string | null
+          huellas_location?: string | null
+          huellas_time?: string | null
           id?: string
+          is_urgent?: boolean | null
+          juridical_notes?: string | null
+          juridical_review_status?: string | null
           opportunity_id: string
           protocol_number?: string | null
+          resource_deadline?: string | null
+          resource_notes?: string | null
+          resource_status?: string | null
           sector: Database["public"]["Enums"]["service_sector"]
           service_type: Database["public"]["Enums"]["service_interest"]
           submission_date?: string | null
           technical_status?:
             | Database["public"]["Enums"]["technical_status"]
             | null
+          tie_lot_number?: string | null
+          tie_picked_up?: boolean | null
+          tie_pickup_date?: string | null
+          tie_validity_date?: string | null
           updated_at?: string | null
         }
         Update: {
           assigned_to_user_id?: string | null
+          case_priority?: string | null
           client_user_id?: string | null
           created_at?: string | null
           decision_date?: string | null
           decision_result?:
             | Database["public"]["Enums"]["decision_result"]
             | null
+          expected_protocol_date?: string | null
+          huellas_completed?: boolean | null
+          huellas_date?: string | null
+          huellas_location?: string | null
+          huellas_time?: string | null
           id?: string
+          is_urgent?: boolean | null
+          juridical_notes?: string | null
+          juridical_review_status?: string | null
           opportunity_id?: string
           protocol_number?: string | null
+          resource_deadline?: string | null
+          resource_notes?: string | null
+          resource_status?: string | null
           sector?: Database["public"]["Enums"]["service_sector"]
           service_type?: Database["public"]["Enums"]["service_interest"]
           submission_date?: string | null
           technical_status?:
             | Database["public"]["Enums"]["technical_status"]
             | null
+          tie_lot_number?: string | null
+          tie_picked_up?: boolean | null
+          tie_pickup_date?: string | null
+          tie_validity_date?: string | null
           updated_at?: string | null
         }
         Relationships: [

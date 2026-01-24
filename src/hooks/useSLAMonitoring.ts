@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface SLABreachItem {
   id: string;
-  type: 'lead' | 'contract' | 'payment' | 'requirement' | 'document';
+  type: 'lead' | 'contract' | 'payment' | 'requirement' | 'document' | 'onboarding' | 'tie';
   title: string;
   description: string;
   severity: 'warning' | 'critical';
@@ -16,8 +16,11 @@ interface SLAMetrics {
   leadsIncomplete: number;
   contractsPendingSignature: number;
   paymentsPending: number;
+  paymentsPreDue: number;
   requirementsUrgent: number;
   documentsPendingReview: number;
+  onboardingIncomplete: number;
+  tiePendingPickup: number;
   breaches: SLABreachItem[];
   healthScore: number;
 }
@@ -212,9 +215,12 @@ export function useSLAMonitoring() {
         leadsIncomplete: leadsIncomplete || 0,
         contractsPendingSignature: contractsPendingSignature || 0,
         paymentsPending: paymentsPending || 0,
+        paymentsPreDue: 0, // TODO: implement pre-due counting
         requirementsUrgent: requirementsUrgent || 0,
         documentsPendingReview: documentsPendingReview || 0,
-        breaches: breaches.slice(0, 10), // Limit to top 10
+        onboardingIncomplete: 0, // TODO: implement onboarding counting
+        tiePendingPickup: 0, // TODO: implement TIE pickup counting
+        breaches: breaches.slice(0, 10),
         healthScore,
       };
     },
