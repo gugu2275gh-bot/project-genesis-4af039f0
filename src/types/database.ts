@@ -61,7 +61,9 @@ export type ContractStatus =
   | 'ASSINADO'
   | 'CANCELADO';
 
-export type PaymentMethod = 
+export type ContractTemplate = 'NACIONALIDADE' | 'GENERICO';
+
+export type PaymentMethod =
   | 'CARTAO'
   | 'TRANSFERENCIA'
   | 'PIX'
@@ -419,6 +421,11 @@ export const CONTRACT_STATUS_LABELS: Record<ContractStatus, string> = {
   ENVIADO: 'Enviado',
   ASSINADO: 'Assinado',
   CANCELADO: 'Cancelado',
+};
+
+export const CONTRACT_TEMPLATE_LABELS: Record<ContractTemplate, string> = {
+  NACIONALIDADE: 'Contrato de Nacionalidade',
+  GENERICO: 'Contrato Genérico',
 };
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
