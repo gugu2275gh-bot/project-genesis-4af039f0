@@ -212,10 +212,10 @@ export function usePayments() {
         const allConfirmed = allPayments?.every(p => p.status === 'CONFIRMADO');
 
         if (allConfirmed) {
-          // Update contract to QUITADO (fully paid)
+          // Update contract to CONCLUIDO (fully paid)
           await supabase
             .from('contracts')
-            .update({ payment_status: 'QUITADO' })
+            .update({ payment_status: 'CONCLUIDO' })
             .eq('id', contractId);
         }
       } else {

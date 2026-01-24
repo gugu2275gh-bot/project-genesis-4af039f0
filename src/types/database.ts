@@ -423,6 +423,18 @@ export const CONTRACT_STATUS_LABELS: Record<ContractStatus, string> = {
   CANCELADO: 'Cancelado',
 };
 
+// Contract Payment Status (separate from contract lifecycle status)
+export type ContractPaymentStatus = 
+  | 'NAO_INICIADO'
+  | 'INICIADO'
+  | 'CONCLUIDO';
+
+export const CONTRACT_PAYMENT_STATUS_LABELS: Record<ContractPaymentStatus, string> = {
+  NAO_INICIADO: 'Não Iniciado',
+  INICIADO: 'Iniciado',
+  CONCLUIDO: 'Concluído',
+};
+
 export const CONTRACT_TEMPLATE_LABELS: Record<ContractTemplate, string> = {
   NACIONALIDADE: 'Contrato de Nacionalidade',
   GENERICO: 'Contrato Genérico',
