@@ -27,9 +27,9 @@ const TYPE_ICONS = {
 };
 
 const TYPE_ROUTES = {
-  lead: '/leads',
+  lead: '/crm/leads',
   contract: '/contracts',
-  payment: '/payments',
+  payment: '/finance',
   requirement: '/cases',
   document: '/cases',
 };
