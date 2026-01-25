@@ -10,7 +10,8 @@ import {
   Clock,
   AlertCircle,
   ExternalLink,
-  Receipt
+  Receipt,
+  Download
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -18,7 +19,8 @@ import {
   PAYMENT_STATUS_LABELS,
   PAYMENT_METHOD_LABELS 
 } from '@/types/database';
-import { downloadReceipt, generateReceiptNumber } from '@/lib/generate-receipt';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 const statusConfig: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
   PENDENTE: { icon: Clock, color: 'text-warning', bg: 'bg-warning/10' },
@@ -30,12 +32,40 @@ const statusConfig: Record<string, { icon: React.ElementType; color: string; bg:
 
 export default function PortalPayments() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const { data: payments = [], isLoading } = useClientPayments();
 
   const pendingPayments = payments.filter(p => p.status === 'PENDENTE' || p.status === 'PARCIAL');
   const completedPayments = payments.filter(p => p.status === 'CONFIRMADO');
   const totalPaid = completedPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
   const totalPending = pendingPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+  const handleDownloadReceipt = async (payment: any) => {
+    if (!payment.receipt_url) {
+      toast({ title: 'Recibo não disponível', variant: 'destructive' });
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabase.storage
+        .from('client-documents')
+        .download(payment.receipt_url);
+
+      if (error) throw error;
+
+      const url = URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${payment.receipt_number || 'recibo'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast({ title: 'Erro ao baixar recibo', description: message, variant: 'destructive' });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -171,24 +201,13 @@ export default function PortalPayments() {
                             </a>
                           </Button>
                         )}
-                        {status === 'CONFIRMADO' && (
+                        {status === 'CONFIRMADO' && (payment as any).receipt_available_in_portal && (payment as any).receipt_url && (
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => {
-                              downloadReceipt({
-                                receiptNumber: generateReceiptNumber(),
-                                clientName: user?.email || 'Cliente',
-                                amount: payment.amount,
-                                currency: payment.currency || 'EUR',
-                                paymentMethod: PAYMENT_METHOD_LABELS[payment.payment_method || 'OUTRO'],
-                                paymentDate: payment.paid_at ? format(new Date(payment.paid_at), 'dd/MM/yyyy') : format(new Date(), 'dd/MM/yyyy'),
-                                transactionId: payment.transaction_id || undefined,
-                                description: 'Serviços de assessoria em extranjería',
-                              });
-                            }}
+                            onClick={() => handleDownloadReceipt(payment)}
                           >
-                            <Receipt className="h-4 w-4 mr-2" />
+                            <Download className="h-4 w-4 mr-2" />
                             Ver Recibo
                           </Button>
                         )}

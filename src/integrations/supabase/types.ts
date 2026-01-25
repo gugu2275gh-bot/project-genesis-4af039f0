@@ -396,6 +396,48 @@ export type Database = {
           },
         ]
       }
+      contract_notes: {
+        Row: {
+          contract_id: string
+          created_at: string | null
+          created_by_user_id: string | null
+          id: string
+          note: string
+          note_type: string | null
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          id?: string
+          note: string
+          note_type?: string | null
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          id?: string
+          note?: string
+          note_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_notes_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_notes_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_reminders: {
         Row: {
           contract_id: string
@@ -1136,8 +1178,13 @@ export type Database = {
           paid_at: string | null
           payment_link: string | null
           payment_method: Database["public"]["Enums"]["payment_method"] | null
+          receipt_approved_at: string | null
+          receipt_approved_by: string | null
           receipt_available_in_portal: boolean | null
+          receipt_generated_at: string | null
+          receipt_number: string | null
           receipt_url: string | null
+          refinanced_status: string | null
           rescheduled_at: string | null
           rescheduled_reason: string | null
           status: Database["public"]["Enums"]["payment_status"] | null
@@ -1157,8 +1204,13 @@ export type Database = {
           paid_at?: string | null
           payment_link?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          receipt_approved_at?: string | null
+          receipt_approved_by?: string | null
           receipt_available_in_portal?: boolean | null
+          receipt_generated_at?: string | null
+          receipt_number?: string | null
           receipt_url?: string | null
+          refinanced_status?: string | null
           rescheduled_at?: string | null
           rescheduled_reason?: string | null
           status?: Database["public"]["Enums"]["payment_status"] | null
@@ -1178,8 +1230,13 @@ export type Database = {
           paid_at?: string | null
           payment_link?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          receipt_approved_at?: string | null
+          receipt_approved_by?: string | null
           receipt_available_in_portal?: boolean | null
+          receipt_generated_at?: string | null
+          receipt_number?: string | null
           receipt_url?: string | null
+          refinanced_status?: string | null
           rescheduled_at?: string | null
           rescheduled_reason?: string | null
           status?: Database["public"]["Enums"]["payment_status"] | null
@@ -1199,6 +1256,13 @@ export type Database = {
             columns: ["opportunity_id"]
             isOneToOne: false
             referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_receipt_approved_by_fkey"
+            columns: ["receipt_approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
