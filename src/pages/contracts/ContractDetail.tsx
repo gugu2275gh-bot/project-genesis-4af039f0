@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BeneficiariesTab } from '@/components/contracts/BeneficiariesTab';
 import { ContractCostsSection } from '@/components/contracts/ContractCostsSection';
+import { ContractNotesSection } from '@/components/contracts/ContractNotesSection';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
@@ -1049,6 +1050,9 @@ export default function ContractDetail() {
         canEdit={contract.status !== 'CANCELADO'}
         currency={contract.currency || 'EUR'}
       />
+
+      {/* Notes Section - Histórico de Acordos */}
+      <ContractNotesSection contractId={contract.id} />
     </div>
   );
 }

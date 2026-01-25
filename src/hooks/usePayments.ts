@@ -14,6 +14,12 @@ export type PaymentWithOpportunity = Payment & {
       contacts: Tables<'contacts'> | null;
     };
   };
+  contracts?: Tables<'contracts'> | null;
+  // New receipt fields
+  receipt_number?: string | null;
+  receipt_generated_at?: string | null;
+  receipt_approved_at?: string | null;
+  receipt_approved_by?: string | null;
 };
 
 export function usePayments() {
@@ -34,7 +40,8 @@ export function usePayments() {
               *,
               contacts (*)
             )
-          )
+          ),
+          contracts (*)
         `)
         .order('created_at', { ascending: false });
       

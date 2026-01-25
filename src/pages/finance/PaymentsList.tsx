@@ -1,14 +1,16 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { usePayments } from '@/hooks/usePayments';
 import { useOpportunities } from '@/hooks/useOpportunities';
+import { useReceipts } from '@/hooks/useReceipts';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText } from 'lucide-react';
+import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText, Download, CheckCircle, Clock, FileCheck } from 'lucide-react';
 import { PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format, differenceInDays, isBefore } from 'date-fns';
@@ -16,11 +18,11 @@ import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { RescheduleDialog } from '@/components/payments/RescheduleDialog';
 import { RefinanceDialog } from '@/components/payments/RefinanceDialog';
-import { downloadReceipt, generateReceiptNumber } from '@/lib/generate-receipt';
 
 export default function PaymentsList() {
   const { payments, isLoading, createPayment, confirmPayment } = usePayments();
   const { opportunities } = useOpportunities();
+  const { generateAndSaveReceipt, approveReceipt, downloadReceipt } = useReceipts();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -187,9 +189,38 @@ export default function PaymentsList() {
         : '-',
     },
     {
+      key: 'receipt',
+      header: 'Recibo',
+      cell: (payment: any) => {
+        if (payment.status !== 'CONFIRMADO') return <span className="text-muted-foreground">-</span>;
+        
+        if (payment.receipt_approved_at) {
+          return (
+            <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+              <FileCheck className="h-3 w-3 mr-1" />
+              Aprovado
+            </Badge>
+          );
+        }
+        
+        if (payment.receipt_generated_at) {
+          return (
+            <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+              <Clock className="h-3 w-3 mr-1" />
+              Aguardando
+            </Badge>
+          );
+        }
+        
+        return (
+          <Badge variant="outline">Não gerado</Badge>
+        );
+      },
+    },
+    {
       key: 'actions',
       header: '',
-      cell: (payment) => (
+      cell: (payment: any) => (
         <div className="flex items-center gap-1">
           {payment.status === 'PENDENTE' && (
             <>
@@ -215,31 +246,72 @@ export default function PaymentsList() {
               >
                 <CalendarClock className="h-4 w-4" />
               </Button>
+              {payment.contract_id && (
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedContractId(payment.contract_id);
+                    setShowRefinanceDialog(true);
+                  }}
+                  title="Reparcelar"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              )}
             </>
           )}
           {payment.status === 'CONFIRMADO' && (
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                const clientName = payment.opportunities?.leads?.contacts?.full_name || 'Cliente';
-                downloadReceipt({
-                  receiptNumber: generateReceiptNumber(),
-                  clientName,
-                  clientDocument: payment.opportunities?.leads?.contacts?.document_number || undefined,
-                  amount: payment.amount,
-                  currency: payment.currency || 'EUR',
-                  paymentMethod: PAYMENT_METHOD_LABELS[payment.payment_method || 'OUTRO'],
-                  paymentDate: payment.paid_at ? format(new Date(payment.paid_at), 'dd/MM/yyyy') : format(new Date(), 'dd/MM/yyyy'),
-                  transactionId: payment.transaction_id || undefined,
-                  description: 'Serviços de assessoria em extranjería',
-                });
-              }}
-              title="Gerar Recibo"
-            >
-              <FileText className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              {/* Gerar Recibo Manualmente */}
+              {!payment.receipt_number && (
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    generateAndSaveReceipt.mutate(payment);
+                  }}
+                  disabled={generateAndSaveReceipt.isPending}
+                  title="Gerar Recibo"
+                >
+                  <FileText className="h-4 w-4" />
+                </Button>
+              )}
+              
+              {/* Aprovar Recibo */}
+              {payment.receipt_number && !payment.receipt_approved_at && (
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    approveReceipt.mutate(payment.id);
+                  }}
+                  disabled={approveReceipt.isPending}
+                  title="Aprovar Recibo"
+                  className="text-green-600 hover:text-green-700"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                </Button>
+              )}
+              
+              {/* Download Recibo */}
+              {payment.receipt_approved_at && payment.receipt_url && (
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    downloadReceipt(payment.receipt_url, payment.receipt_number || 'recibo');
+                  }}
+                  title="Baixar Recibo"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           )}
         </div>
       ),

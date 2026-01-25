@@ -72,16 +72,34 @@ export function RescheduleDialog({ open, onOpenChange, payment }: RescheduleDial
 
       if (error) throw error;
 
-      // TODO: Send WhatsApp notification if notifyClient is true
+      // Send WhatsApp notification if notifyClient is true
       if (notifyClient) {
-        console.log("Would send notification to client about rescheduled payment");
+        const phone = payment.opportunities?.leads?.contacts?.phone;
+        if (phone) {
+          const message = `Olá ${clientName}! 📅 Sua parcela de €${payment.amount.toFixed(2)} foi prorrogada. Nova data de vencimento: ${format(newDueDate, "dd/MM/yyyy")}. Qualquer dúvida, estamos à disposição.`;
+          
+          try {
+            await fetch('https://webhook.robertobarros.ai/webhook/enviamsgccse', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                mensagem: message, 
+                numero: String(phone).replace(/\D/g, '') 
+              })
+            });
+            console.log("WhatsApp notification sent for rescheduled payment");
+          } catch (whatsappError) {
+            console.error("Failed to send WhatsApp notification:", whatsappError);
+          }
+        }
       }
 
       toast({ title: "Pagamento prorrogado com sucesso" });
       queryClient.invalidateQueries({ queryKey: ["payments"] });
       onOpenChange(false);
-    } catch (error: any) {
-      toast({ title: "Erro ao prorrogar pagamento", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast({ title: "Erro ao prorrogar pagamento", description: message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
