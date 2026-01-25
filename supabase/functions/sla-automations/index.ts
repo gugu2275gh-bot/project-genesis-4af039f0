@@ -374,6 +374,22 @@ serve(async (req) => {
             .replace('{valor}', String(payment.amount))
             .replace('{data}', payment.due_date)
           await sendWhatsApp(contact.phone, msg, leadId)
+          
+          // Notify FINANCEIRO team about upcoming payment
+          const { data: financeUsers } = await supabase
+            .from('user_roles')
+            .select('user_id')
+            .eq('role', 'FINANCEIRO')
+          
+          for (const user of financeUsers || []) {
+            await supabase.from('notifications').insert({
+              user_id: user.user_id,
+              title: 'Parcela vence em 48h',
+              message: `Pagamento de €${payment.amount} de ${contact.full_name} vence em ${payment.due_date}.`,
+              type: 'payment_pending',
+            })
+          }
+          
           results.paymentPreReminders++
         }
       }
