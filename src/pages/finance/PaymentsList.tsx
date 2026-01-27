@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText, Download, CheckCircle, Clock, FileCheck } from 'lucide-react';
+import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText, Download, CheckCircle, Clock, FileCheck, MessageSquare } from 'lucide-react';
 import { PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format, differenceInDays, isBefore } from 'date-fns';
@@ -20,7 +20,7 @@ import { RescheduleDialog } from '@/components/payments/RescheduleDialog';
 import { RefinanceDialog } from '@/components/payments/RefinanceDialog';
 
 export default function PaymentsList() {
-  const { payments, isLoading, createPayment, confirmPayment } = usePayments();
+  const { payments, isLoading, createPayment, confirmPayment, sendCollectionMessage } = usePayments();
   const { opportunities } = useOpportunities();
   const { generateAndSaveReceipt, approveReceipt, downloadReceipt } = useReceipts();
   const [search, setSearch] = useState('');
@@ -258,6 +258,21 @@ export default function PaymentsList() {
                   title="Reparcelar"
                 >
                   <RefreshCw className="h-4 w-4" />
+                </Button>
+              )}
+              {getOverdueInfo(payment)?.isOverdue && (
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    sendCollectionMessage.mutate(payment);
+                  }}
+                  disabled={sendCollectionMessage.isPending}
+                  title="Enviar Cobrança WhatsApp"
+                  className="text-green-600 hover:text-green-700"
+                >
+                  <MessageSquare className="h-4 w-4" />
                 </Button>
               )}
             </>
