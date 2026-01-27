@@ -44,6 +44,7 @@ serve(async (req) => {
       preProtocolReminders: 0,
       postProtocolAlerts: 0,
       protocolInstructionsSent: 0,
+      dailyCollections: 0,
     }
 
     // Fetch SLA configurations
@@ -886,6 +887,60 @@ serve(async (req) => {
           })
         }
         results.postProtocolAlerts++
+      }
+    }
+
+    // =====================================================
+    // 15. DAILY COLLECTION - Send collection message every 24h
+    // =====================================================
+    console.log('Starting daily collection for overdue payments...')
+    const { data: allOverduePayments } = await supabase
+      .from('payments')
+      .select(`
+        id, due_date, amount, currency,
+        opportunities!inner (
+          lead_id,
+          leads!inner (id, contacts!inner (full_name, phone))
+        )
+      `)
+      .eq('status', 'PENDENTE')
+      .lt('due_date', today)
+
+    console.log(`Found ${allOverduePayments?.length || 0} overdue payments for daily collection`)
+
+    for (const payment of allOverduePayments || []) {
+      const oppData = payment.opportunities as unknown as { 
+        lead_id: string;
+        leads: { id: string; contacts: { full_name: string; phone: number | null } } 
+      }
+      const contact = oppData?.leads?.contacts
+      const leadId = oppData?.leads?.id
+      
+      if (!contact?.phone) {
+        console.log(`Skipping payment ${payment.id} - no phone number`)
+        continue
+      }
+
+      // Check if already sent today using reminder_type with date
+      const dailyReminderType = `DAILY_COLLECTION_${today}`
+      if (await reminderAlreadySent('payment_reminders', payment.id, dailyReminderType)) {
+        console.log(`Skipping payment ${payment.id} - already sent today`)
+        continue
+      }
+
+      // Send collection message
+      const message = `Olá ${contact.full_name}! Identificamos que seu pagamento está em atraso. Favor providenciar o mais rápido possível ou entre em contato com a CB Asesoria.`
+      
+      // Record reminder first to prevent duplicates
+      await supabase.from('payment_reminders').insert({ 
+        payment_id: payment.id, 
+        reminder_type: dailyReminderType 
+      })
+      
+      const sent = await sendWhatsApp(contact.phone, message, leadId)
+      if (sent) {
+        console.log(`Daily collection sent for payment ${payment.id} to ${String(contact.phone).slice(-4)}`)
+        results.dailyCollections++
       }
     }
 
