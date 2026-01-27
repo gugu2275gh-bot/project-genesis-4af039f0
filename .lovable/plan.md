@@ -1,19 +1,19 @@
 
-# Plano: Botão "Enviar Cobrança" na Tela de Pagamentos
+# Plano: Cobrança Automática Diária de Pagamentos em Atraso
 
 ## Objetivo
 
-Adicionar um botão na tela de pagamentos que identifica pagamentos em atraso e envia automaticamente uma mensagem WhatsApp de cobrança para o cliente, usando a Edge Function `send-whatsapp` já existente.
+Implementar automação que envia mensagens de cobrança via WhatsApp para todos os pagamentos em atraso, rodando automaticamente a cada 24 horas sem necessidade de usuário logado.
 
 ---
 
 ## Como Funcionará
 
-1. O usuário clica no botão "Enviar Cobrança" na linha do pagamento em atraso
-2. O sistema busca o telefone do contato vinculado ao pagamento
-3. Envia uma mensagem pré-definida via Edge Function `send-whatsapp`
-4. Registra a mensagem na tabela `mensagens_cliente` para histórico
-5. Mostra feedback de sucesso/erro ao usuário
+1. O `sla-automations` Edge Function já roda periodicamente (via cron)
+2. Adicionar nova seção que identifica TODOS os pagamentos em atraso
+3. Para cada pagamento em atraso, envia cobrança diária (uma por dia)
+4. Usa tabela `payment_reminders` com tipo `DAILY_COLLECTION` + data para evitar duplicatas no mesmo dia
+5. Mensagem personalizada: "Olá {nome}! Identificamos que seu pagamento está em atraso. Favor providenciar o mais rápido possível ou entre em contato com a CB Asesoria."
 
 ---
 
@@ -21,83 +21,82 @@ Adicionar um botão na tela de pagamentos que identifica pagamentos em atraso e 
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/usePayments.ts` | Adicionar mutation `sendCollectionMessage` para enviar WhatsApp |
-| `src/pages/finance/PaymentsList.tsx` | Adicionar botão "Enviar Cobrança" na coluna de ações para pagamentos em atraso |
+| `supabase/functions/sla-automations/index.ts` | Adicionar seção de cobrança diária automática |
 
 ---
 
-## Detalhes da Implementação
+## Detalhes Técnicos
 
-### 1. Hook usePayments.ts
-
-Adicionar nova mutation que:
-- Recebe o pagamento como parâmetro
-- Busca o telefone do contato via `payment.opportunities.leads.contacts.phone`
-- Busca o `lead_id` via `payment.opportunities.lead_id`
-- Chama `supabase.functions.invoke('send-whatsapp', ...)` com a mensagem de cobrança
-- Insere registro em `mensagens_cliente` para manter histórico
+### Lógica da Cobrança Diária
 
 ```typescript
-const sendCollectionMessage = useMutation({
-  mutationFn: async (payment: PaymentWithOpportunity) => {
-    const phone = payment.opportunities?.leads?.contacts?.phone;
-    const leadId = payment.opportunities?.lead_id;
-    const clientName = payment.opportunities?.leads?.contacts?.full_name || 'Cliente';
-    
-    if (!phone) throw new Error('Telefone do contato não encontrado');
-    
-    const message = `Olá ${clientName}! Identificamos que seu pagamento está em atraso. Favor providenciar o mais rápido possível ou entre em contato com a CB Asesoria.`;
-    
-    // 1. Enviar WhatsApp via Edge Function
-    const { error: webhookError } = await supabase.functions.invoke('send-whatsapp', {
-      body: { mensagem: message, numero: String(phone) }
-    });
-    
-    if (webhookError) throw webhookError;
-    
-    // 2. Registrar no histórico de mensagens (se tiver lead_id)
-    if (leadId) {
-      await supabase.from('mensagens_cliente').insert({
-        id_lead: leadId,
-        mensagem_IA: message,
-        origem: 'SISTEMA',
-      });
-    }
-    
-    return { success: true };
-  },
-  onSuccess: () => {
-    toast({ title: 'Cobrança enviada com sucesso!' });
-  },
-  onError: (error) => {
-    toast({ title: 'Erro ao enviar cobrança', description: error.message, variant: 'destructive' });
-  },
-});
+// =====================================================
+// NEW: DAILY COLLECTION - Send collection message every 24h
+// =====================================================
+const { data: allOverduePayments } = await supabase
+  .from('payments')
+  .select(`
+    id, due_date, amount, currency,
+    opportunities!inner (
+      lead_id,
+      leads!inner (id, contacts!inner (full_name, phone))
+    )
+  `)
+  .eq('status', 'PENDENTE')
+  .lt('due_date', today)
+
+for (const payment of allOverduePayments || []) {
+  const oppData = payment.opportunities as unknown as { 
+    lead_id: string;
+    leads: { id: string; contacts: { full_name: string; phone: number | null } } 
+  }
+  const contact = oppData?.leads?.contacts
+  const leadId = oppData?.leads?.id
+  if (!contact?.phone) continue
+
+  // Check if already sent today using reminder_type with date
+  const dailyReminderType = `DAILY_COLLECTION_${today}`
+  if (await reminderAlreadySent('payment_reminders', payment.id, dailyReminderType)) {
+    continue
+  }
+
+  // Send collection message
+  const message = `Olá ${contact.full_name}! Identificamos que seu pagamento está em atraso. Favor providenciar o mais rápido possível ou entre em contato com a CB Asesoria.`
+  
+  await supabase.from('payment_reminders').insert({ 
+    payment_id: payment.id, 
+    reminder_type: dailyReminderType 
+  })
+  
+  await sendWhatsApp(contact.phone, message, leadId)
+  results.dailyCollections++
+}
 ```
 
-### 2. PaymentsList.tsx
+### Rastreamento de Lembretes
 
-Adicionar botão com ícone de WhatsApp na coluna de ações, visível apenas para pagamentos em atraso:
+- Tipo de lembrete: `DAILY_COLLECTION_YYYY-MM-DD` (ex: `DAILY_COLLECTION_2026-01-27`)
+- Isso permite enviar exatamente 1 mensagem por dia para cada pagamento em atraso
+- A tabela `payment_reminders` já existe e será reutilizada
 
-```tsx
-import { MessageSquare } from 'lucide-react';
+### Cron Job
 
-// Na coluna de ações, após os botões existentes para PENDENTE:
-{getOverdueInfo(payment)?.isOverdue && (
-  <Button 
-    variant="ghost" 
-    size="icon"
-    onClick={(e) => {
-      e.stopPropagation();
-      sendCollectionMessage.mutate(payment);
-    }}
-    disabled={sendCollectionMessage.isPending}
-    title="Enviar Cobrança WhatsApp"
-    className="text-green-600 hover:text-green-700"
-  >
-    <MessageSquare className="h-4 w-4" />
-  </Button>
-)}
+Para garantir execução a cada 24 horas, será necessário:
+1. Habilitar extensões `pg_cron` e `pg_net` no Supabase
+2. Criar cron job que executa a cada 24h às 09:00
+
+```sql
+select cron.schedule(
+  'daily-sla-automations',
+  '0 9 * * *',  -- Todos os dias às 9h
+  $$
+  select net.http_post(
+    url:='https://xdnliyuogkoxckbesktx.supabase.co/functions/v1/sla-automations',
+    headers:='{"Content-Type": "application/json", "Authorization": "Bearer ANON_KEY"}'::jsonb,
+    body:='{}'::jsonb
+  ) as request_id;
+  $$
+);
 ```
 
 ---
@@ -105,23 +104,47 @@ import { MessageSquare } from 'lucide-react';
 ## Fluxo Visual
 
 ```text
-+-------------------+     +--------------------+     +------------------+
-| PaymentsList.tsx  | --> | usePayments.ts     | --> | send-whatsapp    |
-| (botão cobrança)  |     | sendCollectionMsg  |     | Edge Function    |
-+-------------------+     +--------------------+     +------------------+
++------------------+     +----------------------+     +------------------+
+| Cron Job (24h)   | --> | sla-automations      | --> | N8N Webhook      |
+| (pg_cron)        |     | Edge Function        |     | (WhatsApp)       |
++------------------+     +----------------------+     +------------------+
                                     |
                                     v
-                          +--------------------+
-                          | mensagens_cliente  |
-                          | (histórico)        |
-                          +--------------------+
+                         +----------------------+
+                         | payment_reminders    |
+                         | DAILY_COLLECTION_*   |
+                         +----------------------+
+                                    |
+                                    v
+                         +----------------------+
+                         | mensagens_cliente    |
+                         | (histórico CRM)      |
+                         +----------------------+
 ```
 
 ---
 
-## Consideracoes
+## Resultado Esperado
 
-- A mensagem de cobranca e padronizada mas personalizada com o nome do cliente
-- O botao so aparece para pagamentos em atraso (PENDENTE com due_date < hoje)
-- A mensagem e registrada no historico do lead para rastreabilidade
-- Usa a mesma Edge Function `send-whatsapp` que o LeadChat, mantendo consistencia
+| Contador | Descrição |
+|----------|-----------|
+| `dailyCollections` | Número de cobranças diárias enviadas |
+
+---
+
+## Primeira Execução
+
+Como o usuário quer começar agora (20:35), após implementar a alteração:
+1. Deploy automático da Edge Function
+2. Testar manualmente chamando a função uma vez
+3. Configurar cron para execução diária às 09:00
+
+---
+
+## Considerações
+
+- Mensagem padronizada igual à do botão manual
+- Evita duplicatas no mesmo dia via `payment_reminders`
+- Registra todas as mensagens em `mensagens_cliente` para histórico no CRM
+- Usa mesma infraestrutura de WhatsApp já existente (N8N webhook)
+- Não requer usuário logado - usa SUPABASE_SERVICE_ROLE_KEY
