@@ -278,6 +278,42 @@ export function usePayments() {
     },
   });
 
+  const sendCollectionMessage = useMutation({
+    mutationFn: async (payment: PaymentWithOpportunity) => {
+      const phone = payment.opportunities?.leads?.contacts?.phone;
+      const leadId = payment.opportunities?.lead_id;
+      const clientName = payment.opportunities?.leads?.contacts?.full_name || 'Cliente';
+      
+      if (!phone) throw new Error('Telefone do contato não encontrado');
+      
+      const message = `Olá ${clientName}! Identificamos que seu pagamento está em atraso. Favor providenciar o mais rápido possível ou entre em contato com a CB Asesoria.`;
+      
+      // 1. Enviar WhatsApp via Edge Function
+      const { error: webhookError } = await supabase.functions.invoke('send-whatsapp', {
+        body: { mensagem: message, numero: String(phone) }
+      });
+      
+      if (webhookError) throw webhookError;
+      
+      // 2. Registrar no histórico de mensagens (se tiver lead_id)
+      if (leadId) {
+        await supabase.from('mensagens_cliente').insert({
+          id_lead: leadId,
+          mensagem_IA: message,
+          origem: 'SISTEMA',
+        });
+      }
+      
+      return { success: true };
+    },
+    onSuccess: () => {
+      toast({ title: 'Cobrança enviada com sucesso!' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao enviar cobrança', description: error.message, variant: 'destructive' });
+    },
+  });
+
   return {
     payments: paymentsQuery.data ?? [],
     isLoading: paymentsQuery.isLoading,
@@ -285,5 +321,6 @@ export function usePayments() {
     createPayment,
     confirmPayment,
     updatePayment,
+    sendCollectionMessage,
   };
 }
