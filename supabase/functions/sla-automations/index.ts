@@ -14,12 +14,41 @@ interface SLAConfig {
 // N8N Webhook URL for WhatsApp
 const WHATSAPP_WEBHOOK_URL = 'https://webhook.robertobarros.ai/webhook/enviamsgccse'
 
+// Automation types available for filtering
+type AutomationType = 
+  | 'ALL'
+  | 'WELCOME'
+  | 'REENGAGEMENT'
+  | 'ARCHIVE'
+  | 'CONTRACT_REMINDERS'
+  | 'PAYMENT_PRE'
+  | 'PAYMENT_POST'
+  | 'DAILY_COLLECTION'
+  | 'DOCUMENT_REMINDERS'
+  | 'ONBOARDING'
+  | 'TIE_PICKUP'
+  | 'TECHNICAL'
+  | 'LEGAL'
+  | 'REQUIREMENTS'
+  | 'PROTOCOL'
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
+    // Parse request body to get automation_type filter
+    const body = await req.json().catch(() => ({}))
+    const automationType: AutomationType = body.automation_type || 'ALL'
+    
+    console.log(`SLA Automations starting with filter: ${automationType}`)
+    
+    // Helper to check if a specific automation should run
+    const shouldRun = (type: AutomationType): boolean => {
+      return automationType === 'ALL' || automationType === type
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -159,251 +188,266 @@ serve(async (req) => {
     // =====================================================
     // 1. WELCOME MESSAGES - New leads without interaction
     // =====================================================
-    const welcomeDeadline = new Date(now.getTime() - slaMap.sla_welcome_message_minutes * 60 * 1000)
-    const { data: newLeads } = await supabase
-      .from('leads')
-      .select(`id, created_at, contacts!inner (id, full_name, phone)`)
-      .eq('status', 'NOVO')
-      .lt('created_at', welcomeDeadline.toISOString())
+    if (shouldRun('WELCOME')) {
+      console.log('Running WELCOME automation...')
+      const welcomeDeadline = new Date(now.getTime() - slaMap.sla_welcome_message_minutes * 60 * 1000)
+      const { data: newLeads } = await supabase
+        .from('leads')
+        .select(`id, created_at, contacts!inner (id, full_name, phone)`)
+        .eq('status', 'NOVO')
+        .lt('created_at', welcomeDeadline.toISOString())
 
-    for (const lead of newLeads || []) {
-      const contact = lead.contacts as unknown as { id: string; full_name: string; phone: number | null }
-      
-      const { data: existingInteraction } = await supabase
-        .from('interactions')
-        .select('id')
-        .eq('lead_id', lead.id)
-        .eq('channel', 'WHATSAPP')
-        .eq('direction', 'OUTBOUND')
-        .limit(1)
-        .maybeSingle()
+      for (const lead of newLeads || []) {
+        const contact = lead.contacts as unknown as { id: string; full_name: string; phone: number | null }
+        
+        const { data: existingInteraction } = await supabase
+          .from('interactions')
+          .select('id')
+          .eq('lead_id', lead.id)
+          .eq('channel', 'WHATSAPP')
+          .eq('direction', 'OUTBOUND')
+          .limit(1)
+          .maybeSingle()
 
-      if (!existingInteraction && contact.phone) {
-        const message = templateMap.template_welcome_message.replace('{nome}', contact.full_name)
+        if (!existingInteraction && contact.phone) {
+          const message = templateMap.template_welcome_message.replace('{nome}', contact.full_name)
 
-        await supabase.from('interactions').insert({
-          lead_id: lead.id,
-          contact_id: contact.id,
-          channel: 'WHATSAPP',
-          direction: 'OUTBOUND',
-          content: message,
-          origin_bot: true,
-        })
+          await supabase.from('interactions').insert({
+            lead_id: lead.id,
+            contact_id: contact.id,
+            channel: 'WHATSAPP',
+            direction: 'OUTBOUND',
+            content: message,
+            origin_bot: true,
+          })
 
-        await sendWhatsApp(contact.phone, message, lead.id)
-        results.welcomeMessages++
+          await sendWhatsApp(contact.phone, message, lead.id)
+          results.welcomeMessages++
+        }
       }
     }
 
     // =====================================================
     // 2. REENGAGEMENT - Leads with incomplete data
     // =====================================================
-    const reengagementDeadline = new Date(now.getTime() - slaMap.sla_incomplete_data_reengagement_days * 24 * 60 * 60 * 1000)
-    const { data: incompleteLeads } = await supabase
-      .from('leads')
-      .select(`id, updated_at, contacts!inner (id, full_name, phone)`)
-      .eq('status', 'DADOS_INCOMPLETOS')
-      .lt('updated_at', reengagementDeadline.toISOString())
+    if (shouldRun('REENGAGEMENT')) {
+      console.log('Running REENGAGEMENT automation...')
+      const reengagementDeadline = new Date(now.getTime() - slaMap.sla_incomplete_data_reengagement_days * 24 * 60 * 60 * 1000)
+      const { data: incompleteLeads } = await supabase
+        .from('leads')
+        .select(`id, updated_at, contacts!inner (id, full_name, phone)`)
+        .eq('status', 'DADOS_INCOMPLETOS')
+        .lt('updated_at', reengagementDeadline.toISOString())
 
-    for (const lead of incompleteLeads || []) {
-      const contact = lead.contacts as unknown as { id: string; full_name: string; phone: number | null }
-      const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      for (const lead of incompleteLeads || []) {
+        const contact = lead.contacts as unknown as { id: string; full_name: string; phone: number | null }
+        const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
-      const { data: recentInteraction } = await supabase
-        .from('interactions')
-        .select('id')
-        .eq('lead_id', lead.id)
-        .eq('origin_bot', true)
-        .gt('created_at', last24h.toISOString())
-        .limit(1)
-        .maybeSingle()
+        const { data: recentInteraction } = await supabase
+          .from('interactions')
+          .select('id')
+          .eq('lead_id', lead.id)
+          .eq('origin_bot', true)
+          .gt('created_at', last24h.toISOString())
+          .limit(1)
+          .maybeSingle()
 
-      if (!recentInteraction && contact.phone) {
-        const message = templateMap.template_reengagement_message.replace('{nome}', contact.full_name)
+        if (!recentInteraction && contact.phone) {
+          const message = templateMap.template_reengagement_message.replace('{nome}', contact.full_name)
 
-        await supabase.from('interactions').insert({
-          lead_id: lead.id,
-          contact_id: contact.id,
-          channel: 'WHATSAPP',
-          direction: 'OUTBOUND',
-          content: message,
-          origin_bot: true,
-        })
+          await supabase.from('interactions').insert({
+            lead_id: lead.id,
+            contact_id: contact.id,
+            channel: 'WHATSAPP',
+            direction: 'OUTBOUND',
+            content: message,
+            origin_bot: true,
+          })
 
-        await sendWhatsApp(contact.phone, message, lead.id)
-        results.reengagements++
+          await sendWhatsApp(contact.phone, message, lead.id)
+          results.reengagements++
+        }
       }
     }
 
     // =====================================================
     // 3. AUTO-ARCHIVE - Leads without response
     // =====================================================
-    const archiveDeadline = new Date(now.getTime() - slaMap.sla_no_response_archive_days * 24 * 60 * 60 * 1000)
-    const { data: staleLeads } = await supabase
-      .from('leads')
-      .select('id, updated_at')
-      .in('status', ['NOVO', 'DADOS_INCOMPLETOS', 'INTERESSE_PENDENTE'])
-      .lt('updated_at', archiveDeadline.toISOString())
+    if (shouldRun('ARCHIVE')) {
+      console.log('Running ARCHIVE automation...')
+      const archiveDeadline = new Date(now.getTime() - slaMap.sla_no_response_archive_days * 24 * 60 * 60 * 1000)
+      const { data: staleLeads } = await supabase
+        .from('leads')
+        .select('id, updated_at')
+        .in('status', ['NOVO', 'DADOS_INCOMPLETOS', 'INTERESSE_PENDENTE'])
+        .lt('updated_at', archiveDeadline.toISOString())
 
-    for (const lead of staleLeads || []) {
-      const { data: inboundInteraction } = await supabase
-        .from('interactions')
-        .select('id')
-        .eq('lead_id', lead.id)
-        .eq('direction', 'INBOUND')
-        .gt('created_at', archiveDeadline.toISOString())
-        .limit(1)
-        .maybeSingle()
+      for (const lead of staleLeads || []) {
+        const { data: inboundInteraction } = await supabase
+          .from('interactions')
+          .select('id')
+          .eq('lead_id', lead.id)
+          .eq('direction', 'INBOUND')
+          .gt('created_at', archiveDeadline.toISOString())
+          .limit(1)
+          .maybeSingle()
 
-      if (!inboundInteraction) {
-        await supabase.from('leads').update({ status: 'ARQUIVADO_SEM_RETORNO' }).eq('id', lead.id)
-        results.archived++
+        if (!inboundInteraction) {
+          await supabase.from('leads').update({ status: 'ARQUIVADO_SEM_RETORNO' }).eq('id', lead.id)
+          results.archived++
+        }
       }
     }
 
     // =====================================================
     // 4. CONTRACT REMINDERS (D+1, D+2, D+3) + Auto-cancel D+7
     // =====================================================
-    const { data: pendingContracts } = await supabase
-      .from('contracts')
-      .select(`
-        id, created_at, opportunity_id,
-        opportunities!inner (
-          id,
-          leads!inner (id, contacts!inner (full_name, phone))
-        )
-      `)
-      .eq('status', 'ENVIADO')
+    if (shouldRun('CONTRACT_REMINDERS')) {
+      console.log('Running CONTRACT_REMINDERS automation...')
+      const { data: pendingContracts } = await supabase
+        .from('contracts')
+        .select(`
+          id, created_at, opportunity_id,
+          opportunities!inner (
+            id,
+            leads!inner (id, contacts!inner (full_name, phone))
+          )
+        `)
+        .eq('status', 'ENVIADO')
 
-    for (const contract of pendingContracts || []) {
-      const createdAt = new Date(contract.created_at)
-      const daysSinceCreated = Math.floor((now.getTime() - createdAt.getTime()) / (24 * 60 * 60 * 1000))
-      const oppData = contract.opportunities as unknown as { id: string; leads: { id: string; contacts: { full_name: string; phone: number | null } } }
-      const contact = oppData?.leads?.contacts
-      const leadId = oppData?.leads?.id
+      for (const contract of pendingContracts || []) {
+        const createdAt = new Date(contract.created_at)
+        const daysSinceCreated = Math.floor((now.getTime() - createdAt.getTime()) / (24 * 60 * 60 * 1000))
+        const oppData = contract.opportunities as unknown as { id: string; leads: { id: string; contacts: { full_name: string; phone: number | null } } }
+        const contact = oppData?.leads?.contacts
+        const leadId = oppData?.leads?.id
 
-      // Day 1 reminder
-      if (daysSinceCreated >= slaMap.sla_contract_signature_reminder_1_days) {
-        if (!(await reminderAlreadySent('contract_reminders', contract.id, 'D1'))) {
-          await supabase.from('contract_reminders').insert({ contract_id: contract.id, reminder_type: 'D1' })
-          if (contact?.phone) {
-            await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId)
+        // Day 1 reminder
+        if (daysSinceCreated >= slaMap.sla_contract_signature_reminder_1_days) {
+          if (!(await reminderAlreadySent('contract_reminders', contract.id, 'D1'))) {
+            await supabase.from('contract_reminders').insert({ contract_id: contract.id, reminder_type: 'D1' })
+            if (contact?.phone) {
+              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId)
+            }
+            results.contractReminders++
           }
-          results.contractReminders++
         }
-      }
 
-      // Day 2 reminder
-      if (daysSinceCreated >= slaMap.sla_contract_signature_reminder_2_days) {
-        if (!(await reminderAlreadySent('contract_reminders', contract.id, 'D2'))) {
-          await supabase.from('contract_reminders').insert({ contract_id: contract.id, reminder_type: 'D2' })
-          if (contact?.phone) {
-            await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId)
+        // Day 2 reminder
+        if (daysSinceCreated >= slaMap.sla_contract_signature_reminder_2_days) {
+          if (!(await reminderAlreadySent('contract_reminders', contract.id, 'D2'))) {
+            await supabase.from('contract_reminders').insert({ contract_id: contract.id, reminder_type: 'D2' })
+            if (contact?.phone) {
+              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId)
+            }
+            results.contractReminders++
           }
-          results.contractReminders++
         }
-      }
 
-      // Day 3 reminder
-      if (daysSinceCreated >= slaMap.sla_contract_signature_reminder_3_days) {
-        if (!(await reminderAlreadySent('contract_reminders', contract.id, 'D3'))) {
-          await supabase.from('contract_reminders').insert({ contract_id: contract.id, reminder_type: 'D3' })
-          if (contact?.phone) {
-            await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId)
+        // Day 3 reminder
+        if (daysSinceCreated >= slaMap.sla_contract_signature_reminder_3_days) {
+          if (!(await reminderAlreadySent('contract_reminders', contract.id, 'D3'))) {
+            await supabase.from('contract_reminders').insert({ contract_id: contract.id, reminder_type: 'D3' })
+            if (contact?.phone) {
+              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId)
+            }
+            results.contractReminders++
           }
-          results.contractReminders++
         }
-      }
 
-      // Auto-cancel at Day 7
-      if (daysSinceCreated >= slaMap.sla_contract_cancellation_days) {
-        await supabase.from('contracts').update({ 
-          status: 'CANCELADO', 
-          cancellation_reason: 'Cancelado automaticamente por falta de assinatura' 
-        }).eq('id', contract.id)
-        
-        await supabase.from('opportunities').update({ 
-          status: 'FECHADA_PERDIDA', 
-          reason_lost: 'Contrato não assinado no prazo' 
-        }).eq('id', contract.opportunity_id)
-        
-        results.contractsCancelled++
+        // Auto-cancel at Day 7
+        if (daysSinceCreated >= slaMap.sla_contract_cancellation_days) {
+          await supabase.from('contracts').update({ 
+            status: 'CANCELADO', 
+            cancellation_reason: 'Cancelado automaticamente por falta de assinatura' 
+          }).eq('id', contract.id)
+          
+          await supabase.from('opportunities').update({ 
+            status: 'FECHADA_PERDIDA', 
+            reason_lost: 'Contrato não assinado no prazo' 
+          }).eq('id', contract.opportunity_id)
+          
+          results.contractsCancelled++
+        }
       }
     }
 
     // =====================================================
     // 5. PAYMENT PRE-REMINDERS (D-7, D-2, D0)
     // =====================================================
-    const { data: upcomingPayments } = await supabase
-      .from('payments')
-      .select(`
-        id, due_date, amount, currency,
-        opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
-      `)
-      .eq('status', 'PENDENTE')
-      .gte('due_date', today)
+    if (shouldRun('PAYMENT_PRE')) {
+      console.log('Running PAYMENT_PRE automation...')
+      const { data: upcomingPayments } = await supabase
+        .from('payments')
+        .select(`
+          id, due_date, amount, currency,
+          opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
+        `)
+        .eq('status', 'PENDENTE')
+        .gte('due_date', today)
 
-    for (const payment of upcomingPayments || []) {
-      if (!payment.due_date) continue
-      const oppData = payment.opportunities as unknown as { leads: { id: string; contacts: { full_name: string; phone: number | null } } }
-      const contact = oppData?.leads?.contacts
-      const leadId = oppData?.leads?.id
-      if (!contact?.phone) continue
+      for (const payment of upcomingPayments || []) {
+        if (!payment.due_date) continue
+        const oppData = payment.opportunities as unknown as { leads: { id: string; contacts: { full_name: string; phone: number | null } } }
+        const contact = oppData?.leads?.contacts
+        const leadId = oppData?.leads?.id
+        if (!contact?.phone) continue
 
-      const dueDate = new Date(payment.due_date)
-      const daysUntilDue = Math.floor((dueDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+        const dueDate = new Date(payment.due_date)
+        const daysUntilDue = Math.floor((dueDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
 
-      // 7 days before
-      if (daysUntilDue <= 7 && daysUntilDue > 2) {
-        if (!(await reminderAlreadySent('payment_reminders', payment.id, 'PRE_7D'))) {
-          await supabase.from('payment_reminders').insert({ payment_id: payment.id, reminder_type: 'PRE_7D' })
-          const msg = templateMap.template_payment_pre_reminder_7d
-            .replace('{nome}', contact.full_name)
-            .replace('{valor}', String(payment.amount))
-            .replace('{data}', payment.due_date)
-          await sendWhatsApp(contact.phone, msg, leadId)
-          results.paymentPreReminders++
-        }
-      }
-
-      // 2 days before
-      if (daysUntilDue <= 2 && daysUntilDue > 0) {
-        if (!(await reminderAlreadySent('payment_reminders', payment.id, 'PRE_48H'))) {
-          await supabase.from('payment_reminders').insert({ payment_id: payment.id, reminder_type: 'PRE_48H' })
-          const msg = templateMap.template_payment_pre_reminder_48h
-            .replace('{nome}', contact.full_name)
-            .replace('{valor}', String(payment.amount))
-            .replace('{data}', payment.due_date)
-          await sendWhatsApp(contact.phone, msg, leadId)
-          
-          // Notify FINANCEIRO team about upcoming payment
-          const { data: financeUsers } = await supabase
-            .from('user_roles')
-            .select('user_id')
-            .eq('role', 'FINANCEIRO')
-          
-          for (const user of financeUsers || []) {
-            await supabase.from('notifications').insert({
-              user_id: user.user_id,
-              title: 'Parcela vence em 48h',
-              message: `Pagamento de €${payment.amount} de ${contact.full_name} vence em ${payment.due_date}.`,
-              type: 'payment_pending',
-            })
+        // 7 days before
+        if (daysUntilDue <= 7 && daysUntilDue > 2) {
+          if (!(await reminderAlreadySent('payment_reminders', payment.id, 'PRE_7D'))) {
+            await supabase.from('payment_reminders').insert({ payment_id: payment.id, reminder_type: 'PRE_7D' })
+            const msg = templateMap.template_payment_pre_reminder_7d
+              .replace('{nome}', contact.full_name)
+              .replace('{valor}', String(payment.amount))
+              .replace('{data}', payment.due_date)
+            await sendWhatsApp(contact.phone, msg, leadId)
+            results.paymentPreReminders++
           }
-          
-          results.paymentPreReminders++
         }
-      }
 
-      // Due today (at 9h - check if time is around 9:00)
-      if (daysUntilDue === 0 && now.getHours() >= 9 && now.getHours() < 10) {
-        if (!(await reminderAlreadySent('payment_reminders', payment.id, 'DUE_TODAY'))) {
-          await supabase.from('payment_reminders').insert({ payment_id: payment.id, reminder_type: 'DUE_TODAY' })
-          const msg = templateMap.template_payment_due_today
-            .replace('{nome}', contact.full_name)
-            .replace('{valor}', String(payment.amount))
-          await sendWhatsApp(contact.phone, msg, leadId)
-          results.paymentPreReminders++
+        // 2 days before
+        if (daysUntilDue <= 2 && daysUntilDue > 0) {
+          if (!(await reminderAlreadySent('payment_reminders', payment.id, 'PRE_48H'))) {
+            await supabase.from('payment_reminders').insert({ payment_id: payment.id, reminder_type: 'PRE_48H' })
+            const msg = templateMap.template_payment_pre_reminder_48h
+              .replace('{nome}', contact.full_name)
+              .replace('{valor}', String(payment.amount))
+              .replace('{data}', payment.due_date)
+            await sendWhatsApp(contact.phone, msg, leadId)
+            
+            // Notify FINANCEIRO team about upcoming payment
+            const { data: financeUsers } = await supabase
+              .from('user_roles')
+              .select('user_id')
+              .eq('role', 'FINANCEIRO')
+            
+            for (const user of financeUsers || []) {
+              await supabase.from('notifications').insert({
+                user_id: user.user_id,
+                title: 'Parcela vence em 48h',
+                message: `Pagamento de €${payment.amount} de ${contact.full_name} vence em ${payment.due_date}.`,
+                type: 'payment_pending',
+              })
+            }
+            
+            results.paymentPreReminders++
+          }
+        }
+
+        // Due today (at 9h - check if time is around 9:00)
+        if (daysUntilDue === 0 && now.getHours() >= 9 && now.getHours() < 10) {
+          if (!(await reminderAlreadySent('payment_reminders', payment.id, 'DUE_TODAY'))) {
+            await supabase.from('payment_reminders').insert({ payment_id: payment.id, reminder_type: 'DUE_TODAY' })
+            const msg = templateMap.template_payment_due_today
+              .replace('{nome}', contact.full_name)
+              .replace('{valor}', String(payment.amount))
+            await sendWhatsApp(contact.phone, msg, leadId)
+            results.paymentPreReminders++
+          }
         }
       }
     }
@@ -411,155 +455,161 @@ serve(async (req) => {
     // =====================================================
     // 6. PAYMENT POST-DUE REMINDERS (D+1, D+3, D+7) + Cancel D+8
     // =====================================================
-    const { data: overduePayments } = await supabase
-      .from('payments')
-      .select(`
-        id, due_date, amount, currency, contract_id, opportunity_id,
-        opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
-      `)
-      .eq('status', 'PENDENTE')
-      .lt('due_date', today)
+    if (shouldRun('PAYMENT_POST')) {
+      console.log('Running PAYMENT_POST automation...')
+      const { data: overduePayments } = await supabase
+        .from('payments')
+        .select(`
+          id, due_date, amount, currency, contract_id, opportunity_id,
+          opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
+        `)
+        .eq('status', 'PENDENTE')
+        .lt('due_date', today)
 
-    for (const payment of overduePayments || []) {
-      if (!payment.due_date) continue
-      const dueDate = new Date(payment.due_date)
-      const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000))
-      const oppData = payment.opportunities as unknown as { leads: { id: string; contacts: { full_name: string; phone: number | null } } }
-      const contact = oppData?.leads?.contacts
-      const leadId = oppData?.leads?.id
+      for (const payment of overduePayments || []) {
+        if (!payment.due_date) continue
+        const dueDate = new Date(payment.due_date)
+        const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000))
+        const oppData = payment.opportunities as unknown as { leads: { id: string; contacts: { full_name: string; phone: number | null } } }
+        const contact = oppData?.leads?.contacts
+        const leadId = oppData?.leads?.id
 
-      // D+1 reminder
-      if (daysOverdue >= 1 && daysOverdue < 3) {
-        if (!(await reminderAlreadySent('payment_reminders', payment.id, 'POST_D1'))) {
-          await supabase.from('payment_reminders').insert({ payment_id: payment.id, reminder_type: 'POST_D1' })
-          if (contact?.phone) {
-            const msg = templateMap.template_payment_reminder
-              .replace('{nome}', contact.full_name)
-              .replace('{valor}', String(payment.amount))
-            await sendWhatsApp(contact.phone, msg, leadId)
+        // D+1 reminder
+        if (daysOverdue >= 1 && daysOverdue < 3) {
+          if (!(await reminderAlreadySent('payment_reminders', payment.id, 'POST_D1'))) {
+            await supabase.from('payment_reminders').insert({ payment_id: payment.id, reminder_type: 'POST_D1' })
+            if (contact?.phone) {
+              const msg = templateMap.template_payment_reminder
+                .replace('{nome}', contact.full_name)
+                .replace('{valor}', String(payment.amount))
+              await sendWhatsApp(contact.phone, msg, leadId)
+            }
+            results.paymentPostReminders++
           }
-          results.paymentPostReminders++
         }
-      }
 
-      // D+3 reminder + alert manager
-      if (daysOverdue >= 3 && daysOverdue < 7) {
-        if (!(await reminderAlreadySent('payment_reminders', payment.id, 'POST_D3'))) {
-          await supabase.from('payment_reminders').insert({ payment_id: payment.id, reminder_type: 'POST_D3' })
-          if (contact?.phone) {
-            const msg = templateMap.template_payment_reminder
-              .replace('{nome}', contact.full_name)
-              .replace('{valor}', String(payment.amount))
-            await sendWhatsApp(contact.phone, msg, leadId)
+        // D+3 reminder + alert manager
+        if (daysOverdue >= 3 && daysOverdue < 7) {
+          if (!(await reminderAlreadySent('payment_reminders', payment.id, 'POST_D3'))) {
+            await supabase.from('payment_reminders').insert({ payment_id: payment.id, reminder_type: 'POST_D3' })
+            if (contact?.phone) {
+              const msg = templateMap.template_payment_reminder
+                .replace('{nome}', contact.full_name)
+                .replace('{valor}', String(payment.amount))
+              await sendWhatsApp(contact.phone, msg, leadId)
+            }
+            // Alert managers
+            const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
+            for (const mgr of managers || []) {
+              await supabase.from('notifications').insert({
+                user_id: mgr.user_id,
+                title: 'Pagamento atrasado D+3',
+                message: `Pagamento de €${payment.amount} está 3 dias atrasado.`,
+                type: 'payment_overdue',
+              })
+            }
+            results.paymentPostReminders++
           }
-          // Alert managers
-          const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
-          for (const mgr of managers || []) {
-            await supabase.from('notifications').insert({
-              user_id: mgr.user_id,
-              title: 'Pagamento atrasado D+3',
-              message: `Pagamento de €${payment.amount} está 3 dias atrasado.`,
-              type: 'payment_overdue',
-            })
-          }
-          results.paymentPostReminders++
         }
-      }
 
-      // D+7 alert admin
-      if (daysOverdue >= 7 && daysOverdue < 8) {
-        if (!(await reminderAlreadySent('payment_reminders', payment.id, 'POST_D7'))) {
-          await supabase.from('payment_reminders').insert({ payment_id: payment.id, reminder_type: 'POST_D7' })
-          // Alert admins
-          const { data: admins } = await supabase.from('user_roles').select('user_id').eq('role', 'ADMIN')
-          for (const admin of admins || []) {
-            await supabase.from('notifications').insert({
-              user_id: admin.user_id,
-              title: 'Pagamento atrasado D+7 - Cancelamento iminente',
-              message: `Pagamento de €${payment.amount} está 7 dias atrasado. Será cancelado em 24h.`,
-              type: 'payment_overdue',
-            })
+        // D+7 alert admin
+        if (daysOverdue >= 7 && daysOverdue < 8) {
+          if (!(await reminderAlreadySent('payment_reminders', payment.id, 'POST_D7'))) {
+            await supabase.from('payment_reminders').insert({ payment_id: payment.id, reminder_type: 'POST_D7' })
+            // Alert admins
+            const { data: admins } = await supabase.from('user_roles').select('user_id').eq('role', 'ADMIN')
+            for (const admin of admins || []) {
+              await supabase.from('notifications').insert({
+                user_id: admin.user_id,
+                title: 'Pagamento atrasado D+7 - Cancelamento iminente',
+                message: `Pagamento de €${payment.amount} está 7 dias atrasado. Será cancelado em 24h.`,
+                type: 'payment_overdue',
+              })
+            }
+            results.paymentPostReminders++
           }
-          results.paymentPostReminders++
         }
-      }
 
-      // D+8 auto-cancel
-      if (daysOverdue >= slaMap.sla_payment_cancellation_days) {
-        if (payment.contract_id) {
-          await supabase.from('contracts').update({
-            status: 'CANCELADO',
-            cancellation_reason: 'Cancelado automaticamente por inadimplência',
-          }).eq('id', payment.contract_id)
+        // D+8 auto-cancel
+        if (daysOverdue >= slaMap.sla_payment_cancellation_days) {
+          if (payment.contract_id) {
+            await supabase.from('contracts').update({
+              status: 'CANCELADO',
+              cancellation_reason: 'Cancelado automaticamente por inadimplência',
+            }).eq('id', payment.contract_id)
+          }
+          if (payment.opportunity_id) {
+            await supabase.from('opportunities').update({
+              status: 'FECHADA_PERDIDA',
+              reason_lost: 'Inadimplência',
+            }).eq('id', payment.opportunity_id)
+          }
+          await supabase.from('payments').update({ status: 'CANCELADO' }).eq('id', payment.id)
+          results.contractsCancelled++
         }
-        if (payment.opportunity_id) {
-          await supabase.from('opportunities').update({
-            status: 'FECHADA_PERDIDA',
-            reason_lost: 'Inadimplência',
-          }).eq('id', payment.opportunity_id)
-        }
-        await supabase.from('payments').update({ status: 'CANCELADO' }).eq('id', payment.id)
-        results.contractsCancelled++
       }
     }
 
     // =====================================================
     // 7. DOCUMENT REMINDERS
     // =====================================================
-    const { data: pendingDocuments } = await supabase
-      .from('service_documents')
-      .select(`
-        id, status, updated_at,
-        service_cases!inner (
-          id, is_urgent, client_user_id,
-          opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
-        )
-      `)
-      .eq('status', 'PENDENTE')
+    if (shouldRun('DOCUMENT_REMINDERS')) {
+      console.log('Running DOCUMENT_REMINDERS automation...')
+      const { data: pendingDocuments } = await supabase
+        .from('service_documents')
+        .select(`
+          id, status, updated_at,
+          service_cases!inner (
+            id, is_urgent, client_user_id,
+            opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
+          )
+        `)
+        .eq('status', 'PENDENTE')
 
-    for (const doc of pendingDocuments || []) {
-      const caseData = doc.service_cases as unknown as { 
-        id: string; 
-        is_urgent: boolean; 
-        client_user_id: string | null;
-        opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } }
-      }
-      const contact = caseData?.opportunities?.leads?.contacts
-      const leadId = caseData?.opportunities?.leads?.id
-      if (!contact?.phone) continue
+      for (const doc of pendingDocuments || []) {
+        const caseData = doc.service_cases as unknown as { 
+          id: string; 
+          is_urgent: boolean; 
+          client_user_id: string | null;
+          opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } }
+        }
+        const contact = caseData?.opportunities?.leads?.contacts
+        const leadId = caseData?.opportunities?.leads?.id
+        if (!contact?.phone) continue
 
-      const updatedAt = new Date(doc.updated_at || doc.id)
-      const hoursSinceUpdate = (now.getTime() - updatedAt.getTime()) / (60 * 60 * 1000)
-      const daysSinceUpdate = hoursSinceUpdate / 24
+        const updatedAt = new Date(doc.updated_at || doc.id)
+        const hoursSinceUpdate = (now.getTime() - updatedAt.getTime()) / (60 * 60 * 1000)
+        const daysSinceUpdate = hoursSinceUpdate / 24
 
-      const shouldRemind = caseData.is_urgent 
-        ? hoursSinceUpdate >= slaMap.sla_document_reminder_urgent_hours
-        : daysSinceUpdate >= slaMap.sla_document_reminder_normal_days
+        const shouldRemind = caseData.is_urgent 
+          ? hoursSinceUpdate >= slaMap.sla_document_reminder_urgent_hours
+          : daysSinceUpdate >= slaMap.sla_document_reminder_normal_days
 
-      if (shouldRemind) {
-        const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-        const { data: recentNotif } = await supabase
-          .from('notifications')
-          .select('id')
-          .eq('type', 'document_reminder')
-          .gt('created_at', last24h.toISOString())
-          .limit(1)
-          .maybeSingle()
+        if (shouldRemind) {
+          const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+          const { data: recentNotif } = await supabase
+            .from('notifications')
+            .select('id')
+            .eq('type', 'document_reminder')
+            .gt('created_at', last24h.toISOString())
+            .limit(1)
+            .maybeSingle()
 
-        if (!recentNotif) {
-          const template = caseData.is_urgent ? templateMap.template_document_reminder_urgent : templateMap.template_document_reminder_normal
-          const msg = template.replace('{nome}', contact.full_name)
-          await sendWhatsApp(contact.phone, msg, leadId)
+          if (!recentNotif) {
+            const template = caseData.is_urgent ? templateMap.template_document_reminder_urgent : templateMap.template_document_reminder_normal
+            const msg = template.replace('{nome}', contact.full_name)
+            await sendWhatsApp(contact.phone, msg, leadId)
 
-          if (caseData.client_user_id) {
-            await supabase.from('notifications').insert({
-              user_id: caseData.client_user_id,
-              title: 'Lembrete de Documentos',
-              message: 'Você possui documentos pendentes para envio.',
-              type: 'document_reminder',
-            })
+            if (caseData.client_user_id) {
+              await supabase.from('notifications').insert({
+                user_id: caseData.client_user_id,
+                title: 'Lembrete de Documentos',
+                message: 'Você possui documentos pendentes para envio.',
+                type: 'document_reminder',
+              })
+            }
+            results.documentReminders++
           }
-          results.documentReminders++
         }
       }
     }
@@ -567,40 +617,43 @@ serve(async (req) => {
     // =====================================================
     // 8. ONBOARDING REMINDERS
     // =====================================================
-    const { data: incompleteOnboarding } = await supabase
-      .from('contacts')
-      .select('id, full_name, phone, updated_at')
-      .eq('onboarding_completed', false)
+    if (shouldRun('ONBOARDING')) {
+      console.log('Running ONBOARDING automation...')
+      const { data: incompleteOnboarding } = await supabase
+        .from('contacts')
+        .select('id, full_name, phone, updated_at')
+        .eq('onboarding_completed', false)
 
-    for (const contact of incompleteOnboarding || []) {
-      if (!contact.phone) continue
-      const updatedAt = new Date(contact.updated_at || contact.id)
-      const hoursSinceUpdate = (now.getTime() - updatedAt.getTime()) / (60 * 60 * 1000)
+      for (const contact of incompleteOnboarding || []) {
+        if (!contact.phone) continue
+        const updatedAt = new Date(contact.updated_at || contact.id)
+        const hoursSinceUpdate = (now.getTime() - updatedAt.getTime()) / (60 * 60 * 1000)
 
-      if (hoursSinceUpdate >= slaMap.sla_onboarding_reminder_hours) {
-        const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-        
-        const { data: recentInteraction } = await supabase
-          .from('interactions')
-          .select('id')
-          .eq('contact_id', contact.id)
-          .eq('origin_bot', true)
-          .gt('created_at', last24h.toISOString())
-          .limit(1)
-          .maybeSingle()
-
-        if (!recentInteraction) {
-          const msg = templateMap.template_onboarding_reminder.replace('{nome}', contact.full_name)
-          await sendWhatsApp(contact.phone, msg)
+        if (hoursSinceUpdate >= slaMap.sla_onboarding_reminder_hours) {
+          const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
           
-          await supabase.from('interactions').insert({
-            contact_id: contact.id,
-            channel: 'WHATSAPP',
-            direction: 'OUTBOUND',
-            content: msg,
-            origin_bot: true,
-          })
-          results.onboardingReminders++
+          const { data: recentInteraction } = await supabase
+            .from('interactions')
+            .select('id')
+            .eq('contact_id', contact.id)
+            .eq('origin_bot', true)
+            .gt('created_at', last24h.toISOString())
+            .limit(1)
+            .maybeSingle()
+
+          if (!recentInteraction) {
+            const msg = templateMap.template_onboarding_reminder.replace('{nome}', contact.full_name)
+            await sendWhatsApp(contact.phone, msg)
+            
+            await supabase.from('interactions').insert({
+              contact_id: contact.id,
+              channel: 'WHATSAPP',
+              direction: 'OUTBOUND',
+              content: msg,
+              origin_bot: true,
+            })
+            results.onboardingReminders++
+          }
         }
       }
     }
@@ -608,51 +661,54 @@ serve(async (req) => {
     // =====================================================
     // 9. TIE PICKUP REMINDERS
     // =====================================================
-    const { data: tieReady } = await supabase
-      .from('service_cases')
-      .select(`
-        id, tie_pickup_date, tie_picked_up, client_user_id,
-        opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
-      `)
-      .not('tie_pickup_date', 'is', null)
-      .eq('tie_picked_up', false)
+    if (shouldRun('TIE_PICKUP')) {
+      console.log('Running TIE_PICKUP automation...')
+      const { data: tieReady } = await supabase
+        .from('service_cases')
+        .select(`
+          id, tie_pickup_date, tie_picked_up, client_user_id,
+          opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
+        `)
+        .not('tie_pickup_date', 'is', null)
+        .eq('tie_picked_up', false)
 
-    for (const sc of tieReady || []) {
-      if (!sc.tie_pickup_date) continue
-      const pickupDate = new Date(sc.tie_pickup_date)
-      const daysSinceReady = Math.floor((now.getTime() - pickupDate.getTime()) / (24 * 60 * 60 * 1000))
+      for (const sc of tieReady || []) {
+        if (!sc.tie_pickup_date) continue
+        const pickupDate = new Date(sc.tie_pickup_date)
+        const daysSinceReady = Math.floor((now.getTime() - pickupDate.getTime()) / (24 * 60 * 60 * 1000))
 
-      if (daysSinceReady >= slaMap.sla_tie_pickup_reminder_days) {
-        const caseData = sc as unknown as { 
-          opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } };
-          client_user_id: string | null;
-        }
-        const contact = caseData?.opportunities?.leads?.contacts
-        const leadId = caseData?.opportunities?.leads?.id
-        if (!contact?.phone) continue
-
-        const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-        const { data: recentNotif } = await supabase
-          .from('notifications')
-          .select('id')
-          .eq('type', 'tie_pickup')
-          .gt('created_at', last24h.toISOString())
-          .limit(1)
-          .maybeSingle()
-
-        if (!recentNotif) {
-          const msg = templateMap.template_tie_available.replace('{nome}', contact.full_name)
-          await sendWhatsApp(contact.phone, msg, leadId)
-
-          if (sc.client_user_id) {
-            await supabase.from('notifications').insert({
-              user_id: sc.client_user_id,
-              title: 'TIE disponível',
-              message: 'Seu TIE está disponível para retirada.',
-              type: 'tie_pickup',
-            })
+        if (daysSinceReady >= slaMap.sla_tie_pickup_reminder_days) {
+          const caseData = sc as unknown as { 
+            opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } };
+            client_user_id: string | null;
           }
-          results.tiePickupReminders++
+          const contact = caseData?.opportunities?.leads?.contacts
+          const leadId = caseData?.opportunities?.leads?.id
+          if (!contact?.phone) continue
+
+          const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+          const { data: recentNotif } = await supabase
+            .from('notifications')
+            .select('id')
+            .eq('type', 'tie_pickup')
+            .gt('created_at', last24h.toISOString())
+            .limit(1)
+            .maybeSingle()
+
+          if (!recentNotif) {
+            const msg = templateMap.template_tie_available.replace('{nome}', contact.full_name)
+            await sendWhatsApp(contact.phone, msg, leadId)
+
+            if (sc.client_user_id) {
+              await supabase.from('notifications').insert({
+                user_id: sc.client_user_id,
+                title: 'TIE disponível',
+                message: 'Seu TIE está disponível para retirada.',
+                type: 'tie_pickup',
+              })
+            }
+            results.tiePickupReminders++
+          }
         }
       }
     }
@@ -660,138 +716,147 @@ serve(async (req) => {
     // =====================================================
     // 10. TECHNICAL REVIEW ALERTS (Cases pending > 48h)
     // =====================================================
-    const techReviewDeadline = new Date(now.getTime() - 48 * 60 * 60 * 1000)
-    const { data: pendingTechReview } = await supabase
-      .from('service_cases')
-      .select('id, updated_at, assigned_to_user_id')
-      .eq('technical_status', 'PENDENTE')
-      .lt('updated_at', techReviewDeadline.toISOString())
+    if (shouldRun('TECHNICAL')) {
+      console.log('Running TECHNICAL automation...')
+      const techReviewDeadline = new Date(now.getTime() - 48 * 60 * 60 * 1000)
+      const { data: pendingTechReview } = await supabase
+        .from('service_cases')
+        .select('id, updated_at, assigned_to_user_id')
+        .eq('technical_status', 'PENDENTE')
+        .lt('updated_at', techReviewDeadline.toISOString())
 
-    for (const sc of pendingTechReview || []) {
-      const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-      const { data: recentNotif } = await supabase
-        .from('notifications')
-        .select('id')
-        .eq('type', 'technical_review_overdue')
-        .gt('created_at', last24h.toISOString())
-        .limit(1)
-        .maybeSingle()
+      for (const sc of pendingTechReview || []) {
+        const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        const { data: recentNotif } = await supabase
+          .from('notifications')
+          .select('id')
+          .eq('type', 'technical_review_overdue')
+          .gt('created_at', last24h.toISOString())
+          .limit(1)
+          .maybeSingle()
 
-      if (!recentNotif) {
-        const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
-        for (const mgr of managers || []) {
-          await supabase.from('notifications').insert({
-            user_id: mgr.user_id,
-            title: 'Revisão Técnica Atrasada',
-            message: `Caso ${sc.id.slice(0, 8)} aguarda revisão técnica há mais de 48h.`,
-            type: 'technical_review_overdue',
-          })
+        if (!recentNotif) {
+          const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
+          for (const mgr of managers || []) {
+            await supabase.from('notifications').insert({
+              user_id: mgr.user_id,
+              title: 'Revisão Técnica Atrasada',
+              message: `Caso ${sc.id.slice(0, 8)} aguarda revisão técnica há mais de 48h.`,
+              type: 'technical_review_overdue',
+            })
+          }
+          results.technicalReviewAlerts++
         }
-        results.technicalReviewAlerts++
       }
     }
 
     // =====================================================
     // 11. SEND TO LEGAL ALERTS (Approved but not sent > 24h)
     // =====================================================
-    const legalDeadline = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-    const { data: approvedNotSent } = await supabase
-      .from('service_cases')
-      .select('id, technical_approved_at, assigned_to_user_id')
-      .eq('technical_status', 'APROVADO')
-      .is('sent_to_legal_at', null)
-      .lt('technical_approved_at', legalDeadline.toISOString())
+    if (shouldRun('LEGAL')) {
+      console.log('Running LEGAL automation...')
+      const legalDeadline = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      const { data: approvedNotSent } = await supabase
+        .from('service_cases')
+        .select('id, technical_approved_at, assigned_to_user_id')
+        .eq('technical_status', 'APROVADO')
+        .is('sent_to_legal_at', null)
+        .lt('technical_approved_at', legalDeadline.toISOString())
 
-    for (const sc of approvedNotSent || []) {
-      const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-      const { data: recentNotif } = await supabase
-        .from('notifications')
-        .select('id')
-        .eq('type', 'send_to_legal_overdue')
-        .gt('created_at', last24h.toISOString())
-        .limit(1)
-        .maybeSingle()
+      for (const sc of approvedNotSent || []) {
+        const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        const { data: recentNotif } = await supabase
+          .from('notifications')
+          .select('id')
+          .eq('type', 'send_to_legal_overdue')
+          .gt('created_at', last24h.toISOString())
+          .limit(1)
+          .maybeSingle()
 
-      if (!recentNotif && sc.assigned_to_user_id) {
-        await supabase.from('notifications').insert({
-          user_id: sc.assigned_to_user_id,
-          title: 'Enviar ao Jurídico',
-          message: `Caso ${sc.id.slice(0, 8)} aprovado há mais de 24h e ainda não enviado ao jurídico.`,
-          type: 'send_to_legal_overdue',
-        })
-        results.sendToLegalAlerts++
+        if (!recentNotif && sc.assigned_to_user_id) {
+          await supabase.from('notifications').insert({
+            user_id: sc.assigned_to_user_id,
+            title: 'Enviar ao Jurídico',
+            message: `Caso ${sc.id.slice(0, 8)} aprovado há mais de 24h e ainda não enviado ao jurídico.`,
+            type: 'send_to_legal_overdue',
+          })
+          results.sendToLegalAlerts++
+        }
       }
     }
 
     // =====================================================
     // 12. REQUIREMENT DEADLINE ALERTS
     // =====================================================
-    const { data: urgentRequirements } = await supabase
-      .from('requirements_from_authority')
-      .select(`
-        id, description, internal_deadline_date, official_deadline_date,
-        service_cases!inner (assigned_to_user_id, client_user_id, opportunities!inner (leads!inner (id, contacts!inner (full_name, phone))))
-      `)
-      .eq('status', 'PENDENTE')
+    if (shouldRun('REQUIREMENTS')) {
+      console.log('Running REQUIREMENTS automation...')
+      const { data: urgentRequirements } = await supabase
+        .from('requirements_from_authority')
+        .select(`
+          id, description, internal_deadline_date, official_deadline_date,
+          service_cases!inner (assigned_to_user_id, client_user_id, opportunities!inner (leads!inner (id, contacts!inner (full_name, phone))))
+        `)
+        .eq('status', 'PENDENTE')
 
-    for (const req of urgentRequirements || []) {
-      const caseData = req.service_cases as unknown as { 
-        assigned_to_user_id: string | null; 
-        client_user_id: string | null;
-        opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } };
-      }
-      const internalDeadline = req.internal_deadline_date ? new Date(req.internal_deadline_date) : null
-      const officialDeadline = req.official_deadline_date ? new Date(req.official_deadline_date) : null
+      for (const req of urgentRequirements || []) {
+        const caseData = req.service_cases as unknown as { 
+          assigned_to_user_id: string | null; 
+          client_user_id: string | null;
+          opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } };
+        }
+        const internalDeadline = req.internal_deadline_date ? new Date(req.internal_deadline_date) : null
+        const officialDeadline = req.official_deadline_date ? new Date(req.official_deadline_date) : null
 
-      const daysToInternal = internalDeadline ? Math.floor((internalDeadline.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)) : null
-      const daysToOfficial = officialDeadline ? Math.floor((officialDeadline.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)) : null
+        const daysToInternal = internalDeadline ? Math.floor((internalDeadline.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)) : null
+        const daysToOfficial = officialDeadline ? Math.floor((officialDeadline.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)) : null
 
-      // Alert if internal deadline is in 2 days or less
-      if (daysToInternal !== null && daysToInternal <= 2 && daysToInternal >= 0) {
-        if (caseData.assigned_to_user_id) {
+        // Alert if internal deadline is in 2 days or less
+        if (daysToInternal !== null && daysToInternal <= 2 && daysToInternal >= 0) {
+          if (caseData.assigned_to_user_id) {
+            const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+            const { data: recentNotif } = await supabase
+              .from('notifications')
+              .select('id')
+              .eq('type', 'requirement_deadline')
+              .gt('created_at', last24h.toISOString())
+              .limit(1)
+              .maybeSingle()
+
+            if (!recentNotif) {
+              await supabase.from('notifications').insert({
+                user_id: caseData.assigned_to_user_id,
+                title: 'Prazo de Exigência Próximo',
+                message: `Exigência "${req.description.slice(0, 50)}..." vence em ${daysToInternal} dia(s).`,
+                type: 'requirement_deadline',
+              })
+              results.requirementAlerts++
+            }
+          }
+        }
+
+        // Alert if official deadline is in 5 days or less
+        if (daysToOfficial !== null && daysToOfficial <= 5 && daysToOfficial >= 0) {
+          const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
           const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
           const { data: recentNotif } = await supabase
             .from('notifications')
             .select('id')
-            .eq('type', 'requirement_deadline')
+            .eq('type', 'requirement_official_deadline')
             .gt('created_at', last24h.toISOString())
             .limit(1)
             .maybeSingle()
 
           if (!recentNotif) {
-            await supabase.from('notifications').insert({
-              user_id: caseData.assigned_to_user_id,
-              title: 'Prazo de Exigência Próximo',
-              message: `Exigência "${req.description.slice(0, 50)}..." vence em ${daysToInternal} dia(s).`,
-              type: 'requirement_deadline',
-            })
+            for (const mgr of managers || []) {
+              await supabase.from('notifications').insert({
+                user_id: mgr.user_id,
+                title: 'Prazo Oficial de Exigência',
+                message: `Exigência com prazo oficial em ${daysToOfficial} dia(s).`,
+                type: 'requirement_official_deadline',
+              })
+            }
             results.requirementAlerts++
           }
-        }
-      }
-
-      // Alert if official deadline is in 5 days or less
-      if (daysToOfficial !== null && daysToOfficial <= 5 && daysToOfficial >= 0) {
-        const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
-        const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-        const { data: recentNotif } = await supabase
-          .from('notifications')
-          .select('id')
-          .eq('type', 'requirement_official_deadline')
-          .gt('created_at', last24h.toISOString())
-          .limit(1)
-          .maybeSingle()
-
-        if (!recentNotif) {
-          for (const mgr of managers || []) {
-            await supabase.from('notifications').insert({
-              user_id: mgr.user_id,
-              title: 'Prazo Oficial de Exigência',
-              message: `Exigência com prazo oficial em ${daysToOfficial} dia(s).`,
-              type: 'requirement_official_deadline',
-            })
-          }
-          results.requirementAlerts++
         }
       }
     }
@@ -799,155 +864,162 @@ serve(async (req) => {
     // =====================================================
     // 13. PRE-PROTOCOL REMINDERS (Expected protocol date approaching)
     // =====================================================
-    const { data: preProtocolCases } = await supabase
-      .from('service_cases')
-      .select(`
-        id, expected_protocol_date, protocol_instructions_sent, assigned_to_user_id, client_user_id,
-        opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
-      `)
-      .not('expected_protocol_date', 'is', null)
-      .is('submission_date', null)
+    if (shouldRun('PROTOCOL')) {
+      console.log('Running PROTOCOL automation...')
+      const { data: preProtocolCases } = await supabase
+        .from('service_cases')
+        .select(`
+          id, expected_protocol_date, protocol_instructions_sent, assigned_to_user_id, client_user_id,
+          opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
+        `)
+        .not('expected_protocol_date', 'is', null)
+        .is('submission_date', null)
 
-    for (const sc of preProtocolCases || []) {
-      if (!sc.expected_protocol_date) continue
-      const expectedDate = new Date(sc.expected_protocol_date)
-      const daysUntil = Math.floor((expectedDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+      for (const sc of preProtocolCases || []) {
+        if (!sc.expected_protocol_date) continue
+        const expectedDate = new Date(sc.expected_protocol_date)
+        const daysUntil = Math.floor((expectedDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
 
-      // Send instructions 3 days before if not sent
-      if (daysUntil <= 3 && daysUntil >= 0 && !sc.protocol_instructions_sent) {
-        const caseData = sc as unknown as { 
-          opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } };
-          client_user_id: string | null;
-          assigned_to_user_id: string | null;
+        // Send instructions 3 days before if not sent
+        if (daysUntil <= 3 && daysUntil >= 0 && !sc.protocol_instructions_sent) {
+          const caseData = sc as unknown as { 
+            opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } };
+            client_user_id: string | null;
+            assigned_to_user_id: string | null;
+          }
+          const contact = caseData?.opportunities?.leads?.contacts
+          const leadId = caseData?.opportunities?.leads?.id
+
+          if (contact?.phone) {
+            const msg = `Olá ${contact.full_name}! 📋 Seu protocolo está agendado para ${sc.expected_protocol_date}. Em breve enviaremos as instruções de preparação.`
+            await sendWhatsApp(contact.phone, msg, leadId)
+          }
+
+          await supabase.from('service_cases').update({ protocol_instructions_sent: true }).eq('id', sc.id)
+          results.protocolInstructionsSent++
         }
-        const contact = caseData?.opportunities?.leads?.contacts
-        const leadId = caseData?.opportunities?.leads?.id
 
-        if (contact?.phone) {
-          const msg = `Olá ${contact.full_name}! 📋 Seu protocolo está agendado para ${sc.expected_protocol_date}. Em breve enviaremos as instruções de preparação.`
-          await sendWhatsApp(contact.phone, msg, leadId)
+        // Alert staff 2 days before
+        if (daysUntil === 2 && sc.assigned_to_user_id) {
+          const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+          const { data: recentNotif } = await supabase
+            .from('notifications')
+            .select('id')
+            .eq('type', 'pre_protocol_reminder')
+            .gt('created_at', last24h.toISOString())
+            .limit(1)
+            .maybeSingle()
+
+          if (!recentNotif) {
+            await supabase.from('notifications').insert({
+              user_id: sc.assigned_to_user_id,
+              title: 'Protocolo em 2 dias',
+              message: `Caso ${sc.id.slice(0, 8)} tem protocolo previsto em 2 dias.`,
+              type: 'pre_protocol_reminder',
+            })
+            results.preProtocolReminders++
+          }
         }
-
-        await supabase.from('service_cases').update({ protocol_instructions_sent: true }).eq('id', sc.id)
-        results.protocolInstructionsSent++
       }
 
-      // Alert staff 2 days before
-      if (daysUntil === 2 && sc.assigned_to_user_id) {
-        const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+      // =====================================================
+      // 14. POST-PROTOCOL ALERTS (Submitted but no decision > 30 days)
+      // =====================================================
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      const { data: pendingDecision } = await supabase
+        .from('service_cases')
+        .select('id, submission_date, assigned_to_user_id')
+        .not('submission_date', 'is', null)
+        .is('decision_date', null)
+        .lt('submission_date', thirtyDaysAgo.toISOString())
+
+      for (const sc of pendingDecision || []) {
+        const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
         const { data: recentNotif } = await supabase
           .from('notifications')
           .select('id')
-          .eq('type', 'pre_protocol_reminder')
-          .gt('created_at', last24h.toISOString())
+          .eq('type', 'post_protocol_alert')
+          .gt('created_at', last7Days.toISOString())
           .limit(1)
           .maybeSingle()
 
         if (!recentNotif) {
-          await supabase.from('notifications').insert({
-            user_id: sc.assigned_to_user_id,
-            title: 'Protocolo em 2 dias',
-            message: `Caso ${sc.id.slice(0, 8)} tem protocolo previsto em 2 dias.`,
-            type: 'pre_protocol_reminder',
-          })
-          results.preProtocolReminders++
+          const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
+          for (const mgr of managers || []) {
+            await supabase.from('notifications').insert({
+              user_id: mgr.user_id,
+              title: 'Decisão pendente > 30 dias',
+              message: `Caso ${sc.id.slice(0, 8)} protocolado há mais de 30 dias sem decisão.`,
+              type: 'post_protocol_alert',
+            })
+          }
+          results.postProtocolAlerts++
         }
-      }
-    }
-
-    // =====================================================
-    // 14. POST-PROTOCOL ALERTS (Submitted but no decision > 30 days)
-    // =====================================================
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-    const { data: pendingDecision } = await supabase
-      .from('service_cases')
-      .select('id, submission_date, assigned_to_user_id')
-      .not('submission_date', 'is', null)
-      .is('decision_date', null)
-      .lt('submission_date', thirtyDaysAgo.toISOString())
-
-    for (const sc of pendingDecision || []) {
-      const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-      const { data: recentNotif } = await supabase
-        .from('notifications')
-        .select('id')
-        .eq('type', 'post_protocol_alert')
-        .gt('created_at', last7Days.toISOString())
-        .limit(1)
-        .maybeSingle()
-
-      if (!recentNotif) {
-        const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
-        for (const mgr of managers || []) {
-          await supabase.from('notifications').insert({
-            user_id: mgr.user_id,
-            title: 'Decisão pendente > 30 dias',
-            message: `Caso ${sc.id.slice(0, 8)} protocolado há mais de 30 dias sem decisão.`,
-            type: 'post_protocol_alert',
-          })
-        }
-        results.postProtocolAlerts++
       }
     }
 
     // =====================================================
     // 15. DAILY COLLECTION - Send collection message every 24h
     // =====================================================
-    console.log('Starting daily collection for overdue payments...')
-    const { data: allOverduePayments } = await supabase
-      .from('payments')
-      .select(`
-        id, due_date, amount, currency,
-        opportunities!inner (
-          lead_id,
-          leads!inner (id, contacts!inner (full_name, phone))
-        )
-      `)
-      .eq('status', 'PENDENTE')
-      .lt('due_date', today)
+    if (shouldRun('DAILY_COLLECTION')) {
+      console.log('Running DAILY_COLLECTION automation...')
+      console.log('Starting daily collection for overdue payments...')
+      const { data: allOverduePayments } = await supabase
+        .from('payments')
+        .select(`
+          id, due_date, amount, currency,
+          opportunities!inner (
+            lead_id,
+            leads!inner (id, contacts!inner (full_name, phone))
+          )
+        `)
+        .eq('status', 'PENDENTE')
+        .lt('due_date', today)
 
-    console.log(`Found ${allOverduePayments?.length || 0} overdue payments for daily collection`)
+      console.log(`Found ${allOverduePayments?.length || 0} overdue payments for daily collection`)
 
-    for (const payment of allOverduePayments || []) {
-      const oppData = payment.opportunities as unknown as { 
-        lead_id: string;
-        leads: { id: string; contacts: { full_name: string; phone: number | null } } 
-      }
-      const contact = oppData?.leads?.contacts
-      const leadId = oppData?.leads?.id
-      
-      if (!contact?.phone) {
-        console.log(`Skipping payment ${payment.id} - no phone number`)
-        continue
-      }
+      for (const payment of allOverduePayments || []) {
+        const oppData = payment.opportunities as unknown as { 
+          lead_id: string;
+          leads: { id: string; contacts: { full_name: string; phone: number | null } } 
+        }
+        const contact = oppData?.leads?.contacts
+        const leadId = oppData?.leads?.id
+        
+        if (!contact?.phone) {
+          console.log(`Skipping payment ${payment.id} - no phone number`)
+          continue
+        }
 
-      // Check if already sent today using reminder_type with date
-      const dailyReminderType = `DAILY_COLLECTION_${today}`
-      if (await reminderAlreadySent('payment_reminders', payment.id, dailyReminderType)) {
-        console.log(`Skipping payment ${payment.id} - already sent today`)
-        continue
-      }
+        // Check if already sent today using reminder_type with date
+        const dailyReminderType = `DAILY_COLLECTION_${today}`
+        if (await reminderAlreadySent('payment_reminders', payment.id, dailyReminderType)) {
+          console.log(`Skipping payment ${payment.id} - already sent today`)
+          continue
+        }
 
-      // Send collection message
-      const message = `Olá ${contact.full_name}! Identificamos que seu pagamento está em atraso. Favor providenciar o mais rápido possível ou entre em contato com a CB Asesoria.`
-      
-      // Record reminder first to prevent duplicates
-      await supabase.from('payment_reminders').insert({ 
-        payment_id: payment.id, 
-        reminder_type: dailyReminderType 
-      })
-      
-      const sent = await sendWhatsApp(contact.phone, message, leadId)
-      if (sent) {
-        console.log(`Daily collection sent for payment ${payment.id} to ${String(contact.phone).slice(-4)}`)
-        results.dailyCollections++
+        // Send collection message
+        const message = `Olá ${contact.full_name}! Identificamos que seu pagamento está em atraso. Favor providenciar o mais rápido possível ou entre em contato com a CB Asesoria.`
+        
+        // Record reminder first to prevent duplicates
+        await supabase.from('payment_reminders').insert({ 
+          payment_id: payment.id, 
+          reminder_type: dailyReminderType 
+        })
+        
+        const sent = await sendWhatsApp(contact.phone, message, leadId)
+        if (sent) {
+          console.log(`Daily collection sent for payment ${payment.id} to ${String(contact.phone).slice(-4)}`)
+          results.dailyCollections++
+        }
       }
     }
 
-    console.log('SLA Automations completed:', results)
+    console.log(`SLA Automations completed with filter '${automationType}':`, results)
 
     return new Response(JSON.stringify({
       success: true,
+      automation_type: automationType,
       timestamp: now.toISOString(),
       results,
     }), {
