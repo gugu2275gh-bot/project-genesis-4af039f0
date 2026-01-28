@@ -1,110 +1,151 @@
 
-
-# Plano: SLA de Contato Inicial do Técnico ✅ IMPLEMENTADO
+# Plano: Liberação da Lista de Documentos no Primeiro Contato
 
 ## Contexto
 
-Após a confirmação do contrato e pagamento, o caso é criado com status `CONTATO_INICIAL`. O técnico responsável deve entrar em contato com o cliente em até **24 horas úteis** (internamente), com prazo máximo de **72 horas** informado ao cliente.
+Após o primeiro contato com o cliente, o técnico deve "liberar" a lista de documentos necessários para que o cliente possa visualizá-los no portal e fazer o upload. Atualmente, os documentos não são criados automaticamente quando um caso é criado.
+
+---
+
+## Situação Atual
+
+| Item | Status |
+|------|--------|
+| Tipos de documentos por serviço (`service_document_types`) | Cadastrados |
+| Documentos do caso (`service_documents`) | Vazio por padrão |
+| Portal mostra documentos | Sim, quando existem |
+| Provisão automática de documentos | Não existe |
+| Botão de liberar documentos | Não existe |
+
+---
+
+## Fluxo Proposto
+
+```text
++-------------------+     +--------------------+     +----------------------+
+| Técnico faz       |     | Clica em           |     | Sistema cria         |
+| contato inicial   | --> | "Liberar           | --> | service_documents    |
+|                   |     |  Documentos"       |     | baseado no           |
++-------------------+     +--------------------+     | service_type         |
+                                                     +----------------------+
+                                                              |
+                                                              v
+                          +--------------------+     +----------------------+
+                          | Cliente vê lista   | <-- | Status muda para     |
+                          | no portal          |     | AGUARDANDO_DOCUMENTOS|
+                          +--------------------+     +----------------------+
+```
 
 ---
 
 ## Regras de Negócio
 
-| Etapa | Prazo | Ação |
-|-------|-------|------|
-| **Lembrete ao Técnico** | A cada 24h | Notificação interna enquanto status = CONTATO_INICIAL |
-| **Escalonamento Coordenador** | 72h sem contato | Notificar MANAGER (Coordenador) |
-| **Escalonamento ADM** | 72h + 48h = 5 dias úteis | Notificar ADMIN para intervenção |
+1. **Quando liberar**: Ao fazer contato inicial ou quando técnico decidir
+2. **O que criar**: Um registro em `service_documents` para cada `service_document_types` que corresponda ao `service_type` do caso
+3. **Status inicial**: `NAO_ENVIADO`
+4. **Atualização de status**: Automaticamente muda para `AGUARDANDO_DOCUMENTOS`
+5. **Notificação**: Enviar mensagem WhatsApp informando sobre os documentos (pode usar o template existente)
 
 ---
 
-## O Que Já Existe
+## Implementação
 
-| Item | Status |
-|------|--------|
-| Tabela `service_cases` com `technical_status` | ✅ Existe |
-| Status `CONTATO_INICIAL` | ✅ Existe |
-| Campo `created_at` para calcular tempo | ✅ Existe |
-| Campo `assigned_to_user_id` | ✅ Existe |
-| Tabela `user_roles` com roles | ✅ Existe |
-| Roles ADMIN, MANAGER, TECNICO | ✅ Definidas |
-| Sistema de notificações | ✅ Existe |
-| Edge Function `sla-automations` | ✅ Existe |
-| Automação tipo TECHNICAL | ✅ Existe (parcial) |
+### 1. Novo Hook: `useDocuments` - Adicionar Provisão
 
----
+Adicionar função `provisionDocuments` no hook existente:
 
-## O Que Precisa Ser Criado
-
-### 1. Tabela de Controle de Alertas
-
-Nova tabela para rastrear lembretes enviados (evitar duplicatas):
-
-```sql
-CREATE TABLE public.initial_contact_reminders (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  service_case_id UUID REFERENCES public.service_cases(id) ON DELETE CASCADE,
-  reminder_type VARCHAR(50) NOT NULL, -- D1, D2, D3, COORD_72H, ADM_5D
-  sent_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  UNIQUE(service_case_id, reminder_type)
-);
-```
-
-**Tipos de lembrete:**
-- `D1` - Primeiro dia sem contato (24h)
-- `D2` - Segundo dia sem contato (48h)  
-- `D3` - Terceiro dia sem contato (72h) + notifica técnico
-- `COORD_72H` - Escalonamento para Coordenador (72h)
-- `ADM_5D` - Escalonamento para Admin (5 dias úteis)
-
----
-
-### 2. Adicionar Campo de Data de Primeiro Contato
-
-Novo campo para registrar quando o técnico fez o contato:
-
-```sql
-ALTER TABLE public.service_cases 
-ADD COLUMN first_contact_at TIMESTAMP WITH TIME ZONE;
+```typescript
+const provisionDocuments = useMutation({
+  mutationFn: async (serviceCaseId: string, serviceType: string) => {
+    // 1. Buscar tipos de documento para o service_type
+    const { data: docTypes } = await supabase
+      .from('service_document_types')
+      .select('id')
+      .eq('service_type', serviceType);
+    
+    // 2. Criar um service_document para cada tipo
+    const documents = docTypes.map(dt => ({
+      service_case_id: serviceCaseId,
+      document_type_id: dt.id,
+      status: 'NAO_ENVIADO',
+    }));
+    
+    const { error } = await supabase
+      .from('service_documents')
+      .insert(documents);
+    
+    if (error) throw error;
+    return documents;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['documents'] });
+    toast({ title: 'Documentos liberados para o cliente' });
+  },
+});
 ```
 
 ---
 
-### 3. Nova Automação na Edge Function
+### 2. Novo Componente: `ReleaseDocumentsButton`
 
-Adicionar novo tipo de automação `INITIAL_CONTACT`:
+Botão que:
+- Verifica se documentos já foram liberados
+- Se não, mostra diálogo de confirmação
+- Ao confirmar, provisiona documentos e atualiza status
 
-```text
-Automação: INITIAL_CONTACT
-
-Para cada caso com status = 'CONTATO_INICIAL':
-
-1. Calcular horas desde created_at
-2. Se >= 24h e reminder D1 não enviado:
-   → Notificar técnico atribuído (ou todos TECNICO se não atribuído)
-   → Registrar reminder D1
-
-3. Se >= 48h e reminder D2 não enviado:
-   → Notificar técnico novamente
-   → Registrar reminder D2
-
-4. Se >= 72h:
-   a) Se reminder D3 não enviado → Notificar técnico
-   b) Se COORD_72H não enviado → Notificar todos MANAGER
-   → Registrar reminders
-
-5. Se >= 120h (5 dias úteis) e ADM_5D não enviado:
-   → Notificar todos ADMIN
-   → Registrar reminder ADM_5D
+```typescript
+interface ReleaseDocumentsButtonProps {
+  serviceCaseId: string;
+  serviceType: ServiceInterest;
+  currentStatus: string;
+  documentsCount: number;
+  onSuccess: () => void;
+}
 ```
 
 ---
 
-### 4. Atualização Automática ao Fazer Contato
+### 3. Atualização do `CaseDetail.tsx`
 
-Quando o técnico clicar em "Iniciar Contato" e atualizar para `AGUARDANDO_DOCUMENTOS`:
-- Registrar `first_contact_at = now()`
-- Calcular `response_time_hours` para métricas
+Adicionar o botão de liberar documentos:
+- Mostrar quando `documents.length === 0`
+- Mostrar no topo da aba de documentos
+- Integrar com o fluxo de contato inicial
+
+---
+
+### 4. Integração com Contato Inicial
+
+Opção 1 - **Automático**: Ao clicar em "Iniciar Contato" via WhatsApp, também libera documentos
+Opção 2 - **Manual**: Técnico decide quando liberar (mais flexível)
+
+Recomendação: **Opção 2** - Liberar manualmente, pois:
+- Nem todos os serviços têm tipos de documentos cadastrados
+- Técnico pode querer personalizar antes de liberar
+
+---
+
+### 5. Mensagem WhatsApp Atualizada
+
+Adicionar template específico para liberação de documentos:
+
+```typescript
+{
+  id: 'documents_released',
+  label: 'Documentos Liberados',
+  message: `Olá {nome}! 📄
+
+A lista de documentos necessários para o seu processo de {servico} já está disponível no Portal do Cliente!
+
+🔗 {portal_link}
+
+Por favor, acesse e comece a enviar seus documentos. Cada documento possui instruções específicas sobre:
+• Se precisa de apostilamento
+• Se precisa de tradução juramentada
+
+Estamos à disposição para ajudar!`,
+}
+```
 
 ---
 
@@ -112,9 +153,9 @@ Quando o técnico clicar em "Iniciar Contato" e atualizar para `AGUARDANDO_DOCUM
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/sla-automations/index.ts` | Adicionar automação INITIAL_CONTACT |
-| `src/hooks/useCases.ts` | Atualizar `first_contact_at` ao mudar status |
-| `src/pages/cases/CaseDetail.tsx` | Mostrar indicador visual de SLA (tempo aguardando) |
+| `src/hooks/useDocuments.ts` | Adicionar mutação `provisionDocuments` |
+| `src/pages/cases/CaseDetail.tsx` | Adicionar botão "Liberar Documentos" na aba Documents |
+| `src/components/cases/SendWhatsAppButton.tsx` | Adicionar template de documentos liberados |
 
 ---
 
@@ -122,124 +163,86 @@ Quando o técnico clicar em "Iniciar Contato" e atualizar para `AGUARDANDO_DOCUM
 
 | Arquivo | Descrição |
 |---------|-----------|
-| Migração SQL | Criar tabela `initial_contact_reminders` e campo `first_contact_at` |
+| `src/components/cases/ReleaseDocumentsButton.tsx` | Botão com diálogo de confirmação |
 
 ---
 
-## Fluxo Visual
+## Interface Visual
 
-```text
-+---------------------+     +------------------+     +-------------------+
-| Case criado         |     | 24h sem contato  |     | 72h sem contato   |
-| status: CONTATO_    | --> | Notifica técnico | --> | Notifica técnico  |
-| INICIAL             |     | (D1)             |     | + Coordenador     |
-+---------------------+     +------------------+     +-------------------+
-                                                              |
-                                                              v
-                            +------------------+     +-------------------+
-                            | 5 dias sem       | <-- | 48h após (D+5)    |
-                            | contato          |     | Notifica ADMIN    |
-                            +------------------+     +-------------------+
+Na aba de Documentos do CaseDetail:
+
+**Antes de liberar:**
+```
+┌─────────────────────────────────────────────────┐
+│ 📄 Documentos                                   │
+├─────────────────────────────────────────────────┤
+│                                                 │
+│   ⚠️ Nenhum documento vinculado a este caso    │
+│                                                 │
+│   Os documentos serão liberados após o          │
+│   contato inicial com o cliente.                │
+│                                                 │
+│           [📋 Liberar Documentos]               │
+│                                                 │
+└─────────────────────────────────────────────────┘
+```
+
+**Após liberar:**
+```
+┌─────────────────────────────────────────────────┐
+│ 📄 Documentos (8 itens)          [Ver no Portal]│
+├─────────────────────────────────────────────────┤
+│ 📄 Passaporte                    ⬜ Não Enviado │
+│ 📄 Foto 3x4                      ⬜ Não Enviado │
+│ 📄 Certidão de Nascimento        🟡 Obrigatório │
+│ ...                                             │
+└─────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Indicador Visual no CaseDetail
+## Validações
 
-Adicionar badge mostrando tempo aguardando contato:
-
-- **Verde**: < 24h
-- **Amarelo**: 24-72h (alerta para técnico)
-- **Vermelho**: > 72h (escalonado)
+1. **Não liberar duplicado**: Verificar se já existem documentos antes de provisionar
+2. **Tipos cadastrados**: Alertar se não houver tipos de documento para o serviço
+3. **Status do caso**: Atualizar automaticamente para `AGUARDANDO_DOCUMENTOS`
 
 ---
 
-## Notificações Geradas
+## Notificação ao Cliente
 
-| Evento | Destinatário | Tipo | Mensagem |
-|--------|--------------|------|----------|
-| 24h sem contato | Técnico atribuído | `initial_contact_reminder` | "Caso X aguarda contato inicial há 24h" |
-| 48h sem contato | Técnico atribuído | `initial_contact_reminder` | "URGENTE: Caso X aguarda contato há 48h" |
-| 72h sem contato | Técnico + MANAGER | `initial_contact_escalation` | "ESCALONAMENTO: Caso X sem contato há 72h" |
-| 5 dias sem contato | ADMIN | `initial_contact_critical` | "CRÍTICO: Caso X sem contato há 5 dias" |
+Ao liberar documentos, opcionalmente:
+1. Enviar email de notificação (se implementado)
+2. Criar notificação no portal (se implementado)
+3. Sugerir envio de WhatsApp com template específico
 
 ---
 
-## Detalhes Técnicos
+## Considerações Técnicas
 
-### Lógica da Automação (Edge Function)
+### Performance
+- Uma única inserção em batch para todos os documentos
+- Índice em `service_case_id` já existe
 
-```typescript
-// Nova automação INITIAL_CONTACT
-if (shouldRun('INITIAL_CONTACT')) {
-  console.log('Running INITIAL_CONTACT automation...')
-  
-  const { data: pendingContacts } = await supabase
-    .from('service_cases')
-    .select(`
-      id, created_at, assigned_to_user_id,
-      opportunities!inner (leads!inner (contacts!inner (full_name)))
-    `)
-    .eq('technical_status', 'CONTATO_INICIAL')
-  
-  for (const sc of pendingContacts || []) {
-    const hoursWaiting = (now.getTime() - new Date(sc.created_at).getTime()) / (60 * 60 * 1000)
-    
-    // Helper para verificar se reminder já foi enviado
-    const reminderSent = async (type: string) => {
-      const { data } = await supabase
-        .from('initial_contact_reminders')
-        .select('id')
-        .eq('service_case_id', sc.id)
-        .eq('reminder_type', type)
-        .maybeSingle()
-      return !!data
-    }
-    
-    // D1: 24h
-    if (hoursWaiting >= 24 && !(await reminderSent('D1'))) {
-      // Notificar técnico...
-    }
-    
-    // D2: 48h
-    if (hoursWaiting >= 48 && !(await reminderSent('D2'))) {
-      // Notificar técnico urgente...
-    }
-    
-    // D3 + Coordenador: 72h
-    if (hoursWaiting >= 72) {
-      if (!(await reminderSent('D3'))) {
-        // Notificar técnico...
-      }
-      if (!(await reminderSent('COORD_72H'))) {
-        // Notificar todos MANAGER...
-      }
-    }
-    
-    // ADM: 120h (5 dias)
-    if (hoursWaiting >= 120 && !(await reminderSent('ADM_5D'))) {
-      // Notificar todos ADMIN...
-    }
-  }
-}
-```
+### Segurança
+- RLS: Apenas staff pode provisionar documentos
+- Cliente só pode fazer upload, não criar documentos
 
 ---
 
 ## Resultado Esperado
 
-1. **Técnicos** recebem lembretes a cada 24h enquanto não fizerem contato
-2. **Coordenadores** são alertados após 72h sem contato
-3. **Administradores** são alertados após 5 dias para intervenção
-4. **Dashboard** mostra visualmente quais casos estão atrasados
-5. **Métricas** registram tempo de resposta para relatórios
+1. Técnico pode liberar documentos com 1 clique
+2. Cliente vê imediatamente a lista no portal
+3. Sistema registra quem liberou e quando
+4. Status do caso avança automaticamente
+5. Possibilidade de enviar WhatsApp informando
 
 ---
 
 ## Próximos Passos
 
-Após implementar este SLA, seguiremos com:
-- Lembretes de documentação
-- Escalonamento técnico → jurídico
-- Alertas de protocolo
-
+Após implementar, continuaremos com:
+- SLA de lembretes de documentação (a cada 48h)
+- Notificação automática quando documento é rejeitado
+- Conferência e aprovação em lote
