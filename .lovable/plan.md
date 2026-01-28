@@ -1,12 +1,12 @@
 
-# Plano: Sistema de Acompanhamento de Entrega de Documentos
+# Plano: Revisão Técnica de Documentos e Preparação para Jurídico
 
 ## Contexto
 
-O sistema precisa monitorar ativamente a entrega de documentos pelos clientes e:
-1. Enviar lembretes automáticos baseados na prioridade do caso
-2. Alertar a equipe interna sobre casos com documentos pendentes
-3. Confirmar quando a documentação está completa
+Após o cliente entregar todos os documentos, o técnico tem 5 dias úteis para revisar e aprovar a documentação. Este fluxo cria um sistema completo de alertas SLA e automação para garantir que:
+1. Técnicos sejam alertados sobre pendências de revisão
+2. Coordenadores e Admins sejam escalados quando prazos estourarem
+3. O envio ao jurídico ocorra dentro de 5 dias após aprovação técnica
 
 ---
 
@@ -14,235 +14,354 @@ O sistema precisa monitorar ativamente a entrega de documentos pelos clientes e:
 
 | Item | Status |
 |------|--------|
-| Campo `is_urgent` em `service_cases` | Existe |
-| Campo `case_priority` em `service_cases` | Existe (texto livre) |
-| Campo `documents_completed_at` | Existe |
-| Campo `expected_protocol_date` | Existe |
-| Tabela de rastreamento de lembretes de documentos | Não existe |
-| Lógica de lembrete no Edge Function | Básica (urgent vs normal) |
-| SLA configs para documentos | `sla_document_reminder_normal_days: 5`, `sla_document_reminder_urgent_hours: 24` |
+| Campo `documents_completed_at` | ✅ Existe |
+| Campo `technical_approved_at` | ✅ Existe |
+| Campo `sent_to_legal_at` | ✅ Existe |
+| Tabela `document_reminders` | ✅ Existe (pode ser reutilizada) |
+| Status `DOCUMENTOS_EM_CONFERENCIA` | ✅ Existe |
+| Status `DOCUMENTACAO_PARCIAL_APROVADA` | ✅ Existe |
+| Status `EM_ORGANIZACAO` | ✅ Existe |
+| Status `ENVIADO_JURIDICO` | ✅ Existe |
+| SLA config para revisão técnica | ✅ Parcial (`sla_technical_review_alert_days: 2,5,7`) |
+| Lógica de alertas no Edge Function | ⚠️ Básica - precisa refatoração |
 
 ---
 
 ## Fluxo Proposto
 
 ```text
-+-------------------+     +--------------------+     +----------------------+
-| Documentos        |     | Sistema verifica   |     | Baseado na           |
-| liberados pelo    | --> | diariamente        | --> | prioridade:          |
-| técnico           |     | pendências         |     |                      |
-+-------------------+     +--------------------+     +----------------------+
-                                                              |
-              +-----------------------------------------------+
-              |                   |                           |
-              v                   v                           v
-     +----------------+  +------------------+  +------------------------+
-     | URGENTE        |  | NORMAL           |  | EM ESPERA              |
-     | Lembrete 24h   |  | Lembrete 5 dias  |  | Lembrete 1 mês antes   |
-     | para cliente   |  | para cliente     |  | da data prevista       |
-     +----------------+  +------------------+  | + lembretes a cada 5d  |
-              |                   |            +------------------------+
-              |                   |                           |
-              v                   v                           |
-     +----------------+  +------------------+                 |
-     | Técnico:       |  | Técnico: D+2     |                 |
-     | Alerta interno |  | Coord: D+5       |                 |
-     | a cada 24h     |  | ADM: D+2 (48h)   |                 |
-     +----------------+  +------------------+                 |
-              |                   |                           |
-              +---------+---------+---------------------------+
-                        |
-                        v
-     +-----------------------------------------------+
-     | Documentação Completa                          |
-     | - Notificar técnico                           |
-     | - Enviar WhatsApp de confirmação ao cliente   |
-     | - Marcar documents_completed_at               |
-     +-----------------------------------------------+
++---------------------+     +---------------------+     +--------------------+
+| DOCUMENTOS EM       |     | Técnico revisa em   |     | Resultado:         |
+| CONFERENCIA         | --> | até 5 dias úteis    | --> |                    |
++---------------------+     +---------------------+     +--------------------+
+                                                                |
+           +----------------------------------------------------+
+           |                        |                           |
+           v                        v                           v
+  +----------------+     +---------------------+     +------------------+
+  | APROVADO       |     | PARCIAL APROVADO    |     | REJEITADO        |
+  | (docs OK)      |     | (docs incompletos)  |     | (problemas)      |
+  +----------------+     +---------------------+     +------------------+
+           |                        |                           |
+           |                        |                           |
+           v                        v                           v
+  +-----------------------------------------------------+   Cliente
+  | EM_ORGANIZACAO / ENVIADO_JURIDICO                   |   corrige e
+  | (5 dias para enviar ao Jurídico)                    |   reenvia
+  +-----------------------------------------------------+
+                            |
+        +-------------------+-------------------+
+        |                   |                   |
+        v                   v                   v
+   D+3: Alerta        D+5: Alerta          D+8: Alerta
+   Técnico (diário)   Coordenador          ADM
 ```
 
 ---
 
-## Regras de Negócio Detalhadas
+## Alertas SLA - Revisão Técnica
 
-### Lembretes para o Cliente (WhatsApp)
+### Fase 1: Revisão da Documentação (status: DOCUMENTOS_EM_CONFERENCIA)
 
-| Prioridade | Condição | Frequência | Início |
-|------------|----------|------------|--------|
-| URGENTE | `is_urgent = true` | A cada 24h | Imediato |
-| NORMAL | `is_urgent = false` AND `case_priority != 'EM_ESPERA'` | A cada 5 dias | D+5 |
-| EM_ESPERA | `case_priority = 'EM_ESPERA'` | 1 mês antes + a cada 5 dias | Baseado em `expected_protocol_date` |
+| Tempo | Destinatário | Ação |
+|-------|--------------|------|
+| D+2 (48h) | Técnico atribuído | Notificação: "Documentos aguardam revisão há 48h" |
+| D+2+ | Técnico | Alertas diários até conclusão |
+| D+5 | Coordenador/Manager | Notificação: "Revisão técnica atrasada 5 dias" |
+| D+7 | Admin | Notificação: "Revisão técnica crítica - 7 dias" |
 
-### Alertas para Equipe Interna (Notificações)
+### Fase 2: Envio ao Jurídico (status: EM_ORGANIZACAO ou DOCUMENTACAO_PARCIAL_APROVADA)
 
-| Prioridade | Destinatário | Condição |
-|------------|--------------|----------|
-| URGENTE | Técnico atribuído | Alerta contínuo a cada 24h |
-| NORMAL | Técnico atribuído | D+2 (48h) após liberação |
-| NORMAL | Coordenador/Manager | D+5 após liberação |
-| NORMAL | Admin | D+2 (48h) após liberação |
+| Tempo | Destinatário | Ação |
+|-------|--------------|------|
+| D+3 após aprovação | Técnico | Alerta diário: "Faltam 2 dias para enviar ao Jurídico" |
+| D+5 | Coordenador | Notificação: "Prazo de envio ao Jurídico estourado" |
+| D+8 | Admin | Notificação: "Atraso crítico - 3 dias após prazo" |
 
 ---
 
 ## Implementação
 
-### 1. Criar Tabela de Rastreamento de Lembretes
-
-```sql
-CREATE TABLE document_reminders (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  service_case_id UUID NOT NULL REFERENCES service_cases(id) ON DELETE CASCADE,
-  reminder_type TEXT NOT NULL,
-  sent_at TIMESTAMPTZ DEFAULT now(),
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(service_case_id, reminder_type)
-);
-
--- Índice para consultas
-CREATE INDEX idx_document_reminders_case ON document_reminders(service_case_id);
-```
-
-Tipos de lembrete:
-- `CLIENT_D5`, `CLIENT_D10`, `CLIENT_D15`, etc.
-- `TECH_D2`, `COORD_D5`, `ADMIN_D2`
-- `URGENT_CLIENT_1`, `URGENT_CLIENT_2`, etc.
-- `WAITING_30D`, `WAITING_25D`, etc.
-
----
-
-### 2. Adicionar Novos Configs de SLA
+### 1. Novas Configurações SLA (system_config)
 
 ```sql
 INSERT INTO system_config (key, value, description) VALUES
-  ('sla_document_tech_alert_hours', '48', 'Horas para alertar técnico sobre documentos pendentes (casos normais)'),
-  ('sla_document_coord_alert_days', '5', 'Dias para alertar coordenador sobre documentos pendentes'),
-  ('sla_document_admin_alert_hours', '48', 'Horas para alertar admin sobre documentos pendentes'),
-  ('sla_document_waiting_first_reminder_days', '30', 'Dias antes da data prevista para primeiro lembrete (casos em espera)'),
-  ('template_document_confirmation', 'Olá {nome}! ✅ Recebemos toda a sua documentação, que agora está em fase de revisão pelo técnico responsável. O processo de análise pode levar até 5 dias úteis.', 'Mensagem de confirmação de documentação completa');
+  -- Revisão Técnica
+  ('sla_tech_review_tech_alert_hours', '48', 'Horas após documentos completos para alertar técnico'),
+  ('sla_tech_review_coord_alert_days', '5', 'Dias para alertar coordenador sobre revisão pendente'),
+  ('sla_tech_review_admin_alert_days', '7', 'Dias para alertar admin sobre revisão pendente'),
+  
+  -- Envio ao Jurídico
+  ('sla_send_legal_tech_alert_days', '3', 'Dias após aprovação para alertar técnico sobre envio'),
+  ('sla_send_legal_coord_alert_days', '5', 'Dias para alertar coordenador sobre envio ao jurídico'),
+  ('sla_send_legal_admin_alert_days', '8', 'Dias para alertar admin sobre envio ao jurídico')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 ```
 
 ---
 
-### 3. Refatorar Lógica de Document Reminders no Edge Function
+### 2. Nova Tabela de Rastreamento (ou reutilizar document_reminders)
 
-Substituir a seção 7 (DOCUMENT_REMINDERS) por uma lógica muito mais robusta:
+Vamos reutilizar a tabela `document_reminders` já existente, adicionando novos tipos:
+- `TECH_REVIEW_D2`, `TECH_REVIEW_D3`, ... (alertas de revisão técnica)
+- `SEND_LEGAL_D3`, `SEND_LEGAL_D4`, ... (alertas de envio ao jurídico)
+
+---
+
+### 3. Atualização do Edge Function (sla-automations)
+
+#### Seção 10: TECHNICAL REVIEW ALERTS (Refatoração Completa)
 
 ```typescript
 // =====================================================
-// 7. DOCUMENT REMINDERS (ENHANCED)
+// 10. TECHNICAL REVIEW ALERTS (Enhanced)
 // =====================================================
-if (shouldRun('DOCUMENT_REMINDERS')) {
-  console.log('Running DOCUMENT_REMINDERS automation (enhanced)...')
+if (shouldRun('TECHNICAL')) {
+  console.log('Running TECHNICAL automation (enhanced)...')
   
-  // Fetch cases with pending documents
-  const { data: casesWithPendingDocs } = await supabase
+  // Cases in DOCUMENTOS_EM_CONFERENCIA with documents_completed_at
+  const { data: casesInReview } = await supabase
     .from('service_cases')
     .select(`
-      id, is_urgent, case_priority, expected_protocol_date,
-      assigned_to_user_id, client_user_id, first_contact_at,
-      technical_status, documents_completed_at,
+      id, documents_completed_at, assigned_to_user_id, client_user_id,
       opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
     `)
-    .eq('technical_status', 'AGUARDANDO_DOCUMENTOS')
-    .is('documents_completed_at', null);
+    .eq('technical_status', 'DOCUMENTOS_EM_CONFERENCIA')
+    .not('documents_completed_at', 'is', null)
   
-  for (const sc of casesWithPendingDocs || []) {
-    // Check pending documents count
-    const { count: pendingCount } = await supabase
-      .from('service_documents')
-      .select('*', { count: 'exact', head: true })
-      .eq('service_case_id', sc.id)
-      .in('status', ['NAO_ENVIADO', 'REJEITADO']);
+  for (const sc of casesInReview || []) {
+    const completedAt = new Date(sc.documents_completed_at)
+    const hoursSinceComplete = (now.getTime() - completedAt.getTime()) / (60 * 60 * 1000)
+    const daysSinceComplete = hoursSinceComplete / 24
+    const caseShortId = sc.id.slice(0, 8)
+    const clientName = sc.opportunities?.leads?.contacts?.full_name
     
-    if (!pendingCount || pendingCount === 0) {
-      // All docs submitted - trigger completion flow
-      await handleDocumentsComplete(sc);
-      continue;
+    // D+2 (48h) - Daily alerts to technician
+    if (hoursSinceComplete >= slaMap.sla_tech_review_tech_alert_hours) {
+      const dayKey = Math.floor(daysSinceComplete)
+      const reminderKey = `TECH_REVIEW_D${dayKey}`
+      
+      if (!(await docReminderSent(sc.id, reminderKey))) {
+        if (sc.assigned_to_user_id) {
+          await supabase.from('notifications').insert({
+            user_id: sc.assigned_to_user_id,
+            type: 'tech_review_pending',
+            title: 'Revisão Técnica Pendente',
+            message: `Caso ${caseShortId} de ${clientName} aguarda revisão há ${Math.floor(daysSinceComplete)} dias.`
+          })
+        }
+        await recordDocReminder(sc.id, reminderKey, 'TECH')
+        results.technicalReviewAlerts++
+      }
     }
     
-    const contact = sc.opportunities?.leads?.contacts;
-    const leadId = sc.opportunities?.leads?.id;
-    const firstContactAt = new Date(sc.first_contact_at || sc.created_at);
-    const daysSinceRelease = Math.floor((now.getTime() - firstContactAt.getTime()) / (24 * 60 * 60 * 1000));
+    // D+5 - Coordinator alert
+    if (daysSinceComplete >= slaMap.sla_tech_review_coord_alert_days) {
+      if (!(await docReminderSent(sc.id, 'TECH_REVIEW_COORD'))) {
+        const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
+        for (const mgr of managers || []) {
+          await supabase.from('notifications').insert({
+            user_id: mgr.user_id,
+            type: 'tech_review_overdue_coord',
+            title: 'Revisão Técnica Atrasada',
+            message: `Caso ${caseShortId} de ${clientName} aguarda revisão há ${Math.floor(daysSinceComplete)} dias.`
+          })
+        }
+        await recordDocReminder(sc.id, 'TECH_REVIEW_COORD', 'COORD')
+        results.technicalReviewAlerts++
+      }
+    }
     
-    // Determine priority type
-    const priorityType = sc.is_urgent ? 'URGENT' 
-      : sc.case_priority === 'EM_ESPERA' ? 'WAITING' 
-      : 'NORMAL';
+    // D+7 - Admin alert
+    if (daysSinceComplete >= slaMap.sla_tech_review_admin_alert_days) {
+      if (!(await docReminderSent(sc.id, 'TECH_REVIEW_ADMIN'))) {
+        const { data: admins } = await supabase.from('user_roles').select('user_id').eq('role', 'ADMIN')
+        for (const admin of admins || []) {
+          await supabase.from('notifications').insert({
+            user_id: admin.user_id,
+            type: 'tech_review_critical',
+            title: '🚨 Revisão Técnica Crítica',
+            message: `Caso ${caseShortId} de ${clientName} aguarda revisão há ${Math.floor(daysSinceComplete)} dias!`
+          })
+        }
+        await recordDocReminder(sc.id, 'TECH_REVIEW_ADMIN', 'ADMIN')
+        results.technicalReviewAlerts++
+      }
+    }
+  }
+}
+```
+
+#### Seção 11: SEND TO LEGAL ALERTS (Refatoração Completa)
+
+```typescript
+// =====================================================
+// 11. SEND TO LEGAL ALERTS (Enhanced)
+// =====================================================
+if (shouldRun('LEGAL')) {
+  console.log('Running LEGAL automation (enhanced)...')
+  
+  // Cases approved but not sent to legal
+  const { data: approvedCases } = await supabase
+    .from('service_cases')
+    .select(`
+      id, technical_approved_at, assigned_to_user_id,
+      opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
+    `)
+    .in('technical_status', ['EM_ORGANIZACAO', 'PRONTO_PARA_SUBMISSAO', 'DOCUMENTACAO_PARCIAL_APROVADA'])
+    .not('technical_approved_at', 'is', null)
+    .is('sent_to_legal_at', null)
+  
+  for (const sc of approvedCases || []) {
+    const approvedAt = new Date(sc.technical_approved_at)
+    const daysSinceApproval = (now.getTime() - approvedAt.getTime()) / (24 * 60 * 60 * 1000)
+    const caseShortId = sc.id.slice(0, 8)
+    const clientName = sc.opportunities?.leads?.contacts?.full_name
     
-    // Handle each priority type...
+    // D+3 - Daily alerts to technician (2 days before deadline)
+    if (daysSinceApproval >= slaMap.sla_send_legal_tech_alert_days) {
+      const dayKey = Math.floor(daysSinceApproval)
+      const reminderKey = `SEND_LEGAL_D${dayKey}`
+      
+      if (!(await docReminderSent(sc.id, reminderKey))) {
+        if (sc.assigned_to_user_id) {
+          const daysRemaining = Math.max(0, 5 - Math.floor(daysSinceApproval))
+          await supabase.from('notifications').insert({
+            user_id: sc.assigned_to_user_id,
+            type: 'send_to_legal_reminder',
+            title: 'Enviar ao Jurídico',
+            message: daysRemaining > 0 
+              ? `Caso ${caseShortId} de ${clientName}: faltam ${daysRemaining} dias para enviar ao Jurídico.`
+              : `Caso ${caseShortId} de ${clientName}: prazo de envio ao Jurídico estourado!`
+          })
+        }
+        await recordDocReminder(sc.id, reminderKey, 'TECH')
+        results.sendToLegalAlerts++
+      }
+    }
+    
+    // D+5 - Coordinator alert
+    if (daysSinceApproval >= slaMap.sla_send_legal_coord_alert_days) {
+      if (!(await docReminderSent(sc.id, 'SEND_LEGAL_COORD'))) {
+        const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
+        for (const mgr of managers || []) {
+          await supabase.from('notifications').insert({
+            user_id: mgr.user_id,
+            type: 'send_to_legal_overdue_coord',
+            title: 'Prazo de Envio ao Jurídico Estourado',
+            message: `Caso ${caseShortId} de ${clientName} aprovado há ${Math.floor(daysSinceApproval)} dias e não foi enviado ao Jurídico.`
+          })
+        }
+        await recordDocReminder(sc.id, 'SEND_LEGAL_COORD', 'COORD')
+        results.sendToLegalAlerts++
+      }
+    }
+    
+    // D+8 - Admin alert
+    if (daysSinceApproval >= slaMap.sla_send_legal_admin_alert_days) {
+      if (!(await docReminderSent(sc.id, 'SEND_LEGAL_ADMIN'))) {
+        const { data: admins } = await supabase.from('user_roles').select('user_id').eq('role', 'ADMIN')
+        for (const admin of admins || []) {
+          await supabase.from('notifications').insert({
+            user_id: admin.user_id,
+            type: 'send_to_legal_critical',
+            title: '🚨 Atraso Crítico - Envio ao Jurídico',
+            message: `Caso ${caseShortId} de ${clientName} com ${Math.floor(daysSinceApproval)} dias desde aprovação técnica!`
+          })
+        }
+        await recordDocReminder(sc.id, 'SEND_LEGAL_ADMIN', 'ADMIN')
+        results.sendToLegalAlerts++
+      }
+    }
   }
 }
 ```
 
 ---
 
-### 4. Lógica de Documentação Completa
+### 4. Atualização do Hook useCases.ts
 
-Quando todos os documentos forem enviados (status != NAO_ENVIADO e != REJEITADO):
-
-```typescript
-async function handleDocumentsComplete(serviceCase) {
-  // 1. Update case
-  await supabase.from('service_cases').update({
-    documents_completed_at: new Date().toISOString(),
-    technical_status: 'DOCUMENTOS_EM_CONFERENCIA'
-  }).eq('id', serviceCase.id);
-  
-  // 2. Notify technician
-  if (serviceCase.assigned_to_user_id) {
-    await supabase.from('notifications').insert({
-      user_id: serviceCase.assigned_to_user_id,
-      type: 'documents_complete',
-      title: 'Documentação Completa',
-      message: `O cliente enviou todos os documentos. Caso pronto para conferência.`
-    });
-  }
-  
-  // 3. Send confirmation to client
-  const contact = serviceCase.opportunities?.leads?.contacts;
-  if (contact?.phone) {
-    const msg = templateMap.template_document_confirmation.replace('{nome}', contact.full_name);
-    await sendWhatsApp(contact.phone, msg, serviceCase.opportunities?.leads?.id);
-  }
-  
-  results.documentsCompleted++;
-}
-```
-
----
-
-### 5. Atualização do `useCases` Hook
-
-Adicionar função para verificar e atualizar status de documentação:
+Adicionar funções para aprovar documentação e enviar ao jurídico com timestamps:
 
 ```typescript
-const checkDocumentsComplete = useMutation({
-  mutationFn: async (caseId: string) => {
-    // Check if all required docs are submitted
-    const { data: docs } = await supabase
-      .from('service_documents')
-      .select('id, status, service_document_types!inner(is_required)')
-      .eq('service_case_id', caseId);
+const approveDocumentation = useMutation({
+  mutationFn: async ({ id, partial = false }: { id: string; partial?: boolean }) => {
+    const status = partial ? 'DOCUMENTACAO_PARCIAL_APROVADA' : 'EM_ORGANIZACAO';
+    const { data, error } = await supabase
+      .from('service_cases')
+      .update({
+        technical_status: status,
+        technical_approved_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
     
-    const allRequiredSubmitted = docs?.every(d => 
-      !d.service_document_types?.is_required || 
-      ['ENVIADO', 'EM_CONFERENCIA', 'APROVADO'].includes(d.status)
-    );
-    
-    if (allRequiredSubmitted) {
-      // Update case status
-      await supabase.from('service_cases')
-        .update({ 
-          documents_completed_at: new Date().toISOString(),
-          technical_status: 'DOCUMENTOS_EM_CONFERENCIA'
-        })
-        .eq('id', caseId);
-    }
-    
-    return allRequiredSubmitted;
-  }
+    if (error) throw error;
+    return data;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+    toast({ title: 'Documentação aprovada com sucesso' });
+  },
 });
+
+const sendToLegal = useMutation({
+  mutationFn: async (id: string) => {
+    const { data, error } = await supabase
+      .from('service_cases')
+      .update({
+        technical_status: 'ENVIADO_JURIDICO',
+        sent_to_legal_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+    queryClient.invalidateQueries({ queryKey: ['legal-cases'] });
+    toast({ title: 'Caso enviado ao Jurídico' });
+  },
+});
+```
+
+---
+
+### 5. Atualização do CaseDetail.tsx
+
+Modificar os handlers de aprovação para usar os novos métodos:
+
+```typescript
+// Approvar documentação completa
+const handleApproveDocumentation = async () => {
+  await updateCase.mutateAsync({
+    id: serviceCase.id,
+    technical_status: 'EM_ORGANIZACAO' as any,
+    technical_approved_at: new Date().toISOString(),
+  });
+};
+
+// Aprovar documentação parcial
+const handleApprovePartialDocumentation = async () => {
+  await updateCase.mutateAsync({
+    id: serviceCase.id,
+    technical_status: 'DOCUMENTACAO_PARCIAL_APROVADA' as any,
+    technical_approved_at: new Date().toISOString(),
+  });
+};
+
+// Enviar ao Jurídico
+const handleSendToJuridico = async () => {
+  await updateCase.mutateAsync({
+    id: serviceCase.id,
+    technical_status: 'ENVIADO_JURIDICO' as any,
+    sent_to_legal_at: new Date().toISOString(),
+  });
+};
 ```
 
 ---
@@ -251,132 +370,59 @@ const checkDocumentsComplete = useMutation({
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/sla-automations/index.ts` | Refatorar seção DOCUMENT_REMINDERS completamente |
-| `src/hooks/useCases.ts` | Adicionar `checkDocumentsComplete` |
-| `src/hooks/useDocuments.ts` | Verificar completude ao aprovar documento |
+| `supabase/functions/sla-automations/index.ts` | Refatorar seções 10 (TECHNICAL) e 11 (LEGAL) |
+| `src/hooks/useCases.ts` | Adicionar `approveDocumentation` e `sendToLegal` mutations |
+| `src/pages/cases/CaseDetail.tsx` | Atualizar handlers para gravar timestamps |
 
 ---
 
-## Arquivos a Criar
-
-| Arquivo | Descrição |
-|---------|-----------|
-| Migração SQL | Tabela `document_reminders` + configs SLA |
-
----
-
-## Templates de Mensagem
-
-### Lembrete Normal (existente)
-> Olá {nome}! 📄 Ainda estamos aguardando alguns documentos para dar continuidade ao seu processo. Por favor, envie-os pelo portal.
-
-### Lembrete Urgente (existente)
-> Olá {nome}! ⚠️ URGENTE: Precisamos dos documentos pendentes para seu processo. Por favor, envie hoje pelo portal.
-
-### Lembrete Em Espera (novo)
-> Olá {nome}! 📅 Faltam {dias} dias para a data prevista do seu protocolo. Por favor, comece a reunir os documentos pendentes e envie pelo portal.
-
-### Confirmação de Documentação Completa (novo)
-> Olá {nome}! ✅ Recebemos toda a sua documentação, que agora está em fase de revisão pelo técnico responsável. O processo de análise pode levar até 5 dias úteis.
-
----
-
-## Tabela de Lembretes por Prioridade
-
-### Caso URGENTE
-
-| Dia | Para | Ação |
-|-----|------|------|
-| D+1 | Cliente | WhatsApp lembrete urgente |
-| D+1 | Técnico | Notificação interna |
-| D+2 | Cliente | WhatsApp lembrete urgente |
-| D+2 | Técnico | Notificação interna |
-| ... | ... | Continua diariamente |
-
-### Caso NORMAL
-
-| Dia | Para | Ação |
-|-----|------|------|
-| D+2 | Técnico | Notificação: "Documentos pendentes há 48h" |
-| D+2 | Admin | Notificação: "Caso com documentos pendentes" |
-| D+5 | Cliente | WhatsApp lembrete normal |
-| D+5 | Coordenador | Notificação: "Documentos pendentes há 5 dias" |
-| D+10 | Cliente | WhatsApp lembrete normal |
-| D+15 | Cliente | WhatsApp lembrete normal |
-| ... | ... | Continua a cada 5 dias |
-
-### Caso EM_ESPERA
-
-| Quando | Para | Ação |
-|--------|------|------|
-| D-30 | Cliente | WhatsApp: "Faltam 30 dias para protocolo" |
-| D-25 | Cliente | WhatsApp lembrete |
-| D-20 | Cliente | WhatsApp lembrete |
-| ... | ... | Continua a cada 5 dias |
-| D-5 | Cliente | WhatsApp urgente |
-
----
-
-## Migração SQL Completa
+## Migração SQL
 
 ```sql
--- 1. Create document reminders tracking table
-CREATE TABLE IF NOT EXISTS document_reminders (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  service_case_id UUID NOT NULL REFERENCES service_cases(id) ON DELETE CASCADE,
-  reminder_type TEXT NOT NULL,
-  recipient_type TEXT NOT NULL DEFAULT 'CLIENT',
-  sent_at TIMESTAMPTZ DEFAULT now(),
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Index for efficient queries
-CREATE INDEX IF NOT EXISTS idx_document_reminders_case_type 
-  ON document_reminders(service_case_id, reminder_type);
-
--- 2. Add new SLA configurations
+-- Adicionar novas configurações SLA
 INSERT INTO system_config (key, value, description) VALUES
-  ('sla_document_tech_alert_hours', '48', 'Horas para alertar técnico sobre documentos pendentes'),
-  ('sla_document_coord_alert_days', '5', 'Dias para alertar coordenador sobre documentos pendentes'),
-  ('sla_document_admin_alert_hours', '48', 'Horas para alertar admin sobre documentos pendentes'),
-  ('sla_document_waiting_first_reminder_days', '30', 'Dias antes da data prevista para primeiro lembrete'),
-  ('template_document_waiting', 'Olá {nome}! 📅 Faltam {dias} dias para a data prevista do seu protocolo. Por favor, comece a reunir os documentos pendentes e envie pelo portal.', 'Lembrete para casos em espera'),
-  ('template_document_confirmation', 'Olá {nome}! ✅ Recebemos toda a sua documentação, que agora está em fase de revisão pelo técnico responsável. O processo de análise pode levar até 5 dias úteis.', 'Confirmação de documentação completa')
+  ('sla_tech_review_tech_alert_hours', '48', 'Horas para alertar técnico sobre revisão pendente'),
+  ('sla_tech_review_coord_alert_days', '5', 'Dias para alertar coordenador sobre revisão pendente'),
+  ('sla_tech_review_admin_alert_days', '7', 'Dias para alertar admin sobre revisão pendente'),
+  ('sla_send_legal_tech_alert_days', '3', 'Dias para alertar técnico sobre envio ao jurídico'),
+  ('sla_send_legal_coord_alert_days', '5', 'Dias para alertar coordenador sobre envio ao jurídico'),
+  ('sla_send_legal_admin_alert_days', '8', 'Dias para alertar admin sobre envio ao jurídico')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
-
--- 3. Enable RLS
-ALTER TABLE document_reminders ENABLE ROW LEVEL SECURITY;
-
--- 4. RLS Policy - Staff can read/write
-CREATE POLICY "Staff can manage document reminders" 
-  ON document_reminders 
-  FOR ALL 
-  TO authenticated 
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles 
-      WHERE user_id = auth.uid() 
-      AND role IN ('ADMIN', 'MANAGER', 'TECNICO', 'ATENCAO_CLIENTE')
-    )
-  );
 ```
 
 ---
 
 ## Resultado Esperado
 
-1. Clientes recebem lembretes automáticos baseados na prioridade do caso
-2. Equipe interna é alertada sobre casos com documentos pendentes
-3. Sistema detecta automaticamente quando documentação está completa
-4. Mensagem de confirmação é enviada ao cliente
-5. Rastreamento evita lembretes duplicados
-6. SLAs configuráveis via `system_config`
+1. Técnicos recebem alertas diários após 48h de documentos completos
+2. Coordenadores são escalados após 5 dias sem revisão
+3. Admins são alertados após 7 dias (situação crítica)
+4. Após aprovação técnica, alertas diários a partir de D+3 para enviar ao Jurídico
+5. Escalação para Coordenador em D+5 e Admin em D+8
+6. Todos os alertas são rastreados para evitar duplicação
+7. Timestamps são gravados automaticamente nas transições de status
 
 ---
 
-## Próximos Passos Após Implementação
+## Fluxo de Status Atualizado
 
-1. Adicionar indicador visual no CasesList mostrando "documentos pendentes há X dias"
-2. Dashboard com métricas de documentação pendente por prioridade
-3. Relatório de tempo médio de entrega de documentos
+```text
+DOCUMENTOS_EM_CONFERENCIA
+         |
+    +----+----+
+    |         |
+    v         v
+EM_ORGANIZACAO    DOCUMENTACAO_PARCIAL_APROVADA
+    |                       |
+    +----------+------------+
+               |
+               v
+        ENVIADO_JURIDICO
+               |
+               v
+        PRONTO_PARA_SUBMISSAO
+               |
+               v
+           PROTOCOLADO
+```
 
