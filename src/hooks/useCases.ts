@@ -113,10 +113,17 @@ export function useCases() {
   });
 
   const updateStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+    mutationFn: async ({ id, status, fromStatus }: { id: string; status: string; fromStatus?: string }) => {
+      // If transitioning from CONTATO_INICIAL to another status, record first contact time
+      const updates: Record<string, any> = { technical_status: status as any };
+      
+      if (fromStatus === 'CONTATO_INICIAL' && status !== 'CONTATO_INICIAL') {
+        updates.first_contact_at = new Date().toISOString();
+      }
+      
       const { data, error } = await supabase
         .from('service_cases')
-        .update({ technical_status: status as any })
+        .update(updates)
         .eq('id', id)
         .select()
         .single();
