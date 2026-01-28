@@ -14,7 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, FileText, AlertTriangle, Check, X, Plus, Send, User, Scale, Fingerprint, CreditCard, MessageSquare } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { ArrowLeft, FileText, AlertTriangle, Check, X, Plus, Send, User, Scale, Fingerprint, CreditCard, MessageSquare, CalendarIcon } from 'lucide-react';
 import { 
   TECHNICAL_STATUS_LABELS, 
   SERVICE_INTEREST_LABELS, 
@@ -22,7 +24,7 @@ import {
   DOCUMENT_STATUS_LABELS,
   REQUIREMENT_STATUS_LABELS 
 } from '@/types/database';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { HuellasSection } from '@/components/cases/HuellasSection';
@@ -34,6 +36,7 @@ import { DocumentProgressCard } from '@/components/cases/DocumentProgressCard';
 import { SendWhatsAppButton } from '@/components/cases/SendWhatsAppButton';
 import { InitialContactSLABadge } from '@/components/cases/InitialContactSLABadge';
 import { ReleaseDocumentsButton } from '@/components/cases/ReleaseDocumentsButton';
+import { cn } from '@/lib/utils';
 
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
@@ -409,14 +412,68 @@ export default function CaseDetail() {
               </Select>
             </div>
 
-            {serviceCase.expected_protocol_date && (
-              <div>
-                <p className="text-sm text-muted-foreground">Data Prevista de Protocolo</p>
-                <p className="font-medium">
-                  {format(new Date(serviceCase.expected_protocol_date), 'dd/MM/yyyy', { locale: ptBR })}
-                </p>
-              </div>
-            )}
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">Data Prevista de Protocolo</p>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !serviceCase.expected_protocol_date && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {serviceCase.expected_protocol_date 
+                      ? format(new Date(serviceCase.expected_protocol_date), 'dd/MM/yyyy', { locale: ptBR })
+                      : "Definir data"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={serviceCase.expected_protocol_date ? new Date(serviceCase.expected_protocol_date) : undefined}
+                    onSelect={async (date) => {
+                      if (date) {
+                        await updateCase.mutateAsync({
+                          id: serviceCase.id,
+                          expected_protocol_date: format(date, 'yyyy-MM-dd'),
+                        });
+                      }
+                    }}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+              {serviceCase.expected_protocol_date && (() => {
+                const daysUntil = differenceInDays(new Date(serviceCase.expected_protocol_date), new Date());
+                if (daysUntil < 0) {
+                  return (
+                    <p className="text-xs text-destructive mt-1 font-medium">
+                      ⚠️ Prazo expirado há {Math.abs(daysUntil)} dias
+                    </p>
+                  );
+                } else if (daysUntil <= 7) {
+                  return (
+                    <p className="text-xs text-destructive mt-1 font-medium">
+                      ⏰ Faltam apenas {daysUntil} dias!
+                    </p>
+                  );
+                } else if (daysUntil <= 14) {
+                  return (
+                    <p className="text-xs text-amber-600 mt-1">
+                      ⚠️ Faltam {daysUntil} dias para o prazo
+                    </p>
+                  );
+                }
+                return (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Faltam {daysUntil} dias para o prazo
+                  </p>
+                );
+              })()}
+            </div>
 
             {serviceCase.protocol_number && (
               <div>
