@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, FileText, AlertTriangle, Check, X, Plus, Send, User, Scale, Fingerprint, CreditCard } from 'lucide-react';
+import { ArrowLeft, FileText, AlertTriangle, Check, X, Plus, Send, User, Scale, Fingerprint, CreditCard, MessageSquare } from 'lucide-react';
 import { 
   TECHNICAL_STATUS_LABELS, 
   SERVICE_INTEREST_LABELS, 
@@ -28,6 +28,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { HuellasSection } from '@/components/cases/HuellasSection';
 import { TiePickupSection } from '@/components/cases/TiePickupSection';
 import { Switch } from '@/components/ui/switch';
+import { CaseStatusTimeline } from '@/components/cases/CaseStatusTimeline';
+import { TechnicalNotesSection } from '@/components/cases/TechnicalNotesSection';
+import { DocumentProgressCard } from '@/components/cases/DocumentProgressCard';
+import { SendWhatsAppButton } from '@/components/cases/SendWhatsAppButton';
 
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
@@ -157,10 +161,25 @@ export default function CaseDetail() {
   const showHuellasSection = ['AGENDAR_HUELLAS', 'AGUARDANDO_CITA_HUELLAS', 'HUELLAS_REALIZADO', 'DISPONIVEL_RETIRADA_TIE', 'AGUARDANDO_CITA_RETIRADA', 'TIE_RETIRADO', 'ENCERRADO_APROVADO'].includes(serviceCase.technical_status || '');
   const showTieSection = ['HUELLAS_REALIZADO', 'DISPONIVEL_RETIRADA_TIE', 'AGUARDANDO_CITA_RETIRADA', 'TIE_RETIRADO', 'ENCERRADO_APROVADO'].includes(serviceCase.technical_status || '');
 
+  // Client data for templates
+  const clientPhone = serviceCase.opportunities?.leads?.contacts?.phone ?? null;
+  const clientName = serviceCase.opportunities?.leads?.contacts?.full_name || 'Cliente';
+  const clientEmail = serviceCase.opportunities?.leads?.contacts?.email;
+
   // Fluxo de ações baseado no status
   const getAvailableActions = () => {
     const status = serviceCase.technical_status;
     const actions = [];
+
+    // Botão de Contato Inicial sempre visível nas primeiras fases
+    if (status === 'CONTATO_INICIAL') {
+      actions.push({ 
+        label: 'Iniciar Contato', 
+        action: () => {}, // Handled by SendWhatsAppButton
+        icon: MessageSquare,
+        isWhatsApp: true 
+      });
+    }
 
     if (status === 'DOCUMENTOS_EM_CONFERENCIA') {
       actions.push({ label: 'Aprovar Documentação', action: () => handleStatusChange('PRONTO_PARA_SUBMISSAO'), icon: Check });
@@ -198,8 +217,21 @@ export default function CaseDetail() {
         description={`${SERVICE_INTEREST_LABELS[serviceCase.service_type]} • ${SERVICE_SECTOR_LABELS[serviceCase.sector]}`}
         actions={
           <div className="flex gap-2 flex-wrap">
+            {/* WhatsApp button - always available */}
+            <SendWhatsAppButton
+              phone={clientPhone}
+              clientName={clientName}
+              serviceType={SERVICE_INTEREST_LABELS[serviceCase.service_type]}
+              protocolNumber={serviceCase.protocol_number}
+              huellasDate={serviceCase.huellas_date}
+              huellasTime={serviceCase.huellas_time}
+              huellasLocation={serviceCase.huellas_location}
+              serviceCaseId={serviceCase.id}
+              onStatusUpdate={(status) => handleStatusChange(status)}
+            />
+
             {/* Ações disponíveis baseadas no status */}
-            {availableActions.map((action, idx) => (
+            {availableActions.filter(a => !(a as any).isWhatsApp).map((action, idx) => (
               <Button key={idx} variant="outline" onClick={action.action}>
                 <action.icon className="h-4 w-4 mr-2" />
                 {action.label}
@@ -428,8 +460,20 @@ export default function CaseDetail() {
           </CardContent>
         </Card>
 
-        {/* Tabs for Documents, Requirements, Huellas, TIE */}
-        <Card className="lg:col-span-2">
+        {/* Right side panels - Timeline, Notes, Document Progress */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Top row - Timeline, Progress, Notes */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <CaseStatusTimeline 
+              serviceCaseId={serviceCase.id} 
+              currentStatus={serviceCase.technical_status || 'CONTATO_INICIAL'} 
+            />
+            <DocumentProgressCard documents={documents} />
+            <TechnicalNotesSection serviceCaseId={serviceCase.id} />
+          </div>
+
+          {/* Tabs for Documents, Requirements, Huellas, TIE */}
+          <Card>
           <Tabs defaultValue="documents">
             <CardHeader>
               <TabsList className="flex-wrap">
@@ -620,6 +664,7 @@ export default function CaseDetail() {
             </CardContent>
           </Tabs>
         </Card>
+        </div>
       </div>
 
       {/* Reject Document Dialog */}
