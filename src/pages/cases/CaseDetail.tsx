@@ -33,6 +33,7 @@ import { TechnicalNotesSection } from '@/components/cases/TechnicalNotesSection'
 import { DocumentProgressCard } from '@/components/cases/DocumentProgressCard';
 import { SendWhatsAppButton } from '@/components/cases/SendWhatsAppButton';
 import { InitialContactSLABadge } from '@/components/cases/InitialContactSLABadge';
+import { ReleaseDocumentsButton } from '@/components/cases/ReleaseDocumentsButton';
 
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
@@ -512,9 +513,20 @@ export default function CaseDetail() {
               <TabsContent value="documents" className="m-0">
                 <div className="space-y-3">
                   {documents.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">
-                      Nenhum documento vinculado a este caso
-                    </p>
+                    <div className="text-center py-8 space-y-4">
+                      <div className="text-muted-foreground">
+                        <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                        <p className="font-medium">Nenhum documento vinculado a este caso</p>
+                        <p className="text-sm mt-1">
+                          Os documentos serão liberados após o contato inicial com o cliente.
+                        </p>
+                      </div>
+                      <ReleaseDocumentsButton
+                        serviceCaseId={serviceCase.id}
+                        serviceType={serviceCase.service_type}
+                        onSuccess={() => handleStatusChange('AGUARDANDO_DOCUMENTOS')}
+                      />
+                    </div>
                   ) : (
                     documents.map((doc) => (
                       <div 
