@@ -1597,6 +1597,7 @@ export type Database = {
           needs_apostille: boolean | null
           needs_translation: boolean | null
           service_type: Database["public"]["Enums"]["service_interest"]
+          validity_days: number | null
         }
         Insert: {
           created_at?: string | null
@@ -1607,6 +1608,7 @@ export type Database = {
           needs_apostille?: boolean | null
           needs_translation?: boolean | null
           service_type: Database["public"]["Enums"]["service_interest"]
+          validity_days?: number | null
         }
         Update: {
           created_at?: string | null
@@ -1617,6 +1619,7 @@ export type Database = {
           needs_apostille?: boolean | null
           needs_translation?: boolean | null
           service_type?: Database["public"]["Enums"]["service_interest"]
+          validity_days?: number | null
         }
         Relationships: []
       }
@@ -2072,6 +2075,7 @@ export type Database = {
         | "NACIONALIDADE_RESIDENCIA"
         | "NACIONALIDADE_CASAMENTO"
         | "OUTRO"
+        | "RESIDENCIA_PARENTE_COMUNITARIO"
       service_sector:
         | "ESTUDANTE"
         | "TRABALHO"
@@ -2308,6 +2312,7 @@ export const Constants = {
         "NACIONALIDADE_RESIDENCIA",
         "NACIONALIDADE_CASAMENTO",
         "OUTRO",
+        "RESIDENCIA_PARENTE_COMUNITARIO",
       ],
       service_sector: [
         "ESTUDANTE",
