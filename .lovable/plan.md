@@ -1,13 +1,12 @@
 
-
-# Plano: Cadastro de Documentos para EX19 e Data Prevista de Protocolo
+# Plano: Sistema de Acompanhamento de Entrega de Documentos
 
 ## Contexto
 
-O usuário precisa:
-1. Cadastrar a lista completa de documentos para o serviço **Residência por Parente de Comunitário (EX19)**
-2. Incluir informações de validade dos documentos (90 dias, 180 dias, 20 dias, etc.)
-3. Permitir que o técnico defina a **data prevista de apresentação/protocolo** no sistema
+O sistema precisa monitorar ativamente a entrega de documentos pelos clientes e:
+1. Enviar lembretes automáticos baseados na prioridade do caso
+2. Alertar a equipe interna sobre casos com documentos pendentes
+3. Confirmar quando a documentação está completa
 
 ---
 
@@ -15,91 +14,236 @@ O usuário precisa:
 
 | Item | Status |
 |------|--------|
-| Tipo de serviço `RESIDENCIA_PARENTE_COMUNITARIO` no enum | ❌ Não existe |
-| Campo `validity_days` em `service_document_types` | ❌ Não existe |
-| Campo `expected_protocol_date` em `service_cases` | ✅ Já existe |
-| UI para definir data de protocolo prevista | ⚠️ Só mostra, não edita |
-| Documentos cadastrados para EX19 | ❌ Não existem |
+| Campo `is_urgent` em `service_cases` | Existe |
+| Campo `case_priority` em `service_cases` | Existe (texto livre) |
+| Campo `documents_completed_at` | Existe |
+| Campo `expected_protocol_date` | Existe |
+| Tabela de rastreamento de lembretes de documentos | Não existe |
+| Lógica de lembrete no Edge Function | Básica (urgent vs normal) |
+| SLA configs para documentos | `sla_document_reminder_normal_days: 5`, `sla_document_reminder_urgent_hours: 24` |
+
+---
+
+## Fluxo Proposto
+
+```text
++-------------------+     +--------------------+     +----------------------+
+| Documentos        |     | Sistema verifica   |     | Baseado na           |
+| liberados pelo    | --> | diariamente        | --> | prioridade:          |
+| técnico           |     | pendências         |     |                      |
++-------------------+     +--------------------+     +----------------------+
+                                                              |
+              +-----------------------------------------------+
+              |                   |                           |
+              v                   v                           v
+     +----------------+  +------------------+  +------------------------+
+     | URGENTE        |  | NORMAL           |  | EM ESPERA              |
+     | Lembrete 24h   |  | Lembrete 5 dias  |  | Lembrete 1 mês antes   |
+     | para cliente   |  | para cliente     |  | da data prevista       |
+     +----------------+  +------------------+  | + lembretes a cada 5d  |
+              |                   |            +------------------------+
+              |                   |                           |
+              v                   v                           |
+     +----------------+  +------------------+                 |
+     | Técnico:       |  | Técnico: D+2     |                 |
+     | Alerta interno |  | Coord: D+5       |                 |
+     | a cada 24h     |  | ADM: D+2 (48h)   |                 |
+     +----------------+  +------------------+                 |
+              |                   |                           |
+              +---------+---------+---------------------------+
+                        |
+                        v
+     +-----------------------------------------------+
+     | Documentação Completa                          |
+     | - Notificar técnico                           |
+     | - Enviar WhatsApp de confirmação ao cliente   |
+     | - Marcar documents_completed_at               |
+     +-----------------------------------------------+
+```
+
+---
+
+## Regras de Negócio Detalhadas
+
+### Lembretes para o Cliente (WhatsApp)
+
+| Prioridade | Condição | Frequência | Início |
+|------------|----------|------------|--------|
+| URGENTE | `is_urgent = true` | A cada 24h | Imediato |
+| NORMAL | `is_urgent = false` AND `case_priority != 'EM_ESPERA'` | A cada 5 dias | D+5 |
+| EM_ESPERA | `case_priority = 'EM_ESPERA'` | 1 mês antes + a cada 5 dias | Baseado em `expected_protocol_date` |
+
+### Alertas para Equipe Interna (Notificações)
+
+| Prioridade | Destinatário | Condição |
+|------------|--------------|----------|
+| URGENTE | Técnico atribuído | Alerta contínuo a cada 24h |
+| NORMAL | Técnico atribuído | D+2 (48h) após liberação |
+| NORMAL | Coordenador/Manager | D+5 após liberação |
+| NORMAL | Admin | D+2 (48h) após liberação |
 
 ---
 
 ## Implementação
 
-### 1. Adicionar Novo Tipo de Serviço ao Enum
+### 1. Criar Tabela de Rastreamento de Lembretes
 
 ```sql
-ALTER TYPE service_interest ADD VALUE 'RESIDENCIA_PARENTE_COMUNITARIO';
+CREATE TABLE document_reminders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  service_case_id UUID NOT NULL REFERENCES service_cases(id) ON DELETE CASCADE,
+  reminder_type TEXT NOT NULL,
+  sent_at TIMESTAMPTZ DEFAULT now(),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(service_case_id, reminder_type)
+);
+
+-- Índice para consultas
+CREATE INDEX idx_document_reminders_case ON document_reminders(service_case_id);
 ```
 
-Isso permitirá criar casos e documentos para este tipo de serviço.
+Tipos de lembrete:
+- `CLIENT_D5`, `CLIENT_D10`, `CLIENT_D15`, etc.
+- `TECH_D2`, `COORD_D5`, `ADMIN_D2`
+- `URGENT_CLIENT_1`, `URGENT_CLIENT_2`, etc.
+- `WAITING_30D`, `WAITING_25D`, etc.
 
 ---
 
-### 2. Adicionar Campo de Validade dos Documentos
+### 2. Adicionar Novos Configs de SLA
 
 ```sql
-ALTER TABLE service_document_types 
-ADD COLUMN validity_days INTEGER;
-```
-
-Exemplos de validade:
-- 90 dias: Certidões de estado civil, empadronamento, convivência
-- 180 dias: Certidão de casamento
-- 20 dias: Certificado bancário
-
----
-
-### 3. Cadastrar Documentos para EX19
-
-Lista completa de documentos conforme especificação:
-
-| Documento | Obrigatório | Apostila | Tradução | Validade |
-|-----------|-------------|----------|----------|----------|
-| Autorização para Tramitar | Sim | Não | Não | - |
-| Formulário EX19 | Sim | Não | Não | - |
-| Passaporte Completo do Interessado | Sim | Não | Não | - |
-| Documento de Identidade/NIE do Parceiro | Sim | Não | Não | - |
-| Passaporte ou ID do Parceiro | Sim | Não | Não | - |
-| Certificado de Empadronamento de Ambos | Sim | Não | Não | 90 dias |
-| Certificado de Convivência | Não | Não | Não | 90 dias |
-| Certidão de Registro de União Estável | Não | Sim | Sim | 90 dias |
-| Certidão de Casamento | Não | Sim | Sim | 180 dias |
-| Contrato de Trabalho do Parceiro | Sim | Não | Não | - |
-| Holerites do Parceiro (3 meses) | Sim | Não | Não | - |
-| Informe de Vida Laboral do Parceiro | Sim | Não | Não | 90 dias |
-| Certificado Bancário | Sim | Não | Não | 20 dias |
-| Seguro de Saúde | Não | Não | Não | - |
-| Certidão de Estado Civil do Interessado | Sim | Sim | Sim | 90 dias |
-| Certidão de Estado Civil do Parceiro | Sim | Sim | Sim | 90 dias |
-
----
-
-### 4. UI para Definir Data Prevista de Protocolo
-
-Adicionar campo editável no `CaseDetail.tsx`:
-- Mostrar na seção de informações do caso
-- Usar DatePicker do Shadcn
-- Atualizar via `updateCase` quando alterada
-- Exibir alerta quando próximo do prazo (14 dias)
-
-```text
-┌──────────────────────────────────────────┐
-│ Data Prevista de Protocolo              │
-│ ┌────────────────────────┬─────────────┐│
-│ │ 📅  15/02/2026         │  [Alterar]  ││
-│ └────────────────────────┴─────────────┘│
-│ ⚠️ Faltam 18 dias para o prazo          │
-└──────────────────────────────────────────┘
+INSERT INTO system_config (key, value, description) VALUES
+  ('sla_document_tech_alert_hours', '48', 'Horas para alertar técnico sobre documentos pendentes (casos normais)'),
+  ('sla_document_coord_alert_days', '5', 'Dias para alertar coordenador sobre documentos pendentes'),
+  ('sla_document_admin_alert_hours', '48', 'Horas para alertar admin sobre documentos pendentes'),
+  ('sla_document_waiting_first_reminder_days', '30', 'Dias antes da data prevista para primeiro lembrete (casos em espera)'),
+  ('template_document_confirmation', 'Olá {nome}! ✅ Recebemos toda a sua documentação, que agora está em fase de revisão pelo técnico responsável. O processo de análise pode levar até 5 dias úteis.', 'Mensagem de confirmação de documentação completa');
 ```
 
 ---
 
-### 5. Atualizar UI de Tipos de Documento
+### 3. Refatorar Lógica de Document Reminders no Edge Function
 
-Adicionar exibição e edição do campo `validity_days`:
-- No formulário de criação/edição
-- Na tabela de listagem
-- Com formato amigável (ex: "90 dias", "6 meses")
+Substituir a seção 7 (DOCUMENT_REMINDERS) por uma lógica muito mais robusta:
+
+```typescript
+// =====================================================
+// 7. DOCUMENT REMINDERS (ENHANCED)
+// =====================================================
+if (shouldRun('DOCUMENT_REMINDERS')) {
+  console.log('Running DOCUMENT_REMINDERS automation (enhanced)...')
+  
+  // Fetch cases with pending documents
+  const { data: casesWithPendingDocs } = await supabase
+    .from('service_cases')
+    .select(`
+      id, is_urgent, case_priority, expected_protocol_date,
+      assigned_to_user_id, client_user_id, first_contact_at,
+      technical_status, documents_completed_at,
+      opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
+    `)
+    .eq('technical_status', 'AGUARDANDO_DOCUMENTOS')
+    .is('documents_completed_at', null);
+  
+  for (const sc of casesWithPendingDocs || []) {
+    // Check pending documents count
+    const { count: pendingCount } = await supabase
+      .from('service_documents')
+      .select('*', { count: 'exact', head: true })
+      .eq('service_case_id', sc.id)
+      .in('status', ['NAO_ENVIADO', 'REJEITADO']);
+    
+    if (!pendingCount || pendingCount === 0) {
+      // All docs submitted - trigger completion flow
+      await handleDocumentsComplete(sc);
+      continue;
+    }
+    
+    const contact = sc.opportunities?.leads?.contacts;
+    const leadId = sc.opportunities?.leads?.id;
+    const firstContactAt = new Date(sc.first_contact_at || sc.created_at);
+    const daysSinceRelease = Math.floor((now.getTime() - firstContactAt.getTime()) / (24 * 60 * 60 * 1000));
+    
+    // Determine priority type
+    const priorityType = sc.is_urgent ? 'URGENT' 
+      : sc.case_priority === 'EM_ESPERA' ? 'WAITING' 
+      : 'NORMAL';
+    
+    // Handle each priority type...
+  }
+}
+```
+
+---
+
+### 4. Lógica de Documentação Completa
+
+Quando todos os documentos forem enviados (status != NAO_ENVIADO e != REJEITADO):
+
+```typescript
+async function handleDocumentsComplete(serviceCase) {
+  // 1. Update case
+  await supabase.from('service_cases').update({
+    documents_completed_at: new Date().toISOString(),
+    technical_status: 'DOCUMENTOS_EM_CONFERENCIA'
+  }).eq('id', serviceCase.id);
+  
+  // 2. Notify technician
+  if (serviceCase.assigned_to_user_id) {
+    await supabase.from('notifications').insert({
+      user_id: serviceCase.assigned_to_user_id,
+      type: 'documents_complete',
+      title: 'Documentação Completa',
+      message: `O cliente enviou todos os documentos. Caso pronto para conferência.`
+    });
+  }
+  
+  // 3. Send confirmation to client
+  const contact = serviceCase.opportunities?.leads?.contacts;
+  if (contact?.phone) {
+    const msg = templateMap.template_document_confirmation.replace('{nome}', contact.full_name);
+    await sendWhatsApp(contact.phone, msg, serviceCase.opportunities?.leads?.id);
+  }
+  
+  results.documentsCompleted++;
+}
+```
+
+---
+
+### 5. Atualização do `useCases` Hook
+
+Adicionar função para verificar e atualizar status de documentação:
+
+```typescript
+const checkDocumentsComplete = useMutation({
+  mutationFn: async (caseId: string) => {
+    // Check if all required docs are submitted
+    const { data: docs } = await supabase
+      .from('service_documents')
+      .select('id, status, service_document_types!inner(is_required)')
+      .eq('service_case_id', caseId);
+    
+    const allRequiredSubmitted = docs?.every(d => 
+      !d.service_document_types?.is_required || 
+      ['ENVIADO', 'EM_CONFERENCIA', 'APROVADO'].includes(d.status)
+    );
+    
+    if (allRequiredSubmitted) {
+      // Update case status
+      await supabase.from('service_cases')
+        .update({ 
+          documents_completed_at: new Date().toISOString(),
+          technical_status: 'DOCUMENTOS_EM_CONFERENCIA'
+        })
+        .eq('id', caseId);
+    }
+    
+    return allRequiredSubmitted;
+  }
+});
+```
 
 ---
 
@@ -107,184 +251,132 @@ Adicionar exibição e edição do campo `validity_days`:
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/cases/CaseDetail.tsx` | Adicionar DatePicker para `expected_protocol_date` |
-| `src/pages/settings/DocumentTypesManagement.tsx` | Adicionar campo `validity_days` no formulário |
-| `src/types/database.ts` | Adicionar `RESIDENCIA_PARENTE_COMUNITARIO` aos labels |
-| Migração SQL | Alterar enum, adicionar coluna, inserir documentos |
+| `supabase/functions/sla-automations/index.ts` | Refatorar seção DOCUMENT_REMINDERS completamente |
+| `src/hooks/useCases.ts` | Adicionar `checkDocumentsComplete` |
+| `src/hooks/useDocuments.ts` | Verificar completude ao aprovar documento |
+
+---
+
+## Arquivos a Criar
+
+| Arquivo | Descrição |
+|---------|-----------|
+| Migração SQL | Tabela `document_reminders` + configs SLA |
+
+---
+
+## Templates de Mensagem
+
+### Lembrete Normal (existente)
+> Olá {nome}! 📄 Ainda estamos aguardando alguns documentos para dar continuidade ao seu processo. Por favor, envie-os pelo portal.
+
+### Lembrete Urgente (existente)
+> Olá {nome}! ⚠️ URGENTE: Precisamos dos documentos pendentes para seu processo. Por favor, envie hoje pelo portal.
+
+### Lembrete Em Espera (novo)
+> Olá {nome}! 📅 Faltam {dias} dias para a data prevista do seu protocolo. Por favor, comece a reunir os documentos pendentes e envie pelo portal.
+
+### Confirmação de Documentação Completa (novo)
+> Olá {nome}! ✅ Recebemos toda a sua documentação, que agora está em fase de revisão pelo técnico responsável. O processo de análise pode levar até 5 dias úteis.
+
+---
+
+## Tabela de Lembretes por Prioridade
+
+### Caso URGENTE
+
+| Dia | Para | Ação |
+|-----|------|------|
+| D+1 | Cliente | WhatsApp lembrete urgente |
+| D+1 | Técnico | Notificação interna |
+| D+2 | Cliente | WhatsApp lembrete urgente |
+| D+2 | Técnico | Notificação interna |
+| ... | ... | Continua diariamente |
+
+### Caso NORMAL
+
+| Dia | Para | Ação |
+|-----|------|------|
+| D+2 | Técnico | Notificação: "Documentos pendentes há 48h" |
+| D+2 | Admin | Notificação: "Caso com documentos pendentes" |
+| D+5 | Cliente | WhatsApp lembrete normal |
+| D+5 | Coordenador | Notificação: "Documentos pendentes há 5 dias" |
+| D+10 | Cliente | WhatsApp lembrete normal |
+| D+15 | Cliente | WhatsApp lembrete normal |
+| ... | ... | Continua a cada 5 dias |
+
+### Caso EM_ESPERA
+
+| Quando | Para | Ação |
+|--------|------|------|
+| D-30 | Cliente | WhatsApp: "Faltam 30 dias para protocolo" |
+| D-25 | Cliente | WhatsApp lembrete |
+| D-20 | Cliente | WhatsApp lembrete |
+| ... | ... | Continua a cada 5 dias |
+| D-5 | Cliente | WhatsApp urgente |
 
 ---
 
 ## Migração SQL Completa
 
 ```sql
--- 1. Adicionar novo tipo de serviço
-ALTER TYPE service_interest ADD VALUE 'RESIDENCIA_PARENTE_COMUNITARIO';
+-- 1. Create document reminders tracking table
+CREATE TABLE IF NOT EXISTS document_reminders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  service_case_id UUID NOT NULL REFERENCES service_cases(id) ON DELETE CASCADE,
+  reminder_type TEXT NOT NULL,
+  recipient_type TEXT NOT NULL DEFAULT 'CLIENT',
+  sent_at TIMESTAMPTZ DEFAULT now(),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
 
--- 2. Adicionar campo de validade
-ALTER TABLE service_document_types 
-ADD COLUMN validity_days INTEGER;
+-- Index for efficient queries
+CREATE INDEX IF NOT EXISTS idx_document_reminders_case_type 
+  ON document_reminders(service_case_id, reminder_type);
 
--- 3. Inserir documentos para EX19
-INSERT INTO service_document_types 
-  (service_type, name, description, is_required, needs_apostille, needs_translation, validity_days)
-VALUES
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Autorização para Tramitar', 
-   'Documento gerado pelo técnico, deve ser assinado pelo interessado', 
-   true, false, false, NULL),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Formulário EX19', 
-   'Preenchido e gerado pelo técnico, assinado por ambos os interessados', 
-   true, false, false, NULL),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Passaporte Completo do Interessado', 
-   'Cópia digital (scanner) de todas as páginas do passaporte válido', 
-   true, false, false, NULL),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Documento de Identidade/NIE do Parceiro', 
-   'Cópia (frente e verso) do NIE, DNI ou passaporte do cônjuge/parceiro comunitário', 
-   true, false, false, NULL),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Passaporte ou ID do Parceiro', 
-   'Cópia completa de todas as páginas do passaporte ou documento de identidade do parceiro', 
-   true, false, false, NULL),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certificado de Empadronamento de Ambos', 
-   'Documento de registro na prefeitura comprovando residência de ambos no mesmo endereço', 
-   true, false, false, 90),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certificado de Convivência', 
-   'Comprovante oficial de convivência comum, se aplicável', 
-   false, false, false, 90),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certidão de Registro de União Estável', 
-   'Registro de pareja de hecho atualizado (para parceiros não casados oficialmente)', 
-   false, true, true, 90),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certidão de Casamento', 
-   'Devidamente apostilada/legalizada e traduzida por tradutor juramentado (se casamento fora da Espanha)', 
-   false, true, true, 180),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Contrato de Trabalho do Parceiro', 
-   'Contrato de trabalho do parceiro comunitário, assinado por ambas as partes', 
-   true, false, false, NULL),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Holerites do Parceiro (3 meses)', 
-   'Comprovantes de pagamento/salário do parceiro nos últimos 3 meses', 
-   true, false, false, NULL),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Informe de Vida Laboral do Parceiro', 
-   'Documento oficial de histórico laboral na Espanha', 
-   true, false, false, 90),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certificado Bancário', 
-   'Comprovante emitido pelo banco mostrando os recursos financeiros/disponibilidade', 
-   true, false, false, 20),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Seguro de Saúde', 
-   'Cópia da apólice completa de seguro de saúde válido (público ou privado)', 
-   false, false, false, NULL),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certidão de Estado Civil do Interessado', 
-   'Documento do país de origem comprovando estado civil, com apostila e tradução juramentada', 
-   true, true, true, 90),
-  
-  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certidão de Estado Civil do Parceiro', 
-   'Documento equivalente para o parceiro comunitário, apostilado e traduzido', 
-   true, true, true, 90);
+-- 2. Add new SLA configurations
+INSERT INTO system_config (key, value, description) VALUES
+  ('sla_document_tech_alert_hours', '48', 'Horas para alertar técnico sobre documentos pendentes'),
+  ('sla_document_coord_alert_days', '5', 'Dias para alertar coordenador sobre documentos pendentes'),
+  ('sla_document_admin_alert_hours', '48', 'Horas para alertar admin sobre documentos pendentes'),
+  ('sla_document_waiting_first_reminder_days', '30', 'Dias antes da data prevista para primeiro lembrete'),
+  ('template_document_waiting', 'Olá {nome}! 📅 Faltam {dias} dias para a data prevista do seu protocolo. Por favor, comece a reunir os documentos pendentes e envie pelo portal.', 'Lembrete para casos em espera'),
+  ('template_document_confirmation', 'Olá {nome}! ✅ Recebemos toda a sua documentação, que agora está em fase de revisão pelo técnico responsável. O processo de análise pode levar até 5 dias úteis.', 'Confirmação de documentação completa')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+-- 3. Enable RLS
+ALTER TABLE document_reminders ENABLE ROW LEVEL SECURITY;
+
+-- 4. RLS Policy - Staff can read/write
+CREATE POLICY "Staff can manage document reminders" 
+  ON document_reminders 
+  FOR ALL 
+  TO authenticated 
+  USING (
+    EXISTS (
+      SELECT 1 FROM user_roles 
+      WHERE user_id = auth.uid() 
+      AND role IN ('ADMIN', 'MANAGER', 'TECNICO', 'ATENCAO_CLIENTE')
+    )
+  );
 ```
-
----
-
-## Fluxo Atualizado
-
-```text
-+-------------------+     +--------------------+     +----------------------+
-| Técnico libera    |     | Documentos EX19    |     | Cliente vê no        |
-| documentos no     | --> | são criados com    | --> | portal com:          |
-| primeiro contato  |     | validades          |     | • Prazo de validade  |
-+-------------------+     +--------------------+     | • Apostila/Tradução  |
-                                                     +----------------------+
-                                                              |
-                                                              v
-                          +--------------------+     +----------------------+
-                          | Alertas de         | <-- | Sistema monitora     |
-                          | documentos         |     | validade e           |
-                          | vencendo           |     | data de protocolo    |
-                          +--------------------+     +----------------------+
-```
-
----
-
-## UI para Validade de Documentos
-
-No portal do cliente, mostrar indicadores visuais:
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ 📄 Certificado de Empadronamento             ⬜ Não Enviado │
-│    📅 Validade: 90 dias após emissão                        │
-│    ⚠️ Deve ser emitido há menos de 90 dias na data do       │
-│       protocolo                                              │
-├─────────────────────────────────────────────────────────────┤
-│ 📄 Certidão de Casamento                     ⬜ Não Enviado │
-│    📅 Validade: 180 dias após emissão                       │
-│    🔴 Requer Apostila de Haia                               │
-│    🔵 Requer Tradução Juramentada                           │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Validação de Validade
-
-Quando o técnico for submeter ao jurídico, o sistema deve verificar:
-1. Todos os documentos com validade definida
-2. Calcular se estarão válidos na data prevista de protocolo
-3. Alertar se algum documento estará vencido
 
 ---
 
 ## Resultado Esperado
 
-1. Novo tipo de serviço `RESIDENCIA_PARENTE_COMUNITARIO` disponível
-2. 16 documentos cadastrados com todas as informações necessárias
-3. Validades dos documentos visíveis para cliente e técnico
-4. Data prevista de protocolo editável pelo técnico
-5. Sistema preparado para alertas de documentos vencendo
+1. Clientes recebem lembretes automáticos baseados na prioridade do caso
+2. Equipe interna é alertada sobre casos com documentos pendentes
+3. Sistema detecta automaticamente quando documentação está completa
+4. Mensagem de confirmação é enviada ao cliente
+5. Rastreamento evita lembretes duplicados
+6. SLAs configuráveis via `system_config`
 
 ---
 
-## Detalhes Técnicos
+## Próximos Passos Após Implementação
 
-### Atualização do DatePicker no CaseDetail
-
-```typescript
-// Estado para controlar o popover
-const [protocolDateOpen, setProtocolDateOpen] = useState(false);
-
-// Handler para atualizar data
-const handleProtocolDateChange = async (date: Date | undefined) => {
-  if (date) {
-    await updateCase.mutateAsync({
-      id: serviceCase.id,
-      expected_protocol_date: format(date, 'yyyy-MM-dd'),
-    });
-  }
-  setProtocolDateOpen(false);
-};
-```
-
-### Cálculo de dias até o protocolo
-
-```typescript
-const daysUntilProtocol = serviceCase.expected_protocol_date
-  ? differenceInDays(new Date(serviceCase.expected_protocol_date), new Date())
-  : null;
-
-const protocolUrgency = daysUntilProtocol !== null
-  ? daysUntilProtocol <= 7 ? 'danger'
-  : daysUntilProtocol <= 14 ? 'warning'
-  : 'normal'
-  : null;
-```
+1. Adicionar indicador visual no CasesList mostrando "documentos pendentes há X dias"
+2. Dashboard com métricas de documentação pendente por prioridade
+3. Relatório de tempo médio de entrega de documentos
 
