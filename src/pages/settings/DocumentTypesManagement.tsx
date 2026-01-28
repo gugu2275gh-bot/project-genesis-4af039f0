@@ -62,6 +62,7 @@ interface DocumentTypeForm {
   is_required: boolean;
   needs_apostille: boolean;
   needs_translation: boolean;
+  validity_days: string;
 }
 
 const initialForm: DocumentTypeForm = {
@@ -71,6 +72,7 @@ const initialForm: DocumentTypeForm = {
   is_required: true,
   needs_apostille: false,
   needs_translation: false,
+  validity_days: "",
 };
 
 export default function DocumentTypesManagement() {
@@ -98,7 +100,11 @@ export default function DocumentTypesManagement() {
 
   const createMutation = useMutation({
     mutationFn: async (data: DocumentTypeForm) => {
-      const { error } = await supabase.from("service_document_types").insert(data);
+      const insertData = {
+        ...data,
+        validity_days: data.validity_days ? parseInt(data.validity_days, 10) : null,
+      };
+      const { error } = await supabase.from("service_document_types").insert(insertData);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -113,9 +119,13 @@ export default function DocumentTypesManagement() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: DocumentTypeForm }) => {
+      const updateData = {
+        ...data,
+        validity_days: data.validity_days ? parseInt(data.validity_days, 10) : null,
+      };
       const { error } = await supabase
         .from("service_document_types")
-        .update(data)
+        .update(updateData)
         .eq("id", id);
       if (error) throw error;
     },
@@ -161,6 +171,7 @@ export default function DocumentTypesManagement() {
       is_required: doc.is_required ?? true,
       needs_apostille: doc.needs_apostille ?? false,
       needs_translation: doc.needs_translation ?? false,
+      validity_days: doc.validity_days?.toString() || "",
     });
     setIsDialogOpen(true);
   };
@@ -204,6 +215,7 @@ export default function DocumentTypesManagement() {
     "RENOVACAO_RESIDENCIA",
     "NACIONALIDADE_RESIDENCIA",
     "NACIONALIDADE_CASAMENTO",
+    "RESIDENCIA_PARENTE_COMUNITARIO",
     "OUTRO",
   ];
 
@@ -326,6 +338,20 @@ export default function DocumentTypesManagement() {
                       }
                     />
                   </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="validity_days">Validade (dias)</Label>
+                    <Input
+                      id="validity_days"
+                      type="number"
+                      value={form.validity_days}
+                      onChange={(e) => setForm({ ...form, validity_days: e.target.value })}
+                      placeholder="Ex: 90"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Número de dias de validade do documento (deixe vazio se não aplicável)
+                    </p>
+                  </div>
                 </div>
               </div>
               <DialogFooter>
@@ -398,6 +424,7 @@ export default function DocumentTypesManagement() {
                         <TableHead className="text-center">Obrigatório</TableHead>
                         <TableHead className="text-center">Apostila</TableHead>
                         <TableHead className="text-center">Tradução</TableHead>
+                        <TableHead className="text-center">Validade</TableHead>
                         {isAdmin && <TableHead className="text-right">Ações</TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -425,6 +452,13 @@ export default function DocumentTypesManagement() {
                           <TableCell className="text-center">
                             {doc.needs_translation ? (
                               <Globe className="h-4 w-4 text-blue-500 mx-auto" />
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {doc.validity_days ? (
+                              <Badge variant="outline">{doc.validity_days} dias</Badge>
                             ) : (
                               <span className="text-muted-foreground">-</span>
                             )}
