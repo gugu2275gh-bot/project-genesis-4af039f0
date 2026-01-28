@@ -130,14 +130,43 @@ export function useDocuments(serviceCaseId?: string) {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       toast({ title: 'Documento aprovado' });
+      
+      // Check if all required documents are complete
+      if (serviceCaseId) {
+        await checkAndUpdateDocumentsComplete(serviceCaseId);
+      }
     },
     onError: (error) => {
       toast({ title: 'Erro ao aprovar documento', description: error.message, variant: 'destructive' });
     },
   });
+
+  // Helper to check if all required documents are submitted
+  const checkAndUpdateDocumentsComplete = async (caseId: string) => {
+    const { data: docs } = await supabase
+      .from('service_documents')
+      .select('id, status, service_document_types!inner(is_required)')
+      .eq('service_case_id', caseId);
+    
+    const allRequiredSubmitted = docs?.every(d => 
+      !(d.service_document_types as any)?.is_required || 
+      ['ENVIADO', 'EM_CONFERENCIA', 'APROVADO'].includes(d.status)
+    );
+    
+    if (allRequiredSubmitted) {
+      // Update case status
+      await supabase.from('service_cases').update({ 
+        documents_completed_at: new Date().toISOString(),
+        technical_status: 'DOCUMENTOS_EM_CONFERENCIA'
+      }).eq('id', caseId);
+      
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      toast({ title: 'Documentação completa! Caso movido para conferência.' });
+    }
+  };
 
   const rejectDocument = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {

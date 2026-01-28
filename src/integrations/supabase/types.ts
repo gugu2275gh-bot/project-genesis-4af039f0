@@ -616,6 +616,41 @@ export type Database = {
           },
         ]
       }
+      document_reminders: {
+        Row: {
+          created_at: string | null
+          id: string
+          recipient_type: string
+          reminder_type: string
+          sent_at: string | null
+          service_case_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          recipient_type?: string
+          reminder_type: string
+          sent_at?: string | null
+          service_case_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          recipient_type?: string
+          reminder_type?: string
+          sent_at?: string | null
+          service_case_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_reminders_service_case_id_fkey"
+            columns: ["service_case_id"]
+            isOneToOne: false
+            referencedRelation: "service_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documents: {
         Row: {
           content: string | null

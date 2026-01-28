@@ -187,6 +187,48 @@ export function useCases() {
     },
   });
 
+  const checkDocumentsComplete = useMutation({
+    mutationFn: async (caseId: string) => {
+      // Check if all required docs are submitted
+      const { data: docs, error } = await supabase
+        .from('service_documents')
+        .select('id, status, service_document_types!inner(is_required)')
+        .eq('service_case_id', caseId);
+      
+      if (error) throw error;
+      
+      const allRequiredSubmitted = docs?.every(d => 
+        !(d.service_document_types as any)?.is_required || 
+        ['ENVIADO', 'EM_CONFERENCIA', 'APROVADO'].includes(d.status)
+      );
+      
+      if (allRequiredSubmitted) {
+        // Update case status
+        const { error: updateError } = await supabase
+          .from('service_cases')
+          .update({ 
+            documents_completed_at: new Date().toISOString(),
+            technical_status: 'DOCUMENTOS_EM_CONFERENCIA'
+          })
+          .eq('id', caseId);
+        
+        if (updateError) throw updateError;
+      }
+      
+      return allRequiredSubmitted;
+    },
+    onSuccess: (allComplete) => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      if (allComplete) {
+        toast({ title: 'Documentação completa! Caso em conferência.' });
+      }
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao verificar documentação', description: error.message, variant: 'destructive' });
+    },
+  });
+
   return {
     cases: casesQuery.data ?? [],
     myCases: myCasesQuery.data ?? [],
@@ -197,6 +239,7 @@ export function useCases() {
     updateStatus,
     submitCase,
     closeCase,
+    checkDocumentsComplete,
   };
 }
 

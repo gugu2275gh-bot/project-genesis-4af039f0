@@ -553,67 +553,293 @@ serve(async (req) => {
     }
 
     // =====================================================
-    // 7. DOCUMENT REMINDERS
+    // 7. DOCUMENT REMINDERS (ENHANCED)
     // =====================================================
     if (shouldRun('DOCUMENT_REMINDERS')) {
-      console.log('Running DOCUMENT_REMINDERS automation...')
-      const { data: pendingDocuments } = await supabase
-        .from('service_documents')
-        .select(`
-          id, status, updated_at,
-          service_cases!inner (
-            id, is_urgent, client_user_id,
-            opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
-          )
-        `)
-        .eq('status', 'PENDENTE')
+      console.log('Running DOCUMENT_REMINDERS automation (enhanced)...')
+      
+      // Add new SLA configs to map
+      slaMap.sla_document_tech_alert_hours = slaMap.sla_document_tech_alert_hours || 48
+      slaMap.sla_document_coord_alert_days = slaMap.sla_document_coord_alert_days || 5
+      slaMap.sla_document_admin_alert_hours = slaMap.sla_document_admin_alert_hours || 48
+      slaMap.sla_document_waiting_first_reminder_days = slaMap.sla_document_waiting_first_reminder_days || 30
 
-      for (const doc of pendingDocuments || []) {
-        const caseData = doc.service_cases as unknown as { 
-          id: string; 
-          is_urgent: boolean; 
-          client_user_id: string | null;
-          opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } }
+      // Add new templates
+      templateMap.template_document_waiting = templateMap.template_document_waiting || 
+        'Olá {nome}! 📅 Faltam {dias} dias para a data prevista do seu protocolo. Por favor, comece a reunir os documentos pendentes e envie pelo portal.'
+      templateMap.template_document_confirmation = templateMap.template_document_confirmation ||
+        'Olá {nome}! ✅ Recebemos toda a sua documentação, que agora está em fase de revisão pelo técnico responsável. O processo de análise pode levar até 5 dias úteis.'
+      
+      // Helper to check if document reminder was already sent
+      async function docReminderSent(caseId: string, reminderType: string): Promise<boolean> {
+        const { data } = await supabase
+          .from('document_reminders')
+          .select('id')
+          .eq('service_case_id', caseId)
+          .eq('reminder_type', reminderType)
+          .maybeSingle()
+        return !!data
+      }
+      
+      // Helper to record document reminder
+      async function recordDocReminder(caseId: string, reminderType: string, recipientType: string = 'CLIENT') {
+        await supabase.from('document_reminders').insert({
+          service_case_id: caseId,
+          reminder_type: reminderType,
+          recipient_type: recipientType
+        })
+      }
+      
+      // Helper to handle documents complete
+      async function handleDocumentsComplete(serviceCase: any) {
+        console.log(`All documents submitted for case ${serviceCase.id}, triggering completion flow...`)
+        
+        // 1. Update case status
+        await supabase.from('service_cases').update({
+          documents_completed_at: new Date().toISOString(),
+          technical_status: 'DOCUMENTOS_EM_CONFERENCIA'
+        }).eq('id', serviceCase.id)
+        
+        // 2. Notify technician
+        if (serviceCase.assigned_to_user_id) {
+          await supabase.from('notifications').insert({
+            user_id: serviceCase.assigned_to_user_id,
+            type: 'documents_complete',
+            title: 'Documentação Completa',
+            message: `O cliente enviou todos os documentos. Caso pronto para conferência.`
+          })
         }
-        const contact = caseData?.opportunities?.leads?.contacts
-        const leadId = caseData?.opportunities?.leads?.id
-        if (!contact?.phone) continue
-
-        const updatedAt = new Date(doc.updated_at || doc.id)
-        const hoursSinceUpdate = (now.getTime() - updatedAt.getTime()) / (60 * 60 * 1000)
-        const daysSinceUpdate = hoursSinceUpdate / 24
-
-        const shouldRemind = caseData.is_urgent 
-          ? hoursSinceUpdate >= slaMap.sla_document_reminder_urgent_hours
-          : daysSinceUpdate >= slaMap.sla_document_reminder_normal_days
-
-        if (shouldRemind) {
-          const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-          const { data: recentNotif } = await supabase
-            .from('notifications')
-            .select('id')
-            .eq('type', 'document_reminder')
-            .gt('created_at', last24h.toISOString())
-            .limit(1)
-            .maybeSingle()
-
-          if (!recentNotif) {
-            const template = caseData.is_urgent ? templateMap.template_document_reminder_urgent : templateMap.template_document_reminder_normal
-            const msg = template.replace('{nome}', contact.full_name)
-            await sendWhatsApp(contact.phone, msg, leadId)
-
-            if (caseData.client_user_id) {
+        
+        // 3. Send confirmation to client via WhatsApp
+        const contact = serviceCase.opportunities?.leads?.contacts
+        const leadId = serviceCase.opportunities?.leads?.id
+        if (contact?.phone) {
+          const msg = templateMap.template_document_confirmation.replace('{nome}', contact.full_name)
+          await sendWhatsApp(contact.phone, msg, leadId)
+        }
+        
+        // 4. Notify client in portal
+        if (serviceCase.client_user_id) {
+          await supabase.from('notifications').insert({
+            user_id: serviceCase.client_user_id,
+            type: 'documents_complete',
+            title: 'Documentação Recebida',
+            message: 'Recebemos toda a sua documentação. Ela será analisada em até 5 dias úteis.'
+          })
+        }
+        
+        results.documentReminders++
+        console.log(`Documents completion flow completed for case ${serviceCase.id}`)
+      }
+      
+      // Fetch cases waiting for documents (not completed)
+      const { data: casesWithPendingDocs } = await supabase
+        .from('service_cases')
+        .select(`
+          id, is_urgent, case_priority, expected_protocol_date,
+          assigned_to_user_id, client_user_id, first_contact_at, created_at,
+          technical_status, documents_completed_at,
+          opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
+        `)
+        .eq('technical_status', 'AGUARDANDO_DOCUMENTOS')
+        .is('documents_completed_at', null)
+      
+      console.log(`Found ${casesWithPendingDocs?.length || 0} cases awaiting documents`)
+      
+      for (const sc of casesWithPendingDocs || []) {
+        // Check pending documents count
+        const { count: pendingCount } = await supabase
+          .from('service_documents')
+          .select('*', { count: 'exact', head: true })
+          .eq('service_case_id', sc.id)
+          .in('status', ['NAO_ENVIADO', 'REJEITADO'])
+        
+        // If no pending docs, all were submitted - trigger completion
+        if (!pendingCount || pendingCount === 0) {
+          await handleDocumentsComplete(sc)
+          continue
+        }
+        
+        const contact = (sc.opportunities as any)?.leads?.contacts
+        const leadId = (sc.opportunities as any)?.leads?.id
+        const clientName = contact?.full_name || 'Cliente'
+        const caseShortId = sc.id.slice(0, 8)
+        const firstContactAt = new Date(sc.first_contact_at || sc.created_at)
+        const hoursSinceRelease = (now.getTime() - firstContactAt.getTime()) / (60 * 60 * 1000)
+        const daysSinceRelease = hoursSinceRelease / 24
+        
+        // Determine priority type
+        const priorityType = sc.is_urgent ? 'URGENT' 
+          : sc.case_priority === 'EM_ESPERA' ? 'WAITING' 
+          : 'NORMAL'
+        
+        console.log(`Case ${caseShortId}: priority=${priorityType}, pendingDocs=${pendingCount}, daysSinceRelease=${daysSinceRelease.toFixed(1)}`)
+        
+        // ========================
+        // URGENT CASES - 24h cycle
+        // ========================
+        if (priorityType === 'URGENT') {
+          const urgentCycleNumber = Math.floor(hoursSinceRelease / slaMap.sla_document_reminder_urgent_hours)
+          const reminderKey = `URGENT_CLIENT_${urgentCycleNumber}`
+          
+          if (urgentCycleNumber >= 1 && !(await docReminderSent(sc.id, reminderKey))) {
+            // Client WhatsApp reminder
+            if (contact?.phone) {
+              const msg = templateMap.template_document_reminder_urgent.replace('{nome}', clientName)
+              await sendWhatsApp(contact.phone, msg, leadId)
+            }
+            await recordDocReminder(sc.id, reminderKey, 'CLIENT')
+            
+            // Technician notification (every 24h)
+            if (sc.assigned_to_user_id) {
               await supabase.from('notifications').insert({
-                user_id: caseData.client_user_id,
-                title: 'Lembrete de Documentos',
-                message: 'Você possui documentos pendentes para envio.',
-                type: 'document_reminder',
+                user_id: sc.assigned_to_user_id,
+                type: 'document_pending_urgent',
+                title: '⚠️ Documentos Pendentes (Urgente)',
+                message: `Caso ${caseShortId} de ${clientName} aguarda documentos há ${Math.floor(hoursSinceRelease)}h (URGENTE).`
               })
             }
             results.documentReminders++
           }
         }
+        
+        // ========================
+        // NORMAL CASES - D+2, D+5 internal, D+5, D+10, D+15... client
+        // ========================
+        if (priorityType === 'NORMAL') {
+          // D+2 (48h) - Alert technician + admin
+          if (hoursSinceRelease >= slaMap.sla_document_tech_alert_hours) {
+            if (!(await docReminderSent(sc.id, 'TECH_D2'))) {
+              if (sc.assigned_to_user_id) {
+                await supabase.from('notifications').insert({
+                  user_id: sc.assigned_to_user_id,
+                  type: 'document_pending_tech',
+                  title: 'Documentos Pendentes há 48h',
+                  message: `Caso ${caseShortId} de ${clientName} aguarda documentos há mais de 48h.`
+                })
+              }
+              await recordDocReminder(sc.id, 'TECH_D2', 'TECH')
+              results.documentReminders++
+            }
+            
+            // Admin alert also at 48h
+            if (!(await docReminderSent(sc.id, 'ADMIN_D2'))) {
+              const { data: admins } = await supabase.from('user_roles').select('user_id').eq('role', 'ADMIN')
+              for (const admin of admins || []) {
+                await supabase.from('notifications').insert({
+                  user_id: admin.user_id,
+                  type: 'document_pending_admin',
+                  title: 'Caso com Documentos Pendentes',
+                  message: `Caso ${caseShortId} de ${clientName} aguarda documentos há mais de 48h.`
+                })
+              }
+              await recordDocReminder(sc.id, 'ADMIN_D2', 'ADMIN')
+            }
+          }
+          
+          // D+5 - Alert coordinator + first client reminder
+          if (daysSinceRelease >= slaMap.sla_document_coord_alert_days) {
+            // Coordinator alert
+            if (!(await docReminderSent(sc.id, 'COORD_D5'))) {
+              const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
+              for (const mgr of managers || []) {
+                await supabase.from('notifications').insert({
+                  user_id: mgr.user_id,
+                  type: 'document_pending_coord',
+                  title: 'Documentos Pendentes há 5 dias',
+                  message: `Caso ${caseShortId} de ${clientName} aguarda documentos há mais de 5 dias.`
+                })
+              }
+              await recordDocReminder(sc.id, 'COORD_D5', 'COORD')
+            }
+            
+            // Client reminders every 5 days: D5, D10, D15, D20...
+            const reminderCycle = Math.floor(daysSinceRelease / slaMap.sla_document_reminder_normal_days)
+            const clientReminderKey = `CLIENT_D${reminderCycle * slaMap.sla_document_reminder_normal_days}`
+            
+            if (!(await docReminderSent(sc.id, clientReminderKey))) {
+              if (contact?.phone) {
+                const msg = templateMap.template_document_reminder_normal.replace('{nome}', clientName)
+                await sendWhatsApp(contact.phone, msg, leadId)
+              }
+              
+              if (sc.client_user_id) {
+                await supabase.from('notifications').insert({
+                  user_id: sc.client_user_id,
+                  type: 'document_reminder',
+                  title: 'Lembrete de Documentos',
+                  message: 'Você possui documentos pendentes para envio.'
+                })
+              }
+              await recordDocReminder(sc.id, clientReminderKey, 'CLIENT')
+              results.documentReminders++
+            }
+          }
+        }
+        
+        // ========================
+        // WAITING CASES (EM_ESPERA) - Based on expected_protocol_date
+        // ========================
+        if (priorityType === 'WAITING' && sc.expected_protocol_date) {
+          const expectedDate = new Date(sc.expected_protocol_date)
+          const daysUntilProtocol = Math.floor((expectedDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+          
+          console.log(`Case ${caseShortId} (WAITING): ${daysUntilProtocol} days until protocol`)
+          
+          // Start reminders 30 days before, then every 5 days
+          if (daysUntilProtocol <= slaMap.sla_document_waiting_first_reminder_days && daysUntilProtocol > 0) {
+            // Calculate which reminder cycle we're in
+            const daysFromFirst = slaMap.sla_document_waiting_first_reminder_days - daysUntilProtocol
+            const reminderCycle = Math.floor(daysFromFirst / 5)
+            const waitingReminderKey = `WAITING_D${daysUntilProtocol}`
+            
+            // Only send if this specific day reminder wasn't sent
+            if (!(await docReminderSent(sc.id, waitingReminderKey))) {
+              if (contact?.phone) {
+                const msg = templateMap.template_document_waiting
+                  .replace('{nome}', clientName)
+                  .replace('{dias}', String(daysUntilProtocol))
+                await sendWhatsApp(contact.phone, msg, leadId)
+              }
+              
+              if (sc.client_user_id) {
+                await supabase.from('notifications').insert({
+                  user_id: sc.client_user_id,
+                  type: 'document_reminder_waiting',
+                  title: 'Lembrete: Data de Protocolo se Aproxima',
+                  message: `Faltam ${daysUntilProtocol} dias para a data prevista do seu protocolo.`
+                })
+              }
+              await recordDocReminder(sc.id, waitingReminderKey, 'CLIENT')
+              results.documentReminders++
+            }
+          }
+          
+          // If within 5 days of protocol date, switch to urgent mode
+          if (daysUntilProtocol <= 5 && daysUntilProtocol > 0) {
+            const urgentWaitingKey = `WAITING_URGENT_D${daysUntilProtocol}`
+            if (!(await docReminderSent(sc.id, urgentWaitingKey))) {
+              if (contact?.phone) {
+                const msg = templateMap.template_document_reminder_urgent.replace('{nome}', clientName)
+                await sendWhatsApp(contact.phone, msg, leadId)
+              }
+              
+              // Alert technician about approaching deadline
+              if (sc.assigned_to_user_id) {
+                await supabase.from('notifications').insert({
+                  user_id: sc.assigned_to_user_id,
+                  type: 'document_deadline_urgent',
+                  title: '🚨 Prazo de Protocolo Próximo',
+                  message: `Caso ${caseShortId} tem protocolo em ${daysUntilProtocol} dias e ainda há documentos pendentes!`
+                })
+              }
+              await recordDocReminder(sc.id, urgentWaitingKey, 'CLIENT')
+              results.documentReminders++
+            }
+          }
+        }
       }
+      console.log(`Document reminders automation completed. Sent: ${results.documentReminders}`)
     }
 
     // =====================================================
