@@ -42,7 +42,7 @@ export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: serviceCase, isLoading } = useCase(id);
-  const { updateStatus, assignCase, submitCase, closeCase, updateCase } = useCases();
+  const { updateStatus, assignCase, submitCase, closeCase, updateCase, approveDocumentation, sendToLegal } = useCases();
   const { documents, approveDocument, rejectDocument } = useDocuments(id);
   const { requirements, createRequirement, updateRequirement } = useRequirements(id);
   const { data: profiles } = useProfiles();
@@ -131,7 +131,11 @@ export default function CaseDetail() {
   };
 
   const handleSendToJuridico = async () => {
-    await updateStatus.mutateAsync({ id: serviceCase.id, status: 'ENVIADO_JURIDICO' });
+    await sendToLegal.mutateAsync(serviceCase.id);
+  };
+
+  const handleApproveDocumentation = async (partial: boolean = false) => {
+    await approveDocumentation.mutateAsync({ id: serviceCase.id, partial });
   };
 
   const handleMarkProtocolado = async () => {
@@ -188,10 +192,10 @@ export default function CaseDetail() {
     }
 
     if (status === 'DOCUMENTOS_EM_CONFERENCIA') {
-      actions.push({ label: 'Aprovar Documentação', action: () => handleStatusChange('PRONTO_PARA_SUBMISSAO'), icon: Check });
-      actions.push({ label: 'Aprovar Parcial', action: () => handleStatusChange('DOCUMENTACAO_PARCIAL_APROVADA'), icon: Check });
+      actions.push({ label: 'Aprovar Documentação', action: () => handleApproveDocumentation(false), icon: Check });
+      actions.push({ label: 'Aprovar Parcial', action: () => handleApproveDocumentation(true), icon: Check });
     }
-    if (status === 'DOCUMENTACAO_PARCIAL_APROVADA' || status === 'PRONTO_PARA_SUBMISSAO') {
+    if (status === 'DOCUMENTACAO_PARCIAL_APROVADA' || status === 'EM_ORGANIZACAO' || status === 'PRONTO_PARA_SUBMISSAO') {
       actions.push({ label: 'Enviar ao Jurídico', action: handleSendToJuridico, icon: Scale });
     }
     if (status === 'ENVIADO_JURIDICO') {

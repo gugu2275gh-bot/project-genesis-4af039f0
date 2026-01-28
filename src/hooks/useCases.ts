@@ -212,6 +212,58 @@ export function useCases() {
     },
   });
 
+  const approveDocumentation = useMutation({
+    mutationFn: async ({ id, partial = false }: { id: string; partial?: boolean }) => {
+      const status = partial ? 'DOCUMENTACAO_PARCIAL_APROVADA' : 'EM_ORGANIZACAO';
+      const { data, error } = await supabase
+        .from('service_cases')
+        .update({
+          technical_status: status,
+          technical_approved_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      toast({ title: variables.partial ? 'Documentação parcial aprovada' : 'Documentação aprovada com sucesso' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao aprovar documentação', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const sendToLegal = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from('service_cases')
+        .update({
+          technical_status: 'ENVIADO_JURIDICO',
+          sent_to_legal_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['legal-cases'] });
+      toast({ title: 'Caso enviado ao Jurídico' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao enviar ao jurídico', description: error.message, variant: 'destructive' });
+    },
+  });
+
   return {
     cases: casesQuery.data ?? [],
     myCases: myCasesQuery.data ?? [],
@@ -222,6 +274,8 @@ export function useCases() {
     updateStatus,
     submitCase,
     closeCase,
+    approveDocumentation,
+    sendToLegal,
   };
 }
 

@@ -942,75 +942,195 @@ serve(async (req) => {
     }
 
     // =====================================================
-    // 10. TECHNICAL REVIEW ALERTS (Cases pending > 48h)
+    // HELPER FUNCTIONS FOR TECHNICAL/LEGAL SECTIONS
     // =====================================================
-    if (shouldRun('TECHNICAL')) {
-      console.log('Running TECHNICAL automation...')
-      const techReviewDeadline = new Date(now.getTime() - 48 * 60 * 60 * 1000)
-      const { data: pendingTechReview } = await supabase
-        .from('service_cases')
-        .select('id, updated_at, assigned_to_user_id')
-        .eq('technical_status', 'PENDENTE')
-        .lt('updated_at', techReviewDeadline.toISOString())
-
-      for (const sc of pendingTechReview || []) {
-        const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-        const { data: recentNotif } = await supabase
-          .from('notifications')
-          .select('id')
-          .eq('type', 'technical_review_overdue')
-          .gt('created_at', last24h.toISOString())
-          .limit(1)
-          .maybeSingle()
-
-        if (!recentNotif) {
-          const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
-          for (const mgr of managers || []) {
-            await supabase.from('notifications').insert({
-              user_id: mgr.user_id,
-              title: 'Revisão Técnica Atrasada',
-              message: `Caso ${sc.id.slice(0, 8)} aguarda revisão técnica há mais de 48h.`,
-              type: 'technical_review_overdue',
-            })
-          }
-          results.technicalReviewAlerts++
-        }
-      }
+    // Helper to check if document reminder was already sent (global scope)
+    async function techDocReminderSent(caseId: string, reminderType: string): Promise<boolean> {
+      const { data } = await supabase
+        .from('document_reminders')
+        .select('id')
+        .eq('service_case_id', caseId)
+        .eq('reminder_type', reminderType)
+        .maybeSingle()
+      return !!data
+    }
+    
+    // Helper to record document reminder (global scope)
+    async function recordTechDocReminder(caseId: string, reminderType: string, recipientType: string = 'CLIENT') {
+      await supabase.from('document_reminders').insert({
+        service_case_id: caseId,
+        reminder_type: reminderType,
+        recipient_type: recipientType
+      })
     }
 
     // =====================================================
-    // 11. SEND TO LEGAL ALERTS (Approved but not sent > 24h)
+    // 10. TECHNICAL REVIEW ALERTS (Enhanced - D+2 tech, D+5 coord, D+7 admin)
     // =====================================================
-    if (shouldRun('LEGAL')) {
-      console.log('Running LEGAL automation...')
-      const legalDeadline = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-      const { data: approvedNotSent } = await supabase
+    if (shouldRun('TECHNICAL')) {
+      console.log('Running TECHNICAL automation (enhanced)...')
+      
+      // Cases in DOCUMENTOS_EM_CONFERENCIA with documents_completed_at
+      const { data: casesInReview } = await supabase
         .from('service_cases')
-        .select('id, technical_approved_at, assigned_to_user_id')
-        .eq('technical_status', 'APROVADO')
-        .is('sent_to_legal_at', null)
-        .lt('technical_approved_at', legalDeadline.toISOString())
-
-      for (const sc of approvedNotSent || []) {
-        const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-        const { data: recentNotif } = await supabase
-          .from('notifications')
-          .select('id')
-          .eq('type', 'send_to_legal_overdue')
-          .gt('created_at', last24h.toISOString())
-          .limit(1)
-          .maybeSingle()
-
-        if (!recentNotif && sc.assigned_to_user_id) {
-          await supabase.from('notifications').insert({
-            user_id: sc.assigned_to_user_id,
-            title: 'Enviar ao Jurídico',
-            message: `Caso ${sc.id.slice(0, 8)} aprovado há mais de 24h e ainda não enviado ao jurídico.`,
-            type: 'send_to_legal_overdue',
-          })
-          results.sendToLegalAlerts++
+        .select(`
+          id, documents_completed_at, assigned_to_user_id, client_user_id,
+          opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
+        `)
+        .eq('technical_status', 'DOCUMENTOS_EM_CONFERENCIA')
+        .not('documents_completed_at', 'is', null)
+      
+      for (const sc of casesInReview || []) {
+        const completedAt = new Date(sc.documents_completed_at as string)
+        const hoursSinceComplete = (now.getTime() - completedAt.getTime()) / (60 * 60 * 1000)
+        const daysSinceComplete = hoursSinceComplete / 24
+        const caseShortId = sc.id.slice(0, 8)
+        const caseData = sc as unknown as { 
+          opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } };
+          assigned_to_user_id: string | null;
+        }
+        const clientName = caseData.opportunities?.leads?.contacts?.full_name || 'Cliente'
+        
+        // D+2 (48h) - Daily alerts to technician
+        if (hoursSinceComplete >= (slaMap.sla_tech_review_tech_alert_hours || 48)) {
+          const dayKey = Math.floor(daysSinceComplete)
+          const reminderKey = `TECH_REVIEW_D${dayKey}`
+          
+          if (!(await techDocReminderSent(sc.id, reminderKey))) {
+            if (caseData.assigned_to_user_id) {
+              await supabase.from('notifications').insert({
+                user_id: caseData.assigned_to_user_id,
+                type: 'tech_review_pending',
+                title: 'Revisão Técnica Pendente',
+                message: `Caso ${caseShortId} de ${clientName} aguarda revisão há ${Math.floor(daysSinceComplete)} dias.`
+              })
+            }
+            await recordTechDocReminder(sc.id, reminderKey, 'TECH')
+            results.technicalReviewAlerts++
+          }
+        }
+        
+        // D+5 - Coordinator alert
+        if (daysSinceComplete >= (slaMap.sla_tech_review_coord_alert_days || 5)) {
+          if (!(await techDocReminderSent(sc.id, 'TECH_REVIEW_COORD'))) {
+            const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
+            for (const mgr of managers || []) {
+              await supabase.from('notifications').insert({
+                user_id: mgr.user_id,
+                type: 'tech_review_overdue_coord',
+                title: 'Revisão Técnica Atrasada',
+                message: `Caso ${caseShortId} de ${clientName} aguarda revisão há ${Math.floor(daysSinceComplete)} dias.`
+              })
+            }
+            await recordTechDocReminder(sc.id, 'TECH_REVIEW_COORD', 'COORD')
+            results.technicalReviewAlerts++
+          }
+        }
+        
+        // D+7 - Admin alert
+        if (daysSinceComplete >= (slaMap.sla_tech_review_admin_alert_days || 7)) {
+          if (!(await techDocReminderSent(sc.id, 'TECH_REVIEW_ADMIN'))) {
+            const { data: admins } = await supabase.from('user_roles').select('user_id').eq('role', 'ADMIN')
+            for (const admin of admins || []) {
+              await supabase.from('notifications').insert({
+                user_id: admin.user_id,
+                type: 'tech_review_critical',
+                title: '🚨 Revisão Técnica Crítica',
+                message: `Caso ${caseShortId} de ${clientName} aguarda revisão há ${Math.floor(daysSinceComplete)} dias!`
+              })
+            }
+            await recordTechDocReminder(sc.id, 'TECH_REVIEW_ADMIN', 'ADMIN')
+            results.technicalReviewAlerts++
+          }
         }
       }
+      console.log(`Technical review alerts automation completed. Sent: ${results.technicalReviewAlerts}`)
+    }
+
+    // =====================================================
+    // 11. SEND TO LEGAL ALERTS (Enhanced - D+3 tech, D+5 coord, D+8 admin)
+    // =====================================================
+    if (shouldRun('LEGAL')) {
+      console.log('Running LEGAL automation (enhanced)...')
+      
+      // Cases approved but not sent to legal
+      const { data: approvedCases } = await supabase
+        .from('service_cases')
+        .select(`
+          id, technical_approved_at, assigned_to_user_id,
+          opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
+        `)
+        .in('technical_status', ['EM_ORGANIZACAO', 'PRONTO_PARA_SUBMISSAO', 'DOCUMENTACAO_PARCIAL_APROVADA'])
+        .not('technical_approved_at', 'is', null)
+        .is('sent_to_legal_at', null)
+      
+      for (const sc of approvedCases || []) {
+        const approvedAt = new Date(sc.technical_approved_at as string)
+        const daysSinceApproval = (now.getTime() - approvedAt.getTime()) / (24 * 60 * 60 * 1000)
+        const caseShortId = sc.id.slice(0, 8)
+        const caseData = sc as unknown as { 
+          opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } };
+          assigned_to_user_id: string | null;
+        }
+        const clientName = caseData.opportunities?.leads?.contacts?.full_name || 'Cliente'
+        
+        // D+3 - Daily alerts to technician (2 days before deadline)
+        if (daysSinceApproval >= (slaMap.sla_send_legal_tech_alert_days || 3)) {
+          const dayKey = Math.floor(daysSinceApproval)
+          const reminderKey = `SEND_LEGAL_D${dayKey}`
+          
+          if (!(await techDocReminderSent(sc.id, reminderKey))) {
+            if (caseData.assigned_to_user_id) {
+              const daysRemaining = Math.max(0, 5 - Math.floor(daysSinceApproval))
+              await supabase.from('notifications').insert({
+                user_id: caseData.assigned_to_user_id,
+                type: 'send_to_legal_reminder',
+                title: 'Enviar ao Jurídico',
+                message: daysRemaining > 0 
+                  ? `Caso ${caseShortId} de ${clientName}: faltam ${daysRemaining} dias para enviar ao Jurídico.`
+                  : `Caso ${caseShortId} de ${clientName}: prazo de envio ao Jurídico estourado!`
+              })
+            }
+            await recordTechDocReminder(sc.id, reminderKey, 'TECH')
+            results.sendToLegalAlerts++
+          }
+        }
+        
+        // D+5 - Coordinator alert
+        if (daysSinceApproval >= (slaMap.sla_send_legal_coord_alert_days || 5)) {
+          if (!(await techDocReminderSent(sc.id, 'SEND_LEGAL_COORD'))) {
+            const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
+            for (const mgr of managers || []) {
+              await supabase.from('notifications').insert({
+                user_id: mgr.user_id,
+                type: 'send_to_legal_overdue_coord',
+                title: 'Prazo de Envio ao Jurídico Estourado',
+                message: `Caso ${caseShortId} de ${clientName} aprovado há ${Math.floor(daysSinceApproval)} dias e não foi enviado ao Jurídico.`
+              })
+            }
+            await recordTechDocReminder(sc.id, 'SEND_LEGAL_COORD', 'COORD')
+            results.sendToLegalAlerts++
+          }
+        }
+        
+        // D+8 - Admin alert
+        if (daysSinceApproval >= (slaMap.sla_send_legal_admin_alert_days || 8)) {
+          if (!(await techDocReminderSent(sc.id, 'SEND_LEGAL_ADMIN'))) {
+            const { data: admins } = await supabase.from('user_roles').select('user_id').eq('role', 'ADMIN')
+            for (const admin of admins || []) {
+              await supabase.from('notifications').insert({
+                user_id: admin.user_id,
+                type: 'send_to_legal_critical',
+                title: '🚨 Atraso Crítico - Envio ao Jurídico',
+                message: `Caso ${caseShortId} de ${clientName} com ${Math.floor(daysSinceApproval)} dias desde aprovação técnica!`
+              })
+            }
+            await recordTechDocReminder(sc.id, 'SEND_LEGAL_ADMIN', 'ADMIN')
+            results.sendToLegalAlerts++
+          }
+        }
+      }
+      console.log(`Send to legal alerts automation completed. Sent: ${results.sendToLegalAlerts}`)
     }
 
     // =====================================================
