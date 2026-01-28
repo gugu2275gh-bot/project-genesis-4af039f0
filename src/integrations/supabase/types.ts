@@ -47,6 +47,41 @@ export type Database = {
         }
         Relationships: []
       }
+      case_notes: {
+        Row: {
+          created_at: string | null
+          created_by_user_id: string | null
+          id: string
+          note: string
+          note_type: string | null
+          service_case_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by_user_id?: string | null
+          id?: string
+          note: string
+          note_type?: string | null
+          service_case_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by_user_id?: string | null
+          id?: string
+          note?: string
+          note_type?: string | null
+          service_case_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_notes_service_case_id_fkey"
+            columns: ["service_case_id"]
+            isOneToOne: false
+            referencedRelation: "service_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cash_flow: {
         Row: {
           amount: number

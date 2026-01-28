@@ -24,17 +24,41 @@ export function useCaseNotes(serviceCaseId?: string) {
     queryKey: ['case-notes', serviceCaseId],
     queryFn: async () => {
       if (!serviceCaseId) return [];
+      
+      // Use raw query since types might not be regenerated yet
       const { data, error } = await supabase
-        .from('case_notes')
-        .select(`
-          *,
-          created_by_profile:profiles!case_notes_created_by_user_id_fkey(full_name)
-        `)
+        .from('case_notes' as any)
+        .select('*')
         .eq('service_case_id', serviceCaseId)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data as CaseNote[];
+      
+      // Fetch profile names separately
+      const notes = (data || []) as any[];
+      const userIds = [...new Set(notes.map(n => n.created_by_user_id).filter(Boolean))];
+      
+      let profileMap: Record<string, string> = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', userIds);
+        
+        if (profiles) {
+          profileMap = profiles.reduce((acc, p) => {
+            acc[p.id] = p.full_name;
+            return acc;
+          }, {} as Record<string, string>);
+        }
+      }
+      
+      return notes.map(note => ({
+        ...note,
+        created_by_profile: note.created_by_user_id 
+          ? { full_name: profileMap[note.created_by_user_id] || 'Usuário' }
+          : null,
+      })) as CaseNote[];
     },
     enabled: !!serviceCaseId,
   });
@@ -42,8 +66,9 @@ export function useCaseNotes(serviceCaseId?: string) {
   const createNote = useMutation({
     mutationFn: async ({ note, note_type }: { note: string; note_type?: string }) => {
       if (!serviceCaseId) throw new Error('Case ID is required');
+      
       const { data, error } = await supabase
-        .from('case_notes')
+        .from('case_notes' as any)
         .insert({
           service_case_id: serviceCaseId,
           note,
@@ -68,7 +93,7 @@ export function useCaseNotes(serviceCaseId?: string) {
   const deleteNote = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from('case_notes')
+        .from('case_notes' as any)
         .delete()
         .eq('id', id);
       
