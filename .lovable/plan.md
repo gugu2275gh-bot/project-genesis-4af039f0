@@ -1,142 +1,203 @@
 
 
-# Plano: Separar Automações por Tipo com Parâmetro de Filtro
+# Plano de Desenvolvimento: Departamento Técnico
 
-## Problema Identificado
+## Visão Geral
 
-Atualmente, quando a Edge Function `sla-automations` é chamada, ela executa TODAS as automações:
-- Welcome messages
-- Reengagements
-- Onboarding reminders
-- Contract reminders
-- Payment reminders
-- Daily collections
-- etc.
-
-Isso causa envio de mensagens indesejadas quando você só quer executar uma automação específica.
+O Departamento Técnico é responsável pelo acompanhamento do cliente desde a contratação até a conclusão do processo. Com base na análise do código atual, já existe uma estrutura sólida mas que precisa ser expandida para atender ao fluxo operacional completo.
 
 ---
 
-## Solução
+## O Que Já Existe
 
-Adicionar um parâmetro `automation_type` no body da requisição que permite escolher qual(is) automação(ões) executar.
+| Funcionalidade | Status | Arquivo |
+|----------------|--------|---------|
+| Lista de casos (`/cases`) | ✅ Implementado | `CasesList.tsx` |
+| Detalhe do caso | ✅ Implementado | `CaseDetail.tsx` |
+| Status técnicos (22 status) | ✅ Implementado | `types/database.ts` |
+| Gestão de documentos | ✅ Implementado | `useDocuments.ts` |
+| Exigências do órgão | ✅ Implementado | `useRequirements.ts` |
+| Seção de Huellas | ✅ Implementado | `HuellasSection.tsx` |
+| Seção de retirada TIE | ✅ Implementado | `TiePickupSection.tsx` |
+| Portal do cliente | ✅ Implementado | `PortalDashboard.tsx` |
+| Onboarding do cliente | ✅ Implementado | `PortalOnboarding.tsx` |
+| Upload de documentos pelo cliente | ✅ Implementado | `PortalDocuments.tsx` |
+| Timeline do caso (cliente) | ✅ Implementado | `CaseTimeline.tsx` |
+| Geração de EX17 e Taxa 790 | ✅ Implementado | `generate-ex17.ts`, `generate-taxa790.ts` |
+| Automações SLA | ✅ Parcialmente | `sla-automations/index.ts` |
 
 ---
 
-## Arquivo a Modificar
+## O Que Precisa Ser Desenvolvido
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/sla-automations/index.ts` | Adicionar lógica de filtro por tipo de automação |
+### Fase 1: Dashboard do Técnico
 
----
+**Objetivo**: Criar uma visão consolidada para o técnico ver seus casos, pendências e métricas.
 
-## Detalhes da Implementação
-
-### 1. Receber parâmetro do body
-
-```typescript
-const body = await req.json().catch(() => ({}))
-const automationType = body.automation_type || 'ALL' // ALL executa tudo (comportamento atual)
-```
-
-### 2. Tipos de automação disponíveis
-
-| Tipo | Descrição |
+| Item | Descrição |
 |------|-----------|
-| `ALL` | Executa todas (comportamento atual) |
-| `WELCOME` | Welcome messages |
-| `REENGAGEMENT` | Reengagement de leads |
-| `ARCHIVE` | Auto-arquivamento |
-| `CONTRACT_REMINDERS` | Lembretes de contrato |
-| `PAYMENT_PRE` | Lembretes pré-vencimento |
-| `PAYMENT_POST` | Lembretes pós-vencimento |
-| `DAILY_COLLECTION` | Cobrança diária (nova) |
-| `ONBOARDING` | Lembretes de onboarding |
-| `TIE_PICKUP` | Lembretes de retirada TIE |
-| `TECHNICAL` | Alertas técnicos |
-| `LEGAL` | Alertas jurídicos |
-| `REQUIREMENTS` | Alertas de exigências |
-| `PROTOCOL` | Lembretes de protocolo |
+| Dashboard técnico | Página com visão geral dos casos atribuídos |
+| Cards de métricas | Casos por status, documentos pendentes, huellas agendados |
+| Lista de prioridades | Casos urgentes, próximos vencimentos de SLA |
+| Filtros rápidos | Por status, por tipo de serviço, por setor |
 
-### 3. Lógica condicional
-
-```typescript
-// Só executa se automationType for 'ALL' ou o tipo específico
-const shouldRun = (type: string) => automationType === 'ALL' || automationType === type
-
-// Exemplo de uso:
-if (shouldRun('WELCOME')) {
-  // ... lógica de welcome messages
-}
-
-if (shouldRun('DAILY_COLLECTION')) {
-  // ... lógica de cobrança diária
-}
-```
+**Arquivos a criar**:
+- `src/pages/technical/TechnicalDashboard.tsx`
 
 ---
 
-## Como Executar Apenas Cobrança Diária
+### Fase 2: Melhorias no Detalhe do Caso
 
-Após a implementação, você pode chamar a função assim:
+**Objetivo**: Aprimorar a experiência de gestão do caso.
 
-```bash
-curl -X POST https://xdnliyuogkoxckbesktx.supabase.co/functions/v1/sla-automations \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ANON_KEY" \
-  -d '{"automation_type": "DAILY_COLLECTION"}'
-```
+| Item | Descrição |
+|------|-----------|
+| Histórico de status | Timeline visual das mudanças de status do caso |
+| Notas do técnico | Campo para anotações internas sobre o caso |
+| Checklist de documentos | Visão consolidada com progresso |
+| Comunicação com cliente | Botão para enviar WhatsApp diretamente |
+| Alertas visuais | Destaque para casos com SLA próximo do vencimento |
 
-Ou via ferramenta de teste:
-```json
-{
-  "automation_type": "DAILY_COLLECTION"
-}
-```
+**Arquivos a modificar**:
+- `src/pages/cases/CaseDetail.tsx` (adicionar abas/seções)
+- `src/hooks/useCases.ts` (adicionar notas e histórico)
 
 ---
 
-## Cron Jobs Separados
+### Fase 3: Fluxo de Contato Inicial
 
-Cada automação pode ter seu próprio schedule:
+**Objetivo**: Automatizar e padronizar o primeiro contato pós-contratação.
 
-| Automação | Schedule | Horário |
-|-----------|----------|---------|
-| DAILY_COLLECTION | `0 9 * * *` | 09:00 diariamente |
-| WELCOME | `*/15 * * * *` | A cada 15 min |
-| ONBOARDING | `0 10 * * *` | 10:00 diariamente |
-| PAYMENT_PRE | `0 8 * * *` | 08:00 diariamente |
-| PAYMENT_POST | `0 11 * * *` | 11:00 diariamente |
+| Item | Descrição |
+|------|-----------|
+| Botão "Iniciar Contato" | Dispara mensagem padrão via WhatsApp |
+| Atualização automática de status | Muda de CONTATO_INICIAL para AGUARDANDO_DOCUMENTOS |
+| Notificação para o cliente | Orienta sobre o portal e onboarding |
+| Registro de interação | Salva em `mensagens_cliente` |
 
----
-
-## Fluxo Visual
-
-```text
-+------------------+     +----------------------+
-| POST request     | --> | sla-automations      |
-| automation_type: |     | Edge Function        |
-| DAILY_COLLECTION |     +----------------------+
-+------------------+              |
-                                  v
-                    +---------------------------+
-                    | if shouldRun('DAILY_..') |
-                    |   -> executa cobrança    |
-                    +---------------------------+
-                                  |
-                                  v
-                    +---------------------------+
-                    | Pula todas as outras     |
-                    | automações               |
-                    +---------------------------+
-```
+**Arquivos a modificar**:
+- `src/pages/cases/CaseDetail.tsx` (adicionar botão de contato inicial)
+- Edge Function para envio de mensagem padrão
 
 ---
 
-## Resultado
+### Fase 4: Gestão de Documentos Melhorada
 
-1. Você poderá executar APENAS a cobrança diária agora sem acionar outras automações
-2. Cada automação pode ser agendada em horários diferentes
-3. Mantém compatibilidade - chamar sem parâmetro executa tudo (para cron existentes)
+**Objetivo**: Facilitar a conferência e aprovação de documentos.
+
+| Item | Descrição |
+|------|-----------|
+| Visão em grid/cards | Visualização mais amigável dos documentos |
+| Preview de documento | Modal para visualizar PDF/imagem |
+| Aprovação em lote | Aprovar múltiplos documentos de uma vez |
+| Notificação ao cliente | Aviso automático quando documento é rejeitado |
+| Indicador de progresso | Barra mostrando % de documentos aprovados |
+
+**Arquivos a modificar**:
+- `src/pages/cases/CaseDetail.tsx` (aba de documentos)
+- `src/hooks/useDocuments.ts` (adicionar aprovação em lote)
+
+---
+
+### Fase 5: Fluxo Técnico → Jurídico
+
+**Objetivo**: Formalizar a passagem do caso para o departamento jurídico.
+
+| Item | Descrição |
+|------|-----------|
+| Validação antes de enviar | Verificar se todos os documentos obrigatórios estão aprovados |
+| Registro de data de envio | Campo `sent_to_legal_at` |
+| Notificação ao jurídico | Alerta para o departamento jurídico |
+| Status ENVIADO_JURIDICO | Já existe, garantir uso correto |
+
+**Arquivos a modificar**:
+- `src/pages/cases/CaseDetail.tsx` (validação antes de enviar)
+- `src/hooks/useCases.ts` (atualizar campos de data)
+
+---
+
+### Fase 6: Acompanhamento Pós-Protocolo
+
+**Objetivo**: Gerenciar o período entre submissão e decisão.
+
+| Item | Descrição |
+|------|-----------|
+| Lembretes automáticos | Verificar status a cada X dias |
+| Registro de consultas | Anotar quando verificou o status |
+| Gestão de exigências | Já existe, melhorar UX |
+| Alerta de decisão | Quando mudar para APROVADO/NEGADO |
+
+**Arquivos a modificar**:
+- `src/pages/cases/CaseDetail.tsx` (seção de acompanhamento)
+- Edge Function para lembretes automáticos (já existe)
+
+---
+
+### Fase 7: Huellas e TIE (Melhorias)
+
+**Objetivo**: Aprimorar o fluxo de agendamento e retirada.
+
+| Item | Descrição |
+|------|-----------|
+| Envio de lembrete pré-cita | WhatsApp 24h antes da tomada de huellas |
+| Checklist de documentos para levar | Já existe parcialmente |
+| Upload do resguardo | Após huellas, anexar comprovante |
+| Notificação de TIE disponível | Avisar cliente quando TIE chegar |
+| Confirmação de retirada | Registro com data |
+
+**Arquivos a modificar**:
+- `src/components/cases/HuellasSection.tsx` (upload de resguardo)
+- `src/components/cases/TiePickupSection.tsx` (notificação ao cliente)
+- Edge Function para lembretes de huellas
+
+---
+
+### Fase 8: Comunicação Automatizada
+
+**Objetivo**: Centralizar e automatizar comunicações.
+
+| Item | Descrição |
+|------|-----------|
+| Templates de mensagem | Mensagens padrão para cada situação |
+| Envio com 1 clique | Botões de ação rápida no caso |
+| Histórico de mensagens | Visualizar todas as mensagens enviadas |
+| Mensagem de protocolo | Já implementado automaticamente |
+
+**Arquivos a criar**:
+- `src/components/cases/MessageTemplates.tsx`
+- `src/components/cases/MessageHistory.tsx`
+
+---
+
+## Priorização Sugerida
+
+| Fase | Prioridade | Esforço | Impacto |
+|------|------------|---------|---------|
+| Fase 2: Melhorias Detalhe | 🔴 Alta | Médio | Alto |
+| Fase 3: Contato Inicial | 🔴 Alta | Baixo | Alto |
+| Fase 4: Gestão Documentos | 🟡 Média | Médio | Alto |
+| Fase 1: Dashboard Técnico | 🟡 Média | Médio | Médio |
+| Fase 5: Fluxo Jurídico | 🟡 Média | Baixo | Médio |
+| Fase 7: Huellas/TIE | 🟢 Baixa | Baixo | Médio |
+| Fase 6: Pós-Protocolo | 🟢 Baixa | Baixo | Baixo |
+| Fase 8: Comunicação | 🟢 Baixa | Médio | Médio |
+
+---
+
+## Próximos Passos
+
+1. **Aprovar o escopo** - Confirmar quais fases implementar primeiro
+2. **Definir templates de mensagem** - Textos padrão para cada situação
+3. **Iniciar desenvolvimento** - Começar pelas fases de alta prioridade
+
+---
+
+## Perguntas para Definir Escopo
+
+Antes de iniciar, seria útil saber:
+
+1. Qual fase você gostaria de começar? (sugiro Fase 2 + Fase 3)
+2. Existem templates de mensagem específicos para contato inicial?
+3. O técnico precisa ver todos os casos ou apenas os atribuídos a ele?
+4. Deseja algum relatório específico para o departamento técnico?
 
