@@ -715,6 +715,38 @@ export type Database = {
           },
         ]
       }
+      initial_contact_reminders: {
+        Row: {
+          created_at: string | null
+          id: string
+          reminder_type: string
+          sent_at: string | null
+          service_case_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          reminder_type: string
+          sent_at?: string | null
+          service_case_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          reminder_type?: string
+          sent_at?: string | null
+          service_case_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "initial_contact_reminders_service_case_id_fkey"
+            columns: ["service_case_id"]
+            isOneToOne: false
+            referencedRelation: "service_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       interactions: {
         Row: {
           channel: Database["public"]["Enums"]["interaction_channel"] | null
@@ -1424,6 +1456,7 @@ export type Database = {
           decision_result: Database["public"]["Enums"]["decision_result"] | null
           documents_completed_at: string | null
           expected_protocol_date: string | null
+          first_contact_at: string | null
           huellas_completed: boolean | null
           huellas_date: string | null
           huellas_location: string | null
@@ -1467,6 +1500,7 @@ export type Database = {
             | null
           documents_completed_at?: string | null
           expected_protocol_date?: string | null
+          first_contact_at?: string | null
           huellas_completed?: boolean | null
           huellas_date?: string | null
           huellas_location?: string | null
@@ -1510,6 +1544,7 @@ export type Database = {
             | null
           documents_completed_at?: string | null
           expected_protocol_date?: string | null
+          first_contact_at?: string | null
           huellas_completed?: boolean | null
           huellas_date?: string | null
           huellas_location?: string | null

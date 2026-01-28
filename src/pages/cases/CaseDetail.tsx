@@ -32,6 +32,7 @@ import { CaseStatusTimeline } from '@/components/cases/CaseStatusTimeline';
 import { TechnicalNotesSection } from '@/components/cases/TechnicalNotesSection';
 import { DocumentProgressCard } from '@/components/cases/DocumentProgressCard';
 import { SendWhatsAppButton } from '@/components/cases/SendWhatsAppButton';
+import { InitialContactSLABadge } from '@/components/cases/InitialContactSLABadge';
 
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
@@ -82,7 +83,8 @@ export default function CaseDetail() {
   }
 
   const handleStatusChange = async (status: string) => {
-    await updateStatus.mutateAsync({ id: serviceCase.id, status });
+    const currentStatus = serviceCase.technical_status;
+    await updateStatus.mutateAsync({ id: serviceCase.id, status, fromStatus: currentStatus || undefined });
   };
 
   const handleAssign = async (userId: string) => {
@@ -316,6 +318,13 @@ export default function CaseDetail() {
             <CardTitle className="text-lg">Informações do Caso</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* SLA Badge for Initial Contact */}
+            <InitialContactSLABadge 
+              createdAt={serviceCase.created_at || new Date().toISOString()}
+              firstContactAt={(serviceCase as any).first_contact_at}
+              technicalStatus={serviceCase.technical_status}
+            />
+
             <div>
               <p className="text-sm text-muted-foreground">Cliente</p>
               <p className="font-medium">{serviceCase.opportunities?.leads?.contacts?.full_name}</p>

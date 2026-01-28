@@ -31,6 +31,7 @@ type AutomationType =
   | 'LEGAL'
   | 'REQUIREMENTS'
   | 'PROTOCOL'
+  | 'INITIAL_CONTACT'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -74,6 +75,7 @@ serve(async (req) => {
       postProtocolAlerts: 0,
       protocolInstructionsSent: 0,
       dailyCollections: 0,
+      initialContactReminders: 0,
     }
 
     // Fetch SLA configurations
@@ -959,7 +961,146 @@ serve(async (req) => {
     }
 
     // =====================================================
-    // 15. DAILY COLLECTION - Send collection message every 24h
+    // 16. INITIAL CONTACT SLA - Reminders for technicians
+    // =====================================================
+    if (shouldRun('INITIAL_CONTACT')) {
+      console.log('Running INITIAL_CONTACT automation...')
+      
+      const { data: pendingContacts } = await supabase
+        .from('service_cases')
+        .select(`
+          id, created_at, assigned_to_user_id, first_contact_at,
+          opportunities!inner (leads!inner (contacts!inner (full_name)))
+        `)
+        .eq('technical_status', 'CONTATO_INICIAL')
+        .is('first_contact_at', null)
+
+      console.log(`Found ${pendingContacts?.length || 0} cases awaiting initial contact`)
+
+      // Helper to check if reminder was already sent
+      async function initialContactReminderSent(caseId: string, reminderType: string): Promise<boolean> {
+        const { data } = await supabase
+          .from('initial_contact_reminders')
+          .select('id')
+          .eq('service_case_id', caseId)
+          .eq('reminder_type', reminderType)
+          .maybeSingle()
+        return !!data
+      }
+
+      // Helper to record reminder
+      async function recordInitialContactReminder(caseId: string, reminderType: string) {
+        await supabase.from('initial_contact_reminders').insert({
+          service_case_id: caseId,
+          reminder_type: reminderType
+        })
+      }
+
+      for (const sc of pendingContacts || []) {
+        const hoursWaiting = (now.getTime() - new Date(sc.created_at).getTime()) / (60 * 60 * 1000)
+        const clientName = (sc.opportunities as any)?.leads?.contacts?.full_name || 'Cliente'
+        const caseShortId = sc.id.slice(0, 8)
+
+        // D1: 24h reminder to technician
+        if (hoursWaiting >= 24 && !(await initialContactReminderSent(sc.id, 'D1'))) {
+          if (sc.assigned_to_user_id) {
+            await supabase.from('notifications').insert({
+              user_id: sc.assigned_to_user_id,
+              title: 'Contato Inicial Pendente',
+              message: `Caso ${caseShortId} de ${clientName} aguarda contato inicial há 24h.`,
+              type: 'initial_contact_reminder',
+            })
+          } else {
+            // Notify all technicians
+            const { data: technicians } = await supabase
+              .from('user_roles')
+              .select('user_id')
+              .eq('role', 'TECNICO')
+            
+            for (const tech of technicians || []) {
+              await supabase.from('notifications').insert({
+                user_id: tech.user_id,
+                title: 'Contato Inicial Pendente (Não Atribuído)',
+                message: `Caso ${caseShortId} de ${clientName} aguarda contato inicial há 24h - SEM RESPONSÁVEL.`,
+                type: 'initial_contact_reminder',
+              })
+            }
+          }
+          await recordInitialContactReminder(sc.id, 'D1')
+          results.initialContactReminders++
+        }
+
+        // D2: 48h urgent reminder
+        if (hoursWaiting >= 48 && !(await initialContactReminderSent(sc.id, 'D2'))) {
+          if (sc.assigned_to_user_id) {
+            await supabase.from('notifications').insert({
+              user_id: sc.assigned_to_user_id,
+              title: '⚠️ URGENTE: Contato Inicial Pendente',
+              message: `Caso ${caseShortId} de ${clientName} aguarda contato há 48h. Ação imediata necessária.`,
+              type: 'initial_contact_reminder',
+            })
+          }
+          await recordInitialContactReminder(sc.id, 'D2')
+          results.initialContactReminders++
+        }
+
+        // D3 + COORD_72H: 72h - notify technician + escalate to managers
+        if (hoursWaiting >= 72) {
+          // D3 - Final technician reminder
+          if (!(await initialContactReminderSent(sc.id, 'D3'))) {
+            if (sc.assigned_to_user_id) {
+              await supabase.from('notifications').insert({
+                user_id: sc.assigned_to_user_id,
+                title: '🚨 ESCALONAMENTO: Contato Inicial Atrasado',
+                message: `Caso ${caseShortId} de ${clientName} ultrapassou 72h sem contato. Coordenador foi notificado.`,
+                type: 'initial_contact_escalation',
+              })
+            }
+            await recordInitialContactReminder(sc.id, 'D3')
+            results.initialContactReminders++
+          }
+
+          // COORD_72H - Escalate to all managers
+          if (!(await initialContactReminderSent(sc.id, 'COORD_72H'))) {
+            const { data: managers } = await supabase
+              .from('user_roles')
+              .select('user_id')
+              .eq('role', 'MANAGER')
+            
+            for (const mgr of managers || []) {
+              await supabase.from('notifications').insert({
+                user_id: mgr.user_id,
+                title: '🚨 ESCALONAMENTO: Caso sem Contato Inicial',
+                message: `Caso ${caseShortId} de ${clientName} está há mais de 72h sem contato inicial do técnico.`,
+                type: 'initial_contact_escalation',
+              })
+            }
+            await recordInitialContactReminder(sc.id, 'COORD_72H')
+            results.initialContactReminders++
+          }
+        }
+
+        // ADM_5D: 120h (5 business days) - escalate to admins
+        if (hoursWaiting >= 120 && !(await initialContactReminderSent(sc.id, 'ADM_5D'))) {
+          const { data: admins } = await supabase
+            .from('user_roles')
+            .select('user_id')
+            .eq('role', 'ADMIN')
+          
+          for (const admin of admins || []) {
+            await supabase.from('notifications').insert({
+              user_id: admin.user_id,
+              title: '🔴 CRÍTICO: Caso sem Contato há 5 Dias',
+              message: `INTERVENÇÃO NECESSÁRIA: Caso ${caseShortId} de ${clientName} está há mais de 5 dias úteis sem contato inicial.`,
+              type: 'initial_contact_critical',
+            })
+          }
+          await recordInitialContactReminder(sc.id, 'ADM_5D')
+          results.initialContactReminders++
+        }
+      }
+    }
+
     // =====================================================
     if (shouldRun('DAILY_COLLECTION')) {
       console.log('Running DAILY_COLLECTION automation...')
