@@ -46,6 +46,21 @@ No portal você poderá:
 Qualquer dúvida, estou à disposição!`,
   },
   {
+    id: 'documents_released',
+    label: 'Documentos Liberados',
+    message: `Olá {nome}! 📄
+
+A lista de documentos necessários para o seu processo de {servico} já está disponível no Portal do Cliente!
+
+🔗 {portal_link}
+
+Por favor, acesse e comece a enviar seus documentos. Cada documento possui instruções específicas sobre:
+• Se precisa de apostilamento
+• Se precisa de tradução juramentada
+
+Estamos à disposição para ajudar!`,
+  },
+  {
     id: 'document_reminder',
     label: 'Lembrete de Documentos',
     message: `Olá {nome}! 📄
