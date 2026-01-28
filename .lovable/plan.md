@@ -1,9 +1,13 @@
 
-# Plano: Liberação da Lista de Documentos no Primeiro Contato
+
+# Plano: Cadastro de Documentos para EX19 e Data Prevista de Protocolo
 
 ## Contexto
 
-Após o primeiro contato com o cliente, o técnico deve "liberar" a lista de documentos necessários para que o cliente possa visualizá-los no portal e fazer o upload. Atualmente, os documentos não são criados automaticamente quando um caso é criado.
+O usuário precisa:
+1. Cadastrar a lista completa de documentos para o serviço **Residência por Parente de Comunitário (EX19)**
+2. Incluir informações de validade dos documentos (90 dias, 180 dias, 20 dias, etc.)
+3. Permitir que o técnico defina a **data prevista de apresentação/protocolo** no sistema
 
 ---
 
@@ -11,141 +15,91 @@ Após o primeiro contato com o cliente, o técnico deve "liberar" a lista de doc
 
 | Item | Status |
 |------|--------|
-| Tipos de documentos por serviço (`service_document_types`) | Cadastrados |
-| Documentos do caso (`service_documents`) | Vazio por padrão |
-| Portal mostra documentos | Sim, quando existem |
-| Provisão automática de documentos | Não existe |
-| Botão de liberar documentos | Não existe |
-
----
-
-## Fluxo Proposto
-
-```text
-+-------------------+     +--------------------+     +----------------------+
-| Técnico faz       |     | Clica em           |     | Sistema cria         |
-| contato inicial   | --> | "Liberar           | --> | service_documents    |
-|                   |     |  Documentos"       |     | baseado no           |
-+-------------------+     +--------------------+     | service_type         |
-                                                     +----------------------+
-                                                              |
-                                                              v
-                          +--------------------+     +----------------------+
-                          | Cliente vê lista   | <-- | Status muda para     |
-                          | no portal          |     | AGUARDANDO_DOCUMENTOS|
-                          +--------------------+     +----------------------+
-```
-
----
-
-## Regras de Negócio
-
-1. **Quando liberar**: Ao fazer contato inicial ou quando técnico decidir
-2. **O que criar**: Um registro em `service_documents` para cada `service_document_types` que corresponda ao `service_type` do caso
-3. **Status inicial**: `NAO_ENVIADO`
-4. **Atualização de status**: Automaticamente muda para `AGUARDANDO_DOCUMENTOS`
-5. **Notificação**: Enviar mensagem WhatsApp informando sobre os documentos (pode usar o template existente)
+| Tipo de serviço `RESIDENCIA_PARENTE_COMUNITARIO` no enum | ❌ Não existe |
+| Campo `validity_days` em `service_document_types` | ❌ Não existe |
+| Campo `expected_protocol_date` em `service_cases` | ✅ Já existe |
+| UI para definir data de protocolo prevista | ⚠️ Só mostra, não edita |
+| Documentos cadastrados para EX19 | ❌ Não existem |
 
 ---
 
 ## Implementação
 
-### 1. Novo Hook: `useDocuments` - Adicionar Provisão
+### 1. Adicionar Novo Tipo de Serviço ao Enum
 
-Adicionar função `provisionDocuments` no hook existente:
+```sql
+ALTER TYPE service_interest ADD VALUE 'RESIDENCIA_PARENTE_COMUNITARIO';
+```
 
-```typescript
-const provisionDocuments = useMutation({
-  mutationFn: async (serviceCaseId: string, serviceType: string) => {
-    // 1. Buscar tipos de documento para o service_type
-    const { data: docTypes } = await supabase
-      .from('service_document_types')
-      .select('id')
-      .eq('service_type', serviceType);
-    
-    // 2. Criar um service_document para cada tipo
-    const documents = docTypes.map(dt => ({
-      service_case_id: serviceCaseId,
-      document_type_id: dt.id,
-      status: 'NAO_ENVIADO',
-    }));
-    
-    const { error } = await supabase
-      .from('service_documents')
-      .insert(documents);
-    
-    if (error) throw error;
-    return documents;
-  },
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['documents'] });
-    toast({ title: 'Documentos liberados para o cliente' });
-  },
-});
+Isso permitirá criar casos e documentos para este tipo de serviço.
+
+---
+
+### 2. Adicionar Campo de Validade dos Documentos
+
+```sql
+ALTER TABLE service_document_types 
+ADD COLUMN validity_days INTEGER;
+```
+
+Exemplos de validade:
+- 90 dias: Certidões de estado civil, empadronamento, convivência
+- 180 dias: Certidão de casamento
+- 20 dias: Certificado bancário
+
+---
+
+### 3. Cadastrar Documentos para EX19
+
+Lista completa de documentos conforme especificação:
+
+| Documento | Obrigatório | Apostila | Tradução | Validade |
+|-----------|-------------|----------|----------|----------|
+| Autorização para Tramitar | Sim | Não | Não | - |
+| Formulário EX19 | Sim | Não | Não | - |
+| Passaporte Completo do Interessado | Sim | Não | Não | - |
+| Documento de Identidade/NIE do Parceiro | Sim | Não | Não | - |
+| Passaporte ou ID do Parceiro | Sim | Não | Não | - |
+| Certificado de Empadronamento de Ambos | Sim | Não | Não | 90 dias |
+| Certificado de Convivência | Não | Não | Não | 90 dias |
+| Certidão de Registro de União Estável | Não | Sim | Sim | 90 dias |
+| Certidão de Casamento | Não | Sim | Sim | 180 dias |
+| Contrato de Trabalho do Parceiro | Sim | Não | Não | - |
+| Holerites do Parceiro (3 meses) | Sim | Não | Não | - |
+| Informe de Vida Laboral do Parceiro | Sim | Não | Não | 90 dias |
+| Certificado Bancário | Sim | Não | Não | 20 dias |
+| Seguro de Saúde | Não | Não | Não | - |
+| Certidão de Estado Civil do Interessado | Sim | Sim | Sim | 90 dias |
+| Certidão de Estado Civil do Parceiro | Sim | Sim | Sim | 90 dias |
+
+---
+
+### 4. UI para Definir Data Prevista de Protocolo
+
+Adicionar campo editável no `CaseDetail.tsx`:
+- Mostrar na seção de informações do caso
+- Usar DatePicker do Shadcn
+- Atualizar via `updateCase` quando alterada
+- Exibir alerta quando próximo do prazo (14 dias)
+
+```text
+┌──────────────────────────────────────────┐
+│ Data Prevista de Protocolo              │
+│ ┌────────────────────────┬─────────────┐│
+│ │ 📅  15/02/2026         │  [Alterar]  ││
+│ └────────────────────────┴─────────────┘│
+│ ⚠️ Faltam 18 dias para o prazo          │
+└──────────────────────────────────────────┘
 ```
 
 ---
 
-### 2. Novo Componente: `ReleaseDocumentsButton`
+### 5. Atualizar UI de Tipos de Documento
 
-Botão que:
-- Verifica se documentos já foram liberados
-- Se não, mostra diálogo de confirmação
-- Ao confirmar, provisiona documentos e atualiza status
-
-```typescript
-interface ReleaseDocumentsButtonProps {
-  serviceCaseId: string;
-  serviceType: ServiceInterest;
-  currentStatus: string;
-  documentsCount: number;
-  onSuccess: () => void;
-}
-```
-
----
-
-### 3. Atualização do `CaseDetail.tsx`
-
-Adicionar o botão de liberar documentos:
-- Mostrar quando `documents.length === 0`
-- Mostrar no topo da aba de documentos
-- Integrar com o fluxo de contato inicial
-
----
-
-### 4. Integração com Contato Inicial
-
-Opção 1 - **Automático**: Ao clicar em "Iniciar Contato" via WhatsApp, também libera documentos
-Opção 2 - **Manual**: Técnico decide quando liberar (mais flexível)
-
-Recomendação: **Opção 2** - Liberar manualmente, pois:
-- Nem todos os serviços têm tipos de documentos cadastrados
-- Técnico pode querer personalizar antes de liberar
-
----
-
-### 5. Mensagem WhatsApp Atualizada
-
-Adicionar template específico para liberação de documentos:
-
-```typescript
-{
-  id: 'documents_released',
-  label: 'Documentos Liberados',
-  message: `Olá {nome}! 📄
-
-A lista de documentos necessários para o seu processo de {servico} já está disponível no Portal do Cliente!
-
-🔗 {portal_link}
-
-Por favor, acesse e comece a enviar seus documentos. Cada documento possui instruções específicas sobre:
-• Se precisa de apostilamento
-• Se precisa de tradução juramentada
-
-Estamos à disposição para ajudar!`,
-}
-```
+Adicionar exibição e edição do campo `validity_days`:
+- No formulário de criação/edição
+- Na tabela de listagem
+- Com formato amigável (ex: "90 dias", "6 meses")
 
 ---
 
@@ -153,96 +107,184 @@ Estamos à disposição para ajudar!`,
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useDocuments.ts` | Adicionar mutação `provisionDocuments` |
-| `src/pages/cases/CaseDetail.tsx` | Adicionar botão "Liberar Documentos" na aba Documents |
-| `src/components/cases/SendWhatsAppButton.tsx` | Adicionar template de documentos liberados |
+| `src/pages/cases/CaseDetail.tsx` | Adicionar DatePicker para `expected_protocol_date` |
+| `src/pages/settings/DocumentTypesManagement.tsx` | Adicionar campo `validity_days` no formulário |
+| `src/types/database.ts` | Adicionar `RESIDENCIA_PARENTE_COMUNITARIO` aos labels |
+| Migração SQL | Alterar enum, adicionar coluna, inserir documentos |
 
 ---
 
-## Arquivos a Criar
+## Migração SQL Completa
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `src/components/cases/ReleaseDocumentsButton.tsx` | Botão com diálogo de confirmação |
+```sql
+-- 1. Adicionar novo tipo de serviço
+ALTER TYPE service_interest ADD VALUE 'RESIDENCIA_PARENTE_COMUNITARIO';
 
----
+-- 2. Adicionar campo de validade
+ALTER TABLE service_document_types 
+ADD COLUMN validity_days INTEGER;
 
-## Interface Visual
-
-Na aba de Documentos do CaseDetail:
-
-**Antes de liberar:**
+-- 3. Inserir documentos para EX19
+INSERT INTO service_document_types 
+  (service_type, name, description, is_required, needs_apostille, needs_translation, validity_days)
+VALUES
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Autorização para Tramitar', 
+   'Documento gerado pelo técnico, deve ser assinado pelo interessado', 
+   true, false, false, NULL),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Formulário EX19', 
+   'Preenchido e gerado pelo técnico, assinado por ambos os interessados', 
+   true, false, false, NULL),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Passaporte Completo do Interessado', 
+   'Cópia digital (scanner) de todas as páginas do passaporte válido', 
+   true, false, false, NULL),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Documento de Identidade/NIE do Parceiro', 
+   'Cópia (frente e verso) do NIE, DNI ou passaporte do cônjuge/parceiro comunitário', 
+   true, false, false, NULL),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Passaporte ou ID do Parceiro', 
+   'Cópia completa de todas as páginas do passaporte ou documento de identidade do parceiro', 
+   true, false, false, NULL),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certificado de Empadronamento de Ambos', 
+   'Documento de registro na prefeitura comprovando residência de ambos no mesmo endereço', 
+   true, false, false, 90),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certificado de Convivência', 
+   'Comprovante oficial de convivência comum, se aplicável', 
+   false, false, false, 90),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certidão de Registro de União Estável', 
+   'Registro de pareja de hecho atualizado (para parceiros não casados oficialmente)', 
+   false, true, true, 90),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certidão de Casamento', 
+   'Devidamente apostilada/legalizada e traduzida por tradutor juramentado (se casamento fora da Espanha)', 
+   false, true, true, 180),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Contrato de Trabalho do Parceiro', 
+   'Contrato de trabalho do parceiro comunitário, assinado por ambas as partes', 
+   true, false, false, NULL),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Holerites do Parceiro (3 meses)', 
+   'Comprovantes de pagamento/salário do parceiro nos últimos 3 meses', 
+   true, false, false, NULL),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Informe de Vida Laboral do Parceiro', 
+   'Documento oficial de histórico laboral na Espanha', 
+   true, false, false, 90),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certificado Bancário', 
+   'Comprovante emitido pelo banco mostrando os recursos financeiros/disponibilidade', 
+   true, false, false, 20),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Seguro de Saúde', 
+   'Cópia da apólice completa de seguro de saúde válido (público ou privado)', 
+   false, false, false, NULL),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certidão de Estado Civil do Interessado', 
+   'Documento do país de origem comprovando estado civil, com apostila e tradução juramentada', 
+   true, true, true, 90),
+  
+  ('RESIDENCIA_PARENTE_COMUNITARIO', 'Certidão de Estado Civil do Parceiro', 
+   'Documento equivalente para o parceiro comunitário, apostilado e traduzido', 
+   true, true, true, 90);
 ```
-┌─────────────────────────────────────────────────┐
-│ 📄 Documentos                                   │
-├─────────────────────────────────────────────────┤
-│                                                 │
-│   ⚠️ Nenhum documento vinculado a este caso    │
-│                                                 │
-│   Os documentos serão liberados após o          │
-│   contato inicial com o cliente.                │
-│                                                 │
-│           [📋 Liberar Documentos]               │
-│                                                 │
-└─────────────────────────────────────────────────┘
-```
 
-**Após liberar:**
-```
-┌─────────────────────────────────────────────────┐
-│ 📄 Documentos (8 itens)          [Ver no Portal]│
-├─────────────────────────────────────────────────┤
-│ 📄 Passaporte                    ⬜ Não Enviado │
-│ 📄 Foto 3x4                      ⬜ Não Enviado │
-│ 📄 Certidão de Nascimento        🟡 Obrigatório │
-│ ...                                             │
-└─────────────────────────────────────────────────┘
+---
+
+## Fluxo Atualizado
+
+```text
++-------------------+     +--------------------+     +----------------------+
+| Técnico libera    |     | Documentos EX19    |     | Cliente vê no        |
+| documentos no     | --> | são criados com    | --> | portal com:          |
+| primeiro contato  |     | validades          |     | • Prazo de validade  |
++-------------------+     +--------------------+     | • Apostila/Tradução  |
+                                                     +----------------------+
+                                                              |
+                                                              v
+                          +--------------------+     +----------------------+
+                          | Alertas de         | <-- | Sistema monitora     |
+                          | documentos         |     | validade e           |
+                          | vencendo           |     | data de protocolo    |
+                          +--------------------+     +----------------------+
 ```
 
 ---
 
-## Validações
+## UI para Validade de Documentos
 
-1. **Não liberar duplicado**: Verificar se já existem documentos antes de provisionar
-2. **Tipos cadastrados**: Alertar se não houver tipos de documento para o serviço
-3. **Status do caso**: Atualizar automaticamente para `AGUARDANDO_DOCUMENTOS`
+No portal do cliente, mostrar indicadores visuais:
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ 📄 Certificado de Empadronamento             ⬜ Não Enviado │
+│    📅 Validade: 90 dias após emissão                        │
+│    ⚠️ Deve ser emitido há menos de 90 dias na data do       │
+│       protocolo                                              │
+├─────────────────────────────────────────────────────────────┤
+│ 📄 Certidão de Casamento                     ⬜ Não Enviado │
+│    📅 Validade: 180 dias após emissão                       │
+│    🔴 Requer Apostila de Haia                               │
+│    🔵 Requer Tradução Juramentada                           │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Notificação ao Cliente
+## Validação de Validade
 
-Ao liberar documentos, opcionalmente:
-1. Enviar email de notificação (se implementado)
-2. Criar notificação no portal (se implementado)
-3. Sugerir envio de WhatsApp com template específico
-
----
-
-## Considerações Técnicas
-
-### Performance
-- Uma única inserção em batch para todos os documentos
-- Índice em `service_case_id` já existe
-
-### Segurança
-- RLS: Apenas staff pode provisionar documentos
-- Cliente só pode fazer upload, não criar documentos
+Quando o técnico for submeter ao jurídico, o sistema deve verificar:
+1. Todos os documentos com validade definida
+2. Calcular se estarão válidos na data prevista de protocolo
+3. Alertar se algum documento estará vencido
 
 ---
 
 ## Resultado Esperado
 
-1. Técnico pode liberar documentos com 1 clique
-2. Cliente vê imediatamente a lista no portal
-3. Sistema registra quem liberou e quando
-4. Status do caso avança automaticamente
-5. Possibilidade de enviar WhatsApp informando
+1. Novo tipo de serviço `RESIDENCIA_PARENTE_COMUNITARIO` disponível
+2. 16 documentos cadastrados com todas as informações necessárias
+3. Validades dos documentos visíveis para cliente e técnico
+4. Data prevista de protocolo editável pelo técnico
+5. Sistema preparado para alertas de documentos vencendo
 
 ---
 
-## Próximos Passos
+## Detalhes Técnicos
 
-Após implementar, continuaremos com:
-- SLA de lembretes de documentação (a cada 48h)
-- Notificação automática quando documento é rejeitado
-- Conferência e aprovação em lote
+### Atualização do DatePicker no CaseDetail
+
+```typescript
+// Estado para controlar o popover
+const [protocolDateOpen, setProtocolDateOpen] = useState(false);
+
+// Handler para atualizar data
+const handleProtocolDateChange = async (date: Date | undefined) => {
+  if (date) {
+    await updateCase.mutateAsync({
+      id: serviceCase.id,
+      expected_protocol_date: format(date, 'yyyy-MM-dd'),
+    });
+  }
+  setProtocolDateOpen(false);
+};
+```
+
+### Cálculo de dias até o protocolo
+
+```typescript
+const daysUntilProtocol = serviceCase.expected_protocol_date
+  ? differenceInDays(new Date(serviceCase.expected_protocol_date), new Date())
+  : null;
+
+const protocolUrgency = daysUntilProtocol !== null
+  ? daysUntilProtocol <= 7 ? 'danger'
+  : daysUntilProtocol <= 14 ? 'warning'
+  : 'normal'
+  : null;
+```
+
