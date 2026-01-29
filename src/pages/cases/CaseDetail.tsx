@@ -36,6 +36,8 @@ import { DocumentProgressCard } from '@/components/cases/DocumentProgressCard';
 import { SendWhatsAppButton } from '@/components/cases/SendWhatsAppButton';
 import { InitialContactSLABadge } from '@/components/cases/InitialContactSLABadge';
 import { ReleaseDocumentsButton } from '@/components/cases/ReleaseDocumentsButton';
+import { ProtocolReceiptUpload } from '@/components/cases/ProtocolReceiptUpload';
+import { ExpedienteNumberInput } from '@/components/cases/ExpedienteNumberInput';
 import { cn } from '@/lib/utils';
 
 export default function CaseDetail() {
@@ -235,6 +237,7 @@ export default function CaseDetail() {
               leadId={leadId}
               serviceType={SERVICE_INTEREST_LABELS[serviceCase.service_type]}
               protocolNumber={serviceCase.protocol_number}
+              expedienteNumber={(serviceCase as any).expediente_number}
               huellasDate={serviceCase.huellas_date}
               huellasTime={serviceCase.huellas_time}
               huellasLocation={serviceCase.huellas_location}
@@ -488,6 +491,14 @@ export default function CaseDetail() {
               </div>
             )}
 
+            {/* Número de Expediente - visível após protocolo */}
+            {(serviceCase as any).expediente_number && (
+              <div className="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                <p className="text-sm text-muted-foreground">Expediente (ID do Processo)</p>
+                <p className="font-mono font-bold text-primary">{(serviceCase as any).expediente_number}</p>
+              </div>
+            )}
+
             {serviceCase.submission_date && (
               <div>
                 <p className="text-sm text-muted-foreground">Data de Submissão</p>
@@ -544,6 +555,28 @@ export default function CaseDetail() {
             <DocumentProgressCard documents={documents} />
             <TechnicalNotesSection serviceCaseId={serviceCase.id} />
           </div>
+
+          {/* Seção de Protocolo - visível após ENVIADO_JURIDICO */}
+          {['ENVIADO_JURIDICO', 'PROTOCOLADO', 'EM_ACOMPANHAMENTO', 'AGENDAR_HUELLAS', 'AGUARDANDO_CITA_HUELLAS', 'HUELLAS_REALIZADO', 'DISPONIVEL_RETIRADA_TIE', 'AGUARDANDO_CITA_RETIRADA', 'TIE_RETIRADO', 'ENCERRADO_APROVADO'].includes(serviceCase.technical_status || '') && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ProtocolReceiptUpload
+                serviceCaseId={serviceCase.id}
+                protocolReceiptUrl={(serviceCase as any).protocol_receipt_url}
+                protocolReceiptApproved={(serviceCase as any).protocol_receipt_approved || false}
+                protocolReceiptApprovedAt={(serviceCase as any).protocol_receipt_approved_at}
+                protocolReceiptApprovedBy={(serviceCase as any).protocol_receipt_approved_by}
+                assignedToUserId={serviceCase.assigned_to_user_id}
+              />
+              <ExpedienteNumberInput
+                serviceCaseId={serviceCase.id}
+                expedienteNumber={(serviceCase as any).expediente_number}
+                clientName={clientName}
+                clientPhone={clientPhone}
+                clientUserId={serviceCase.client_user_id}
+                serviceType={SERVICE_INTEREST_LABELS[serviceCase.service_type]}
+              />
+            </div>
+          )}
 
           {/* Tabs for Documents, Requirements, Huellas, TIE */}
           <Card>
