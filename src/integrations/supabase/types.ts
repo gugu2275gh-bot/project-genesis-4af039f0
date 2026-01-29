@@ -750,6 +750,41 @@ export type Database = {
           },
         ]
       }
+      huellas_reminders: {
+        Row: {
+          created_at: string | null
+          id: string
+          recipient_type: string
+          reminder_type: string
+          sent_at: string | null
+          service_case_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          recipient_type: string
+          reminder_type: string
+          sent_at?: string | null
+          service_case_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          recipient_type?: string
+          reminder_type?: string
+          sent_at?: string | null
+          service_case_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "huellas_reminders_service_case_id_fkey"
+            columns: ["service_case_id"]
+            isOneToOne: false
+            referencedRelation: "service_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       initial_contact_reminders: {
         Row: {
           created_at: string | null
@@ -1567,13 +1602,21 @@ export type Database = {
           decision_date: string | null
           decision_result: Database["public"]["Enums"]["decision_result"] | null
           documents_completed_at: string | null
+          empadronamiento_expected_date: string | null
+          empadronamiento_notes: string | null
+          empadronamiento_valid: boolean | null
           expected_protocol_date: string | null
           expediente_number: string | null
           first_contact_at: string | null
+          huellas_appointment_confirmation_url: string | null
+          huellas_client_notified_at: string | null
           huellas_completed: boolean | null
           huellas_date: string | null
+          huellas_instructions_sent: boolean | null
           huellas_location: string | null
+          huellas_requested_at: string | null
           huellas_resguardo_url: string | null
+          huellas_scheduler_notified: boolean | null
           huellas_time: string | null
           id: string
           is_urgent: boolean | null
@@ -1623,13 +1666,21 @@ export type Database = {
             | Database["public"]["Enums"]["decision_result"]
             | null
           documents_completed_at?: string | null
+          empadronamiento_expected_date?: string | null
+          empadronamiento_notes?: string | null
+          empadronamiento_valid?: boolean | null
           expected_protocol_date?: string | null
           expediente_number?: string | null
           first_contact_at?: string | null
+          huellas_appointment_confirmation_url?: string | null
+          huellas_client_notified_at?: string | null
           huellas_completed?: boolean | null
           huellas_date?: string | null
+          huellas_instructions_sent?: boolean | null
           huellas_location?: string | null
+          huellas_requested_at?: string | null
           huellas_resguardo_url?: string | null
+          huellas_scheduler_notified?: boolean | null
           huellas_time?: string | null
           id?: string
           is_urgent?: boolean | null
@@ -1679,13 +1730,21 @@ export type Database = {
             | Database["public"]["Enums"]["decision_result"]
             | null
           documents_completed_at?: string | null
+          empadronamiento_expected_date?: string | null
+          empadronamiento_notes?: string | null
+          empadronamiento_valid?: boolean | null
           expected_protocol_date?: string | null
           expediente_number?: string | null
           first_contact_at?: string | null
+          huellas_appointment_confirmation_url?: string | null
+          huellas_client_notified_at?: string | null
           huellas_completed?: boolean | null
           huellas_date?: string | null
+          huellas_instructions_sent?: boolean | null
           huellas_location?: string | null
+          huellas_requested_at?: string | null
           huellas_resguardo_url?: string | null
+          huellas_scheduler_notified?: boolean | null
           huellas_time?: string | null
           id?: string
           is_urgent?: boolean | null

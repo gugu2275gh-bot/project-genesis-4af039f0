@@ -33,6 +33,7 @@ type AutomationType =
   | 'PROTOCOL'
   | 'INITIAL_CONTACT'
   | 'POST_PROTOCOL_DOCS'
+  | 'HUELLAS'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -78,6 +79,9 @@ serve(async (req) => {
       dailyCollections: 0,
       initialContactReminders: 0,
       postProtocolDocsAlerts: 0,
+      huellasScheduleReminders: 0,
+      huellasPreCitaReminders: 0,
+      huellasEmpadReminders: 0,
     }
 
     // Fetch SLA configurations
@@ -1620,6 +1624,88 @@ serve(async (req) => {
         if (sent) {
           console.log(`Daily collection sent for payment ${payment.id} to ${String(contact.phone).slice(-4)}`)
           results.dailyCollections++
+        }
+      }
+    }
+
+    // =====================================================
+    // 18. HUELLAS SCHEDULING REMINDERS AND ALERTS
+    // =====================================================
+    if (shouldRun('HUELLAS')) {
+      console.log('Running HUELLAS automation...')
+
+      // Helper to check if huellas reminder was already sent
+      async function huellasReminderSent(caseId: string, reminderType: string): Promise<boolean> {
+        const { data } = await supabase
+          .from('huellas_reminders')
+          .select('id')
+          .eq('service_case_id', caseId)
+          .eq('reminder_type', reminderType)
+          .maybeSingle()
+        return !!data
+      }
+
+      // Helper to record huellas reminder
+      async function recordHuellasReminder(caseId: string, reminderType: string, recipientType: string) {
+        await supabase.from('huellas_reminders').insert({
+          service_case_id: caseId,
+          reminder_type: reminderType,
+          recipient_type: recipientType
+        })
+      }
+
+      // SLA 1: Cases in AGENDAR_HUELLAS without schedule request (48h SLA)
+      const { data: pendingScheduleCases } = await supabase
+        .from('service_cases')
+        .select(`id, technical_status, updated_at, assigned_to_user_id, opportunities!inner (leads!inner (contacts!inner (full_name)))`)
+        .eq('technical_status', 'AGENDAR_HUELLAS')
+        .is('huellas_requested_at', null)
+
+      for (const sc of pendingScheduleCases || []) {
+        const hoursWaiting = (now.getTime() - new Date(sc.updated_at).getTime()) / (60 * 60 * 1000)
+        const oppData = sc.opportunities as unknown as { leads: { contacts: { full_name: string } } }
+        const clientName = oppData?.leads?.contacts?.full_name || 'Cliente'
+
+        if (hoursWaiting >= 48 && !(await huellasReminderSent(sc.id, 'SCHEDULE_48H'))) {
+          const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
+          for (const mgr of managers || []) {
+            await supabase.from('notifications').insert({
+              user_id: mgr.user_id,
+              title: '🚨 Huellas não Solicitado',
+              message: `Caso ${sc.id.slice(0, 8)} de ${clientName} aguarda agendamento há 48h+.`,
+              type: 'huellas_schedule_escalation',
+            })
+          }
+          await recordHuellasReminder(sc.id, 'SCHEDULE_48H', 'COORD')
+          results.huellasScheduleReminders++
+        }
+      }
+
+      // SLA 2: Pre-cita reminders (D-3, D-1)
+      const { data: scheduledHuellasCases } = await supabase
+        .from('service_cases')
+        .select(`id, huellas_date, huellas_time, huellas_location, opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))`)
+        .not('huellas_date', 'is', null)
+        .eq('huellas_completed', false)
+        .gte('huellas_date', today)
+
+      for (const sc of scheduledHuellasCases || []) {
+        if (!sc.huellas_date) continue
+        const daysUntil = Math.floor((new Date(sc.huellas_date).getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+        const oppData = sc.opportunities as unknown as { leads: { id: string; contacts: { full_name: string; phone: number | null } } }
+        const contact = oppData?.leads?.contacts
+        if (!contact?.phone) continue
+
+        if (daysUntil <= 3 && daysUntil > 1 && !(await huellasReminderSent(sc.id, 'D3_REMINDER'))) {
+          await sendWhatsApp(contact.phone, `Olá ${contact.full_name}! Sua huellas é em 3 dias (${sc.huellas_date}). Organize seus documentos!`, oppData.leads.id)
+          await recordHuellasReminder(sc.id, 'D3_REMINDER', 'CLIENT')
+          results.huellasPreCitaReminders++
+        }
+
+        if (daysUntil === 1 && !(await huellasReminderSent(sc.id, 'D1_REMINDER'))) {
+          await sendWhatsApp(contact.phone, `Olá ${contact.full_name}! AMANHÃ é sua huellas (${sc.huellas_date}). Boa sorte! 🍀`, oppData.leads.id)
+          await recordHuellasReminder(sc.id, 'D1_REMINDER', 'CLIENT')
+          results.huellasPreCitaReminders++
         }
       }
     }
