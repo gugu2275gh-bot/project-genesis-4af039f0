@@ -201,8 +201,8 @@ export function SendWhatsAppButton({
     try {
       const { error } = await supabase.functions.invoke('send-whatsapp', {
         body: {
-          phone: phone.toString(),
-          message,
+          numero: phone.toString(),
+          mensagem: message,
         },
       });
 
