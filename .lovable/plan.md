@@ -1,170 +1,242 @@
 
-# Plano: Corrigir Envio de WhatsApp no SendWhatsAppButton
+# Plano: Implementação do Fluxo de Protocolo do Pedido (Etapa 6)
 
-## Problema Raiz Identificado
+## Resumo da Análise
 
-Ao comparar as 3 implementações que enviam WhatsApp:
+Após análise detalhada do código atual, identifiquei o que **já existe** e o que **precisa ser implementado**:
 
-| Componente | Funciona? | Código |
-|------------|-----------|--------|
-| `sendCollectionMessage` (Pagamentos) | ✅ | `numero: String(phone)` |
-| `useLeadMessages` (CRM Lead Chat) | ✅ | `numero: String(contactPhone)` |
-| `SendWhatsAppButton` (Casos Técnicos) | ❌ | `numero: phone.toString()` |
+### O que já existe
+| Funcionalidade | Status | Localização |
+|----------------|--------|-------------|
+| Campo `protocol_number` na tabela `service_cases` | ✅ | Supabase types |
+| Campo `submission_date` | ✅ | Supabase types |
+| Status `PROTOCOLADO` no enum | ✅ | types/database.ts |
+| Automação de notificação pré-protocolo (D-3) | ✅ | sla-automations |
+| Botão "Marcar Protocolado" no CaseDetail | ✅ | CaseDetail.tsx |
+| Template de WhatsApp "Informação de Protocolo" | ✅ | SendWhatsAppButton.tsx |
+| Dashboard Jurídico com lista de casos | ✅ | LegalDashboard.tsx |
 
-A diferença é que o `phone` no `SendWhatsAppButton` é do tipo `number | null` (bigint convertido para number pelo Supabase), e quando convertido para string via `.toString()`, números muito grandes como `553193025099` podem aparecer em **notação científica** (`5.53193025099e+11`).
+### O que precisa ser implementado
 
-Além disso, no componente atual:
-1. Não há validação do formato do número antes do envio
-2. Não há console.log para debug
-3. O usuário não tem feedback visual sobre problemas com o número
-
----
-
-## Solução Proposta
-
-### 1. Corrigir conversão do número (SendWhatsAppButton.tsx)
-
-Alterar de:
-```typescript
-numero: phone.toString(),
-```
-
-Para:
-```typescript
-numero: String(phone).replace(/\D/g, ''),
-```
-
-Isso garante:
-- Conversão consistente com os outros componentes que funcionam
-- Remoção de qualquer caractere não-numérico (espaços, hífen, etc.)
-- Evita problema de notação científica
-
-### 2. Adicionar validação visual do número
-
-Adicionar um indicador visual quando o número parecer suspeito:
-- Menos de 10 dígitos: ⚠️ Número muito curto
-- Mais de 15 dígitos: ⚠️ Número muito longo
-- Botão "Corrigir" com 1 clique (conforme preferência do usuário)
-
-### 3. Permitir edição do número antes do envio
-
-Adicionar um campo de texto editável no modal para que o usuário possa corrigir o número antes de enviar, caso necessário.
-
-### 4. Adicionar console.log para debug
-
-Incluir logs detalhados para facilitar debugging futuro:
-```typescript
-console.log('[WhatsApp Cases] Enviando:', { 
-  phoneOriginal: phone, 
-  phoneFormatted: cleanedPhone,
-  templateId: selectedTemplate 
-});
-```
+| Funcionalidade | Descrição |
+|----------------|-----------|
+| **Comprovante de Protocolo (Documento Privado)** | Upload de documento pelo Jurídico com flag `is_visible_to_client = false` até aprovação do Técnico |
+| **Número de Expediente** | Novo campo para armazenar o ID do processo na Extranjería (diferente do `protocol_number`) |
+| **Fluxo de aprovação do comprovante** | Técnico deve aprovar antes de liberar para o cliente |
+| **Notificação automática ao cliente** | Quando status muda para PROTOCOLADO |
+| **Orientações de consulta do expediente** | Template WhatsApp + notificação com instruções de acompanhamento |
+| **Exibição no Portal do Cliente** | Mostrar número de expediente como ID do processo |
 
 ---
 
-## Arquivo a Modificar
+## Alterações no Banco de Dados
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/cases/SendWhatsAppButton.tsx` | Corrigir conversão, adicionar validação visual e campo editável |
+### 1. Adicionar campos à tabela `service_cases`
+
+```sql
+ALTER TABLE service_cases ADD COLUMN IF NOT EXISTS expediente_number TEXT;
+ALTER TABLE service_cases ADD COLUMN IF NOT EXISTS protocol_receipt_url TEXT;
+ALTER TABLE service_cases ADD COLUMN IF NOT EXISTS protocol_receipt_approved BOOLEAN DEFAULT false;
+ALTER TABLE service_cases ADD COLUMN IF NOT EXISTS protocol_receipt_approved_by UUID REFERENCES profiles(id);
+ALTER TABLE service_cases ADD COLUMN IF NOT EXISTS protocol_receipt_approved_at TIMESTAMPTZ;
+```
+
+**Explicação dos campos:**
+- `expediente_number`: Número de expediente da Extranjería (ex: "E/2024/12345")
+- `protocol_receipt_url`: URL do comprovante de protocolo (arquivo privado)
+- `protocol_receipt_approved`: Flag indicando se o técnico aprovou
+- `protocol_receipt_approved_by`: Quem aprovou o comprovante
+- `protocol_receipt_approved_at`: Quando foi aprovado
 
 ---
 
-## Alterações Detalhadas
+## Arquivos a Criar/Modificar
 
-### SendWhatsAppButton.tsx
-
-1. **Adicionar estado para número editável**:
-```typescript
-const [editedPhone, setEditedPhone] = useState<string>('');
-```
-
-2. **Inicializar o número quando o modal abre**:
-```typescript
-useEffect(() => {
-  if (isOpen && phone) {
-    setEditedPhone(String(phone).replace(/\D/g, ''));
-  }
-}, [isOpen, phone]);
-```
-
-3. **Validar formato do número**:
-```typescript
-const getPhoneValidation = (phoneStr: string) => {
-  const digits = phoneStr.replace(/\D/g, '');
-  if (digits.length < 10) return { valid: false, message: 'Número muito curto' };
-  if (digits.length > 15) return { valid: false, message: 'Número muito longo' };
-  return { valid: true, message: null };
-};
-```
-
-4. **Exibir campo editável com validação visual**:
-```tsx
-<div className="space-y-2">
-  <Label>Número WhatsApp</Label>
-  <div className="flex gap-2">
-    <Input
-      value={editedPhone}
-      onChange={(e) => setEditedPhone(e.target.value.replace(/\D/g, ''))}
-      className={cn(!phoneValidation.valid && 'border-yellow-500')}
-    />
-  </div>
-  {!phoneValidation.valid && (
-    <p className="text-xs text-yellow-600">⚠️ {phoneValidation.message}</p>
-  )}
-</div>
-```
-
-5. **Usar o número editado no envio**:
-```typescript
-const { error } = await supabase.functions.invoke('send-whatsapp', {
-  body: {
-    numero: editedPhone, // Usa o número editado/validado
-    mensagem: message,
-  },
-});
-```
-
----
-
-## Fluxo Corrigido
+### 1. **Novo Componente: ProtocolReceiptUpload.tsx**
+Componente para o Jurídico fazer upload do comprovante de protocolo.
 
 ```text
-                        Modal Aberto
-                             │
-                             ▼
-              ┌──────────────────────────────────┐
-              │  📱 Número: 553193025099         │
-              │  [Campo editável com validação]   │
-              │                                   │
-              │  ⚠️ Número muito curto (se <10)   │
-              │     [Sugerir correção]            │
-              │                                   │
-              │  Template: Contato Inicial ▼      │
-              │                                   │
-              │  [Mensagem pré-visualizada]       │
-              │                                   │
-              │           [Enviar]                │
-              └──────────────────────────────────┘
-                             │
-                             ▼
-              console.log('[WhatsApp Cases] Enviando...')
-                             │
-                             ▼
-              Edge Function send-whatsapp
-              { numero: "553193025099", mensagem: "..." }
-                             │
-                             ▼
-              Webhook n8n → WhatsApp ✅
+src/components/cases/ProtocolReceiptUpload.tsx
+```
+
+**Funcionalidades:**
+- Input de arquivo para upload do comprovante (PDF)
+- Upload para bucket `signed-contracts` (já existe e é privado)
+- Salvar URL no campo `protocol_receipt_url`
+- Criar notificação para o técnico responsável
+
+### 2. **Novo Componente: ExpedienteNumberInput.tsx**
+Campo para inserir o número de expediente quando recebido.
+
+```text
+src/components/cases/ExpedienteNumberInput.tsx
+```
+
+**Funcionalidades:**
+- Input para digitar o número de expediente
+- Validação de formato (opcional, ex: E/YYYY/XXXXX)
+- Botão de salvar com confirmação
+- Ao salvar: enviar WhatsApp automático com instruções de consulta
+
+### 3. **Modificar: src/pages/cases/CaseDetail.tsx**
+
+Adicionar:
+- Seção de "Protocolo" com:
+  - Upload do comprovante (visível para JURIDICO)
+  - Botão de aprovar comprovante (visível para TECNICO)
+  - Campo de número de expediente (após protocolo)
+  - Exibição do comprovante aprovado (link para download)
+
+### 4. **Modificar: src/pages/legal/LegalDashboard.tsx**
+
+Adicionar:
+- Coluna "Comprovante" mostrando status (Pendente/Enviado/Aprovado)
+- Ação rápida para upload de comprovante
+- Ação rápida para inserir expediente
+
+### 5. **Modificar: src/hooks/useCases.ts**
+
+Adicionar mutações:
+- `uploadProtocolReceipt`: Upload do comprovante
+- `approveProtocolReceipt`: Aprovação pelo técnico
+- `setExpedienteNumber`: Inserir número de expediente
+- `markAsProtocolado`: Transição de status com notificações automáticas
+
+### 6. **Modificar: src/pages/portal/PortalDashboard.tsx**
+
+Alterar:
+- Mostrar `expediente_number` como "ID do Processo" em vez de `protocol_number`
+- Adicionar link para consulta no site da Extranjería
+- Exibir comprovante de protocolo (se aprovado)
+
+### 7. **Modificar: src/components/cases/SendWhatsAppButton.tsx**
+
+Adicionar template:
+```typescript
+{
+  id: 'expediente_instructions',
+  label: 'Instruções do Expediente',
+  message: `Olá {nome}! 📋
+
+Seu processo de {servico} foi protocolado com sucesso!
+
+📋 Número do Expediente: {expediente_number}
+
+Para acompanhar o andamento, acesse:
+🔗 https://sede.administracionespublicas.gob.es
+
+Passo a passo:
+1. Acesse o link acima
+2. Clique em "Consulta del estado de expedientes"
+3. Insira seu número de expediente: {expediente_number}
+4. Preencha seus dados pessoais
+
+Continuaremos acompanhando e avisaremos sobre qualquer atualização!`,
+}
+```
+
+### 8. **Modificar: supabase/functions/sla-automations/index.ts**
+
+Adicionar na seção PROTOCOL:
+- Notificação ao técnico quando jurídico faz upload do comprovante
+- Alerta ao coordenador se comprovante não for aprovado em 24h
+- Envio automático de WhatsApp com instruções quando expediente é cadastrado
+
+---
+
+## Fluxo Visual
+
+```text
+JURÍDICO                       TÉCNICO                        CLIENTE
+   │                              │                              │
+   │  1. Protocola pedido         │                              │
+   │  ─────────────────►          │                              │
+   │                              │                              │
+   │  2. Upload comprovante       │                              │
+   │  (documento privado)         │                              │
+   │  ─────────────────►          │                              │
+   │                              │                              │
+   │                    3. Notificação recebida                  │
+   │                              │                              │
+   │                    4. Revisa e aprova                       │
+   │                              │                              │
+   │                    5. Libera para cliente                   │
+   │                    ──────────────────────────────►          │
+   │                              │                              │
+   │                              │         6. Visualiza no portal
+   │                              │                              │
+   │  7. Recebe expediente        │                              │
+   │  por e-mail                  │                              │
+   │  ─────────────────►          │                              │
+   │                              │                              │
+   │                    8. Cadastra expediente                   │
+   │                              │                              │
+   │                    9. Sistema envia WhatsApp                │
+   │                    com instruções ────────────────────────► │
+   │                              │                              │
+   │                              │        10. Acompanha no site
+   │                              │            da Extranjería
 ```
 
 ---
 
-## Resultado Esperado
+## Notificações Automáticas
 
-1. O número será sempre enviado no formato correto (string numérica pura)
-2. O usuário pode verificar e editar o número antes de enviar
-3. Validação visual alerta sobre números suspeitos
-4. Console.log facilita debug em caso de problemas futuros
-5. Comportamento idêntico aos componentes que já funcionam (Pagamentos, CRM)
+| Evento | Destinatário | Tipo | Mensagem |
+|--------|--------------|------|----------|
+| Upload comprovante | Técnico responsável | in-app | "Comprovante de protocolo inserido para caso X" |
+| Comprovante não aprovado em 24h | Coordenador | in-app | "Comprovante pendente de aprovação há 24h" |
+| Comprovante aprovado | Cliente (via portal) | in-app | "Seu protocolo foi confirmado!" |
+| Expediente cadastrado | Cliente (WhatsApp) | WhatsApp | Template com instruções de consulta |
+
+---
+
+## Templates de Mensagem (WhatsApp)
+
+### Novo Template: Instruções de Acompanhamento do Expediente
+
+Será adicionado ao `SendWhatsAppButton.tsx` e poderá ser disparado automaticamente quando o técnico cadastrar o número de expediente.
+
+---
+
+## Configurações SLA (system_config)
+
+Novos parâmetros sugeridos:
+```text
+sla_protocol_receipt_approval_hours = 24
+sla_expediente_reminder_days = 7
+```
+
+---
+
+## Impacto nas Permissões (RLS)
+
+O comprovante de protocolo será armazenado no bucket `signed-contracts` (já privado). A visibilidade será controlada pelo campo `protocol_receipt_approved` na tabela `service_cases`:
+- `false`: Apenas staff pode visualizar
+- `true`: Cliente também pode visualizar
+
+---
+
+## Ordem de Implementação
+
+1. **Migração do banco** (adicionar campos)
+2. **Hook useCases** (adicionar mutações)
+3. **Componentes novos** (ProtocolReceiptUpload, ExpedienteNumberInput)
+4. **CaseDetail.tsx** (integrar componentes)
+5. **LegalDashboard.tsx** (ações rápidas)
+6. **SendWhatsAppButton.tsx** (novo template)
+7. **PortalDashboard.tsx** (exibir expediente)
+8. **sla-automations** (notificações automáticas)
+
+---
+
+## Testes Recomendados
+
+Após implementação, testar:
+1. Upload de comprovante pelo Jurídico
+2. Notificação chega ao Técnico
+3. Aprovação do comprovante
+4. Liberação para o cliente no portal
+5. Cadastro do número de expediente
+6. Envio automático de WhatsApp com instruções
+7. Visualização correta no portal do cliente
