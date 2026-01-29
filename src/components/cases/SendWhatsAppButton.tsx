@@ -137,6 +137,25 @@ Passo a passo:
 Continuaremos acompanhando e avisaremos sobre qualquer atualização!`,
   },
   {
+    id: 'approval_congratulations',
+    label: 'Parabéns pela Aprovação',
+    message: `🎉 Parabéns {nome}! 🎉
+
+Temos uma ÓTIMA notícia! Seu processo de {servico} foi APROVADO!
+
+✅ Resolução favorável recebida
+📅 Validade da residência: {residencia_validity}
+
+Próximos passos:
+1️⃣ Agendaremos sua tomada de impressões digitais (huellas)
+2️⃣ Após as huellas, aguardaremos a emissão do seu TIE
+3️⃣ Quando o TIE estiver pronto, avisaremos para retirada
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe CB Asesoria 🙌`,
+  },
+  {
     id: 'custom',
     label: 'Mensagem Personalizada',
     message: '',
@@ -153,6 +172,7 @@ interface SendWhatsAppButtonProps {
   huellasDate?: string | null;
   huellasTime?: string | null;
   huellasLocation?: string | null;
+  residenciaValidityDate?: string | null;
   serviceCaseId: string;
   onStatusUpdate?: (status: string) => void;
   variant?: 'default' | 'outline' | 'ghost';
@@ -170,6 +190,7 @@ export function SendWhatsAppButton({
   huellasDate,
   huellasTime,
   huellasLocation,
+  residenciaValidityDate,
   serviceCaseId,
   onStatusUpdate,
   variant = 'outline',
@@ -213,7 +234,8 @@ export function SendWhatsAppButton({
       .replace(/{expediente_number}/g, expedienteNumber || 'N/A')
       .replace(/{huellas_date}/g, huellasDate || 'A definir')
       .replace(/{huellas_time}/g, huellasTime || 'A definir')
-      .replace(/{huellas_location}/g, huellasLocation || 'A definir');
+      .replace(/{huellas_location}/g, huellasLocation || 'A definir')
+      .replace(/{residencia_validity}/g, residenciaValidityDate || 'A definir');
   };
 
   const getCurrentMessage = () => {

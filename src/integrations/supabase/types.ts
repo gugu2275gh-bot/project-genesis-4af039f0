@@ -1555,6 +1555,9 @@ export type Database = {
       }
       service_cases: {
         Row: {
+          approval_date: string | null
+          approval_notified_client: boolean | null
+          approval_whatsapp_sent_at: string | null
           assigned_to_user_id: string | null
           case_priority: string | null
           client_user_id: string | null
@@ -1586,6 +1589,7 @@ export type Database = {
           protocol_receipt_url: string | null
           requirement_deadline: string | null
           requirement_received_at: string | null
+          residencia_validity_date: string | null
           resource_deadline: string | null
           resource_notes: string | null
           resource_status: string | null
@@ -1605,6 +1609,9 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          approval_date?: string | null
+          approval_notified_client?: boolean | null
+          approval_whatsapp_sent_at?: string | null
           assigned_to_user_id?: string | null
           case_priority?: string | null
           client_user_id?: string | null
@@ -1638,6 +1645,7 @@ export type Database = {
           protocol_receipt_url?: string | null
           requirement_deadline?: string | null
           requirement_received_at?: string | null
+          residencia_validity_date?: string | null
           resource_deadline?: string | null
           resource_notes?: string | null
           resource_status?: string | null
@@ -1657,6 +1665,9 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          approval_date?: string | null
+          approval_notified_client?: boolean | null
+          approval_whatsapp_sent_at?: string | null
           assigned_to_user_id?: string | null
           case_priority?: string | null
           client_user_id?: string | null
@@ -1690,6 +1701,7 @@ export type Database = {
           protocol_receipt_url?: string | null
           requirement_deadline?: string | null
           requirement_received_at?: string | null
+          residencia_validity_date?: string | null
           resource_deadline?: string | null
           resource_notes?: string | null
           resource_status?: string | null
@@ -2262,6 +2274,7 @@ export type Database = {
         | "AGUARDANDO_CITA_RETIRADA"
         | "TIE_RETIRADO"
         | "DENEGADO"
+        | "APROVADO_INTERNAMENTE"
       webhook_source: "ASSINATURA" | "PAGAMENTO" | "IA_WHATSAPP" | "OUTRO"
     }
     CompositeTypes: {
@@ -2507,6 +2520,7 @@ export const Constants = {
         "AGUARDANDO_CITA_RETIRADA",
         "TIE_RETIRADO",
         "DENEGADO",
+        "APROVADO_INTERNAMENTE",
       ],
       webhook_source: ["ASSINATURA", "PAGAMENTO", "IA_WHATSAPP", "OUTRO"],
     },

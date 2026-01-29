@@ -264,6 +264,120 @@ export function useCases() {
     },
   });
 
+  const registerApproval = useMutation({
+    mutationFn: async ({ 
+      id, 
+      approvalDate, 
+      residenciaValidityDate 
+    }: { 
+      id: string; 
+      approvalDate: string;
+      residenciaValidityDate?: string;
+    }) => {
+      // Update the case status to APROVADO_INTERNAMENTE
+      const { data, error } = await supabase
+        .from('service_cases')
+        .update({
+          technical_status: 'APROVADO_INTERNAMENTE',
+          approval_date: approvalDate,
+          residencia_validity_date: residenciaValidityDate || null,
+          decision_result: 'APROVADO',
+        } as any)
+        .eq('id', id)
+        .select(`
+          *,
+          assigned_to_user_id,
+          opportunities (leads (contacts (full_name)))
+        `)
+        .single();
+      
+      if (error) throw error;
+      
+      // Notify the team about the approval
+      const clientName = (data as any).opportunities?.leads?.contacts?.full_name || 'Cliente';
+      
+      // Notify assigned technician
+      if (data.assigned_to_user_id) {
+        await supabase.from('notifications').insert({
+          user_id: data.assigned_to_user_id,
+          type: 'case_approved',
+          title: '🎉 Processo Aprovado!',
+          message: `O processo de ${clientName} foi aprovado! Entre em contato para dar a boa notícia.`
+        });
+      }
+      
+      // Notify managers
+      const { data: managers } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'MANAGER');
+      
+      for (const mgr of managers || []) {
+        await supabase.from('notifications').insert({
+          user_id: mgr.user_id,
+          type: 'case_approved',
+          title: '🎉 Aprovação Registrada',
+          message: `Processo de ${clientName} aprovado!`
+        });
+      }
+      
+      // Notify admins
+      const { data: admins } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'ADMIN');
+      
+      for (const admin of admins || []) {
+        await supabase.from('notifications').insert({
+          user_id: admin.user_id,
+          type: 'case_approved',
+          title: '🎉 Aprovação Registrada',
+          message: `Processo de ${clientName} aprovado!`
+        });
+      }
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      toast({ title: 'Aprovação registrada com sucesso!' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao registrar aprovação', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const confirmClientContact = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from('service_cases')
+        .update({
+          technical_status: 'AGENDAR_HUELLAS',
+          approval_notified_client: true,
+          approval_whatsapp_sent_at: new Date().toISOString(),
+        } as any)
+        .eq('id', id)
+        .select(`
+          *,
+          opportunities (leads (contacts (phone, full_name)))
+        `)
+        .single();
+      
+      if (error) throw error;
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      toast({ title: 'Status atualizado para Agendar Huellas' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao confirmar contato', description: error.message, variant: 'destructive' });
+    },
+  });
+
   return {
     cases: casesQuery.data ?? [],
     myCases: myCasesQuery.data ?? [],
@@ -276,6 +390,8 @@ export function useCases() {
     closeCase,
     approveDocumentation,
     sendToLegal,
+    registerApproval,
+    confirmClientContact,
   };
 }
 

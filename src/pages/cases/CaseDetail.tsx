@@ -39,13 +39,14 @@ import { ReleaseDocumentsButton } from '@/components/cases/ReleaseDocumentsButto
 import { ProtocolReceiptUpload } from '@/components/cases/ProtocolReceiptUpload';
 import { ExpedienteNumberInput } from '@/components/cases/ExpedienteNumberInput';
 import { RequirementActionsPanel } from '@/components/cases/RequirementActionsPanel';
+import { ApprovalSection } from '@/components/cases/ApprovalSection';
 import { cn } from '@/lib/utils';
 
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: serviceCase, isLoading } = useCase(id);
-  const { updateStatus, assignCase, submitCase, closeCase, updateCase, approveDocumentation, sendToLegal } = useCases();
+  const { updateStatus, assignCase, submitCase, closeCase, updateCase, approveDocumentation, sendToLegal, registerApproval, confirmClientContact } = useCases();
   const { documents, approveDocument, rejectDocument, markPostProtocolPending } = useDocuments(id);
   const { requirements, createRequirement, updateRequirement, requestExtension, sendToLegal: sendRequirementToLegal } = useRequirements(id);
   const { data: profiles } = useProfiles();
@@ -187,9 +188,7 @@ export default function CaseDetail() {
     if (status === 'ENVIADO_JURIDICO') {
       actions.push({ label: 'Marcar Protocolado', action: handleMarkProtocolado, icon: Send });
     }
-    if (status === 'PROTOCOLADO' || status === 'EM_ACOMPANHAMENTO') {
-      actions.push({ label: 'Registrar Aprovação', action: () => handleStatusChange('AGENDAR_HUELLAS'), icon: Check });
-    }
+    // Removed - handled by ApprovalSection now
     if (status === 'DENEGADO') {
       actions.push({ label: 'Entrar com Recurso', action: () => setShowRecursoDialog(true), icon: Scale });
     }
@@ -224,6 +223,7 @@ export default function CaseDetail() {
               huellasDate={serviceCase.huellas_date}
               huellasTime={serviceCase.huellas_time}
               huellasLocation={serviceCase.huellas_location}
+              residenciaValidityDate={(serviceCase as any).residencia_validity_date}
               serviceCaseId={serviceCase.id}
               onStatusUpdate={(status) => handleStatusChange(status)}
             />
@@ -539,8 +539,26 @@ export default function CaseDetail() {
             <TechnicalNotesSection serviceCaseId={serviceCase.id} />
           </div>
 
+          {/* Approval Section - visible for relevant statuses */}
+          {['PROTOCOLADO', 'EM_ACOMPANHAMENTO', 'APROVADO_INTERNAMENTE', 'AGENDAR_HUELLAS', 'AGUARDANDO_CITA_HUELLAS', 'HUELLAS_REALIZADO', 'DISPONIVEL_RETIRADA_TIE', 'AGUARDANDO_CITA_RETIRADA', 'TIE_RETIRADO', 'ENCERRADO_APROVADO'].includes(serviceCase.technical_status || '') && (
+            <ApprovalSection
+              serviceCase={serviceCase}
+              onRegisterApproval={async (approvalDate, residenciaValidityDate) => {
+                await registerApproval.mutateAsync({ 
+                  id: serviceCase.id, 
+                  approvalDate, 
+                  residenciaValidityDate 
+                });
+              }}
+              onConfirmClientContact={async () => {
+                await confirmClientContact.mutateAsync(serviceCase.id);
+              }}
+              isLoading={registerApproval.isPending || confirmClientContact.isPending}
+            />
+          )}
+
           {/* Seção de Protocolo - visível após ENVIADO_JURIDICO */}
-          {['ENVIADO_JURIDICO', 'PROTOCOLADO', 'EM_ACOMPANHAMENTO', 'AGENDAR_HUELLAS', 'AGUARDANDO_CITA_HUELLAS', 'HUELLAS_REALIZADO', 'DISPONIVEL_RETIRADA_TIE', 'AGUARDANDO_CITA_RETIRADA', 'TIE_RETIRADO', 'ENCERRADO_APROVADO'].includes(serviceCase.technical_status || '') && (
+          {['ENVIADO_JURIDICO', 'PROTOCOLADO', 'EM_ACOMPANHAMENTO', 'APROVADO_INTERNAMENTE', 'AGENDAR_HUELLAS', 'AGUARDANDO_CITA_HUELLAS', 'HUELLAS_REALIZADO', 'DISPONIVEL_RETIRADA_TIE', 'AGUARDANDO_CITA_RETIRADA', 'TIE_RETIRADO', 'ENCERRADO_APROVADO'].includes(serviceCase.technical_status || '') && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <ProtocolReceiptUpload
                 serviceCaseId={serviceCase.id}
