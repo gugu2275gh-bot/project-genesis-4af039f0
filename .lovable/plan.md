@@ -1,242 +1,307 @@
 
-# Plano: Implementação do Fluxo de Protocolo do Pedido (Etapa 6)
+# Plano: Implementação do Acompanhamento Pós-Protocolo (Etapa 7)
 
 ## Resumo da Análise
 
-Após análise detalhada do código atual, identifiquei o que **já existe** e o que **precisa ser implementado**:
+Após análise detalhada do código existente, identifiquei que grande parte da infraestrutura já existe:
 
 ### O que já existe
 | Funcionalidade | Status | Localização |
 |----------------|--------|-------------|
-| Campo `protocol_number` na tabela `service_cases` | ✅ | Supabase types |
-| Campo `submission_date` | ✅ | Supabase types |
-| Status `PROTOCOLADO` no enum | ✅ | types/database.ts |
-| Automação de notificação pré-protocolo (D-3) | ✅ | sla-automations |
-| Botão "Marcar Protocolado" no CaseDetail | ✅ | CaseDetail.tsx |
-| Template de WhatsApp "Informação de Protocolo" | ✅ | SendWhatsAppButton.tsx |
-| Dashboard Jurídico com lista de casos | ✅ | LegalDashboard.tsx |
+| Tabela `requirements_from_authority` | ✅ | Supabase |
+| Tabela `document_reminders` (para rastreio) | ✅ | Supabase |
+| Hook `useRequirements` | ✅ | src/hooks/useRequirements.ts |
+| Alertas de Exigência no SLA Monitoring | ✅ | sla-automations |
+| UI de Exigências no CaseDetail | ✅ | CaseDetail.tsx (tab Exigências) |
+| Seção REQUIREMENTS no sla-automations | ✅ | linhas 1130-1210 |
+| Configuração `sla_post_protocol_followup_days` | ✅ | system_config ("14,21,35") |
 
 ### O que precisa ser implementado
 
 | Funcionalidade | Descrição |
 |----------------|-----------|
-| **Comprovante de Protocolo (Documento Privado)** | Upload de documento pelo Jurídico com flag `is_visible_to_client = false` até aprovação do Técnico |
-| **Número de Expediente** | Novo campo para armazenar o ID do processo na Extranjería (diferente do `protocol_number`) |
-| **Fluxo de aprovação do comprovante** | Técnico deve aprovar antes de liberar para o cliente |
-| **Notificação automática ao cliente** | Quando status muda para PROTOCOLADO |
-| **Orientações de consulta do expediente** | Template WhatsApp + notificação com instruções de acompanhamento |
-| **Exibição no Portal do Cliente** | Mostrar número de expediente como ID do processo |
+| **Tracking de Documentos Pendentes Pós-Protocolo** | Flag `is_post_protocol_pending` na tabela `service_documents` |
+| **Alertas Escalonados Pós-Protocolo** | 2 sem → Técnico, 3 sem → Coordenador, 5 sem → ADM |
+| **UI para Marcar Documentos como Pendentes Pós-Protocolo** | Checkbox/toggle no CaseDetail |
+| **Seção POST_PROTOCOL_DOCS no sla-automations** | Nova automação para documentos pendentes pós-protocolo |
+| **Ação de "Enviar ao Jurídico" pós-protocolo** | Botão para encaminhar documento complementar |
 
 ---
 
 ## Alterações no Banco de Dados
 
-### 1. Adicionar campos à tabela `service_cases`
+### 1. Adicionar campo à tabela `service_documents`
 
 ```sql
-ALTER TABLE service_cases ADD COLUMN IF NOT EXISTS expediente_number TEXT;
-ALTER TABLE service_cases ADD COLUMN IF NOT EXISTS protocol_receipt_url TEXT;
-ALTER TABLE service_cases ADD COLUMN IF NOT EXISTS protocol_receipt_approved BOOLEAN DEFAULT false;
-ALTER TABLE service_cases ADD COLUMN IF NOT EXISTS protocol_receipt_approved_by UUID REFERENCES profiles(id);
-ALTER TABLE service_cases ADD COLUMN IF NOT EXISTS protocol_receipt_approved_at TIMESTAMPTZ;
+ALTER TABLE service_documents 
+ADD COLUMN IF NOT EXISTS is_post_protocol_pending BOOLEAN DEFAULT false;
+
+ALTER TABLE service_documents 
+ADD COLUMN IF NOT EXISTS post_protocol_pending_since TIMESTAMPTZ;
 ```
 
 **Explicação dos campos:**
-- `expediente_number`: Número de expediente da Extranjería (ex: "E/2024/12345")
-- `protocol_receipt_url`: URL do comprovante de protocolo (arquivo privado)
-- `protocol_receipt_approved`: Flag indicando se o técnico aprovou
-- `protocol_receipt_approved_by`: Quem aprovou o comprovante
-- `protocol_receipt_approved_at`: Quando foi aprovado
+- `is_post_protocol_pending`: Flag indicando que o documento ainda precisa ser enviado após o protocolo
+- `post_protocol_pending_since`: Data a partir da qual começou a contagem para alertas
 
 ---
 
-## Arquivos a Criar/Modificar
+## Arquivos a Modificar
 
-### 1. **Novo Componente: ProtocolReceiptUpload.tsx**
-Componente para o Jurídico fazer upload do comprovante de protocolo.
+### 1. **Modificar: supabase/functions/sla-automations/index.ts**
 
-```text
-src/components/cases/ProtocolReceiptUpload.tsx
-```
+Adicionar nova seção `POST_PROTOCOL_DOCS`:
 
-**Funcionalidades:**
-- Input de arquivo para upload do comprovante (PDF)
-- Upload para bucket `signed-contracts` (já existe e é privado)
-- Salvar URL no campo `protocol_receipt_url`
-- Criar notificação para o técnico responsável
-
-### 2. **Novo Componente: ExpedienteNumberInput.tsx**
-Campo para inserir o número de expediente quando recebido.
-
-```text
-src/components/cases/ExpedienteNumberInput.tsx
-```
-
-**Funcionalidades:**
-- Input para digitar o número de expediente
-- Validação de formato (opcional, ex: E/YYYY/XXXXX)
-- Botão de salvar com confirmação
-- Ao salvar: enviar WhatsApp automático com instruções de consulta
-
-### 3. **Modificar: src/pages/cases/CaseDetail.tsx**
-
-Adicionar:
-- Seção de "Protocolo" com:
-  - Upload do comprovante (visível para JURIDICO)
-  - Botão de aprovar comprovante (visível para TECNICO)
-  - Campo de número de expediente (após protocolo)
-  - Exibição do comprovante aprovado (link para download)
-
-### 4. **Modificar: src/pages/legal/LegalDashboard.tsx**
-
-Adicionar:
-- Coluna "Comprovante" mostrando status (Pendente/Enviado/Aprovado)
-- Ação rápida para upload de comprovante
-- Ação rápida para inserir expediente
-
-### 5. **Modificar: src/hooks/useCases.ts**
-
-Adicionar mutações:
-- `uploadProtocolReceipt`: Upload do comprovante
-- `approveProtocolReceipt`: Aprovação pelo técnico
-- `setExpedienteNumber`: Inserir número de expediente
-- `markAsProtocolado`: Transição de status com notificações automáticas
-
-### 6. **Modificar: src/pages/portal/PortalDashboard.tsx**
-
-Alterar:
-- Mostrar `expediente_number` como "ID do Processo" em vez de `protocol_number`
-- Adicionar link para consulta no site da Extranjería
-- Exibir comprovante de protocolo (se aprovado)
-
-### 7. **Modificar: src/components/cases/SendWhatsAppButton.tsx**
-
-Adicionar template:
 ```typescript
-{
-  id: 'expediente_instructions',
-  label: 'Instruções do Expediente',
-  message: `Olá {nome}! 📋
+// =====================================================
+// 15. POST-PROTOCOL PENDING DOCUMENTS ALERTS
+// =====================================================
+if (shouldRun('POST_PROTOCOL_DOCS')) {
+  console.log('Running POST_PROTOCOL_DOCS automation...')
+  
+  // Find documents marked as pending post-protocol
+  const { data: pendingDocs } = await supabase
+    .from('service_documents')
+    .select(`
+      id, service_case_id, document_type_id, post_protocol_pending_since,
+      service_document_types!inner (name),
+      service_cases!inner (
+        assigned_to_user_id,
+        opportunities!inner (leads!inner (contacts!inner (full_name)))
+      )
+    `)
+    .eq('is_post_protocol_pending', true)
+    .in('status', ['NAO_ENVIADO', 'ENVIADO', 'RECUSADO'])
 
-Seu processo de {servico} foi protocolado com sucesso!
-
-📋 Número do Expediente: {expediente_number}
-
-Para acompanhar o andamento, acesse:
-🔗 https://sede.administracionespublicas.gob.es
-
-Passo a passo:
-1. Acesse o link acima
-2. Clique em "Consulta del estado de expedientes"
-3. Insira seu número de expediente: {expediente_number}
-4. Preencha seus dados pessoais
-
-Continuaremos acompanhando e avisaremos sobre qualquer atualização!`,
+  for (const doc of pendingDocs || []) {
+    const pendingSince = new Date(doc.post_protocol_pending_since || doc.updated_at)
+    const weeksPending = (now.getTime() - pendingSince.getTime()) / (7 * 24 * 60 * 60 * 1000)
+    
+    const caseData = doc.service_cases as any
+    const docName = (doc.service_document_types as any)?.name || 'Documento'
+    const clientName = caseData?.opportunities?.leads?.contacts?.full_name || 'Cliente'
+    const caseShortId = doc.service_case_id.slice(0, 8)
+    
+    // Week 2 - Alert to Technician
+    if (weeksPending >= 2 && weeksPending < 3) {
+      if (!(await techDocReminderSent(doc.service_case_id, `POST_PROTO_W2_${doc.id}`))) {
+        if (caseData.assigned_to_user_id) {
+          await supabase.from('notifications').insert({
+            user_id: caseData.assigned_to_user_id,
+            type: 'post_protocol_doc_pending',
+            title: 'Documento Pendente Pós-Protocolo',
+            message: `${docName} de ${clientName} (caso ${caseShortId}) pendente há 2 semanas.`
+          })
+        }
+        await recordTechDocReminder(doc.service_case_id, `POST_PROTO_W2_${doc.id}`, 'TECH')
+        results.postProtocolDocsAlerts++
+      }
+    }
+    
+    // Week 3 - Escalate to Coordinator
+    if (weeksPending >= 3 && weeksPending < 5) {
+      if (!(await techDocReminderSent(doc.service_case_id, `POST_PROTO_W3_${doc.id}`))) {
+        const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
+        for (const mgr of managers || []) {
+          await supabase.from('notifications').insert({
+            user_id: mgr.user_id,
+            type: 'post_protocol_doc_escalated',
+            title: 'Documento Pós-Protocolo Atrasado',
+            message: `${docName} de ${clientName} (caso ${caseShortId}) pendente há 3 semanas.`
+          })
+        }
+        await recordTechDocReminder(doc.service_case_id, `POST_PROTO_W3_${doc.id}`, 'COORD')
+        results.postProtocolDocsAlerts++
+      }
+    }
+    
+    // Week 5 - Escalate to Admin
+    if (weeksPending >= 5) {
+      if (!(await techDocReminderSent(doc.service_case_id, `POST_PROTO_W5_${doc.id}`))) {
+        const { data: admins } = await supabase.from('user_roles').select('user_id').eq('role', 'ADMIN')
+        for (const admin of admins || []) {
+          await supabase.from('notifications').insert({
+            user_id: admin.user_id,
+            type: 'post_protocol_doc_critical',
+            title: '🚨 Documento Pós-Protocolo Crítico',
+            message: `${docName} de ${clientName} (caso ${caseShortId}) pendente há 5+ semanas!`
+          })
+        }
+        await recordTechDocReminder(doc.service_case_id, `POST_PROTO_W5_${doc.id}`, 'ADMIN')
+        results.postProtocolDocsAlerts++
+      }
+    }
+  }
 }
 ```
 
-### 8. **Modificar: supabase/functions/sla-automations/index.ts**
+Adicionar tipo de automação:
+```typescript
+type AutomationType = 
+  | 'ALL'
+  | ...
+  | 'POST_PROTOCOL_DOCS'  // Novo
+```
 
-Adicionar na seção PROTOCOL:
-- Notificação ao técnico quando jurídico faz upload do comprovante
-- Alerta ao coordenador se comprovante não for aprovado em 24h
-- Envio automático de WhatsApp com instruções quando expediente é cadastrado
+Adicionar contador de resultados:
+```typescript
+postProtocolDocsAlerts: 0,
+```
+
+---
+
+### 2. **Modificar: src/hooks/useDocuments.ts**
+
+Adicionar mutação para marcar documento como pendente pós-protocolo:
+
+```typescript
+const markPostProtocolPending = useMutation({
+  mutationFn: async ({ docId, isPending }: { docId: string; isPending: boolean }) => {
+    const { data, error } = await supabase
+      .from('service_documents')
+      .update({
+        is_post_protocol_pending: isPending,
+        post_protocol_pending_since: isPending ? new Date().toISOString() : null,
+      })
+      .eq('id', docId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['service-documents'] });
+    toast({ title: 'Documento atualizado' });
+  },
+});
+```
+
+---
+
+### 3. **Modificar: src/pages/cases/CaseDetail.tsx**
+
+Adicionar indicador visual e toggle para documentos pendentes pós-protocolo na tab de Documentos.
+
+Na listagem de documentos, adicionar:
+- Badge "Pós-Protocolo" para documentos marcados
+- Toggle para marcar/desmarcar como pendente pós-protocolo (visível apenas após status PROTOCOLADO)
+- Botão "Enviar ao Jurídico" para encaminhar documento complementar
+
+---
+
+### 4. **Modificar: src/hooks/useSLAMonitoring.ts**
+
+Adicionar contagem de documentos pendentes pós-protocolo no painel de SLA:
+
+```typescript
+// Post-protocol pending documents
+const { count: postProtocolDocsPending } = await supabase
+  .from('service_documents')
+  .select('id', { count: 'exact' })
+  .eq('is_post_protocol_pending', true)
+  .in('status', ['NAO_ENVIADO', 'ENVIADO', 'RECUSADO']);
+```
 
 ---
 
 ## Fluxo Visual
 
 ```text
-JURÍDICO                       TÉCNICO                        CLIENTE
-   │                              │                              │
-   │  1. Protocola pedido         │                              │
-   │  ─────────────────►          │                              │
-   │                              │                              │
-   │  2. Upload comprovante       │                              │
-   │  (documento privado)         │                              │
-   │  ─────────────────►          │                              │
-   │                              │                              │
-   │                    3. Notificação recebida                  │
-   │                              │                              │
-   │                    4. Revisa e aprova                       │
-   │                              │                              │
-   │                    5. Libera para cliente                   │
-   │                    ──────────────────────────────►          │
-   │                              │                              │
-   │                              │         6. Visualiza no portal
-   │                              │                              │
-   │  7. Recebe expediente        │                              │
-   │  por e-mail                  │                              │
-   │  ─────────────────►          │                              │
-   │                              │                              │
-   │                    8. Cadastra expediente                   │
-   │                              │                              │
-   │                    9. Sistema envia WhatsApp                │
-   │                    com instruções ────────────────────────► │
-   │                              │                              │
-   │                              │        10. Acompanha no site
-   │                              │            da Extranjería
+         PROTOCOLO REALIZADO
+                │
+                ▼
+   ┌─────────────────────────────┐
+   │ Técnico marca documento(s)  │
+   │ como "Pendente Pós-Proto"   │
+   └─────────────────────────────┘
+                │
+                ▼
+   ┌─────────────────────────────┐
+   │ Sistema inicia contagem     │
+   │ post_protocol_pending_since │
+   └─────────────────────────────┘
+                │
+    ┌───────────┼───────────┬──────────────┐
+    ▼           ▼           ▼              ▼
+  2 sem       3 sem       5 sem         Cliente
+ (Técnico)  (Coord)     (Admin)        envia doc
+    │           │           │              │
+    ▼           ▼           ▼              ▼
+ Notific.   Escalação   Alerta       Técnico aprova
+ in-app     MANAGER     Crítico      e envia ao Jurídico
+                                          │
+                                          ▼
+                                   Fluxo de Exigência
+                                   (se necessário)
 ```
 
 ---
 
-## Notificações Automáticas
+## Escalas de Alertas Pós-Protocolo
 
-| Evento | Destinatário | Tipo | Mensagem |
-|--------|--------------|------|----------|
-| Upload comprovante | Técnico responsável | in-app | "Comprovante de protocolo inserido para caso X" |
-| Comprovante não aprovado em 24h | Coordenador | in-app | "Comprovante pendente de aprovação há 24h" |
-| Comprovante aprovado | Cliente (via portal) | in-app | "Seu protocolo foi confirmado!" |
-| Expediente cadastrado | Cliente (WhatsApp) | WhatsApp | Template com instruções de consulta |
-
----
-
-## Templates de Mensagem (WhatsApp)
-
-### Novo Template: Instruções de Acompanhamento do Expediente
-
-Será adicionado ao `SendWhatsAppButton.tsx` e poderá ser disparado automaticamente quando o técnico cadastrar o número de expediente.
+| Tempo | Destinatário | Tipo | Mensagem |
+|-------|--------------|------|----------|
+| 2 semanas | Técnico responsável | in-app | "Documento X pendente há 2 semanas" |
+| 3 semanas | Coordenador (MANAGER) | in-app | "Documento X atrasado há 3 semanas" |
+| 5 semanas | Administrador (ADMIN) | in-app | "🚨 Documento X crítico - 5+ semanas" |
 
 ---
 
-## Configurações SLA (system_config)
+## Integração com Exigências (Requerimientos)
 
-Novos parâmetros sugeridos:
-```text
-sla_protocol_receipt_approval_hours = 24
-sla_expediente_reminder_days = 7
-```
+O sistema de exigências já está implementado e funcionando:
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Cadastro de Exigência (requirements_from_authority) | ✅ |
+| Prazos Oficial e Interno | ✅ |
+| Alertas automáticos (2 dias interno, 5 dias oficial) | ✅ |
+| Status (ABERTA, EM_ANDAMENTO, RESPONDIDA, EXPIRADA) | ✅ |
+| UI no CaseDetail | ✅ |
+
+**Não há necessidade de alterações** no sistema de exigências - ele já atende ao requisito de "Requerimiento" mencionado na documentação.
 
 ---
 
-## Impacto nas Permissões (RLS)
+## Configurações SLA Existentes
 
-O comprovante de protocolo será armazenado no bucket `signed-contracts` (já privado). A visibilidade será controlada pelo campo `protocol_receipt_approved` na tabela `service_cases`:
-- `false`: Apenas staff pode visualizar
-- `true`: Cliente também pode visualizar
+A configuração `sla_post_protocol_followup_days` já existe com valor "14,21,35" (dias):
+- 14 dias (2 semanas) → Alerta Técnico
+- 21 dias (3 semanas) → Alerta Coordenador  
+- 35 dias (5 semanas) → Alerta Admin
 
 ---
 
 ## Ordem de Implementação
 
 1. **Migração do banco** (adicionar campos)
-2. **Hook useCases** (adicionar mutações)
-3. **Componentes novos** (ProtocolReceiptUpload, ExpedienteNumberInput)
-4. **CaseDetail.tsx** (integrar componentes)
-5. **LegalDashboard.tsx** (ações rápidas)
-6. **SendWhatsAppButton.tsx** (novo template)
-7. **PortalDashboard.tsx** (exibir expediente)
-8. **sla-automations** (notificações automáticas)
+2. **Hook useDocuments** (adicionar mutação)
+3. **CaseDetail.tsx** (UI de toggle e indicadores)
+4. **useSLAMonitoring.ts** (contagem no painel)
+5. **sla-automations** (nova seção POST_PROTOCOL_DOCS)
+6. **Atualizar types.ts** (regenerar tipos)
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/migrations/new_migration.sql` | Adicionar campos à service_documents |
+| `src/integrations/supabase/types.ts` | Regenerar tipos |
+| `src/hooks/useDocuments.ts` | Adicionar markPostProtocolPending |
+| `src/pages/cases/CaseDetail.tsx` | UI para marcar docs pós-protocolo |
+| `src/hooks/useSLAMonitoring.ts` | Adicionar contagem |
+| `supabase/functions/sla-automations/index.ts` | Seção POST_PROTOCOL_DOCS |
 
 ---
 
 ## Testes Recomendados
 
-Após implementação, testar:
-1. Upload de comprovante pelo Jurídico
-2. Notificação chega ao Técnico
-3. Aprovação do comprovante
-4. Liberação para o cliente no portal
-5. Cadastro do número de expediente
-6. Envio automático de WhatsApp com instruções
-7. Visualização correta no portal do cliente
+1. Marcar documento como pendente pós-protocolo
+2. Verificar contagem no painel SLA
+3. Simular passagem de tempo (ajustar post_protocol_pending_since)
+4. Verificar alertas escalonados
+5. Desmarcar documento e verificar que alertas param
+6. Testar fluxo de envio ao jurídico
