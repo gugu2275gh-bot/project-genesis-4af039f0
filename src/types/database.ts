@@ -94,6 +94,7 @@ export type TechnicalStatus =
   | 'EM_RECURSO'
   | 'AGUARDANDO_RECURSO'
   | 'DENEGADO'
+  | 'APROVADO_INTERNAMENTE'
   | 'AGENDAR_HUELLAS'
   | 'AGUARDANDO_CITA_HUELLAS'
   | 'HUELLAS_REALIZADO'
@@ -409,6 +410,7 @@ export const TECHNICAL_STATUS_LABELS: Record<TechnicalStatus, string> = {
   EM_RECURSO: 'Em Recurso',
   AGUARDANDO_RECURSO: 'Aguardando Recurso',
   DENEGADO: 'Denegado',
+  APROVADO_INTERNAMENTE: 'Aprovado (Aguardando Contato)',
   AGENDAR_HUELLAS: 'Agendar Tomada de Huellas',
   AGUARDANDO_CITA_HUELLAS: 'Aguardando Cita de Huellas',
   HUELLAS_REALIZADO: 'Huellas Realizado',
