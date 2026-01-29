@@ -124,6 +124,7 @@ Continuaremos monitorando e informaremos sobre qualquer atualização!`,
 interface SendWhatsAppButtonProps {
   phone: number | null;
   clientName: string;
+  leadId?: string | null;
   serviceType?: string;
   protocolNumber?: string | null;
   huellasDate?: string | null;
@@ -139,6 +140,7 @@ interface SendWhatsAppButtonProps {
 export function SendWhatsAppButton({
   phone,
   clientName,
+  leadId,
   serviceType = 'extranjería',
   protocolNumber,
   huellasDate,
@@ -208,8 +210,9 @@ export function SendWhatsAppButton({
 
       if (error) throw error;
 
-      // Log the message
+      // Log the message with id_lead for proper tracking
       await supabase.from('mensagens_cliente').insert({
+        id_lead: leadId,
         phone_id: phone,
         mensagem_IA: message,
         origem: 'SISTEMA',
