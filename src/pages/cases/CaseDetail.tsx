@@ -175,6 +175,7 @@ export default function CaseDetail() {
   const clientPhone = serviceCase.opportunities?.leads?.contacts?.phone ?? null;
   const clientName = serviceCase.opportunities?.leads?.contacts?.full_name || 'Cliente';
   const clientEmail = serviceCase.opportunities?.leads?.contacts?.email;
+  const leadId = serviceCase.opportunities?.leads?.id;
 
   // Fluxo de ações baseado no status
   const getAvailableActions = () => {
@@ -231,6 +232,7 @@ export default function CaseDetail() {
             <SendWhatsAppButton
               phone={clientPhone}
               clientName={clientName}
+              leadId={leadId}
               serviceType={SERVICE_INTEREST_LABELS[serviceCase.service_type]}
               protocolNumber={serviceCase.protocol_number}
               huellasDate={serviceCase.huellas_date}
