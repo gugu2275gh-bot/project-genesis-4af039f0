@@ -86,6 +86,76 @@ Identificamos um problema com um dos documentos enviados para o seu processo. Po
 Se precisar de ajuda, entre em contato conosco!`,
   },
   {
+    id: 'huellas_instructions',
+    label: 'Instruções de Huellas',
+    message: `📋 Instruções para sua Tomada de Huellas
+
+Olá {nome}!
+
+📅 Data: {huellas_date}
+⏰ Horário: {huellas_time}
+📍 Local: {huellas_location}
+
+📝 DOCUMENTOS QUE VOCÊ DEVE LEVAR:
+1. Resolução Favorável original
+2. Passaporte original válido
+3. Foto 3x4 colorida (fundo branco, recente)
+4. Certificado de Empadronamento (máx. 90 dias)
+5. Comprovante de pagamento da Taxa 790/012
+6. Formulário EX17 impresso e assinado
+7. Comprovante do agendamento (esta confirmação)
+
+💰 PAGAMENTO DA TAXA:
+• Valor: €16,08
+• Pague em agência CaixaBank ou terminal automático
+• Guarde o comprovante carimbado
+
+⚠️ IMPORTANTE:
+• Chegue 15 minutos antes
+• Leve caneta
+• Após o atendimento, tire foto do resguardo e nos envie
+
+A CB Asesoria não acompanha presencialmente, mas estamos à disposição para qualquer dúvida!
+
+Boa sorte! 🍀`,
+  },
+  {
+    id: 'huellas_reminder_d3',
+    label: 'Lembrete Huellas (3 dias)',
+    message: `Olá {nome}! 📅
+
+Sua tomada de huellas é daqui a 3 dias:
+📅 {huellas_date} às {huellas_time}
+📍 {huellas_location}
+
+Já organizou todos os documentos?
+☐ Passaporte
+☐ Foto 3x4
+☐ Empadronamento
+☐ Taxa paga (€16,08)
+☐ EX17 assinado
+
+Qualquer dúvida, estamos aqui! 💬`,
+  },
+  {
+    id: 'huellas_reminder_d1',
+    label: 'Lembrete Huellas (1 dia)',
+    message: `Olá {nome}! ⏰
+
+AMANHÃ é sua tomada de huellas!
+📅 {huellas_date} às {huellas_time}
+📍 {huellas_location}
+
+Chegue 15 minutos antes e não esqueça:
+✅ Todos os documentos originais
+✅ Taxa paga
+✅ Caneta
+
+Após o atendimento, envie-nos foto do resguardo!
+
+Boa sorte! 🍀`,
+  },
+  {
     id: 'huellas_reminder',
     label: 'Lembrete de Huellas',
     message: `Olá {nome}! 📅

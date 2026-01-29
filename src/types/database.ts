@@ -421,6 +421,32 @@ export const TECHNICAL_STATUS_LABELS: Record<TechnicalStatus, string> = {
   ENCERRADO_NEGADO: 'Encerrado (Negado)',
 };
 
+export const TECHNICAL_STATUS_DESCRIPTIONS: Record<string, string> = {
+  CONTATO_INICIAL: 'Aguardando primeiro contato com o cliente',
+  AGUARDANDO_DOCUMENTOS: 'Documentos liberados, aguardando envio pelo cliente',
+  DOCUMENTOS_EM_CONFERENCIA: 'Todos os documentos recebidos, em análise interna',
+  DOCUMENTACAO_PARCIAL_APROVADA: 'Parte dos documentos aprovados, aguardando restantes',
+  EM_ORGANIZACAO: 'Organizando dossiê para envio ao jurídico',
+  ENVIADO_JURIDICO: 'Dossiê enviado ao departamento jurídico',
+  PRONTO_PARA_SUBMISSAO: 'Documentação aprovada, pronto para protocolar',
+  SUBMETIDO: 'Processo submetido, aguardando número de protocolo',
+  PROTOCOLADO: 'Processo protocolado com número de expediente',
+  EM_ACOMPANHAMENTO: 'Aguardando decisão do órgão',
+  EXIGENCIA_ORGAO: 'Órgão solicitou documentação adicional',
+  EM_RECURSO: 'Recurso em análise',
+  AGUARDANDO_RECURSO: 'Aguardando preparação de recurso',
+  DENEGADO: 'Processo denegado',
+  APROVADO_INTERNAMENTE: 'Aprovação registrada, aguardando contato com cliente',
+  AGENDAR_HUELLAS: 'Cliente notificado da aprovação, aguardando disponibilidade para huellas',
+  AGUARDANDO_CITA_HUELLAS: 'Agendamento solicitado, aguardando confirmação de data/hora',
+  HUELLAS_REALIZADO: 'Tomada de impressões digitais realizada com sucesso',
+  DISPONIVEL_RETIRADA_TIE: 'TIE pronto para retirada na comisaría',
+  AGUARDANDO_CITA_RETIRADA: 'Aguardando agendamento para retirada do TIE',
+  TIE_RETIRADO: 'Cliente retirou o TIE',
+  ENCERRADO_APROVADO: 'Processo finalizado com resultado favorável',
+  ENCERRADO_NEGADO: 'Processo finalizado com resultado desfavorável',
+};
+
 export const CONTRACT_STATUS_LABELS: Record<ContractStatus, string> = {
   EM_ELABORACAO: 'Em Elaboração',
   EM_REVISAO: 'Em Revisão',

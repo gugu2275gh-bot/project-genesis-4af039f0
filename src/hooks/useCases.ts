@@ -378,6 +378,184 @@ export function useCases() {
     },
   });
 
+  // Huellas Scheduling Mutations
+  const requestHuellasSchedule = useMutation({
+    mutationFn: async ({ 
+      id, 
+      preferredDate 
+    }: { 
+      id: string; 
+      preferredDate?: string;
+    }) => {
+      const { data, error } = await supabase
+        .from('service_cases')
+        .update({
+          technical_status: 'AGUARDANDO_CITA_HUELLAS',
+          huellas_requested_at: new Date().toISOString(),
+          huellas_scheduler_notified: false,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Notify scheduler/manager users
+      const { data: managers } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .in('role', ['MANAGER', 'ADMIN']);
+      
+      for (const mgr of managers || []) {
+        await supabase.from('notifications').insert({
+          user_id: mgr.user_id,
+          title: '📅 Solicitação de Cita de Huellas',
+          message: `Novo agendamento de huellas solicitado${preferredDate ? ` para ${preferredDate}` : ''}. Caso ${id.slice(0, 8)}.`,
+          type: 'huellas_schedule_request',
+        });
+      }
+      
+      // Mark scheduler as notified
+      await supabase
+        .from('service_cases')
+        .update({ huellas_scheduler_notified: true })
+        .eq('id', id);
+      
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      toast({ title: 'Agendamento solicitado! O agendador será notificado.' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao solicitar agendamento', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const confirmHuellasAppointment = useMutation({
+    mutationFn: async ({ 
+      id, 
+      date, 
+      time, 
+      location,
+      confirmationUrl 
+    }: { 
+      id: string; 
+      date: string;
+      time: string;
+      location: string;
+      confirmationUrl?: string;
+    }) => {
+      const { data, error } = await supabase
+        .from('service_cases')
+        .update({
+          huellas_date: date,
+          huellas_time: time,
+          huellas_location: location,
+          huellas_appointment_confirmation_url: confirmationUrl,
+          huellas_client_notified_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      toast({ title: 'Cita de huellas confirmada!' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao confirmar cita', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const updateEmpadronamiento = useMutation({
+    mutationFn: async ({ 
+      id, 
+      valid, 
+      expectedDate,
+      notes 
+    }: { 
+      id: string; 
+      valid: boolean;
+      expectedDate?: string;
+      notes?: string;
+    }) => {
+      const { data, error } = await supabase
+        .from('service_cases')
+        .update({
+          empadronamiento_valid: valid,
+          empadronamiento_expected_date: valid ? null : expectedDate,
+          empadronamiento_notes: notes,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      toast({ title: 'Empadronamento atualizado' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao atualizar empadronamento', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const markHuellasCompleted = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from('service_cases')
+        .update({
+          huellas_completed: true,
+          technical_status: 'HUELLAS_REALIZADO',
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      toast({ title: 'Huellas marcado como realizado!' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const sendHuellasInstructions = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('service_cases')
+        .update({
+          huellas_instructions_sent: true,
+        })
+        .eq('id', id);
+      
+      if (error) throw error;
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      toast({ title: 'Instruções enviadas ao cliente!' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao enviar instruções', description: error.message, variant: 'destructive' });
+    },
+  });
+
   return {
     cases: casesQuery.data ?? [],
     myCases: myCasesQuery.data ?? [],
@@ -392,6 +570,11 @@ export function useCases() {
     sendToLegal,
     registerApproval,
     confirmClientContact,
+    requestHuellasSchedule,
+    confirmHuellasAppointment,
+    updateEmpadronamiento,
+    markHuellasCompleted,
+    sendHuellasInstructions,
   };
 }
 
