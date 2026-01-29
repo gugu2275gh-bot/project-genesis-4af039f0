@@ -1440,38 +1440,110 @@ export type Database = {
         }
         Relationships: []
       }
-      requirements_from_authority: {
+      requirement_reminders: {
         Row: {
           created_at: string | null
+          id: string
+          recipient_type: string
+          reminder_type: string
+          requirement_id: string
+          sent_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          recipient_type: string
+          reminder_type: string
+          requirement_id: string
+          sent_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          recipient_type?: string
+          reminder_type?: string
+          requirement_id?: string
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "requirement_reminders_requirement_id_fkey"
+            columns: ["requirement_id"]
+            isOneToOne: false
+            referencedRelation: "requirements_from_authority"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      requirements_from_authority: {
+        Row: {
+          coordinator_notified_at: string | null
+          created_at: string | null
           description: string
+          extension_approved_at: string | null
+          extension_count: number | null
+          extension_requested_at: string | null
           id: string
           internal_deadline_date: string | null
+          notes: string | null
+          notified_at: string | null
           official_deadline_date: string | null
+          original_deadline_date: string | null
+          responded_at: string | null
+          response_file_url: string | null
+          response_sent_by: string | null
           service_case_id: string
           status: Database["public"]["Enums"]["requirement_status"] | null
           updated_at: string | null
         }
         Insert: {
+          coordinator_notified_at?: string | null
           created_at?: string | null
           description: string
+          extension_approved_at?: string | null
+          extension_count?: number | null
+          extension_requested_at?: string | null
           id?: string
           internal_deadline_date?: string | null
+          notes?: string | null
+          notified_at?: string | null
           official_deadline_date?: string | null
+          original_deadline_date?: string | null
+          responded_at?: string | null
+          response_file_url?: string | null
+          response_sent_by?: string | null
           service_case_id: string
           status?: Database["public"]["Enums"]["requirement_status"] | null
           updated_at?: string | null
         }
         Update: {
+          coordinator_notified_at?: string | null
           created_at?: string | null
           description?: string
+          extension_approved_at?: string | null
+          extension_count?: number | null
+          extension_requested_at?: string | null
           id?: string
           internal_deadline_date?: string | null
+          notes?: string | null
+          notified_at?: string | null
           official_deadline_date?: string | null
+          original_deadline_date?: string | null
+          responded_at?: string | null
+          response_file_url?: string | null
+          response_sent_by?: string | null
           service_case_id?: string
           status?: Database["public"]["Enums"]["requirement_status"] | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "requirements_from_authority_response_sent_by_fkey"
+            columns: ["response_sent_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "requirements_from_authority_service_case_id_fkey"
             columns: ["service_case_id"]
@@ -1486,6 +1558,8 @@ export type Database = {
           assigned_to_user_id: string | null
           case_priority: string | null
           client_user_id: string | null
+          closed_at: string | null
+          closure_reason: string | null
           created_at: string | null
           decision_date: string | null
           decision_result: Database["public"]["Enums"]["decision_result"] | null
@@ -1503,6 +1577,7 @@ export type Database = {
           juridical_notes: string | null
           juridical_review_status: string | null
           opportunity_id: string
+          previous_case_id: string | null
           protocol_instructions_sent: boolean | null
           protocol_number: string | null
           protocol_receipt_approved: boolean | null
@@ -1533,6 +1608,8 @@ export type Database = {
           assigned_to_user_id?: string | null
           case_priority?: string | null
           client_user_id?: string | null
+          closed_at?: string | null
+          closure_reason?: string | null
           created_at?: string | null
           decision_date?: string | null
           decision_result?:
@@ -1552,6 +1629,7 @@ export type Database = {
           juridical_notes?: string | null
           juridical_review_status?: string | null
           opportunity_id: string
+          previous_case_id?: string | null
           protocol_instructions_sent?: boolean | null
           protocol_number?: string | null
           protocol_receipt_approved?: boolean | null
@@ -1582,6 +1660,8 @@ export type Database = {
           assigned_to_user_id?: string | null
           case_priority?: string | null
           client_user_id?: string | null
+          closed_at?: string | null
+          closure_reason?: string | null
           created_at?: string | null
           decision_date?: string | null
           decision_result?:
@@ -1601,6 +1681,7 @@ export type Database = {
           juridical_notes?: string | null
           juridical_review_status?: string | null
           opportunity_id?: string
+          previous_case_id?: string | null
           protocol_instructions_sent?: boolean | null
           protocol_number?: string | null
           protocol_receipt_approved?: boolean | null
@@ -1633,6 +1714,13 @@ export type Database = {
             columns: ["opportunity_id"]
             isOneToOne: false
             referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_cases_previous_case_id_fkey"
+            columns: ["previous_case_id"]
+            isOneToOne: false
+            referencedRelation: "service_cases"
             referencedColumns: ["id"]
           },
           {
@@ -2129,7 +2217,12 @@ export type Database = {
         | "CONFIRMADO"
         | "PARCIAL"
         | "ESTORNADO"
-      requirement_status: "ABERTA" | "RESPONDIDA" | "ENCERRADA"
+      requirement_status:
+        | "ABERTA"
+        | "RESPONDIDA"
+        | "ENCERRADA"
+        | "EM_PRORROGACAO"
+        | "PRORROGADA"
       service_interest:
         | "VISTO_ESTUDANTE"
         | "VISTO_TRABALHO"
@@ -2366,7 +2459,13 @@ export const Constants = {
         "PARCIAL",
         "ESTORNADO",
       ],
-      requirement_status: ["ABERTA", "RESPONDIDA", "ENCERRADA"],
+      requirement_status: [
+        "ABERTA",
+        "RESPONDIDA",
+        "ENCERRADA",
+        "EM_PRORROGACAO",
+        "PRORROGADA",
+      ],
       service_interest: [
         "VISTO_ESTUDANTE",
         "VISTO_TRABALHO",

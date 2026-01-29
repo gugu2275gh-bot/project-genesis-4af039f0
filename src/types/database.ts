@@ -125,6 +125,8 @@ export type TaskStatus =
 
 export type RequirementStatus = 
   | 'ABERTA'
+  | 'EM_PRORROGACAO'
+  | 'PRORROGADA'
   | 'RESPONDIDA'
   | 'ENCERRADA';
 
@@ -522,6 +524,8 @@ export const INTERACTION_CHANNEL_LABELS: Record<InteractionChannel, string> = {
 
 export const REQUIREMENT_STATUS_LABELS: Record<RequirementStatus, string> = {
   ABERTA: 'Aberta',
+  EM_PRORROGACAO: 'Prorrogação Solicitada',
+  PRORROGADA: 'Prazo Estendido',
   RESPONDIDA: 'Respondida',
   ENCERRADA: 'Encerrada',
 };
