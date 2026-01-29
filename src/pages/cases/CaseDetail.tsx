@@ -45,7 +45,7 @@ export default function CaseDetail() {
   const navigate = useNavigate();
   const { data: serviceCase, isLoading } = useCase(id);
   const { updateStatus, assignCase, submitCase, closeCase, updateCase, approveDocumentation, sendToLegal } = useCases();
-  const { documents, approveDocument, rejectDocument } = useDocuments(id);
+  const { documents, approveDocument, rejectDocument, markPostProtocolPending } = useDocuments(id);
   const { requirements, createRequirement, updateRequirement } = useRequirements(id);
   const { data: profiles } = useProfiles();
 
@@ -624,46 +624,77 @@ export default function CaseDetail() {
                       />
                     </div>
                   ) : (
-                    documents.map((doc) => (
-                      <div 
-                        key={doc.id}
-                        className="flex items-center justify-between p-4 rounded-lg bg-muted/50"
-                      >
-                        <div className="flex items-center gap-3">
-                          <FileText className="h-5 w-5 text-muted-foreground" />
-                          <div>
-                            <p className="font-medium">{doc.service_document_types.name}</p>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <StatusBadge 
-                                status={doc.status || 'NAO_ENVIADO'} 
-                                label={DOCUMENT_STATUS_LABELS[doc.status || 'NAO_ENVIADO']} 
-                              />
-                              {doc.service_document_types.is_required && (
-                                <span className="text-amber-600">• Obrigatório</span>
-                              )}
+                    documents.map((doc) => {
+                      const isProtocolado = ['PROTOCOLADO', 'EM_ACOMPANHAMENTO', 'AGENDAR_HUELLAS', 'AGUARDANDO_CITA_HUELLAS', 'HUELLAS_REALIZADO', 'DISPONIVEL_RETIRADA_TIE', 'AGUARDANDO_CITA_RETIRADA', 'TIE_RETIRADO', 'ENCERRADO_APROVADO'].includes(serviceCase.technical_status || '');
+                      const docData = doc as any;
+                      
+                      return (
+                        <div 
+                          key={doc.id}
+                          className={cn(
+                            "flex items-center justify-between p-4 rounded-lg bg-muted/50",
+                            docData.is_post_protocol_pending && "border-l-4 border-amber-500"
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            <FileText className="h-5 w-5 text-muted-foreground" />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium">{doc.service_document_types.name}</p>
+                                {docData.is_post_protocol_pending && (
+                                  <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full">
+                                    Pós-Protocolo
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <StatusBadge 
+                                  status={doc.status || 'NAO_ENVIADO'} 
+                                  label={DOCUMENT_STATUS_LABELS[doc.status || 'NAO_ENVIADO']} 
+                                />
+                                {doc.service_document_types.is_required && (
+                                  <span className="text-amber-600">• Obrigatório</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        {doc.status === 'EM_CONFERENCIA' && (
-                          <div className="flex gap-2">
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleApproveDoc(doc.id)}
-                            >
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => setShowRejectDialog(doc.id)}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
+                          <div className="flex gap-2 items-center">
+                            {/* Toggle pós-protocolo - apenas visível após PROTOCOLADO e para docs não aprovados */}
+                            {isProtocolado && doc.status !== 'APROVADO' && (
+                              <Button
+                                size="sm"
+                                variant={docData.is_post_protocol_pending ? "secondary" : "outline"}
+                                onClick={() => markPostProtocolPending.mutateAsync({ 
+                                  docId: doc.id, 
+                                  isPending: !docData.is_post_protocol_pending 
+                                })}
+                                title={docData.is_post_protocol_pending ? "Remover marcação pós-protocolo" : "Marcar como pendente pós-protocolo"}
+                              >
+                                {docData.is_post_protocol_pending ? "Pendente" : "Pós-Proto"}
+                              </Button>
+                            )}
+                            {doc.status === 'EM_CONFERENCIA' && (
+                              <>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => handleApproveDoc(doc.id)}
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => setShowRejectDialog(doc.id)}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    ))
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </TabsContent>

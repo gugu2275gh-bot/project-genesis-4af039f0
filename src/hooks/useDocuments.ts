@@ -192,6 +192,30 @@ export function useDocuments(serviceCaseId?: string) {
     },
   });
 
+  const markPostProtocolPending = useMutation({
+    mutationFn: async ({ docId, isPending }: { docId: string; isPending: boolean }) => {
+      const { data, error } = await supabase
+        .from('service_documents')
+        .update({
+          is_post_protocol_pending: isPending,
+          post_protocol_pending_since: isPending ? new Date().toISOString() : null,
+        })
+        .eq('id', docId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', serviceCaseId] });
+      toast({ title: 'Documento atualizado' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao atualizar documento', description: error.message, variant: 'destructive' });
+    },
+  });
+
   return {
     documents: documentsQuery.data ?? [],
     documentTypes: documentTypesQuery.data ?? [],
@@ -203,5 +227,6 @@ export function useDocuments(serviceCaseId?: string) {
     updateDocument,
     approveDocument,
     rejectDocument,
+    markPostProtocolPending,
   };
 }

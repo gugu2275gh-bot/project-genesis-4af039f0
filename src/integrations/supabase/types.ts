@@ -1685,6 +1685,8 @@ export type Database = {
           document_type_id: string
           file_url: string | null
           id: string
+          is_post_protocol_pending: boolean | null
+          post_protocol_pending_since: string | null
           rejection_reason: string | null
           service_case_id: string
           status: Database["public"]["Enums"]["document_status"] | null
@@ -1696,6 +1698,8 @@ export type Database = {
           document_type_id: string
           file_url?: string | null
           id?: string
+          is_post_protocol_pending?: boolean | null
+          post_protocol_pending_since?: string | null
           rejection_reason?: string | null
           service_case_id: string
           status?: Database["public"]["Enums"]["document_status"] | null
@@ -1707,6 +1711,8 @@ export type Database = {
           document_type_id?: string
           file_url?: string | null
           id?: string
+          is_post_protocol_pending?: boolean | null
+          post_protocol_pending_since?: string | null
           rejection_reason?: string | null
           service_case_id?: string
           status?: Database["public"]["Enums"]["document_status"] | null

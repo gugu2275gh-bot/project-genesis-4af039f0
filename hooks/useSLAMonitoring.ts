@@ -18,6 +18,7 @@ interface SLAMetrics {
   paymentsPending: number;
   requirementsUrgent: number;
   documentsPendingReview: number;
+  postProtocolDocsPending: number;
   breaches: SLABreachItem[];
   healthScore: number;
 }
@@ -190,6 +191,13 @@ export function useSLAMonitoring() {
         .eq('status', 'ENVIADO')
         .lt('uploaded_at', docReviewDeadline.toISOString());
 
+      // 7. Post-protocol pending documents
+      const { count: postProtocolDocsPending } = await supabase
+        .from('service_documents')
+        .select('id', { count: 'exact' })
+        .eq('is_post_protocol_pending', true)
+        .in('status', ['NAO_ENVIADO', 'ENVIADO', 'RECUSADO']);
+
       // Calculate health score (0-100)
       const totalBreaches = breaches.length;
       const criticalBreaches = breaches.filter((b) => b.severity === 'critical').length;
@@ -212,6 +220,7 @@ export function useSLAMonitoring() {
         paymentsPending: paymentsPending || 0,
         requirementsUrgent: requirementsUrgent || 0,
         documentsPendingReview: documentsPendingReview || 0,
+        postProtocolDocsPending: postProtocolDocsPending || 0,
         breaches: breaches.slice(0, 10), // Limit to top 10
         healthScore,
       };
