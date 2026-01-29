@@ -32,6 +32,7 @@ type AutomationType =
   | 'REQUIREMENTS'
   | 'PROTOCOL'
   | 'INITIAL_CONTACT'
+  | 'POST_PROTOCOL_DOCS'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -76,6 +77,7 @@ serve(async (req) => {
       protocolInstructionsSent: 0,
       dailyCollections: 0,
       initialContactReminders: 0,
+      postProtocolDocsAlerts: 0,
     }
 
     // Fetch SLA configurations
@@ -1443,6 +1445,126 @@ serve(async (req) => {
           }
           await recordInitialContactReminder(sc.id, 'ADM_5D')
           results.initialContactReminders++
+        }
+      }
+    }
+
+    // =====================================================
+    // 17. POST-PROTOCOL PENDING DOCUMENTS ALERTS
+    // =====================================================
+    if (shouldRun('POST_PROTOCOL_DOCS')) {
+      console.log('Running POST_PROTOCOL_DOCS automation...')
+      
+      // Find documents marked as pending post-protocol
+      const { data: pendingDocs } = await supabase
+        .from('service_documents')
+        .select(`
+          id, service_case_id, document_type_id, post_protocol_pending_since, updated_at,
+          service_document_types!inner (name),
+          service_cases!inner (
+            assigned_to_user_id,
+            opportunities!inner (leads!inner (contacts!inner (full_name)))
+          )
+        `)
+        .eq('is_post_protocol_pending', true)
+        .in('status', ['NAO_ENVIADO', 'ENVIADO', 'RECUSADO'])
+
+      console.log(`Found ${pendingDocs?.length || 0} post-protocol pending documents`)
+
+      // Helper to check if reminder was already sent
+      async function postProtoDocReminderSent(caseId: string, reminderType: string): Promise<boolean> {
+        const { data } = await supabase
+          .from('document_reminders')
+          .select('id')
+          .eq('service_case_id', caseId)
+          .eq('reminder_type', reminderType)
+          .maybeSingle()
+        return !!data
+      }
+
+      // Helper to record reminder
+      async function recordPostProtoDocReminder(caseId: string, reminderType: string, recipientType: string) {
+        await supabase.from('document_reminders').insert({
+          service_case_id: caseId,
+          reminder_type: reminderType,
+          recipient_type: recipientType
+        })
+      }
+
+      for (const doc of pendingDocs || []) {
+        const pendingSince = new Date(doc.post_protocol_pending_since || doc.updated_at)
+        const weeksPending = (now.getTime() - pendingSince.getTime()) / (7 * 24 * 60 * 60 * 1000)
+        
+        const caseData = doc.service_cases as unknown as { 
+          assigned_to_user_id: string | null;
+          opportunities: { leads: { contacts: { full_name: string } } }
+        }
+        const docName = (doc.service_document_types as unknown as { name: string })?.name || 'Documento'
+        const clientName = caseData?.opportunities?.leads?.contacts?.full_name || 'Cliente'
+        const caseShortId = doc.service_case_id.slice(0, 8)
+
+        // Week 2 - Alert to Technician
+        if (weeksPending >= 2 && weeksPending < 3) {
+          const reminderType = `POST_PROTO_W2_${doc.id}`
+          if (!(await postProtoDocReminderSent(doc.service_case_id, reminderType))) {
+            if (caseData.assigned_to_user_id) {
+              await supabase.from('notifications').insert({
+                user_id: caseData.assigned_to_user_id,
+                type: 'post_protocol_doc_pending',
+                title: 'Documento Pendente Pós-Protocolo',
+                message: `${docName} de ${clientName} (caso ${caseShortId}) pendente há 2 semanas.`
+              })
+            }
+            await recordPostProtoDocReminder(doc.service_case_id, reminderType, 'TECH')
+            results.postProtocolDocsAlerts++
+            console.log(`Week 2 alert sent for doc ${doc.id}`)
+          }
+        }
+
+        // Week 3 - Escalate to Coordinator
+        if (weeksPending >= 3 && weeksPending < 5) {
+          const reminderType = `POST_PROTO_W3_${doc.id}`
+          if (!(await postProtoDocReminderSent(doc.service_case_id, reminderType))) {
+            const { data: managers } = await supabase
+              .from('user_roles')
+              .select('user_id')
+              .eq('role', 'MANAGER')
+            
+            for (const mgr of managers || []) {
+              await supabase.from('notifications').insert({
+                user_id: mgr.user_id,
+                type: 'post_protocol_doc_escalated',
+                title: 'Documento Pós-Protocolo Atrasado',
+                message: `${docName} de ${clientName} (caso ${caseShortId}) pendente há 3 semanas.`
+              })
+            }
+            await recordPostProtoDocReminder(doc.service_case_id, reminderType, 'COORD')
+            results.postProtocolDocsAlerts++
+            console.log(`Week 3 escalation sent for doc ${doc.id}`)
+          }
+        }
+
+        // Week 5 - Escalate to Admin
+        if (weeksPending >= 5) {
+          const reminderType = `POST_PROTO_W5_${doc.id}`
+          if (!(await postProtoDocReminderSent(doc.service_case_id, reminderType))) {
+            const { data: admins } = await supabase
+              .from('user_roles')
+              .select('user_id')
+              .eq('role', 'ADMIN')
+            
+            for (const admin of admins || []) {
+              await supabase.from('notifications').insert({
+                user_id: admin.user_id,
+                type: 'post_protocol_doc_critical',
+                title: '🚨 Documento Pós-Protocolo Crítico',
+                message: `${docName} de ${clientName} (caso ${caseShortId}) pendente há 5+ semanas!`
+              })
+            }
+            await recordPostProtoDocReminder(doc.service_case_id, reminderType, 'ADMIN')
+            results.postProtocolDocsAlerts++
+            console.log(`Week 5 critical alert sent for doc ${doc.id}`)
+          }
         }
       }
     }
