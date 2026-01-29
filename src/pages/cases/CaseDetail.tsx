@@ -38,6 +38,7 @@ import { InitialContactSLABadge } from '@/components/cases/InitialContactSLABadg
 import { ReleaseDocumentsButton } from '@/components/cases/ReleaseDocumentsButton';
 import { ProtocolReceiptUpload } from '@/components/cases/ProtocolReceiptUpload';
 import { ExpedienteNumberInput } from '@/components/cases/ExpedienteNumberInput';
+import { RequirementActionsPanel } from '@/components/cases/RequirementActionsPanel';
 import { cn } from '@/lib/utils';
 
 export default function CaseDetail() {
@@ -46,7 +47,7 @@ export default function CaseDetail() {
   const { data: serviceCase, isLoading } = useCase(id);
   const { updateStatus, assignCase, submitCase, closeCase, updateCase, approveDocumentation, sendToLegal } = useCases();
   const { documents, approveDocument, rejectDocument, markPostProtocolPending } = useDocuments(id);
-  const { requirements, createRequirement, updateRequirement } = useRequirements(id);
+  const { requirements, createRequirement, updateRequirement, requestExtension, sendToLegal: sendRequirementToLegal } = useRequirements(id);
   const { data: profiles } = useProfiles();
 
   const [protocolNumber, setProtocolNumber] = useState('');
@@ -55,12 +56,6 @@ export default function CaseDetail() {
   const [closeResult, setCloseResult] = useState<'APROVADO' | 'NEGADO'>('APROVADO');
   const [showRejectDialog, setShowRejectDialog] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
-  const [showRequirementDialog, setShowRequirementDialog] = useState(false);
-  const [newRequirement, setNewRequirement] = useState({
-    description: '',
-    official_deadline_date: '',
-    internal_deadline_date: '',
-  });
   const [showRecursoDialog, setShowRecursoDialog] = useState(false);
   const [recursoDeadline, setRecursoDeadline] = useState('');
   const [recursoNotes, setRecursoNotes] = useState('');
@@ -119,18 +114,6 @@ export default function CaseDetail() {
     setRejectReason('');
   };
 
-  const handleAddRequirement = async () => {
-    if (!newRequirement.description) return;
-    await createRequirement.mutateAsync({
-      service_case_id: serviceCase.id,
-      description: newRequirement.description,
-      official_deadline_date: newRequirement.official_deadline_date || null,
-      internal_deadline_date: newRequirement.internal_deadline_date || null,
-      status: 'ABERTA',
-    });
-    setShowRequirementDialog(false);
-    setNewRequirement({ description: '', official_deadline_date: '', internal_deadline_date: '' });
-  };
 
   const handleSendToJuridico = async () => {
     await sendToLegal.mutateAsync(serviceCase.id);
@@ -700,94 +683,23 @@ export default function CaseDetail() {
               </TabsContent>
 
               <TabsContent value="requirements" className="m-0">
-                <div className="space-y-3">
-                  <div className="flex justify-end">
-                    <Dialog open={showRequirementDialog} onOpenChange={setShowRequirementDialog}>
-                      <DialogTrigger asChild>
-                        <Button size="sm">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Nova Exigência
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Nova Exigência</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label>Descrição *</Label>
-                            <Textarea
-                              value={newRequirement.description}
-                              onChange={(e) => setNewRequirement({ ...newRequirement, description: e.target.value })}
-                              placeholder="Descreva a exigência do órgão..."
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label>Prazo Oficial</Label>
-                              <Input
-                                type="date"
-                                value={newRequirement.official_deadline_date}
-                                onChange={(e) => setNewRequirement({ ...newRequirement, official_deadline_date: e.target.value })}
-                              />
-                            </div>
-                            <div>
-                              <Label>Prazo Interno</Label>
-                              <Input
-                                type="date"
-                                value={newRequirement.internal_deadline_date}
-                                onChange={(e) => setNewRequirement({ ...newRequirement, internal_deadline_date: e.target.value })}
-                              />
-                            </div>
-                          </div>
-                          <div className="flex justify-end gap-2">
-                            <Button variant="outline" onClick={() => setShowRequirementDialog(false)}>
-                              Cancelar
-                            </Button>
-                            <Button onClick={handleAddRequirement} disabled={!newRequirement.description}>
-                              Adicionar
-                            </Button>
-                          </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-
-                  {requirements.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">
-                      Nenhuma exigência registrada
-                    </p>
-                  ) : (
-                    requirements.map((req) => (
-                      <div 
-                        key={req.id}
-                        className="p-4 rounded-lg bg-muted/50 space-y-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <StatusBadge 
-                            status={req.status || 'ABERTA'} 
-                            label={REQUIREMENT_STATUS_LABELS[req.status || 'ABERTA']} 
-                          />
-                          {req.official_deadline_date && (
-                            <span className="text-sm text-muted-foreground">
-                              Prazo: {format(new Date(req.official_deadline_date), 'dd/MM/yyyy', { locale: ptBR })}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm">{req.description}</p>
-                        {req.status === 'ABERTA' && (
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => updateRequirement.mutateAsync({ id: req.id, status: 'RESPONDIDA' })}
-                          >
-                            Marcar como Respondida
-                          </Button>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
+                <RequirementActionsPanel
+                  requirements={requirements}
+                  serviceCaseId={serviceCase.id}
+                  onCreateRequirement={async (data) => {
+                    await createRequirement.mutateAsync(data);
+                  }}
+                  onUpdateRequirement={async (data) => {
+                    await updateRequirement.mutateAsync(data);
+                  }}
+                  onRequestExtension={async (reqId, newDeadline) => {
+                    await requestExtension.mutateAsync({ id: reqId, newDeadline });
+                  }}
+                  onSendToLegal={async (reqId) => {
+                    await sendRequirementToLegal.mutateAsync(reqId);
+                  }}
+                  isLoading={createRequirement.isPending || updateRequirement.isPending}
+                />
               </TabsContent>
 
               {showHuellasSection && (
