@@ -1,358 +1,408 @@
 
-# Plano: Requerimentos e Recursos - Prazos e Procedimentos (Etapa 8)
+# Plano: Aprovação do Pedido e Etapas Finais (Etapa 9)
 
 ## Resumo da Análise
 
-Após análise detalhada do código existente, identifiquei a infraestrutura parcialmente implementada:
+Após análise detalhada do código existente, identifiquei que a maior parte da infraestrutura para as etapas finais já existe:
 
 ### O que já existe
 | Funcionalidade | Status | Localização |
 |----------------|--------|-------------|
-| Tabela `requirements_from_authority` | ✅ | Supabase (id, service_case_id, description, official_deadline_date, internal_deadline_date, status) |
-| Enum `requirement_status` (ABERTA, RESPONDIDA, ENCERRADA) | ✅ | types/database.ts |
-| Hook `useRequirements` | ✅ | src/hooks/useRequirements.ts |
-| UI de Nova Exigência no CaseDetail | ✅ | CaseDetail.tsx (dialog com prazo oficial e interno) |
-| Tabela `document_reminders` (para rastrear alertas) | ✅ | Supabase |
-| Seção REQUIREMENTS no sla-automations | ⚠️ Parcial | Alerta 2 dias (interno), 5 dias (oficial) |
-| Status `EXIGENCIA_ORGAO` no enum | ✅ | technical_status |
-| Status `DENEGADO` e `EM_RECURSO` | ✅ | technical_status |
-| Campos `resource_deadline`, `resource_notes` | ✅ | service_cases |
-| Dialog para iniciar Recurso | ✅ | CaseDetail.tsx |
+| Status `AGENDAR_HUELLAS` | ✅ | TechnicalStatus enum |
+| Status `AGUARDANDO_CITA_HUELLAS` | ✅ | TechnicalStatus enum |
+| Status `HUELLAS_REALIZADO` | ✅ | TechnicalStatus enum |
+| Status `DISPONIVEL_RETIRADA_TIE` | ✅ | TechnicalStatus enum |
+| Status `AGUARDANDO_CITA_RETIRADA` | ✅ | TechnicalStatus enum |
+| Status `TIE_RETIRADO` | ✅ | TechnicalStatus enum |
+| Status `ENCERRADO_APROVADO` | ✅ | TechnicalStatus enum |
+| Componente `HuellasSection` | ✅ | Agendamento e marcação de huellas |
+| Componente `TiePickupSection` | ✅ | Registro de lote, validade e retirada |
+| Campo `tie_validity_date` | ✅ | service_cases |
+| Campo `decision_date` | ✅ | service_cases |
+| Notificação NPS após aprovação | ✅ | useCases.closeCase |
+| WhatsApp templates (protocolo, huellas) | ✅ | SendWhatsAppButton |
 
 ### O que precisa ser implementado
 
 | Funcionalidade | Descrição |
 |----------------|-----------|
-| **Campos adicionais para Exigências** | `responded_at`, `extension_count`, `original_deadline_date`, `extension_requested_at`, `notified_coordinator` |
-| **Status `EM_PRORROGACAO`** | Novo status para exigência com prorrogação solicitada |
-| **Alertas escalonados (10 dias)** | Imediato, D-3, D-2 (ADM), confirmação ao coord |
-| **Lógica de prorrogação (+5 dias)** | Novo prazo com alertas proporcionais |
-| **UI para solicitar prorrogação** | Botão no CaseDetail que atualiza deadline e notifica |
-| **Notificação de exigência recebida** | Alerta imediato para Técnico, Coord e ADM |
-| **Alertas de recurso escalonados** | Similar a exigências, para prazos de recurso (ex: 1 mês) |
-| **Botão "Enviar ao Jurídico"** | Para enviar resposta de exigência |
-| **Histórico do processo denegado** | Link para novo processo mantendo histórico |
+| **Status `APROVADO_INTERNAMENTE`** | Novo status intermediário antes de contatar o cliente |
+| **Campo `approval_date`** | Data da resolução favorável |
+| **Campo `residencia_validity_date`** | Validade do status de residente (além do TIE) |
+| **Notificação de aprovação interna** | Alertar Técnico, Coord e ADM quando jurídico marca aprovação |
+| **Template WhatsApp de parabéns** | Mensagem automática após contato com cliente |
+| **Ação "Registrar Aprovação"** | Dialog com campos para data e validade |
+| **Seção de Aprovação no CaseDetail** | Card com informações de validade e próximas etapas |
+| **Automação APPROVAL** no sla-automations | Notificações após aprovação interna |
 
 ---
 
 ## Alterações no Banco de Dados
 
-### 1. Adicionar campos à tabela `requirements_from_authority`
+### 1. Adicionar novo valor ao enum `technical_status`
 
 ```sql
-ALTER TABLE requirements_from_authority 
-ADD COLUMN IF NOT EXISTS responded_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS response_sent_by UUID REFERENCES profiles(id),
-ADD COLUMN IF NOT EXISTS extension_count INTEGER DEFAULT 0,
-ADD COLUMN IF NOT EXISTS original_deadline_date DATE,
-ADD COLUMN IF NOT EXISTS extension_requested_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS extension_approved_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS coordinator_notified_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS response_file_url TEXT,
-ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TYPE technical_status ADD VALUE IF NOT EXISTS 'APROVADO_INTERNAMENTE' 
+  BEFORE 'AGENDAR_HUELLAS';
 ```
 
-### 2. Adicionar novo valor ao enum `requirement_status`
+### 2. Adicionar campos à tabela `service_cases`
 
 ```sql
-ALTER TYPE requirement_status ADD VALUE IF NOT EXISTS 'EM_PRORROGACAO';
-ALTER TYPE requirement_status ADD VALUE IF NOT EXISTS 'PRORROGADA';
+ALTER TABLE service_cases 
+ADD COLUMN IF NOT EXISTS approval_date DATE,
+ADD COLUMN IF NOT EXISTS residencia_validity_date DATE,
+ADD COLUMN IF NOT EXISTS approval_notified_client BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS approval_whatsapp_sent_at TIMESTAMPTZ;
 ```
 
-### 3. Criar tabela `requirement_reminders` (se não existir)
+**Explicação dos campos:**
+- `approval_date`: Data em que a resolução favorável foi recebida
+- `residencia_validity_date`: Até quando o status de residente está concedido
+- `approval_notified_client`: Flag indicando que o cliente já foi contatado
+- `approval_whatsapp_sent_at`: Quando a mensagem automática de parabéns foi enviada
 
-```sql
-CREATE TABLE IF NOT EXISTS requirement_reminders (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  requirement_id UUID NOT NULL REFERENCES requirements_from_authority(id),
-  reminder_type TEXT NOT NULL, -- 'IMMEDIATE', 'D3', 'D2_ADM', 'RESPONSE_CONFIRMED', 'EXTENSION_REQUESTED'
-  recipient_type TEXT NOT NULL, -- 'TECH', 'COORD', 'ADM', 'JURIDICO'
-  sent_at TIMESTAMPTZ DEFAULT now(),
-  created_at TIMESTAMPTZ DEFAULT now()
-);
+---
 
-CREATE INDEX idx_requirement_reminders ON requirement_reminders(requirement_id, reminder_type);
+## Fluxo Visual
+
+```text
+     RESOLUÇÃO FAVORÁVEL RECEBIDA
+                │
+                ▼
+   ┌────────────────────────────────┐
+   │ Jurídico muda status para      │
+   │ APROVADO_INTERNAMENTE          │
+   │ ► Registra approval_date       │
+   │ ► Registra residencia_validity │
+   └────────────────────────────────┘
+                │
+                ▼
+   ┌────────────────────────────────┐
+   │ Sistema notifica:              │
+   │ • Técnico responsável          │
+   │ • Coordenador                  │
+   │ • ADM                          │
+   └────────────────────────────────┘
+                │
+                ▼
+   ┌────────────────────────────────┐
+   │ Técnico entra em contato       │
+   │ com cliente (dar a notícia!)   │
+   └────────────────────────────────┘
+                │
+                ▼
+   ┌────────────────────────────────┐
+   │ Técnico clica "Cliente         │
+   │ Contactado"                    │
+   │ ► Status: AGENDAR_HUELLAS      │
+   │ ► Sistema envia WhatsApp auto  │
+   │   de parabéns + instruções     │
+   └────────────────────────────────┘
+                │
+                ▼
+   ┌────────────────────────────────┐
+   │ Fluxo de Huellas existente     │
+   │ (já implementado)              │
+   └────────────────────────────────┘
+                │
+                ▼
+   ┌────────────────────────────────┐
+   │ Fluxo de TIE existente         │
+   │ (já implementado)              │
+   └────────────────────────────────┘
+                │
+                ▼
+   ┌────────────────────────────────┐
+   │ TIE_RETIRADO → Encerrar Caso   │
+   │ ► NPS survey (já implementado) │
+   └────────────────────────────────┘
 ```
 
 ---
 
 ## Arquivos a Criar/Modificar
 
-### 1. **Novo Componente: RequirementActionsPanel.tsx**
+### 1. **Novo Componente: ApprovalSection.tsx**
 
 ```text
-src/components/cases/RequirementActionsPanel.tsx
+src/components/cases/ApprovalSection.tsx
 ```
 
 Funcionalidades:
-- Exibe exigência com contagem regressiva de dias
-- Badge de urgência visual (vermelho se <= 3 dias)
-- Botão "Responder Exigência" (upload de arquivo + marcar respondida)
-- Botão "Solicitar Prorrogação" (adiciona +5 dias, notifica coord)
-- Histórico de prorrogações (mostra `extension_count`)
-- Indicador de que coord foi notificado
+- Exibe informações da aprovação (data, validade)
+- Card visual destacado (verde/celebração)
+- Botão "Registrar Aprovação" (para status anterior)
+- Botão "Cliente Contactado" (para APROVADO_INTERNAMENTE)
+- Exibe data de validade da residência
+- Checklist de próximas etapas
 
-### 2. **Modificar: src/hooks/useRequirements.ts**
+### 2. **Modificar: src/types/database.ts**
 
-Adicionar mutações:
-- `requestExtension`: Solicita +5 dias, incrementa `extension_count`, notifica
-- `respondRequirement`: Marca respondida, upload arquivo, notifica coord
-- `sendToLegal`: Encaminha resposta ao jurídico
+Adicionar novo status:
 
-### 3. **Modificar: src/pages/cases/CaseDetail.tsx**
-
-Na tab "Exigências":
-- Substituir listagem simples pelo `RequirementActionsPanel`
-- Adicionar visualização de prazo com urgência
-- Exibir histórico de prorrogações
-- Botões de ação contextuais
-
-### 4. **Modificar: supabase/functions/sla-automations/index.ts**
-
-Reescrever seção REQUIREMENTS com:
-
-```text
-LÓGICA DE ALERTAS PARA PRAZO DE 10 DIAS:
-├── Imediatamente ao registrar exigência:
-│   ├── Notificar Técnico (in-app + WhatsApp opcional)
-│   ├── Notificar Coordenador (in-app)
-│   └── Registrar em requirement_reminders (type='IMMEDIATE')
-│
-├── 3 dias antes do prazo (D-3):
-│   ├── Notificar Técnico (in-app)
-│   ├── Notificar Jurídico (in-app)
-│   ├── Notificar Coordenador (in-app)
-│   └── Registrar em requirement_reminders (type='D3')
-│
-├── 2 dias antes do prazo (D-2):
-│   ├── Notificar ADM (urgência máxima)
-│   └── Registrar em requirement_reminders (type='D2_ADM')
-│
-└── Ao responder ou solicitar prorrogação:
-    └── Notificar Coordenador (confirmação de ação tomada)
-
-LÓGICA DE PRORROGAÇÃO (+5 DIAS):
-├── Se prorrogação solicitada:
-│   ├── Atualizar official_deadline_date += 5 dias
-│   ├── Incrementar extension_count
-│   ├── Salvar original_deadline_date (se primeira prorrogação)
-│   └── Notificar imediatamente Técnico/Jurídico/Coord com novo prazo
-│
-├── Para prazo de 5 dias, alertas proporcionais:
-│   ├── D-3: Alerta Técnico/Jurídico (pois são quase contínuos)
-│   └── D-2: Alerta ADM
-│
-└── Limite recomendado: 3 prorrogações
-    └── Após 3ª, enviar alerta especial ao Coord/ADM
-```
-
-### 5. **Modificar: src/pages/legal/LegalDashboard.tsx**
-
-Adicionar tab ou seção "Exigências Urgentes":
-- Lista de exigências com prazo < 5 dias
-- Indicador de quantas prorrogações já foram solicitadas
-- Filtro por status (ABERTA, EM_PRORROGACAO, RESPONDIDA)
-
-### 6. **Modificar: src/types/database.ts**
-
-Atualizar:
 ```typescript
-export type RequirementStatus = 
-  | 'ABERTA'
-  | 'EM_PRORROGACAO'
-  | 'PRORROGADA'
-  | 'RESPONDIDA'
-  | 'ENCERRADA';
+export type TechnicalStatus = 
+  | ...
+  | 'APROVADO_INTERNAMENTE'  // Novo - antes de AGENDAR_HUELLAS
+  | 'AGENDAR_HUELLAS'
+  | ...
 
-export const REQUIREMENT_STATUS_LABELS: Record<RequirementStatus, string> = {
-  ABERTA: 'Aberta',
-  EM_PRORROGACAO: 'Prorrogação Solicitada',
-  PRORROGADA: 'Prazo Estendido',
-  RESPONDIDA: 'Respondida',
-  ENCERRADA: 'Encerrada',
+export const TECHNICAL_STATUS_LABELS: Record<TechnicalStatus, string> = {
+  ...
+  APROVADO_INTERNAMENTE: 'Aprovado (Aguardando Contato)',
+  ...
 };
 ```
 
----
+### 3. **Modificar: src/hooks/useCases.ts**
 
-## Fluxo Visual - Exigência (Requerimiento)
-
-```text
-       ÓRGÃO EMITE EXIGÊNCIA (10 DIAS)
-                    │
-                    ▼
-    ┌───────────────────────────────────┐
-    │ Jurídico registra no sistema      │
-    │ Status: ABERTA                    │
-    │ ► Notifica Técnico + Coord + ADM  │
-    └───────────────────────────────────┘
-                    │
-         ┌──────────┴──────────┐
-         ▼                     ▼
-    D-3 (7 dias)          Cliente consegue
-    ├─ Alerta Técnico     reunir documentos?
-    ├─ Alerta Jurídico          │
-    └─ Alerta Coord       ┌─────┴─────┐
-         │                ▼           ▼
-         │              SIM          NÃO
-    D-2 (8 dias)          │           │
-    ├─ Alerta ADM         │           ▼
-    └─ Urgência máxima    │    ┌─────────────────┐
-         │                │    │ Solicitar       │
-         ▼                │    │ Prorrogação     │
-    D-0 (Prazo vence)     │    │ (+5 dias)       │
-         │                │    └─────────────────┘
-         │                │           │
-         ▼                ▼           ▼
-    ┌────────────────────────────────────────┐
-    │ Técnico envia docs ao Jurídico         │
-    │ Jurídico protocola resposta            │
-    │ Status: RESPONDIDA                     │
-    │ ► Notifica Coord (ação tomada)         │
-    └────────────────────────────────────────┘
-```
-
----
-
-## Fluxo Visual - Recurso (Apelação)
-
-```text
-        PROCESSO DENEGADO
-              │
-              ▼
-   ┌──────────────────────────┐
-   │ Jurídico altera status   │
-   │ para DENEGADO            │
-   │ ► Notifica todos         │
-   └──────────────────────────┘
-              │
-     ┌────────┴────────┐
-     ▼                 ▼
-  RECORRER        NÃO RECORRER
-     │                 │
-     ▼                 ▼
-┌─────────────┐   ┌──────────────────┐
-│ Status:     │   │ Arquivar processo│
-│ EM_RECURSO  │   │ Iniciar novo     │
-│ Prazo: 1 mês│   │ (mantém histórico)│
-└─────────────┘   └──────────────────┘
-     │
-     ▼ (Alertas proporcionais)
-┌────────────────────────────┐
-│ D-7: Alerta Jurídico       │
-│ D-5: Alerta Coord          │
-│ D-3: Alerta ADM            │
-└────────────────────────────┘
-     │
-     ▼
-Jurídico protocola recurso
-```
-
----
-
-## Escalas de Alertas
-
-### Exigência (10 dias oficiais)
-| Momento | Destinatários | Mensagem |
-|---------|---------------|----------|
-| Imediato | Técnico, Coord | "Nova exigência recebida - prazo 10 dias" |
-| D-3 | Técnico, Jurídico, Coord | "Prazo de exigência vence em 3 dias" |
-| D-2 | ADM | "🚨 Urgência máxima - exigência vence em 2 dias" |
-| Após resposta | Coord | "Exigência respondida/protocolada" |
-
-### Prorrogação (5 dias)
-| Momento | Destinatários | Mensagem |
-|---------|---------------|----------|
-| Imediato | Técnico, Jurídico, Coord | "Novo prazo: X dias (prorrogação N)" |
-| D-3 | Técnico, Jurídico | "Prazo estendido vence em 3 dias" |
-| D-2 | ADM | "🚨 Prazo de prorrogação vence em 2 dias" |
-
-### Recurso (1 mês típico)
-| Momento | Destinatários | Mensagem |
-|---------|---------------|----------|
-| Imediato | Jurídico | "Recurso iniciado - prazo até X" |
-| D-7 | Jurídico | "Prazo de recurso vence em 7 dias" |
-| D-5 | Coord | "Prazo de recurso vence em 5 dias" |
-| D-3 | ADM | "🚨 Prazo de recurso vence em 3 dias" |
-
----
-
-## Regra de Dias Úteis
-
-A documentação menciona: "Caso o último dia caia em final de semana ou feriado, antecipar para dia útil anterior."
-
-Implementar função helper:
+Adicionar mutações:
 
 ```typescript
-function adjustToBusinessDay(date: Date): Date {
-  const day = date.getDay();
-  if (day === 0) return addDays(date, -2); // Domingo → Sexta
-  if (day === 6) return addDays(date, -1); // Sábado → Sexta
-  return date;
+const registerApproval = useMutation({
+  mutationFn: async ({ 
+    id, 
+    approvalDate, 
+    residenciaValidityDate 
+  }: { 
+    id: string; 
+    approvalDate: string;
+    residenciaValidityDate?: string;
+  }) => {
+    const { data, error } = await supabase
+      .from('service_cases')
+      .update({
+        technical_status: 'APROVADO_INTERNAMENTE',
+        approval_date: approvalDate,
+        residencia_validity_date: residenciaValidityDate,
+        decision_result: 'APROVADO',
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    // Notificar equipe interna
+    // ... criar notificações para tech, coord, admin
+    
+    return data;
+  },
+});
+
+const confirmClientContact = useMutation({
+  mutationFn: async (id: string) => {
+    const { data, error } = await supabase
+      .from('service_cases')
+      .update({
+        technical_status: 'AGENDAR_HUELLAS',
+        approval_notified_client: true,
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        opportunities (leads (contacts (phone, full_name)))
+      `)
+      .single();
+    
+    if (error) throw error;
+    
+    // Enviar WhatsApp automático de parabéns
+    // ...
+    
+    return data;
+  },
+});
+```
+
+### 4. **Modificar: src/pages/cases/CaseDetail.tsx**
+
+Na seção de ações disponíveis:
+- Adicionar botão "Registrar Aprovação" (para status PROTOCOLADO/EM_ACOMPANHAMENTO)
+- Adicionar botão "Cliente Contactado" (para status APROVADO_INTERNAMENTE)
+
+Adicionar `ApprovalSection` visível quando status é:
+- APROVADO_INTERNAMENTE
+- AGENDAR_HUELLAS
+- AGUARDANDO_CITA_HUELLAS
+- HUELLAS_REALIZADO
+- DISPONIVEL_RETIRADA_TIE
+- AGUARDANDO_CITA_RETIRADA
+- TIE_RETIRADO
+- ENCERRADO_APROVADO
+
+### 5. **Modificar: src/components/cases/SendWhatsAppButton.tsx**
+
+Adicionar novo template:
+
+```typescript
+{
+  id: 'approval_congratulations',
+  label: 'Parabéns pela Aprovação',
+  message: `🎉 Parabéns {nome}! 🎉
+
+Temos uma ÓTIMA notícia! Seu processo de {servico} foi APROVADO!
+
+✅ Resolução favorável recebida
+📅 Validade da residência: {residencia_validity}
+
+Próximos passos:
+1️⃣ Agendaremos sua tomada de impressões digitais (huellas)
+2️⃣ Após as huellas, aguardaremos a emissão do seu TIE
+3️⃣ Quando o TIE estiver pronto, avisaremos para retirada
+
+Qualquer dúvida, estamos à disposição!
+
+Equipe CB Asesoria 🙌`,
 }
 ```
 
-Esta lógica será aplicada ao calcular alertas e ao definir prazos internos.
+### 6. **Modificar: supabase/functions/sla-automations/index.ts**
+
+Adicionar seção `APPROVAL`:
+
+```typescript
+type AutomationType = 
+  | ...
+  | 'APPROVAL'  // Novo
+
+// =====================================================
+// XX. APPROVAL NOTIFICATIONS
+// =====================================================
+if (shouldRun('APPROVAL')) {
+  console.log('Running APPROVAL automation...')
+  
+  // Find cases that just moved to APROVADO_INTERNAMENTE
+  // and haven't notified the team yet
+  const { data: approvedCases } = await supabase
+    .from('service_cases')
+    .select(`
+      id, assigned_to_user_id, approval_date,
+      opportunities!inner (leads!inner (contacts!inner (full_name)))
+    `)
+    .eq('technical_status', 'APROVADO_INTERNAMENTE')
+    .is('approval_notified_client', false)
+  
+  for (const caseData of approvedCases || []) {
+    const clientName = caseData.opportunities?.leads?.contacts?.full_name || 'Cliente'
+    
+    // Notify assigned technician
+    if (caseData.assigned_to_user_id) {
+      await supabase.from('notifications').insert({
+        user_id: caseData.assigned_to_user_id,
+        type: 'case_approved',
+        title: '🎉 Processo Aprovado!',
+        message: `O processo de ${clientName} foi aprovado! Entre em contato para dar a boa notícia.`
+      })
+    }
+    
+    // Notify coordinators
+    const { data: managers } = await supabase
+      .from('user_roles')
+      .select('user_id')
+      .eq('role', 'MANAGER')
+    
+    for (const mgr of managers || []) {
+      await supabase.from('notifications').insert({
+        user_id: mgr.user_id,
+        type: 'case_approved',
+        title: '🎉 Aprovação Registrada',
+        message: `Processo de ${clientName} aprovado!`
+      })
+    }
+    
+    // Notify admins
+    const { data: admins } = await supabase
+      .from('user_roles')
+      .select('user_id')
+      .eq('role', 'ADMIN')
+    
+    for (const admin of admins || []) {
+      await supabase.from('notifications').insert({
+        user_id: admin.user_id,
+        type: 'case_approved',
+        title: '🎉 Aprovação Registrada',
+        message: `Processo de ${clientName} aprovado!`
+      })
+    }
+    
+    results.approvalNotifications++
+  }
+}
+```
 
 ---
 
-## Configurações SLA (system_config)
+## Componente ApprovalSection - Detalhes
 
-Adicionar:
 ```text
-sla_requirement_immediate_alert = true
-sla_requirement_d3_alert_days = 3
-sla_requirement_d2_alert_days = 2
-sla_requirement_extension_days = 5
-sla_requirement_max_extensions = 3
-sla_resource_d7_alert_days = 7
-sla_resource_d5_alert_days = 5
-sla_resource_d3_alert_days = 3
+┌─────────────────────────────────────────────────────────┐
+│  🎉 PROCESSO APROVADO                                   │
+│                                                         │
+│  ┌─────────────────────┐  ┌─────────────────────┐      │
+│  │ Data da Aprovação   │  │ Validade Residência │      │
+│  │ 15/01/2026          │  │ 15/01/2028          │      │
+│  └─────────────────────┘  └─────────────────────┘      │
+│                                                         │
+│  Status: ✅ Cliente contactado em 16/01/2026            │
+│                                                         │
+│  Próximas etapas:                                       │
+│  □ Agendar tomada de huellas                            │
+│  □ Aguardar emissão do TIE                              │
+│  □ Retirar TIE                                          │
+│                                                         │
+│  ┌─────────────────────────────────────────────┐       │
+│  │     [Cliente Contactado - Avançar]          │       │
+│  └─────────────────────────────────────────────┘       │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Histórico de Processos
+## Validação de Renovações
 
-Para a funcionalidade de "iniciar novo processo mantendo histórico":
-
-Adicionar campo à tabela `service_cases`:
-```sql
-ALTER TABLE service_cases 
-ADD COLUMN IF NOT EXISTS previous_case_id UUID REFERENCES service_cases(id),
-ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS closure_reason TEXT;
-```
-
-Na UI:
-- Exibir "Processo anterior: #ID - Denegado em DD/MM/AAAA"
-- Botão "Iniciar Novo Processo" que cria novo case com `previous_case_id`
+O campo `residencia_validity_date` será usado para:
+1. Exibir na UI a data até quando o cliente está regular
+2. Futuramente: alertas de renovação (ex: 6 meses antes do vencimento)
 
 ---
 
 ## Ordem de Implementação
 
-1. **Migração do banco** (campos em requirements_from_authority, tabela requirement_reminders, campos em service_cases)
-2. **Atualizar enum requirement_status**
-3. **Hook useRequirements** (novas mutações)
-4. **Componente RequirementActionsPanel**
-5. **CaseDetail.tsx** (integrar painel)
-6. **LegalDashboard.tsx** (seção exigências urgentes)
-7. **sla-automations** (reescrever seção REQUIREMENTS + adicionar RECURSOS)
-8. **types/database.ts** (atualizar tipos e labels)
-9. **Regenerar types.ts do Supabase**
+1. **Migração do banco** (novo status + campos)
+2. **Atualizar types/database.ts** (adicionar status)
+3. **Componente ApprovalSection**
+4. **Hook useCases** (novas mutações)
+5. **CaseDetail.tsx** (integrar seção + botões)
+6. **SendWhatsAppButton** (novo template)
+7. **sla-automations** (seção APPROVAL)
+8. **Regenerar types.ts do Supabase**
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/migrations/new_migration.sql` | Novo status + campos |
+| `src/integrations/supabase/types.ts` | Regenerar tipos |
+| `src/types/database.ts` | Adicionar status e labels |
+| `src/components/cases/ApprovalSection.tsx` | Novo componente |
+| `src/hooks/useCases.ts` | registerApproval + confirmClientContact |
+| `src/pages/cases/CaseDetail.tsx` | Integrar ApprovalSection |
+| `src/components/cases/SendWhatsAppButton.tsx` | Template de parabéns |
+| `supabase/functions/sla-automations/index.ts` | Seção APPROVAL |
 
 ---
 
 ## Testes Recomendados
 
-1. Criar exigência e verificar notificações imediatas
-2. Simular D-3 e verificar alertas
-3. Simular D-2 e verificar alerta ADM
-4. Solicitar prorrogação e verificar novo prazo
-5. Responder exigência e verificar notificação ao coord
-6. Testar limite de 3 prorrogações
-7. Iniciar recurso após denegação
-8. Verificar alertas de recurso
-9. Iniciar novo processo mantendo histórico do denegado
+1. Registrar aprovação de um caso em acompanhamento
+2. Verificar notificações para técnico, coord e admin
+3. Clicar "Cliente Contactado" e verificar:
+   - Status muda para AGENDAR_HUELLAS
+   - WhatsApp de parabéns é enviado (se configurado)
+4. Verificar que dados de validade aparecem no card
+5. Seguir fluxo completo: Huellas → TIE → Encerramento
+6. Verificar que NPS é enviado ao final (já implementado)
