@@ -225,10 +225,33 @@ export default function PortalDashboard() {
                           <Calendar className="h-3 w-3" />
                           {t.portal.openedAt} {format(new Date(caseItem.created_at!), "dd/MM/yyyy", { locale: dateLocale })}
                         </span>
-                        {caseItem.protocol_number && (
+                        {/* Mostrar Expediente como ID principal se disponível, senão protocolo */}
+                        {(caseItem as any).expediente_number ? (
+                          <span className="font-mono font-medium text-primary">
+                            Expediente: {(caseItem as any).expediente_number}
+                          </span>
+                        ) : caseItem.protocol_number && (
                           <span>{t.portal.protocol}: {caseItem.protocol_number}</span>
                         )}
                       </div>
+
+                      {/* Link para consultar expediente se disponível */}
+                      {(caseItem as any).expediente_number && (
+                        <div className="mt-2 p-2 bg-primary/5 rounded border border-primary/20">
+                          <p className="text-xs text-muted-foreground">
+                            Acompanhe seu processo em{' '}
+                            <a 
+                              href="https://sede.administracionespublicas.gob.es" 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-primary underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              sede.administracionespublicas.gob.es
+                            </a>
+                          </p>
+                        </div>
+                      )}
 
                       {caseItem.decision_result && caseItem.decision_result !== 'EM_ANDAMENTO' && (
                         <div className="mt-2">

@@ -117,6 +117,26 @@ Você pode acompanhar o andamento em:
 Continuaremos monitorando e informaremos sobre qualquer atualização!`,
   },
   {
+    id: 'expediente_instructions',
+    label: 'Instruções do Expediente',
+    message: `Olá {nome}! 📋
+
+Seu processo de {servico} foi protocolado com sucesso!
+
+📋 Número do Expediente: {expediente_number}
+
+Para acompanhar o andamento, acesse:
+🔗 https://sede.administracionespublicas.gob.es
+
+Passo a passo:
+1. Acesse o link acima
+2. Clique em "Consulta del estado de expedientes"
+3. Insira seu número de expediente: {expediente_number}
+4. Preencha seus dados pessoais
+
+Continuaremos acompanhando e avisaremos sobre qualquer atualização!`,
+  },
+  {
     id: 'custom',
     label: 'Mensagem Personalizada',
     message: '',
@@ -129,6 +149,7 @@ interface SendWhatsAppButtonProps {
   leadId?: string | null;
   serviceType?: string;
   protocolNumber?: string | null;
+  expedienteNumber?: string | null;
   huellasDate?: string | null;
   huellasTime?: string | null;
   huellasLocation?: string | null;
@@ -145,6 +166,7 @@ export function SendWhatsAppButton({
   leadId,
   serviceType = 'extranjería',
   protocolNumber,
+  expedienteNumber,
   huellasDate,
   huellasTime,
   huellasLocation,
@@ -188,6 +210,7 @@ export function SendWhatsAppButton({
       .replace(/{servico}/g, serviceType)
       .replace(/{portal_link}/g, portalLink)
       .replace(/{protocol_number}/g, protocolNumber || 'N/A')
+      .replace(/{expediente_number}/g, expedienteNumber || 'N/A')
       .replace(/{huellas_date}/g, huellasDate || 'A definir')
       .replace(/{huellas_time}/g, huellasTime || 'A definir')
       .replace(/{huellas_location}/g, huellasLocation || 'A definir');

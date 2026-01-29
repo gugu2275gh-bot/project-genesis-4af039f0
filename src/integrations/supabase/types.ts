@@ -1491,6 +1491,7 @@ export type Database = {
           decision_result: Database["public"]["Enums"]["decision_result"] | null
           documents_completed_at: string | null
           expected_protocol_date: string | null
+          expediente_number: string | null
           first_contact_at: string | null
           huellas_completed: boolean | null
           huellas_date: string | null
@@ -1504,6 +1505,10 @@ export type Database = {
           opportunity_id: string
           protocol_instructions_sent: boolean | null
           protocol_number: string | null
+          protocol_receipt_approved: boolean | null
+          protocol_receipt_approved_at: string | null
+          protocol_receipt_approved_by: string | null
+          protocol_receipt_url: string | null
           requirement_deadline: string | null
           requirement_received_at: string | null
           resource_deadline: string | null
@@ -1535,6 +1540,7 @@ export type Database = {
             | null
           documents_completed_at?: string | null
           expected_protocol_date?: string | null
+          expediente_number?: string | null
           first_contact_at?: string | null
           huellas_completed?: boolean | null
           huellas_date?: string | null
@@ -1548,6 +1554,10 @@ export type Database = {
           opportunity_id: string
           protocol_instructions_sent?: boolean | null
           protocol_number?: string | null
+          protocol_receipt_approved?: boolean | null
+          protocol_receipt_approved_at?: string | null
+          protocol_receipt_approved_by?: string | null
+          protocol_receipt_url?: string | null
           requirement_deadline?: string | null
           requirement_received_at?: string | null
           resource_deadline?: string | null
@@ -1579,6 +1589,7 @@ export type Database = {
             | null
           documents_completed_at?: string | null
           expected_protocol_date?: string | null
+          expediente_number?: string | null
           first_contact_at?: string | null
           huellas_completed?: boolean | null
           huellas_date?: string | null
@@ -1592,6 +1603,10 @@ export type Database = {
           opportunity_id?: string
           protocol_instructions_sent?: boolean | null
           protocol_number?: string | null
+          protocol_receipt_approved?: boolean | null
+          protocol_receipt_approved_at?: string | null
+          protocol_receipt_approved_by?: string | null
+          protocol_receipt_url?: string | null
           requirement_deadline?: string | null
           requirement_received_at?: string | null
           resource_deadline?: string | null
@@ -1618,6 +1633,13 @@ export type Database = {
             columns: ["opportunity_id"]
             isOneToOne: false
             referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_cases_protocol_receipt_approved_by_fkey"
+            columns: ["protocol_receipt_approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

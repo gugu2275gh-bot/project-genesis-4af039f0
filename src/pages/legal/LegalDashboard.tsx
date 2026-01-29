@@ -109,6 +109,12 @@ export default function LegalDashboard() {
     return caseItem.opportunities?.leads?.contacts?.full_name || "Cliente não identificado";
   };
 
+  const getReceiptStatus = (caseItem: any) => {
+    if (!caseItem.protocol_receipt_url) return 'pending';
+    if (caseItem.protocol_receipt_approved) return 'approved';
+    return 'awaiting_approval';
+  };
+
   const columns = [
     {
       key: "client",
@@ -130,6 +136,28 @@ export default function LegalDashboard() {
       cell: (item: any) => (
         <Badge>{statusLabels[item.technical_status] || item.technical_status}</Badge>
       ),
+    },
+    {
+      key: "receipt_status",
+      header: "Comprovante",
+      cell: (item: any) => {
+        const status = getReceiptStatus(item);
+        if (status === 'pending') {
+          return <Badge variant="outline" className="text-muted-foreground">Pendente</Badge>;
+        }
+        if (status === 'awaiting_approval') {
+          return <Badge variant="outline" className="bg-warning/10 text-warning">Aguard. Aprovação</Badge>;
+        }
+        return <Badge variant="outline" className="bg-success/10 text-success">Aprovado</Badge>;
+      },
+    },
+    {
+      key: "expediente",
+      header: "Expediente",
+      cell: (item: any) => {
+        if (!item.expediente_number) return <span className="text-muted-foreground">-</span>;
+        return <span className="font-mono text-xs">{item.expediente_number}</span>;
+      },
     },
     {
       key: "priority",
@@ -156,21 +184,6 @@ export default function LegalDashboard() {
             {format(d, "dd/MM/yyyy", { locale: ptBR })}
             {isToday(d) && " (HOJE)"}
             {isTomorrow(d) && " (Amanhã)"}
-          </span>
-        );
-      },
-    },
-    {
-      key: "requirement_deadline",
-      header: "Prazo Exigência",
-      cell: (item: any) => {
-        const date = item.requirement_deadline;
-        if (!date) return <span className="text-muted-foreground">-</span>;
-        const d = new Date(date);
-        const daysLeft = Math.ceil((d.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-        return (
-          <span className={daysLeft <= 3 ? "text-destructive font-semibold" : ""}>
-            {format(d, "dd/MM/yyyy")} ({daysLeft}d)
           </span>
         );
       },
