@@ -1,307 +1,358 @@
 
-# Plano: Implementação do Acompanhamento Pós-Protocolo (Etapa 7)
+# Plano: Requerimentos e Recursos - Prazos e Procedimentos (Etapa 8)
 
 ## Resumo da Análise
 
-Após análise detalhada do código existente, identifiquei que grande parte da infraestrutura já existe:
+Após análise detalhada do código existente, identifiquei a infraestrutura parcialmente implementada:
 
 ### O que já existe
 | Funcionalidade | Status | Localização |
 |----------------|--------|-------------|
-| Tabela `requirements_from_authority` | ✅ | Supabase |
-| Tabela `document_reminders` (para rastreio) | ✅ | Supabase |
+| Tabela `requirements_from_authority` | ✅ | Supabase (id, service_case_id, description, official_deadline_date, internal_deadline_date, status) |
+| Enum `requirement_status` (ABERTA, RESPONDIDA, ENCERRADA) | ✅ | types/database.ts |
 | Hook `useRequirements` | ✅ | src/hooks/useRequirements.ts |
-| Alertas de Exigência no SLA Monitoring | ✅ | sla-automations |
-| UI de Exigências no CaseDetail | ✅ | CaseDetail.tsx (tab Exigências) |
-| Seção REQUIREMENTS no sla-automations | ✅ | linhas 1130-1210 |
-| Configuração `sla_post_protocol_followup_days` | ✅ | system_config ("14,21,35") |
+| UI de Nova Exigência no CaseDetail | ✅ | CaseDetail.tsx (dialog com prazo oficial e interno) |
+| Tabela `document_reminders` (para rastrear alertas) | ✅ | Supabase |
+| Seção REQUIREMENTS no sla-automations | ⚠️ Parcial | Alerta 2 dias (interno), 5 dias (oficial) |
+| Status `EXIGENCIA_ORGAO` no enum | ✅ | technical_status |
+| Status `DENEGADO` e `EM_RECURSO` | ✅ | technical_status |
+| Campos `resource_deadline`, `resource_notes` | ✅ | service_cases |
+| Dialog para iniciar Recurso | ✅ | CaseDetail.tsx |
 
 ### O que precisa ser implementado
 
 | Funcionalidade | Descrição |
 |----------------|-----------|
-| **Tracking de Documentos Pendentes Pós-Protocolo** | Flag `is_post_protocol_pending` na tabela `service_documents` |
-| **Alertas Escalonados Pós-Protocolo** | 2 sem → Técnico, 3 sem → Coordenador, 5 sem → ADM |
-| **UI para Marcar Documentos como Pendentes Pós-Protocolo** | Checkbox/toggle no CaseDetail |
-| **Seção POST_PROTOCOL_DOCS no sla-automations** | Nova automação para documentos pendentes pós-protocolo |
-| **Ação de "Enviar ao Jurídico" pós-protocolo** | Botão para encaminhar documento complementar |
+| **Campos adicionais para Exigências** | `responded_at`, `extension_count`, `original_deadline_date`, `extension_requested_at`, `notified_coordinator` |
+| **Status `EM_PRORROGACAO`** | Novo status para exigência com prorrogação solicitada |
+| **Alertas escalonados (10 dias)** | Imediato, D-3, D-2 (ADM), confirmação ao coord |
+| **Lógica de prorrogação (+5 dias)** | Novo prazo com alertas proporcionais |
+| **UI para solicitar prorrogação** | Botão no CaseDetail que atualiza deadline e notifica |
+| **Notificação de exigência recebida** | Alerta imediato para Técnico, Coord e ADM |
+| **Alertas de recurso escalonados** | Similar a exigências, para prazos de recurso (ex: 1 mês) |
+| **Botão "Enviar ao Jurídico"** | Para enviar resposta de exigência |
+| **Histórico do processo denegado** | Link para novo processo mantendo histórico |
 
 ---
 
 ## Alterações no Banco de Dados
 
-### 1. Adicionar campo à tabela `service_documents`
+### 1. Adicionar campos à tabela `requirements_from_authority`
 
 ```sql
-ALTER TABLE service_documents 
-ADD COLUMN IF NOT EXISTS is_post_protocol_pending BOOLEAN DEFAULT false;
-
-ALTER TABLE service_documents 
-ADD COLUMN IF NOT EXISTS post_protocol_pending_since TIMESTAMPTZ;
+ALTER TABLE requirements_from_authority 
+ADD COLUMN IF NOT EXISTS responded_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS response_sent_by UUID REFERENCES profiles(id),
+ADD COLUMN IF NOT EXISTS extension_count INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS original_deadline_date DATE,
+ADD COLUMN IF NOT EXISTS extension_requested_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS extension_approved_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS coordinator_notified_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS response_file_url TEXT,
+ADD COLUMN IF NOT EXISTS notes TEXT;
 ```
 
-**Explicação dos campos:**
-- `is_post_protocol_pending`: Flag indicando que o documento ainda precisa ser enviado após o protocolo
-- `post_protocol_pending_since`: Data a partir da qual começou a contagem para alertas
+### 2. Adicionar novo valor ao enum `requirement_status`
 
----
-
-## Arquivos a Modificar
-
-### 1. **Modificar: supabase/functions/sla-automations/index.ts**
-
-Adicionar nova seção `POST_PROTOCOL_DOCS`:
-
-```typescript
-// =====================================================
-// 15. POST-PROTOCOL PENDING DOCUMENTS ALERTS
-// =====================================================
-if (shouldRun('POST_PROTOCOL_DOCS')) {
-  console.log('Running POST_PROTOCOL_DOCS automation...')
-  
-  // Find documents marked as pending post-protocol
-  const { data: pendingDocs } = await supabase
-    .from('service_documents')
-    .select(`
-      id, service_case_id, document_type_id, post_protocol_pending_since,
-      service_document_types!inner (name),
-      service_cases!inner (
-        assigned_to_user_id,
-        opportunities!inner (leads!inner (contacts!inner (full_name)))
-      )
-    `)
-    .eq('is_post_protocol_pending', true)
-    .in('status', ['NAO_ENVIADO', 'ENVIADO', 'RECUSADO'])
-
-  for (const doc of pendingDocs || []) {
-    const pendingSince = new Date(doc.post_protocol_pending_since || doc.updated_at)
-    const weeksPending = (now.getTime() - pendingSince.getTime()) / (7 * 24 * 60 * 60 * 1000)
-    
-    const caseData = doc.service_cases as any
-    const docName = (doc.service_document_types as any)?.name || 'Documento'
-    const clientName = caseData?.opportunities?.leads?.contacts?.full_name || 'Cliente'
-    const caseShortId = doc.service_case_id.slice(0, 8)
-    
-    // Week 2 - Alert to Technician
-    if (weeksPending >= 2 && weeksPending < 3) {
-      if (!(await techDocReminderSent(doc.service_case_id, `POST_PROTO_W2_${doc.id}`))) {
-        if (caseData.assigned_to_user_id) {
-          await supabase.from('notifications').insert({
-            user_id: caseData.assigned_to_user_id,
-            type: 'post_protocol_doc_pending',
-            title: 'Documento Pendente Pós-Protocolo',
-            message: `${docName} de ${clientName} (caso ${caseShortId}) pendente há 2 semanas.`
-          })
-        }
-        await recordTechDocReminder(doc.service_case_id, `POST_PROTO_W2_${doc.id}`, 'TECH')
-        results.postProtocolDocsAlerts++
-      }
-    }
-    
-    // Week 3 - Escalate to Coordinator
-    if (weeksPending >= 3 && weeksPending < 5) {
-      if (!(await techDocReminderSent(doc.service_case_id, `POST_PROTO_W3_${doc.id}`))) {
-        const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
-        for (const mgr of managers || []) {
-          await supabase.from('notifications').insert({
-            user_id: mgr.user_id,
-            type: 'post_protocol_doc_escalated',
-            title: 'Documento Pós-Protocolo Atrasado',
-            message: `${docName} de ${clientName} (caso ${caseShortId}) pendente há 3 semanas.`
-          })
-        }
-        await recordTechDocReminder(doc.service_case_id, `POST_PROTO_W3_${doc.id}`, 'COORD')
-        results.postProtocolDocsAlerts++
-      }
-    }
-    
-    // Week 5 - Escalate to Admin
-    if (weeksPending >= 5) {
-      if (!(await techDocReminderSent(doc.service_case_id, `POST_PROTO_W5_${doc.id}`))) {
-        const { data: admins } = await supabase.from('user_roles').select('user_id').eq('role', 'ADMIN')
-        for (const admin of admins || []) {
-          await supabase.from('notifications').insert({
-            user_id: admin.user_id,
-            type: 'post_protocol_doc_critical',
-            title: '🚨 Documento Pós-Protocolo Crítico',
-            message: `${docName} de ${clientName} (caso ${caseShortId}) pendente há 5+ semanas!`
-          })
-        }
-        await recordTechDocReminder(doc.service_case_id, `POST_PROTO_W5_${doc.id}`, 'ADMIN')
-        results.postProtocolDocsAlerts++
-      }
-    }
-  }
-}
+```sql
+ALTER TYPE requirement_status ADD VALUE IF NOT EXISTS 'EM_PRORROGACAO';
+ALTER TYPE requirement_status ADD VALUE IF NOT EXISTS 'PRORROGADA';
 ```
 
-Adicionar tipo de automação:
-```typescript
-type AutomationType = 
-  | 'ALL'
-  | ...
-  | 'POST_PROTOCOL_DOCS'  // Novo
-```
+### 3. Criar tabela `requirement_reminders` (se não existir)
 
-Adicionar contador de resultados:
-```typescript
-postProtocolDocsAlerts: 0,
+```sql
+CREATE TABLE IF NOT EXISTS requirement_reminders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  requirement_id UUID NOT NULL REFERENCES requirements_from_authority(id),
+  reminder_type TEXT NOT NULL, -- 'IMMEDIATE', 'D3', 'D2_ADM', 'RESPONSE_CONFIRMED', 'EXTENSION_REQUESTED'
+  recipient_type TEXT NOT NULL, -- 'TECH', 'COORD', 'ADM', 'JURIDICO'
+  sent_at TIMESTAMPTZ DEFAULT now(),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_requirement_reminders ON requirement_reminders(requirement_id, reminder_type);
 ```
 
 ---
 
-### 2. **Modificar: src/hooks/useDocuments.ts**
+## Arquivos a Criar/Modificar
 
-Adicionar mutação para marcar documento como pendente pós-protocolo:
+### 1. **Novo Componente: RequirementActionsPanel.tsx**
 
-```typescript
-const markPostProtocolPending = useMutation({
-  mutationFn: async ({ docId, isPending }: { docId: string; isPending: boolean }) => {
-    const { data, error } = await supabase
-      .from('service_documents')
-      .update({
-        is_post_protocol_pending: isPending,
-        post_protocol_pending_since: isPending ? new Date().toISOString() : null,
-      })
-      .eq('id', docId)
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
-  },
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['service-documents'] });
-    toast({ title: 'Documento atualizado' });
-  },
-});
+```text
+src/components/cases/RequirementActionsPanel.tsx
 ```
 
----
+Funcionalidades:
+- Exibe exigência com contagem regressiva de dias
+- Badge de urgência visual (vermelho se <= 3 dias)
+- Botão "Responder Exigência" (upload de arquivo + marcar respondida)
+- Botão "Solicitar Prorrogação" (adiciona +5 dias, notifica coord)
+- Histórico de prorrogações (mostra `extension_count`)
+- Indicador de que coord foi notificado
+
+### 2. **Modificar: src/hooks/useRequirements.ts**
+
+Adicionar mutações:
+- `requestExtension`: Solicita +5 dias, incrementa `extension_count`, notifica
+- `respondRequirement`: Marca respondida, upload arquivo, notifica coord
+- `sendToLegal`: Encaminha resposta ao jurídico
 
 ### 3. **Modificar: src/pages/cases/CaseDetail.tsx**
 
-Adicionar indicador visual e toggle para documentos pendentes pós-protocolo na tab de Documentos.
+Na tab "Exigências":
+- Substituir listagem simples pelo `RequirementActionsPanel`
+- Adicionar visualização de prazo com urgência
+- Exibir histórico de prorrogações
+- Botões de ação contextuais
 
-Na listagem de documentos, adicionar:
-- Badge "Pós-Protocolo" para documentos marcados
-- Toggle para marcar/desmarcar como pendente pós-protocolo (visível apenas após status PROTOCOLADO)
-- Botão "Enviar ao Jurídico" para encaminhar documento complementar
+### 4. **Modificar: supabase/functions/sla-automations/index.ts**
 
----
-
-### 4. **Modificar: src/hooks/useSLAMonitoring.ts**
-
-Adicionar contagem de documentos pendentes pós-protocolo no painel de SLA:
-
-```typescript
-// Post-protocol pending documents
-const { count: postProtocolDocsPending } = await supabase
-  .from('service_documents')
-  .select('id', { count: 'exact' })
-  .eq('is_post_protocol_pending', true)
-  .in('status', ['NAO_ENVIADO', 'ENVIADO', 'RECUSADO']);
-```
-
----
-
-## Fluxo Visual
+Reescrever seção REQUIREMENTS com:
 
 ```text
-         PROTOCOLO REALIZADO
-                │
-                ▼
-   ┌─────────────────────────────┐
-   │ Técnico marca documento(s)  │
-   │ como "Pendente Pós-Proto"   │
-   └─────────────────────────────┘
-                │
-                ▼
-   ┌─────────────────────────────┐
-   │ Sistema inicia contagem     │
-   │ post_protocol_pending_since │
-   └─────────────────────────────┘
-                │
-    ┌───────────┼───────────┬──────────────┐
-    ▼           ▼           ▼              ▼
-  2 sem       3 sem       5 sem         Cliente
- (Técnico)  (Coord)     (Admin)        envia doc
-    │           │           │              │
-    ▼           ▼           ▼              ▼
- Notific.   Escalação   Alerta       Técnico aprova
- in-app     MANAGER     Crítico      e envia ao Jurídico
-                                          │
-                                          ▼
-                                   Fluxo de Exigência
-                                   (se necessário)
+LÓGICA DE ALERTAS PARA PRAZO DE 10 DIAS:
+├── Imediatamente ao registrar exigência:
+│   ├── Notificar Técnico (in-app + WhatsApp opcional)
+│   ├── Notificar Coordenador (in-app)
+│   └── Registrar em requirement_reminders (type='IMMEDIATE')
+│
+├── 3 dias antes do prazo (D-3):
+│   ├── Notificar Técnico (in-app)
+│   ├── Notificar Jurídico (in-app)
+│   ├── Notificar Coordenador (in-app)
+│   └── Registrar em requirement_reminders (type='D3')
+│
+├── 2 dias antes do prazo (D-2):
+│   ├── Notificar ADM (urgência máxima)
+│   └── Registrar em requirement_reminders (type='D2_ADM')
+│
+└── Ao responder ou solicitar prorrogação:
+    └── Notificar Coordenador (confirmação de ação tomada)
+
+LÓGICA DE PRORROGAÇÃO (+5 DIAS):
+├── Se prorrogação solicitada:
+│   ├── Atualizar official_deadline_date += 5 dias
+│   ├── Incrementar extension_count
+│   ├── Salvar original_deadline_date (se primeira prorrogação)
+│   └── Notificar imediatamente Técnico/Jurídico/Coord com novo prazo
+│
+├── Para prazo de 5 dias, alertas proporcionais:
+│   ├── D-3: Alerta Técnico/Jurídico (pois são quase contínuos)
+│   └── D-2: Alerta ADM
+│
+└── Limite recomendado: 3 prorrogações
+    └── Após 3ª, enviar alerta especial ao Coord/ADM
+```
+
+### 5. **Modificar: src/pages/legal/LegalDashboard.tsx**
+
+Adicionar tab ou seção "Exigências Urgentes":
+- Lista de exigências com prazo < 5 dias
+- Indicador de quantas prorrogações já foram solicitadas
+- Filtro por status (ABERTA, EM_PRORROGACAO, RESPONDIDA)
+
+### 6. **Modificar: src/types/database.ts**
+
+Atualizar:
+```typescript
+export type RequirementStatus = 
+  | 'ABERTA'
+  | 'EM_PRORROGACAO'
+  | 'PRORROGADA'
+  | 'RESPONDIDA'
+  | 'ENCERRADA';
+
+export const REQUIREMENT_STATUS_LABELS: Record<RequirementStatus, string> = {
+  ABERTA: 'Aberta',
+  EM_PRORROGACAO: 'Prorrogação Solicitada',
+  PRORROGADA: 'Prazo Estendido',
+  RESPONDIDA: 'Respondida',
+  ENCERRADA: 'Encerrada',
+};
 ```
 
 ---
 
-## Escalas de Alertas Pós-Protocolo
+## Fluxo Visual - Exigência (Requerimiento)
 
-| Tempo | Destinatário | Tipo | Mensagem |
-|-------|--------------|------|----------|
-| 2 semanas | Técnico responsável | in-app | "Documento X pendente há 2 semanas" |
-| 3 semanas | Coordenador (MANAGER) | in-app | "Documento X atrasado há 3 semanas" |
-| 5 semanas | Administrador (ADMIN) | in-app | "🚨 Documento X crítico - 5+ semanas" |
+```text
+       ÓRGÃO EMITE EXIGÊNCIA (10 DIAS)
+                    │
+                    ▼
+    ┌───────────────────────────────────┐
+    │ Jurídico registra no sistema      │
+    │ Status: ABERTA                    │
+    │ ► Notifica Técnico + Coord + ADM  │
+    └───────────────────────────────────┘
+                    │
+         ┌──────────┴──────────┐
+         ▼                     ▼
+    D-3 (7 dias)          Cliente consegue
+    ├─ Alerta Técnico     reunir documentos?
+    ├─ Alerta Jurídico          │
+    └─ Alerta Coord       ┌─────┴─────┐
+         │                ▼           ▼
+         │              SIM          NÃO
+    D-2 (8 dias)          │           │
+    ├─ Alerta ADM         │           ▼
+    └─ Urgência máxima    │    ┌─────────────────┐
+         │                │    │ Solicitar       │
+         ▼                │    │ Prorrogação     │
+    D-0 (Prazo vence)     │    │ (+5 dias)       │
+         │                │    └─────────────────┘
+         │                │           │
+         ▼                ▼           ▼
+    ┌────────────────────────────────────────┐
+    │ Técnico envia docs ao Jurídico         │
+    │ Jurídico protocola resposta            │
+    │ Status: RESPONDIDA                     │
+    │ ► Notifica Coord (ação tomada)         │
+    └────────────────────────────────────────┘
+```
 
 ---
 
-## Integração com Exigências (Requerimientos)
+## Fluxo Visual - Recurso (Apelação)
 
-O sistema de exigências já está implementado e funcionando:
-
-| Funcionalidade | Status |
-|----------------|--------|
-| Cadastro de Exigência (requirements_from_authority) | ✅ |
-| Prazos Oficial e Interno | ✅ |
-| Alertas automáticos (2 dias interno, 5 dias oficial) | ✅ |
-| Status (ABERTA, EM_ANDAMENTO, RESPONDIDA, EXPIRADA) | ✅ |
-| UI no CaseDetail | ✅ |
-
-**Não há necessidade de alterações** no sistema de exigências - ele já atende ao requisito de "Requerimiento" mencionado na documentação.
+```text
+        PROCESSO DENEGADO
+              │
+              ▼
+   ┌──────────────────────────┐
+   │ Jurídico altera status   │
+   │ para DENEGADO            │
+   │ ► Notifica todos         │
+   └──────────────────────────┘
+              │
+     ┌────────┴────────┐
+     ▼                 ▼
+  RECORRER        NÃO RECORRER
+     │                 │
+     ▼                 ▼
+┌─────────────┐   ┌──────────────────┐
+│ Status:     │   │ Arquivar processo│
+│ EM_RECURSO  │   │ Iniciar novo     │
+│ Prazo: 1 mês│   │ (mantém histórico)│
+└─────────────┘   └──────────────────┘
+     │
+     ▼ (Alertas proporcionais)
+┌────────────────────────────┐
+│ D-7: Alerta Jurídico       │
+│ D-5: Alerta Coord          │
+│ D-3: Alerta ADM            │
+└────────────────────────────┘
+     │
+     ▼
+Jurídico protocola recurso
+```
 
 ---
 
-## Configurações SLA Existentes
+## Escalas de Alertas
 
-A configuração `sla_post_protocol_followup_days` já existe com valor "14,21,35" (dias):
-- 14 dias (2 semanas) → Alerta Técnico
-- 21 dias (3 semanas) → Alerta Coordenador  
-- 35 dias (5 semanas) → Alerta Admin
+### Exigência (10 dias oficiais)
+| Momento | Destinatários | Mensagem |
+|---------|---------------|----------|
+| Imediato | Técnico, Coord | "Nova exigência recebida - prazo 10 dias" |
+| D-3 | Técnico, Jurídico, Coord | "Prazo de exigência vence em 3 dias" |
+| D-2 | ADM | "🚨 Urgência máxima - exigência vence em 2 dias" |
+| Após resposta | Coord | "Exigência respondida/protocolada" |
+
+### Prorrogação (5 dias)
+| Momento | Destinatários | Mensagem |
+|---------|---------------|----------|
+| Imediato | Técnico, Jurídico, Coord | "Novo prazo: X dias (prorrogação N)" |
+| D-3 | Técnico, Jurídico | "Prazo estendido vence em 3 dias" |
+| D-2 | ADM | "🚨 Prazo de prorrogação vence em 2 dias" |
+
+### Recurso (1 mês típico)
+| Momento | Destinatários | Mensagem |
+|---------|---------------|----------|
+| Imediato | Jurídico | "Recurso iniciado - prazo até X" |
+| D-7 | Jurídico | "Prazo de recurso vence em 7 dias" |
+| D-5 | Coord | "Prazo de recurso vence em 5 dias" |
+| D-3 | ADM | "🚨 Prazo de recurso vence em 3 dias" |
+
+---
+
+## Regra de Dias Úteis
+
+A documentação menciona: "Caso o último dia caia em final de semana ou feriado, antecipar para dia útil anterior."
+
+Implementar função helper:
+
+```typescript
+function adjustToBusinessDay(date: Date): Date {
+  const day = date.getDay();
+  if (day === 0) return addDays(date, -2); // Domingo → Sexta
+  if (day === 6) return addDays(date, -1); // Sábado → Sexta
+  return date;
+}
+```
+
+Esta lógica será aplicada ao calcular alertas e ao definir prazos internos.
+
+---
+
+## Configurações SLA (system_config)
+
+Adicionar:
+```text
+sla_requirement_immediate_alert = true
+sla_requirement_d3_alert_days = 3
+sla_requirement_d2_alert_days = 2
+sla_requirement_extension_days = 5
+sla_requirement_max_extensions = 3
+sla_resource_d7_alert_days = 7
+sla_resource_d5_alert_days = 5
+sla_resource_d3_alert_days = 3
+```
+
+---
+
+## Histórico de Processos
+
+Para a funcionalidade de "iniciar novo processo mantendo histórico":
+
+Adicionar campo à tabela `service_cases`:
+```sql
+ALTER TABLE service_cases 
+ADD COLUMN IF NOT EXISTS previous_case_id UUID REFERENCES service_cases(id),
+ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS closure_reason TEXT;
+```
+
+Na UI:
+- Exibir "Processo anterior: #ID - Denegado em DD/MM/AAAA"
+- Botão "Iniciar Novo Processo" que cria novo case com `previous_case_id`
 
 ---
 
 ## Ordem de Implementação
 
-1. **Migração do banco** (adicionar campos)
-2. **Hook useDocuments** (adicionar mutação)
-3. **CaseDetail.tsx** (UI de toggle e indicadores)
-4. **useSLAMonitoring.ts** (contagem no painel)
-5. **sla-automations** (nova seção POST_PROTOCOL_DOCS)
-6. **Atualizar types.ts** (regenerar tipos)
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/migrations/new_migration.sql` | Adicionar campos à service_documents |
-| `src/integrations/supabase/types.ts` | Regenerar tipos |
-| `src/hooks/useDocuments.ts` | Adicionar markPostProtocolPending |
-| `src/pages/cases/CaseDetail.tsx` | UI para marcar docs pós-protocolo |
-| `src/hooks/useSLAMonitoring.ts` | Adicionar contagem |
-| `supabase/functions/sla-automations/index.ts` | Seção POST_PROTOCOL_DOCS |
+1. **Migração do banco** (campos em requirements_from_authority, tabela requirement_reminders, campos em service_cases)
+2. **Atualizar enum requirement_status**
+3. **Hook useRequirements** (novas mutações)
+4. **Componente RequirementActionsPanel**
+5. **CaseDetail.tsx** (integrar painel)
+6. **LegalDashboard.tsx** (seção exigências urgentes)
+7. **sla-automations** (reescrever seção REQUIREMENTS + adicionar RECURSOS)
+8. **types/database.ts** (atualizar tipos e labels)
+9. **Regenerar types.ts do Supabase**
 
 ---
 
 ## Testes Recomendados
 
-1. Marcar documento como pendente pós-protocolo
-2. Verificar contagem no painel SLA
-3. Simular passagem de tempo (ajustar post_protocol_pending_since)
-4. Verificar alertas escalonados
-5. Desmarcar documento e verificar que alertas param
-6. Testar fluxo de envio ao jurídico
+1. Criar exigência e verificar notificações imediatas
+2. Simular D-3 e verificar alertas
+3. Simular D-2 e verificar alerta ADM
+4. Solicitar prorrogação e verificar novo prazo
+5. Responder exigência e verificar notificação ao coord
+6. Testar limite de 3 prorrogações
+7. Iniciar recurso após denegação
+8. Verificar alertas de recurso
+9. Iniciar novo processo mantendo histórico do denegado
