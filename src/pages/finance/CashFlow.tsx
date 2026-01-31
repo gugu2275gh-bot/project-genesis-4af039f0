@@ -55,6 +55,8 @@ const EXIT_CATEGORIES = [
   { value: 'DESPESA_VARIAVEL', label: 'Despesa Variável' },
   { value: 'COMISSAO_PAGA', label: 'Comissão Paga' },
   { value: 'TAXA_OFICIAL', label: 'Taxa Oficial' },
+  { value: 'TRANSFERENCIA_INTERNA', label: 'Transferência Interna' },
+  { value: 'PRO_LABORE', label: 'Pró-Labore / Retirada' },
   { value: 'OUTROS', label: 'Outros' },
 ];
 
@@ -72,6 +74,9 @@ export default function CashFlow() {
     totalEntradas,
     totalSaidas,
     saldo,
+    totalDespesasFixas,
+    totalDespesasVariaveis,
+    margemOperacional,
     byCategory,
   } = useCashFlow(startDate, endDate);
   
@@ -256,7 +261,8 @@ export default function CashFlow() {
                 </Select>
               </div>
 
-              {formData.type === 'SAIDA' && formData.category === 'DESPESA_FIXA' && (
+              {formData.type === 'SAIDA' && 
+               (formData.category === 'DESPESA_FIXA' || formData.category === 'DESPESA_VARIAVEL') && (
                 <div className="space-y-2">
                   <Label>Subcategoria</Label>
                   <Select 
@@ -267,11 +273,13 @@ export default function CashFlow() {
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.filter(c => c.type === 'FIXA').map((cat) => (
-                        <SelectItem key={cat.id} value={cat.name}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
+                      {categories
+                        .filter(c => formData.category === 'DESPESA_FIXA' ? c.type === 'FIXA' : c.type === 'VARIAVEL')
+                        .map((cat) => (
+                          <SelectItem key={cat.id} value={cat.name}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -352,8 +360,8 @@ export default function CashFlow() {
         </CardContent>
       </Card>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Stats Cards - Resumo Financeiro */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Entradas</CardTitle>
@@ -364,6 +372,28 @@ export default function CashFlow() {
             <p className="text-xs text-muted-foreground">
               {entries.filter(e => e.type === 'ENTRADA').length} lançamentos
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Despesas Fixas</CardTitle>
+            <TrendingDown className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-500">€{totalDespesasFixas.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Custos recorrentes</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Despesas Variáveis</CardTitle>
+            <TrendingDown className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-500">€{totalDespesasVariaveis.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Custos operacionais</p>
           </CardContent>
         </Card>
 
@@ -380,17 +410,17 @@ export default function CashFlow() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={margemOperacional >= 0 ? 'border-green-200 bg-green-50/50' : 'border-destructive/20 bg-destructive/5'}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Saldo do Período</CardTitle>
+            <CardTitle className="text-sm font-medium">Margem Operacional</CardTitle>
             <Wallet className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${saldo >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-              €{saldo.toFixed(2)}
+            <div className={`text-2xl font-bold ${margemOperacional >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+              €{margemOperacional.toFixed(2)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {saldo >= 0 ? 'Lucro' : 'Prejuízo'} no período
+              {margemOperacional >= 0 ? '✓ Positiva' : '✗ Negativa'}
             </p>
           </CardContent>
         </Card>
