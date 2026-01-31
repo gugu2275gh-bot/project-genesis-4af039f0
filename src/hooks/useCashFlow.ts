@@ -155,6 +155,18 @@ export function useCashFlow(startDate?: string, endDate?: string) {
     .reduce((sum, e) => sum + e.amount, 0);
   const saldo = totalEntradas - totalSaidas;
 
+  // Cálculos separados por tipo de despesa
+  const totalDespesasFixas = entries
+    .filter(e => e.type === 'SAIDA' && e.category === 'DESPESA_FIXA')
+    .reduce((sum, e) => sum + e.amount, 0);
+  
+  const totalDespesasVariaveis = entries
+    .filter(e => e.type === 'SAIDA' && e.category === 'DESPESA_VARIAVEL')
+    .reduce((sum, e) => sum + e.amount, 0);
+  
+  const totalOutrasSaidas = totalSaidas - totalDespesasFixas - totalDespesasVariaveis;
+  const margemOperacional = totalEntradas - totalDespesasFixas - totalDespesasVariaveis;
+
   // Agrupamento por categoria
   const byCategory = entries.reduce((acc, entry) => {
     const key = `${entry.type}-${entry.category}`;
@@ -177,6 +189,10 @@ export function useCashFlow(startDate?: string, endDate?: string) {
     totalEntradas,
     totalSaidas,
     saldo,
+    totalDespesasFixas,
+    totalDespesasVariaveis,
+    totalOutrasSaidas,
+    margemOperacional,
     byCategory: Object.values(byCategory),
   };
 }
