@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Eye, FileText } from 'lucide-react';
+import { Plus, Search, Eye, FileText, AlertTriangle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format } from 'date-fns';
@@ -83,12 +84,23 @@ export default function ContractsList() {
     {
       key: 'status',
       header: 'Status',
-      cell: (contract) => (
-        <StatusBadge 
-          status={contract.status || 'EM_ELABORACAO'} 
-          label={CONTRACT_STATUS_LABELS[contract.status || 'EM_ELABORACAO']} 
-        />
-      ),
+      cell: (contract) => {
+        const contractData = contract as any;
+        return (
+          <div className="flex items-center gap-2">
+            <StatusBadge 
+              status={contract.status || 'EM_ELABORACAO'} 
+              label={CONTRACT_STATUS_LABELS[contract.status || 'EM_ELABORACAO']} 
+            />
+            {contractData.is_suspended && (
+              <Badge variant="destructive" className="flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Suspenso
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'total_fee',

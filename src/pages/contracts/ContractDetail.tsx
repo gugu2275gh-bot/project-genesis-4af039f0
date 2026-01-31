@@ -12,13 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Send, Check, Save, X, Calendar, FileText, Users, Upload, FileCheck, Loader2, User, Phone, MapPin, CreditCard } from 'lucide-react';
+import { ArrowLeft, Send, Check, Save, X, Calendar, FileText, Users, Upload, FileCheck, Loader2, User, Phone, MapPin, CreditCard, Pause, Play, AlertTriangle } from 'lucide-react';
 import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, LANGUAGE_LABELS, CONTRACT_TEMPLATE_LABELS, ContractTemplate, PAYMENT_METHOD_LABELS, PAYMENT_ACCOUNT_LABELS, PaymentAccount } from '@/types/database';
 import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BeneficiariesTab } from '@/components/contracts/BeneficiariesTab';
+import { Badge } from '@/components/ui/badge';
 import { ContractCostsSection } from '@/components/contracts/ContractCostsSection';
 import { ContractNotesSection } from '@/components/contracts/ContractNotesSection';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,7 +29,7 @@ export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: contract, isLoading } = useContract(id);
-  const { updateContract, sendForSignature, markAsSigned, cancelContract } = useContracts();
+  const { updateContract, sendForSignature, markAsSigned, cancelContract, suspendContract, reactivateContract } = useContracts();
   const { data: profiles = [] } = useProfiles();
   
   const [formData, setFormData] = useState({
@@ -53,6 +54,10 @@ export default function ContractDetail() {
   const [isEditing, setIsEditing] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
+  
+  // State for suspension
+  const [showSuspendDialog, setShowSuspendDialog] = useState(false);
+  const [suspensionReason, setSuspensionReason] = useState('');
   
   // State for signed document upload
   const [signedDocumentFile, setSignedDocumentFile] = useState<File | null>(null);
@@ -261,6 +266,23 @@ export default function ContractDetail() {
     setCancellationReason('');
   };
 
+  const handleSuspend = async () => {
+    if (!suspensionReason.trim()) return;
+    await suspendContract.mutateAsync({
+      id: contract.id,
+      reason: suspensionReason,
+    });
+    setShowSuspendDialog(false);
+    setSuspensionReason('');
+  };
+
+  const handleReactivate = async () => {
+    await reactivateContract.mutateAsync(contract.id);
+  };
+
+  const contractData = contract as any;
+  const isSuspended = contractData.is_suspended === true;
+
   const canEdit = contract.status === 'EM_ELABORACAO' || contract.status === 'EM_REVISAO';
   const canSend = contract.status === 'EM_REVISAO' && 
     contract.scope_summary && 
@@ -270,6 +292,8 @@ export default function ContractDetail() {
     contract.first_due_date;
   const canSign = contract.status === 'ENVIADO';
   const canCancel = contract.status !== 'CANCELADO';
+  const canSuspend = contract.status === 'ASSINADO' && !isSuspended;
+  const canReactivate = isSuspended;
 
   // Generate preview of installments
   const installmentCount = parseInt(formData.installment_count) || 1;
@@ -296,6 +320,12 @@ export default function ContractDetail() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             Contrato - {contract.opportunities?.leads?.contacts?.full_name}
+            {isSuspended && (
+              <Badge variant="destructive" className="flex items-center gap-1 ml-2">
+                <AlertTriangle className="h-3 w-3" />
+                SUSPENSO
+              </Badge>
+            )}
           </div>
         }
         description={`Criado em ${format(new Date(contract.created_at!), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
@@ -322,6 +352,18 @@ export default function ContractDetail() {
               <Button onClick={() => setShowSignDialog(true)}>
                 <Check className="h-4 w-4 mr-2" />
                 Marcar como Assinado
+              </Button>
+            )}
+            {canSuspend && (
+              <Button variant="destructive" onClick={() => setShowSuspendDialog(true)}>
+                <Pause className="h-4 w-4 mr-2" />
+                Suspender por Inadimplência
+              </Button>
+            )}
+            {canReactivate && (
+              <Button onClick={handleReactivate} disabled={reactivateContract.isPending}>
+                <Play className="h-4 w-4 mr-2" />
+                {reactivateContract.isPending ? 'Reativando...' : 'Reativar Contrato'}
               </Button>
             )}
           </div>
@@ -358,6 +400,42 @@ export default function ContractDetail() {
               disabled={!cancellationReason.trim() || cancelContract.isPending}
             >
               {cancelContract.isPending ? 'Cancelando...' : 'Confirmar Cancelamento'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Suspend Contract Dialog */}
+      <Dialog open={showSuspendDialog} onOpenChange={setShowSuspendDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Suspender Contrato por Inadimplência</DialogTitle>
+            <DialogDescription>
+              Isso irá suspender tanto o contrato quanto o caso técnico associado.
+              O técnico responsável será notificado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Motivo da Suspensão *</Label>
+              <Textarea
+                value={suspensionReason}
+                onChange={(e) => setSuspensionReason(e.target.value)}
+                placeholder="Descreva o motivo da suspensão..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSuspendDialog(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleSuspend}
+              disabled={!suspensionReason.trim() || suspendContract.isPending}
+            >
+              {suspendContract.isPending ? 'Suspendendo...' : 'Confirmar Suspensão'}
             </Button>
           </DialogFooter>
         </DialogContent>
