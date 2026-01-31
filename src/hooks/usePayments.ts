@@ -3,6 +3,35 @@ import { supabase } from '@/integrations/supabase/client';
 import { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { format } from 'date-fns';
+
+// Contas oficiais que requerem emissão de fatura fiscal
+const OFFICIAL_ACCOUNTS = [
+  'BRUCKSCHEN_ES',
+  'BRUCKSCHEN_ASSOCIADOS_ES',
+  'BRUCKSCHEN_ASESORIA_ES',
+];
+
+// Função auxiliar para gerar próximo número de fatura
+async function getNextInvoiceNumber(): Promise<string> {
+  const year = new Date().getFullYear();
+  const { data, error } = await supabase
+    .from('invoices')
+    .select('invoice_number')
+    .ilike('invoice_number', `${year}-%`)
+    .order('invoice_number', { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+
+  let nextNumber = 1;
+  if (data && data.length > 0) {
+    const lastNumber = parseInt(data[0].invoice_number.split('-')[1]) || 0;
+    nextNumber = lastNumber + 1;
+  }
+
+  return `${year}-${String(nextNumber).padStart(5, '0')}`;
+}
 
 export type Payment = Tables<'payments'>;
 export type PaymentInsert = TablesInsert<'payments'>;
@@ -270,7 +299,8 @@ export function usePayments() {
         // Usar a data do pagamento para reference_date (apenas a data, sem hora)
         const referenceDate = paidAtDate.split('T')[0];
 
-        await supabase.from('cash_flow').insert({
+        // Inserir entrada no Cash Flow e capturar o ID
+        const { data: cashFlowEntry } = await supabase.from('cash_flow').insert({
           type: 'ENTRADA',
           category: 'SERVICOS',
           description,
@@ -280,10 +310,70 @@ export function usePayments() {
           related_contract_id: contractId || null,
           reference_date: referenceDate,
           created_by_user_id: user?.id,
-        });
+        }).select().single();
+
+        const cashFlowEntryId = cashFlowEntry?.id;
+
+        // 7. NOVO: Verificar se precisa emitir fatura fiscal
+        const requiresInvoice = OFFICIAL_ACCOUNTS.includes(paymentAccount);
+        let invoiceNumber: string | null = null;
+
+        if (requiresInvoice) {
+          // Gerar fatura automática para contas oficiais
+          invoiceNumber = await getNextInvoiceNumber();
+          
+          // Cálculo do IVA (21%): valor do pagamento é o total bruto
+          const totalAmount = payment.amount;
+          const vatRate = 0.21;
+          const amountWithoutVat = totalAmount / (1 + vatRate);
+          const vatAmount = totalAmount - amountWithoutVat;
+
+          // Obter tipo de serviço para descrição
+          const serviceType = opportunity?.leads?.service_interest || 'assessoria';
+          
+          const { data: newInvoice } = await supabase.from('invoices').insert({
+            invoice_number: invoiceNumber,
+            payment_id: payment.id,
+            contract_id: contractId || null,
+            client_name: clientName,
+            client_document: opportunity?.leads?.contacts?.document_number || null,
+            client_address: opportunity?.leads?.contacts?.address || null,
+            service_description: `Serviços de ${serviceType}${installmentInfo}`,
+            amount_without_vat: Math.round(amountWithoutVat * 100) / 100,
+            vat_rate: vatRate,
+            vat_amount: Math.round(vatAmount * 100) / 100,
+            total_amount: totalAmount,
+            status: 'EMITIDA',
+            created_by_user_id: user?.id,
+          }).select().single();
+
+          // Atualizar Cash Flow com referência à fatura
+          if (newInvoice && cashFlowEntryId) {
+            await supabase.from('cash_flow')
+              .update({
+                is_invoiced: true,
+                invoice_number: newInvoice.invoice_number,
+              })
+              .eq('id', cashFlowEntryId);
+          }
+        } else {
+          // Marcar como não faturado com referência ao mês/ano
+          const refMonthYear = format(new Date(paidAtDate), 'MM/yyyy');
+
+          if (cashFlowEntryId) {
+            await supabase.from('cash_flow')
+              .update({
+                is_invoiced: false,
+                invoice_number: `NO-${refMonthYear}`,
+              })
+              .eq('id', cashFlowEntryId);
+          }
+        }
+
+        return { payment, isFirstPayment, caseCreated, invoiceNumber };
       }
 
-      return { payment, isFirstPayment, caseCreated };
+      return { payment, isFirstPayment, caseCreated, invoiceNumber: null };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['payments'] });
@@ -293,13 +383,24 @@ export function usePayments() {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
       
-      if (result.isFirstPayment && result.caseCreated) {
-        toast({ title: 'Pagamento confirmado! Contrato iniciado, caso técnico criado e lançamento registrado no Caixa.' });
-      } else if (result.isFirstPayment) {
-        toast({ title: 'Pagamento confirmado! Contrato iniciado e lançamento registrado no Caixa.' });
+      if (result.invoiceNumber) {
+        if (result.isFirstPayment && result.caseCreated) {
+          toast({ title: `Pagamento confirmado! Fatura ${result.invoiceNumber} emitida, caso técnico criado.` });
+        } else if (result.isFirstPayment) {
+          toast({ title: `Pagamento confirmado! Fatura ${result.invoiceNumber} emitida, contrato iniciado.` });
+        } else {
+          toast({ title: `Pagamento confirmado! Fatura ${result.invoiceNumber} emitida automaticamente.` });
+        }
       } else {
-        toast({ title: 'Pagamento confirmado e lançamento registrado no Caixa!' });
+        if (result.isFirstPayment && result.caseCreated) {
+          toast({ title: 'Pagamento confirmado e registrado no Caixa (sem fatura fiscal). Caso técnico criado.' });
+        } else if (result.isFirstPayment) {
+          toast({ title: 'Pagamento confirmado e registrado no Caixa (sem fatura fiscal). Contrato iniciado.' });
+        } else {
+          toast({ title: 'Pagamento confirmado e registrado no Caixa (sem fatura fiscal).' });
+        }
       }
     },
     onError: (error) => {

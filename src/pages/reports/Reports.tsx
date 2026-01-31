@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { ReportTable, ReportColumn } from '@/components/reports/ReportTable';
 import SLAPerformanceReport from '@/components/reports/SLAPerformanceReport';
 import NPSReport from '@/components/reports/NPSReport';
+import BillingReport from '@/components/reports/BillingReport';
 import {
   Users,
   TrendingUp,
@@ -26,6 +27,7 @@ import {
   Filter,
   Shield,
   Star,
+  Receipt,
 } from 'lucide-react';
 import {
   SERVICE_INTEREST_LABELS,
@@ -532,8 +534,12 @@ export default function Reports() {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-8 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-9 lg:w-auto lg:inline-grid">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="billing" className="gap-1">
+            <Receipt className="h-3 w-3" />
+            Faturamento
+          </TabsTrigger>
           <TabsTrigger value="sla" className="gap-1">
             <Shield className="h-3 w-3" />
             SLAs
@@ -719,6 +725,11 @@ export default function Reports() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* Billing Tab */}
+        <TabsContent value="billing" className="space-y-4">
+          <BillingReport dateRange={dateRange} />
         </TabsContent>
 
         {/* SLA Performance Tab */}

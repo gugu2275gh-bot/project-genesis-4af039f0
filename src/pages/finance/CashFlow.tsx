@@ -146,6 +146,19 @@ export default function CashFlow() {
       },
     },
     {
+      key: 'is_invoiced',
+      header: 'Faturado',
+      cell: (item) => (
+        item.type === 'ENTRADA' ? (
+          item.is_invoiced 
+            ? <Badge className="bg-success text-success-foreground">{item.invoice_number}</Badge>
+            : <Badge variant="secondary">{item.invoice_number || 'Não'}</Badge>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )
+      ),
+    },
+    {
       key: 'amount',
       header: 'Valor',
       cell: (item) => (
