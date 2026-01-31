@@ -80,12 +80,14 @@ export function usePayments() {
 
   const confirmPayment = useMutation({
     mutationFn: async ({ id, transactionId, paidAt }: { id: string; transactionId?: string; paidAt?: string }) => {
+      const paidAtDate = paidAt || new Date().toISOString();
+      
       // 1. Update payment to CONFIRMADO
       const { data: payment, error: paymentError } = await supabase
         .from('payments')
         .update({
           status: 'CONFIRMADO',
-          paid_at: paidAt || new Date().toISOString(),
+          paid_at: paidAtDate,
           transaction_id: transactionId,
         })
         .eq('id', id)
@@ -97,6 +99,7 @@ export function usePayments() {
       let isFirstPayment = false;
       let caseCreated = false;
       let contractId = payment.contract_id;
+      let clientName = 'Cliente';
 
       // 2. If payment has no contract_id, try to find contract by opportunity_id
       if (!contractId && payment.opportunity_id) {
@@ -116,38 +119,43 @@ export function usePayments() {
         }
       }
 
-      // 3. Check if payment has a linked contract
+      // 3. Get opportunity with lead/contact info for client name
+      const { data: opportunity } = await supabase
+        .from('opportunities')
+        .select('*, leads (*, contacts (*))')
+        .eq('id', payment.opportunity_id)
+        .single();
+
+      if (opportunity?.leads?.contacts?.full_name) {
+        clientName = opportunity.leads.contacts.full_name;
+      }
+
+      // 4. Check if payment has a linked contract
       if (contractId) {
-        // 4. Get contract to check current payment_status
+        // 4a. Get contract to check current payment_status
         const { data: contract } = await supabase
           .from('contracts')
           .select('id, payment_status, opportunity_id')
           .eq('id', contractId)
           .single();
 
-        // 4. If payment_status is NAO_INICIADO, this is the FIRST payment
+        // 4b. If payment_status is NAO_INICIADO, this is the FIRST payment
         if (contract && contract.payment_status === 'NAO_INICIADO') {
           isFirstPayment = true;
 
-          // 4a. Update contract payment_status to INICIADO
+          // Update contract payment_status to INICIADO
           await supabase
             .from('contracts')
             .update({ payment_status: 'INICIADO' })
             .eq('id', contract.id);
 
-          // 4b. Update opportunity to FECHADA_GANHA
+          // Update opportunity to FECHADA_GANHA
           await supabase
             .from('opportunities')
             .update({ status: 'FECHADA_GANHA' })
             .eq('id', payment.opportunity_id);
 
-          // 4c. Get lead data for service type
-          const { data: opportunity } = await supabase
-            .from('opportunities')
-            .select('*, leads (*)')
-            .eq('id', payment.opportunity_id)
-            .single();
-
+          // Create technical case if lead data exists
           if (opportunity?.leads) {
             const serviceType = opportunity.leads.service_interest || 'OUTRO';
             type ServiceSector = 'ESTUDANTE' | 'TRABALHO' | 'REAGRUPAMENTO' | 'RENOVACAO' | 'NACIONALIDADE';
@@ -162,7 +170,7 @@ export function usePayments() {
             };
             const sector: ServiceSector = sectorMap[serviceType] || 'ESTUDANTE';
 
-            // 4d. Create technical case linked to opportunity
+            // Create technical case linked to opportunity
             const { data: newCase, error: caseError } = await supabase
               .from('service_cases')
               .insert([{
@@ -177,7 +185,7 @@ export function usePayments() {
             if (!caseError && newCase) {
               caseCreated = true;
 
-              // 4e. Create routing task linked to the case
+              // Create routing task linked to the case
               await supabase
                 .from('tasks')
                 .insert([{
@@ -188,20 +196,19 @@ export function usePayments() {
                   created_by_user_id: user?.id,
                 }]);
 
-              // 4f. Create notifications for TECNICO users
-              const { data: techUsers } = await supabase
+              // Notify MANAGER/COORD to assign the case to a technician
+              const { data: managers } = await supabase
                 .from('user_roles')
                 .select('user_id')
-                .eq('role', 'TECNICO');
+                .in('role', ['MANAGER', 'ADMIN']);
 
-              if (techUsers?.length) {
-                const notifications = techUsers.map(u => ({
+              if (managers?.length) {
+                const notifications = managers.map(u => ({
                   user_id: u.user_id,
                   type: 'case_status_changed',
-                  title: 'Novo Caso Técnico',
-                  message: 'Um novo caso foi criado após confirmação de pagamento e está aguardando atribuição.',
+                  title: 'Novo Caso Técnico - Atribuir Responsável',
+                  message: `Caso de ${clientName} criado após pagamento. Atribuir a um técnico responsável.`,
                 }));
-
                 await supabase.from('notifications').insert(notifications);
               }
             } else if (caseError) {
@@ -227,11 +234,53 @@ export function usePayments() {
         }
       } else {
         // Payment without linked contract - legacy behavior
-        // Just update opportunity status
         await supabase
           .from('opportunities')
           .update({ status: 'FECHADA_GANHA' })
           .eq('id', payment.opportunity_id);
+      }
+
+      // 6. NOVO: Criar entrada automática no Livro Caixa (Cash Flow)
+      // Verificar se já existe entrada para evitar duplicatas
+      const { data: existingCashFlowEntry } = await supabase
+        .from('cash_flow')
+        .select('id')
+        .eq('related_payment_id', payment.id)
+        .maybeSingle();
+
+      if (!existingCashFlowEntry) {
+        // Mapear método de pagamento para conta
+        const accountMap: Record<string, string> = {
+          'TRANSFERENCIA': 'BRUCKSCHEN_ES',
+          'PIX': 'PIX_BR',
+          'PAYPAL': 'PAYPAL',
+          'CARTAO': 'BRUCKSCHEN_ES',
+          'DINHEIRO': 'DINHEIRO',
+          'PARCELAMENTO_MANUAL': 'BRUCKSCHEN_ES',
+          'OUTRO': 'OUTRO',
+        };
+        const paymentAccount = accountMap[payment.payment_method || 'OUTRO'] || 'OUTRO';
+
+        // Construir descrição com nome do cliente e número da parcela
+        const installmentInfo = payment.installment_number 
+          ? ` - Parcela ${payment.installment_number}` 
+          : '';
+        const description = `Pagamento ${clientName}${installmentInfo}`;
+
+        // Usar a data do pagamento para reference_date (apenas a data, sem hora)
+        const referenceDate = paidAtDate.split('T')[0];
+
+        await supabase.from('cash_flow').insert({
+          type: 'ENTRADA',
+          category: 'SERVICOS',
+          description,
+          amount: payment.amount,
+          payment_account: paymentAccount,
+          related_payment_id: payment.id,
+          related_contract_id: contractId || null,
+          reference_date: referenceDate,
+          created_by_user_id: user?.id,
+        });
       }
 
       return { payment, isFirstPayment, caseCreated };
@@ -243,13 +292,14 @@ export function usePayments() {
       queryClient.invalidateQueries({ queryKey: ['service-cases'] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
       
       if (result.isFirstPayment && result.caseCreated) {
-        toast({ title: 'Pagamento confirmado! Contrato iniciado e caso técnico criado.' });
+        toast({ title: 'Pagamento confirmado! Contrato iniciado, caso técnico criado e lançamento registrado no Caixa.' });
       } else if (result.isFirstPayment) {
-        toast({ title: 'Pagamento confirmado! Contrato iniciado.' });
+        toast({ title: 'Pagamento confirmado! Contrato iniciado e lançamento registrado no Caixa.' });
       } else {
-        toast({ title: 'Pagamento confirmado!' });
+        toast({ title: 'Pagamento confirmado e lançamento registrado no Caixa!' });
       }
     },
     onError: (error) => {
