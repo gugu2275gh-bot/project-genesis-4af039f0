@@ -21,6 +21,7 @@ export type ContractWithOpportunity = Contract & {
     status: string;
     paid_at: string | null;
     installment_number: number | null;
+    due_date: string | null;
   }>;
 };
 
@@ -46,7 +47,7 @@ export function useContracts() {
             )
           ),
           payments (
-            id, amount, status, paid_at, installment_number
+            id, amount, status, paid_at, installment_number, due_date
           )
         `)
         .order('created_at', { ascending: false });
