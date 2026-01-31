@@ -1,378 +1,127 @@
 
 
-# Plano: Suspensão de Contrato e Caso Técnico por Inadimplência
+# Plano: Indicador de Parcela em Atraso no Grid de Contratos
 
 ## Objetivo
 
-Permitir que o Financeiro:
-1. **Suspenda** um contrato por inadimplência (e automaticamente suspenda o caso técnico relacionado)
-2. **Reative** um contrato suspenso (e automaticamente reative o caso técnico)
+Adicionar um indicador visual (badge) no grid de contratos do Financeiro para identificar rapidamente contratos que possuem parcelas em atraso.
 
 ---
 
-## Análise da Infraestrutura Existente
+## Análise Técnica
 
 ### Estrutura Atual
 
-| Tabela | Campos Relevantes |
-|--------|-------------------|
-| `contracts` | `status`, `opportunity_id`, `cancellation_reason` |
-| `service_cases` | `opportunity_id`, `technical_status` |
-
-### Relacionamento
-
-```text
-contracts.opportunity_id → service_cases.opportunity_id
-```
-
-Um contrato está vinculado a um caso técnico através do `opportunity_id`.
-
----
-
-## Alterações no Banco de Dados
-
-### 1. Adicionar campos de suspensão na tabela `contracts`
-
-```sql
-ALTER TABLE contracts 
-ADD COLUMN is_suspended boolean DEFAULT false,
-ADD COLUMN suspended_at timestamptz,
-ADD COLUMN suspended_by uuid REFERENCES auth.users(id),
-ADD COLUMN suspension_reason text;
-```
-
-### 2. Adicionar campos de suspensão na tabela `service_cases`
-
-```sql
-ALTER TABLE service_cases 
-ADD COLUMN is_suspended boolean DEFAULT false,
-ADD COLUMN suspended_at timestamptz,
-ADD COLUMN suspended_by uuid REFERENCES auth.users(id),
-ADD COLUMN suspension_reason text;
-```
-
----
-
-## Fluxo Visual
-
-```text
-   FINANCEIRO IDENTIFICA INADIMPLÊNCIA
-                │
-                ▼
-   ┌────────────────────────────────────┐
-   │ Clica em "Suspender por            │
-   │ Inadimplência" na página de        │
-   │ detalhes do contrato               │
-   └────────────────────────────────────┘
-                │
-                ▼
-   ┌────────────────────────────────────┐
-   │ Dialog: Motivo da Suspensão        │
-   │ (Campo obrigatório)                │
-   └────────────────────────────────────┘
-                │
-                ▼
-   ┌────────────────────────────────────┐
-   │ 1. Contrato: is_suspended = true   │
-   │ 2. Buscar service_case pelo        │
-   │    opportunity_id                  │
-   │ 3. Caso Técnico: is_suspended=true │
-   │ 4. Notificar Técnico responsável   │
-   └────────────────────────────────────┘
-                │
-                ▼
-   ┌────────────────────────────────────┐
-   │ Visual: Badge "SUSPENSO" em        │
-   │ vermelho no contrato e caso        │
-   └────────────────────────────────────┘
-```
-
-### Fluxo de Reativação
-
-```text
-   FINANCEIRO DECIDE REATIVAR
-                │
-                ▼
-   ┌────────────────────────────────────┐
-   │ Clica em "Reativar Contrato"       │
-   └────────────────────────────────────┘
-                │
-                ▼
-   ┌────────────────────────────────────┐
-   │ 1. Contrato: is_suspended = false  │
-   │    limpa suspended_at/by/reason    │
-   │ 2. Caso Técnico: is_suspended=false│
-   │ 3. Notificar Técnico               │
-   └────────────────────────────────────┘
-```
-
----
-
-## Alterações no Código
-
-### 1. Adicionar mutations no `useContracts.ts`
+O hook `useContracts` já busca pagamentos junto aos contratos, mas não inclui o campo `due_date`:
 
 ```typescript
-const suspendContract = useMutation({
-  mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-    // 1. Suspender contrato
-    const { data: contract, error } = await supabase
-      .from('contracts')
-      .update({
-        is_suspended: true,
-        suspended_at: new Date().toISOString(),
-        suspended_by: user?.id,
-        suspension_reason: reason,
-      })
-      .eq('id', id)
-      .select()
-      .single();
+payments (
+  id, amount, status, paid_at, installment_number
+)
+```
+
+### O que falta
+
+- Incluir `due_date` na query de pagamentos
+- Criar lógica para detectar pagamentos em atraso
+- Exibir badge visual no grid
+
+---
+
+## Alterações Propostas
+
+### 1. Atualizar o hook `useContracts.ts`
+
+Adicionar `due_date` à query de pagamentos:
+
+```typescript
+payments (
+  id, amount, status, paid_at, installment_number, due_date
+)
+```
+
+Atualizar o tipo `ContractWithOpportunity`:
+
+```typescript
+payments?: Array<{
+  id: string;
+  amount: number;
+  status: string;
+  paid_at: string | null;
+  installment_number: number | null;
+  due_date: string | null;  // NOVO
+}>;
+```
+
+### 2. Atualizar o grid `ContractsList.tsx`
+
+Adicionar função para detectar pagamentos em atraso:
+
+```typescript
+const hasOverduePayments = (contract: typeof contracts[0]) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const payments = contract.payments || [];
+  return payments.some(p => 
+    p.status === 'PENDENTE' && 
+    p.due_date && 
+    new Date(p.due_date) < today
+  );
+};
+```
+
+Adicionar badge de atraso na coluna "Saldo":
+
+```typescript
+{
+  key: 'balance',
+  header: 'Saldo',
+  cell: (contract) => {
+    const { balance } = calculatePaymentStatus(contract);
+    const isFullyPaid = balance <= 0;
+    const isOverdue = hasOverduePayments(contract);
     
-    if (error) throw error;
-
-    // 2. Buscar e suspender caso técnico
-    const { data: serviceCase } = await supabase
-      .from('service_cases')
-      .select('id, assigned_to_user_id')
-      .eq('opportunity_id', contract.opportunity_id)
-      .maybeSingle();
-
-    if (serviceCase) {
-      await supabase.from('service_cases')
-        .update({
-          is_suspended: true,
-          suspended_at: new Date().toISOString(),
-          suspended_by: user?.id,
-          suspension_reason: reason,
-        })
-        .eq('id', serviceCase.id);
-
-      // 3. Notificar técnico
-      if (serviceCase.assigned_to_user_id) {
-        await supabase.from('notifications').insert({
-          user_id: serviceCase.assigned_to_user_id,
-          title: 'Caso Suspenso por Inadimplência',
-          message: `O caso foi suspenso pelo Financeiro: ${reason}`,
-          type: 'case_suspended',
-        });
-      }
-    }
-
-    return contract;
-  },
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['contracts'] });
-    queryClient.invalidateQueries({ queryKey: ['service-cases'] });
-    toast({ title: 'Contrato suspenso por inadimplência' });
-  },
-});
-
-const reactivateContract = useMutation({
-  mutationFn: async (id: string) => {
-    // 1. Reativar contrato
-    const { data: contract, error } = await supabase
-      .from('contracts')
-      .update({
-        is_suspended: false,
-        suspended_at: null,
-        suspended_by: null,
-        suspension_reason: null,
-      })
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) throw error;
-
-    // 2. Reativar caso técnico
-    const { data: serviceCase } = await supabase
-      .from('service_cases')
-      .select('id, assigned_to_user_id')
-      .eq('opportunity_id', contract.opportunity_id)
-      .maybeSingle();
-
-    if (serviceCase) {
-      await supabase.from('service_cases')
-        .update({
-          is_suspended: false,
-          suspended_at: null,
-          suspended_by: null,
-          suspension_reason: null,
-        })
-        .eq('id', serviceCase.id);
-
-      // 3. Notificar técnico
-      if (serviceCase.assigned_to_user_id) {
-        await supabase.from('notifications').insert({
-          user_id: serviceCase.assigned_to_user_id,
-          title: 'Caso Reativado',
-          message: 'O caso foi reativado pelo Financeiro. Você pode continuar o processo.',
-          type: 'case_reactivated',
-        });
-      }
-    }
-
-    return contract;
-  },
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['contracts'] });
-    queryClient.invalidateQueries({ queryKey: ['service-cases'] });
-    toast({ title: 'Contrato reativado com sucesso' });
-  },
-});
-```
-
-### 2. Adicionar UI no `ContractDetail.tsx`
-
-**Botões condicionais:**
-
-```typescript
-{/* Botão Suspender - somente se não está suspenso e contrato está ASSINADO */}
-{contract.status === 'ASSINADO' && !contract.is_suspended && (
-  <Button variant="destructive" onClick={() => setShowSuspendDialog(true)}>
-    <Pause className="h-4 w-4 mr-2" />
-    Suspender por Inadimplência
-  </Button>
-)}
-
-{/* Botão Reativar - somente se está suspenso */}
-{contract.is_suspended && (
-  <Button variant="default" onClick={handleReactivate}>
-    <Play className="h-4 w-4 mr-2" />
-    Reativar Contrato
-  </Button>
-)}
-```
-
-**Badge de Suspenso no cabeçalho:**
-
-```typescript
-{contract.is_suspended && (
-  <Badge variant="destructive" className="ml-2">
-    <AlertTriangle className="h-3 w-3 mr-1" />
-    SUSPENSO
-  </Badge>
-)}
-```
-
-**Dialog de Suspensão:**
-
-```typescript
-<Dialog open={showSuspendDialog} onOpenChange={setShowSuspendDialog}>
-  <DialogContent>
-    <DialogHeader>
-      <DialogTitle>Suspender Contrato por Inadimplência</DialogTitle>
-      <DialogDescription>
-        Isso irá suspender tanto o contrato quanto o caso técnico associado.
-        O técnico responsável será notificado.
-      </DialogDescription>
-    </DialogHeader>
-    <div className="space-y-4 py-4">
-      <div>
-        <Label>Motivo da Suspensão *</Label>
-        <Textarea
-          value={suspensionReason}
-          onChange={(e) => setSuspensionReason(e.target.value)}
-          placeholder="Descreva o motivo da suspensão..."
-          rows={3}
-        />
+    return (
+      <div className="flex items-center gap-2">
+        <span className={isFullyPaid ? 'text-emerald-600' : 'text-amber-600'}>
+          {isFullyPaid ? 'Quitado' : formatCurrency(balance, contract.currency)}
+        </span>
+        {isOverdue && (
+          <Badge variant="destructive" className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            Atraso
+          </Badge>
+        )}
       </div>
-    </div>
-    <DialogFooter>
-      <Button variant="outline" onClick={() => setShowSuspendDialog(false)}>
-        Cancelar
-      </Button>
-      <Button 
-        variant="destructive" 
-        onClick={handleSuspend}
-        disabled={!suspensionReason.trim() || suspendContract.isPending}
-      >
-        Confirmar Suspensão
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-```
-
-### 3. Adicionar indicador visual no `CaseDetail.tsx`
-
-**Alerta no topo da página quando caso está suspenso:**
-
-```typescript
-{serviceCase.is_suspended && (
-  <Alert variant="destructive" className="mb-4">
-    <AlertTriangle className="h-4 w-4" />
-    <AlertTitle>Caso Suspenso por Inadimplência</AlertTitle>
-    <AlertDescription>
-      Este caso foi suspenso em {format(new Date(serviceCase.suspended_at), "dd/MM/yyyy 'às' HH:mm")}.
-      <br />
-      <strong>Motivo:</strong> {serviceCase.suspension_reason}
-      <br />
-      <span className="text-sm">Aguarde a regularização financeira para continuar.</span>
-    </AlertDescription>
-  </Alert>
-)}
-```
-
-### 4. Adicionar indicador visual no `CasesList.tsx`
-
-**Badge "Suspenso" na listagem:**
-
-```typescript
-{serviceCase.is_suspended && (
-  <Badge variant="destructive" className="ml-2">
-    Suspenso
-  </Badge>
-)}
-```
-
-### 5. Adicionar indicador visual no `ContractsList.tsx`
-
-**Badge "Suspenso" na listagem:**
-
-```typescript
-{contract.is_suspended && (
-  <Badge variant="destructive">Suspenso</Badge>
-)}
+    );
+  },
+},
 ```
 
 ---
 
-## Arquivos a Modificar/Criar
+## Visual Esperado
+
+| Cliente | Serviço | Status | Valor Total | Pago | Saldo |
+|---------|---------|--------|-------------|------|-------|
+| Breno Teste | Visto Trabalho | Assinado | € 1.500,00 | € 750,00 | € 750,00 🔴 **Atraso** |
+| Maria Silva | Visto Estudante | Assinado | € 1.500,00 | € 1.500,00 | ✅ Quitado |
+
+---
+
+## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| **Migração SQL** | Adicionar campos `is_suspended`, `suspended_at`, `suspended_by`, `suspension_reason` em `contracts` e `service_cases` |
-| `src/hooks/useContracts.ts` | Adicionar `suspendContract` e `reactivateContract` mutations |
-| `src/pages/contracts/ContractDetail.tsx` | Adicionar botões, dialog e badge de suspensão |
-| `src/pages/contracts/ContractsList.tsx` | Adicionar badge de suspenso na listagem |
-| `src/pages/cases/CaseDetail.tsx` | Adicionar alerta de caso suspenso |
-| `src/pages/cases/CasesList.tsx` | Adicionar badge de suspenso na listagem |
-
----
-
-## Permissões
-
-As políticas RLS existentes já permitem que FINANCEIRO e ADMIN modifiquem contratos. A mesma lógica se aplica aos novos campos.
-
----
-
-## Testes Recomendados
-
-1. Suspender um contrato ASSINADO e verificar que o caso técnico também foi suspenso
-2. Verificar que o técnico recebe notificação de suspensão
-3. Verificar badge "Suspenso" na lista de contratos
-4. Verificar alerta na página de detalhes do caso
-5. Reativar contrato e verificar que caso técnico também foi reativado
-6. Verificar que o técnico recebe notificação de reativação
-7. Verificar que badges/alertas são removidos após reativação
+| `src/hooks/useContracts.ts` | Adicionar `due_date` na query e no tipo |
+| `src/pages/contracts/ContractsList.tsx` | Adicionar lógica de detecção e badge visual |
 
 ---
 
 ## Benefícios
 
-- **Controle financeiro**: Financeiro pode pausar processos de clientes inadimplentes
-- **Comunicação clara**: Técnico é notificado e vê alertas visuais claros
-- **Rastreabilidade**: Registro de quem suspendeu, quando e por quê
-- **Reversibilidade**: Fácil reativar quando cliente regulariza
+- **Visibilidade imediata**: Financeiro identifica rapidamente contratos inadimplentes
+- **Ação proativa**: Permite agir antes de suspender o contrato
+- **Zero impacto em performance**: Utiliza dados já carregados (apenas adiciona um campo)
 
