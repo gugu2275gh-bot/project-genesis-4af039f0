@@ -522,6 +522,7 @@ export type Database = {
           installment_amount: number | null
           installment_conditions: string | null
           installment_count: number | null
+          is_suspended: boolean | null
           language: Database["public"]["Enums"]["language_code"] | null
           opportunity_id: string
           payment_account: string | null
@@ -533,6 +534,9 @@ export type Database = {
           signed_at: string | null
           signed_document_url: string | null
           status: Database["public"]["Enums"]["contract_status"] | null
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
           total_fee: number | null
           updated_at: string | null
           updated_by_user_id: string | null
@@ -553,6 +557,7 @@ export type Database = {
           installment_amount?: number | null
           installment_conditions?: string | null
           installment_count?: number | null
+          is_suspended?: boolean | null
           language?: Database["public"]["Enums"]["language_code"] | null
           opportunity_id: string
           payment_account?: string | null
@@ -564,6 +569,9 @@ export type Database = {
           signed_at?: string | null
           signed_document_url?: string | null
           status?: Database["public"]["Enums"]["contract_status"] | null
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspension_reason?: string | null
           total_fee?: number | null
           updated_at?: string | null
           updated_by_user_id?: string | null
@@ -584,6 +592,7 @@ export type Database = {
           installment_amount?: number | null
           installment_conditions?: string | null
           installment_count?: number | null
+          is_suspended?: boolean | null
           language?: Database["public"]["Enums"]["language_code"] | null
           opportunity_id?: string
           payment_account?: string | null
@@ -595,6 +604,9 @@ export type Database = {
           signed_at?: string | null
           signed_document_url?: string | null
           status?: Database["public"]["Enums"]["contract_status"] | null
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspension_reason?: string | null
           total_fee?: number | null
           updated_at?: string | null
           updated_by_user_id?: string | null
@@ -1619,6 +1631,7 @@ export type Database = {
           huellas_scheduler_notified: boolean | null
           huellas_time: string | null
           id: string
+          is_suspended: boolean | null
           is_urgent: boolean | null
           juridical_notes: string | null
           juridical_review_status: string | null
@@ -1640,6 +1653,9 @@ export type Database = {
           sent_to_legal_at: string | null
           service_type: Database["public"]["Enums"]["service_interest"]
           submission_date: string | null
+          suspended_at: string | null
+          suspended_by: string | null
+          suspension_reason: string | null
           technical_approved_at: string | null
           technical_status:
             | Database["public"]["Enums"]["technical_status"]
@@ -1683,6 +1699,7 @@ export type Database = {
           huellas_scheduler_notified?: boolean | null
           huellas_time?: string | null
           id?: string
+          is_suspended?: boolean | null
           is_urgent?: boolean | null
           juridical_notes?: string | null
           juridical_review_status?: string | null
@@ -1704,6 +1721,9 @@ export type Database = {
           sent_to_legal_at?: string | null
           service_type: Database["public"]["Enums"]["service_interest"]
           submission_date?: string | null
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspension_reason?: string | null
           technical_approved_at?: string | null
           technical_status?:
             | Database["public"]["Enums"]["technical_status"]
@@ -1747,6 +1767,7 @@ export type Database = {
           huellas_scheduler_notified?: boolean | null
           huellas_time?: string | null
           id?: string
+          is_suspended?: boolean | null
           is_urgent?: boolean | null
           juridical_notes?: string | null
           juridical_review_status?: string | null
@@ -1768,6 +1789,9 @@ export type Database = {
           sent_to_legal_at?: string | null
           service_type?: Database["public"]["Enums"]["service_interest"]
           submission_date?: string | null
+          suspended_at?: string | null
+          suspended_by?: string | null
+          suspension_reason?: string | null
           technical_approved_at?: string | null
           technical_status?:
             | Database["public"]["Enums"]["technical_status"]

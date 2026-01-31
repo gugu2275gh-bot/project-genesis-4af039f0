@@ -40,6 +40,7 @@ import { ProtocolReceiptUpload } from '@/components/cases/ProtocolReceiptUpload'
 import { ExpedienteNumberInput } from '@/components/cases/ExpedienteNumberInput';
 import { RequirementActionsPanel } from '@/components/cases/RequirementActionsPanel';
 import { ApprovalSection } from '@/components/cases/ApprovalSection';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 
 export default function CaseDetail() {
@@ -198,8 +199,26 @@ export default function CaseDetail() {
 
   const availableActions = getAvailableActions();
 
+  const caseData = serviceCase as any;
+  const isSuspended = caseData.is_suspended === true;
+
   return (
     <div className="space-y-6">
+      {/* Suspension Alert */}
+      {isSuspended && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Caso Suspenso por Inadimplência</AlertTitle>
+          <AlertDescription>
+            Este caso foi suspenso em {caseData.suspended_at ? format(new Date(caseData.suspended_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : '-'}.
+            <br />
+            <strong>Motivo:</strong> {caseData.suspension_reason || 'Não informado'}
+            <br />
+            <span className="text-sm">Aguarde a regularização financeira para continuar o processo.</span>
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <PageHeader
         title={
           <div className="flex items-center gap-3">

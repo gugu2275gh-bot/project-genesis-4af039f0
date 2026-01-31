@@ -7,9 +7,10 @@ import { DataTable, Column } from '@/components/ui/data-table';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Eye } from 'lucide-react';
+import { Search, Eye, AlertTriangle } from 'lucide-react';
 import { TECHNICAL_STATUS_LABELS, SERVICE_SECTOR_LABELS, SERVICE_INTEREST_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -64,12 +65,23 @@ export default function CasesList() {
     {
       key: 'technical_status',
       header: 'Status',
-      cell: (serviceCase) => (
-        <StatusBadge 
-          status={serviceCase.technical_status || 'CONTATO_INICIAL'} 
-          label={TECHNICAL_STATUS_LABELS[serviceCase.technical_status || 'CONTATO_INICIAL']} 
-        />
-      ),
+      cell: (serviceCase) => {
+        const caseData = serviceCase as any;
+        return (
+          <div className="flex items-center gap-2">
+            <StatusBadge 
+              status={serviceCase.technical_status || 'CONTATO_INICIAL'} 
+              label={TECHNICAL_STATUS_LABELS[serviceCase.technical_status || 'CONTATO_INICIAL']} 
+            />
+            {caseData.is_suspended && (
+              <Badge variant="destructive" className="flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Suspenso
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'protocol_number',

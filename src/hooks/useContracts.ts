@@ -243,6 +243,122 @@ export function useContracts() {
     },
   });
 
+  const suspendContract = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      // 1. Suspender contrato
+      const { data: contract, error } = await supabase
+        .from('contracts')
+        .update({
+          is_suspended: true,
+          suspended_at: new Date().toISOString(),
+          suspended_by: user?.id,
+          suspension_reason: reason,
+          updated_by_user_id: user?.id,
+        } as any)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+
+      // 2. Buscar e suspender caso técnico vinculado
+      const { data: serviceCase } = await supabase
+        .from('service_cases')
+        .select('id, assigned_to_user_id')
+        .eq('opportunity_id', contract.opportunity_id)
+        .maybeSingle();
+
+      if (serviceCase) {
+        await supabase.from('service_cases')
+          .update({
+            is_suspended: true,
+            suspended_at: new Date().toISOString(),
+            suspended_by: user?.id,
+            suspension_reason: reason,
+          } as any)
+          .eq('id', serviceCase.id);
+
+        // 3. Notificar técnico responsável
+        if (serviceCase.assigned_to_user_id) {
+          await supabase.from('notifications').insert({
+            user_id: serviceCase.assigned_to_user_id,
+            title: 'Caso Suspenso por Inadimplência',
+            message: `O caso foi suspenso pelo Financeiro: ${reason}`,
+            type: 'case_suspended',
+          });
+        }
+      }
+
+      return contract;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contracts'] });
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      toast({ title: 'Contrato suspenso por inadimplência' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao suspender contrato', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const reactivateContract = useMutation({
+    mutationFn: async (id: string) => {
+      // 1. Reativar contrato
+      const { data: contract, error } = await supabase
+        .from('contracts')
+        .update({
+          is_suspended: false,
+          suspended_at: null,
+          suspended_by: null,
+          suspension_reason: null,
+          updated_by_user_id: user?.id,
+        } as any)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+
+      // 2. Reativar caso técnico
+      const { data: serviceCase } = await supabase
+        .from('service_cases')
+        .select('id, assigned_to_user_id')
+        .eq('opportunity_id', contract.opportunity_id)
+        .maybeSingle();
+
+      if (serviceCase) {
+        await supabase.from('service_cases')
+          .update({
+            is_suspended: false,
+            suspended_at: null,
+            suspended_by: null,
+            suspension_reason: null,
+          } as any)
+          .eq('id', serviceCase.id);
+
+        // 3. Notificar técnico
+        if (serviceCase.assigned_to_user_id) {
+          await supabase.from('notifications').insert({
+            user_id: serviceCase.assigned_to_user_id,
+            title: 'Caso Reativado',
+            message: 'O caso foi reativado pelo Financeiro. Você pode continuar o processo.',
+            type: 'case_reactivated',
+          });
+        }
+      }
+
+      return contract;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contracts'] });
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      toast({ title: 'Contrato reativado com sucesso' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao reativar contrato', description: error.message, variant: 'destructive' });
+    },
+  });
+
   return {
     contracts: contractsQuery.data ?? [],
     isLoading: contractsQuery.isLoading,
@@ -252,6 +368,8 @@ export function useContracts() {
     sendForSignature,
     markAsSigned,
     cancelContract,
+    suspendContract,
+    reactivateContract,
   };
 }
 
