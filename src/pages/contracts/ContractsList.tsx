@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Eye, FileText, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Eye, FileText, AlertTriangle, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -60,6 +60,18 @@ export default function ContractsList() {
     const balance = totalFee - paidAmount;
     
     return { totalFee, paidAmount, balance };
+  };
+
+  const hasOverduePayments = (contract: typeof contracts[0]) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const payments = contract.payments || [];
+    return payments.some(p => 
+      p.status === 'PENDENTE' && 
+      p.due_date && 
+      new Date(p.due_date) < today
+    );
   };
 
   const formatCurrency = (value: number, currency: string = 'EUR') => 
@@ -128,10 +140,19 @@ export default function ContractsList() {
       cell: (contract) => {
         const { balance } = calculatePaymentStatus(contract);
         const isFullyPaid = balance <= 0;
+        const isOverdue = hasOverduePayments(contract);
         return (
-          <span className={isFullyPaid ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-amber-600 dark:text-amber-400 font-medium'}>
-            {isFullyPaid ? 'Quitado' : formatCurrency(balance, contract.currency || 'EUR')}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={isFullyPaid ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-amber-600 dark:text-amber-400 font-medium'}>
+              {isFullyPaid ? 'Quitado' : formatCurrency(balance, contract.currency || 'EUR')}
+            </span>
+            {isOverdue && !isFullyPaid && (
+              <Badge variant="destructive" className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Atraso
+              </Badge>
+            )}
+          </div>
         );
       },
     },
