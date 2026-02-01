@@ -341,7 +341,6 @@ export function SendWhatsAppButton({
       // Log the message with id_lead for proper tracking
       await supabase.from('mensagens_cliente').insert({
         id_lead: leadId,
-        phone_id: parseInt(phoneNumber, 10) || null,
         mensagem_IA: message,
         origem: 'SISTEMA',
       });
