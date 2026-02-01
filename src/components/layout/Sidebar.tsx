@@ -54,6 +54,7 @@ const navItems: NavItem[] = [
       { label: 'Comissões', href: '/finance/commissions' },
       { label: 'Fluxo de Caixa', href: '/finance/cashflow' },
       { label: 'Faturas', href: '/finance/invoices' },
+      { label: 'Relatórios', href: '/finance/reports' },
     ]
   },
   { label: 'Casos Técnicos', href: '/cases', icon: Briefcase, roles: ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'TECNICO'] },

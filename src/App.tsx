@@ -33,6 +33,7 @@ import PaymentsList from "./pages/finance/PaymentsList";
 import Commissions from "./pages/finance/Commissions";
 import CashFlow from "./pages/finance/CashFlow";
 import Invoices from "./pages/finance/Invoices";
+import FinancialReports from "./pages/finance/FinancialReports";
 
 // Cases Pages
 import CasesList from "./pages/cases/CasesList";
@@ -117,6 +118,7 @@ function AppRoutes() {
         <Route path="/finance/commissions" element={<Commissions />} />
         <Route path="/finance/cashflow" element={<CashFlow />} />
         <Route path="/finance/invoices" element={<Invoices />} />
+        <Route path="/finance/reports" element={<FinancialReports />} />
         
         {/* Cases Module */}
         <Route path="/cases" element={<CasesList />} />
