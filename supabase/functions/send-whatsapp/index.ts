@@ -81,8 +81,21 @@ serve(async (req) => {
       )
     }
 
+    const rawMessage = String(mensagem ?? '')
+
+    // Normalize line breaks and remove them for webhook compatibility
+    // (Some WhatsApp/N8N providers fail to deliver messages containing actual newlines)
+    const normalizedMessage = rawMessage.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    const messageForWebhook = normalizedMessage.replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ').trim()
+
+    console.log('Message formatting:', {
+      hadNewlines: normalizedMessage.includes('\n'),
+      originalLength: rawMessage.length,
+      webhookLength: messageForWebhook.length,
+    })
+
     // Validate message length
-    if (mensagem.length > 4096) {
+    if (messageForWebhook.length > 4096) {
       console.error('Message too long')
       return new Response(
         JSON.stringify({ error: 'Mensagem muito longa (máximo 4096 caracteres)' }),
@@ -95,7 +108,7 @@ serve(async (req) => {
     const response = await fetch(WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mensagem, numero: phoneStr })
+      body: JSON.stringify({ mensagem: messageForWebhook, numero: phoneStr })
     })
 
     console.log('Webhook response status:', response.status)
