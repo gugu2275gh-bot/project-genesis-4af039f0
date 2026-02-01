@@ -1,89 +1,102 @@
 
-# Plano: Corrigir Lógica de Registro de Mensagem WhatsApp nos Casos Técnicos
+
+# Plano: Corrigir Chamada da Edge Function WhatsApp nos Casos Técnicos
 
 ## Problema Identificado
 
-Ao comparar o envio de WhatsApp entre **CRM Leads** e **Casos Técnicos**, identifiquei uma diferença na inserção de mensagens na tabela `mensagens_cliente`:
+A chamada da Edge Function nos Casos Técnicos está diferente do CRM Leads:
 
-| Módulo | Código | Problema |
-|--------|--------|----------|
-| CRM Leads (`useLeadMessages.ts`) | Não passa `phone_id` | Correto |
-| Casos Técnicos (`SendWhatsAppButton.tsx`) | Passa `phone_id: parseInt(phoneNumber, 10)` | Incorreto |
+| Módulo | Código |
+|--------|--------|
+| CRM Leads | `numero: String(contactPhone)` |
+| Casos Técnicos | `numero: phoneNumber` (processado com `.replace(/\D/g, '')`) |
+
+## Diferenças Encontradas
+
+### 1. Processamento do Número (Principal)
+
+**CRM Leads (funciona):**
+```typescript
+numero: String(contactPhone)
+```
+
+**Casos Técnicos (não funciona):**
+```typescript
+const phoneNumber = String(phone).replace(/\D/g, '');
+// ...
+numero: phoneNumber
+```
+
+### 2. Ordem dos Campos no Body
+
+**CRM Leads:**
+```typescript
+body: { 
+  mensagem: message, 
+  numero: String(contactPhone) 
+}
+```
+
+**Casos Técnicos:**
+```typescript
+body: {
+  numero: phoneNumber,
+  mensagem: message,
+}
+```
 
 ---
 
-## Análise Técnica
+## Solução Proposta
 
-### O que é `phone_id`?
-
-A coluna `phone_id` na tabela `mensagens_cliente` é do tipo `bigint` e serve para correlacionar mensagens recebidas do webhook com o número de telefone do cliente. **Não deve ser preenchida manualmente** ao enviar mensagens pelo sistema.
-
-### Código Atual (Incorreto)
-
-```typescript
-// SendWhatsAppButton.tsx - linha 342-347
-await supabase.from('mensagens_cliente').insert({
-  id_lead: leadId,
-  phone_id: parseInt(phoneNumber, 10) || null,  // INCORRETO
-  mensagem_IA: message,
-  origem: 'SISTEMA',
-});
-```
-
-### Código Correto (Como funciona no CRM Leads)
-
-```typescript
-// useLeadMessages.ts - linha 61-67
-await supabase.from('mensagens_cliente').insert({
-  id_lead: leadId,
-  mensagem_IA: message,
-  origem: 'SISTEMA',
-});
-// Sem phone_id - o campo é preenchido apenas por mensagens recebidas
-```
-
----
-
-## Alteração Proposta
+Modificar o `SendWhatsAppButton.tsx` para usar exatamente o mesmo padrão do CRM Leads:
 
 ### Arquivo: `src/components/cases/SendWhatsAppButton.tsx`
 
-Remover a linha que insere `phone_id`:
-
-**Antes:**
+**Antes (linha 329-335):**
 ```typescript
-await supabase.from('mensagens_cliente').insert({
-  id_lead: leadId,
-  phone_id: parseInt(phoneNumber, 10) || null,
-  mensagem_IA: message,
-  origem: 'SISTEMA',
+const phoneNumber = String(phone).replace(/\D/g, '');
+// ...
+const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+  body: {
+    numero: phoneNumber,
+    mensagem: message,
+  },
 });
 ```
 
 **Depois:**
 ```typescript
-await supabase.from('mensagens_cliente').insert({
-  id_lead: leadId,
-  mensagem_IA: message,
-  origem: 'SISTEMA',
+const { data, error } = await supabase.functions.invoke('send-whatsapp', {
+  body: { 
+    mensagem: message, 
+    numero: String(phone)
+  }
 });
 ```
 
----
+### Alterações:
 
-## Verificação de Dados
-
-Os logs confirmam que ambos os envios funcionaram corretamente via Edge Function. O problema era apenas no registro local:
-
-| ID | Origem | phone_id | Status |
-|----|--------|----------|--------|
-| 447 | CRM Leads | `null` | Correto |
-| 446 | Casos Técnicos | `5.53193025099e+11` | Errado |
+1. Remover a variável `phoneNumber` e o processamento `.replace(/\D/g, '')`
+2. Usar `String(phone)` diretamente como no CRM
+3. Manter a mesma ordem de campos: `mensagem` primeiro, depois `numero`
 
 ---
 
-## Benefícios da Correção
+## Por que isso pode resolver
 
-- **Consistência**: Mesmo comportamento entre CRM e Casos Técnicos
-- **Integridade de Dados**: `phone_id` mantido para uso correto (mensagens recebidas do webhook)
-- **Evita Erros**: `parseInt` em números de telefone longos pode causar overflow ou perda de precisão
+O número no banco é armazenado como `bigint`. Quando convertemos para string:
+
+- `String(553193025099)` → `"553193025099"` (correto)
+- O `.replace(/\D/g, '')` não deveria alterar, mas pode haver algum comportamento edge case
+
+Replicar exatamente o código que funciona elimina qualquer diferença potencial.
+
+---
+
+## Arquivo a Modificar
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/cases/SendWhatsAppButton.tsx` | Ajustar chamada da Edge Function para igualar ao CRM |
+
