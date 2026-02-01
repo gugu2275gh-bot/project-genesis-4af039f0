@@ -1,102 +1,80 @@
 
 
-# Plano: Corrigir Chamada da Edge Function WhatsApp nos Casos Técnicos
+# Plano: Diagnosticar e Corrigir Problema de Quebras de Linha no WhatsApp
 
 ## Problema Identificado
 
-A chamada da Edge Function nos Casos Técnicos está diferente do CRM Leads:
+Através da análise dos logs da Edge Function, identifiquei que:
 
-| Módulo | Código |
-|--------|--------|
-| CRM Leads | `numero: String(contactPhone)` |
-| Casos Técnicos | `numero: phoneNumber` (processado com `.replace(/\D/g, '')`) |
+| Horário | Quebras de linha | WhatsApp |
+|---------|-----------------|----------|
+| 19:02:10 | Presentes (`\n`) | Chegou ✅ |
+| 19:02:33 | Presentes (`\n`) | Chegou ✅ |
+| 19:08:13 | Ausentes (espaços) | Não chegou ❌ |
 
-## Diferenças Encontradas
+A mensagem das **19:08:13 chegou na Edge Function SEM as quebras de linha** - elas foram substituídas por espaços duplos antes de sair do browser.
 
-### 1. Processamento do Número (Principal)
-
-**CRM Leads (funciona):**
-```typescript
-numero: String(contactPhone)
-```
-
-**Casos Técnicos (não funciona):**
-```typescript
-const phoneNumber = String(phone).replace(/\D/g, '');
-// ...
-numero: phoneNumber
-```
-
-### 2. Ordem dos Campos no Body
-
-**CRM Leads:**
-```typescript
-body: { 
-  mensagem: message, 
-  numero: String(contactPhone) 
-}
-```
-
-**Casos Técnicos:**
-```typescript
-body: {
-  numero: phoneNumber,
-  mensagem: message,
-}
-```
+O código-fonte está correto, então isso sugere um problema de **cache do build** ou **versão antiga do código rodando no preview**.
 
 ---
 
-## Solução Proposta
+## Solução em Duas Partes
 
-Modificar o `SendWhatsAppButton.tsx` para usar exatamente o mesmo padrão do CRM Leads:
+### Parte 1: Adicionar Logging Detalhado
 
-### Arquivo: `src/components/cases/SendWhatsAppButton.tsx`
+Para diagnosticar exatamente o que está acontecendo, vou adicionar um log que mostra a mensagem completa ANTES de enviar:
 
-**Antes (linha 329-335):**
+**Arquivo:** `src/components/cases/SendWhatsAppButton.tsx`
+
 ```typescript
-const phoneNumber = String(phone).replace(/\D/g, '');
-// ...
+console.log('[WhatsApp Cases] Iniciando envio:', { 
+  phone,
+  numero: String(phone),
+  templateId: selectedTemplate,
+  leadId,
+  messagePreview: message.substring(0, 100), // Primeiros 100 chars
+  hasNewlines: message.includes('\n'), // Verificar se tem quebras
+  messageLength: message.length,
+});
+```
+
+### Parte 2: Normalizar Quebras de Linha
+
+Para garantir que as quebras de linha sejam preservadas mesmo em casos edge, vou adicionar uma normalização explícita:
+
+```typescript
+// Garantir que quebras de linha estão no formato correto
+const normalizedMessage = message.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
 const { data, error } = await supabase.functions.invoke('send-whatsapp', {
-  body: {
-    numero: phoneNumber,
-    mensagem: message,
+  body: { 
+    mensagem: normalizedMessage, 
+    numero: String(phone) 
   },
 });
 ```
 
-**Depois:**
-```typescript
-const { data, error } = await supabase.functions.invoke('send-whatsapp', {
-  body: { 
-    mensagem: message, 
-    numero: String(phone)
-  }
-});
-```
-
-### Alterações:
-
-1. Remover a variável `phoneNumber` e o processamento `.replace(/\D/g, '')`
-2. Usar `String(phone)` diretamente como no CRM
-3. Manter a mesma ordem de campos: `mensagem` primeiro, depois `numero`
-
 ---
 
-## Por que isso pode resolver
-
-O número no banco é armazenado como `bigint`. Quando convertemos para string:
-
-- `String(553193025099)` → `"553193025099"` (correto)
-- O `.replace(/\D/g, '')` não deveria alterar, mas pode haver algum comportamento edge case
-
-Replicar exatamente o código que funciona elimina qualquer diferença potencial.
-
----
-
-## Arquivo a Modificar
+## Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/cases/SendWhatsAppButton.tsx` | Ajustar chamada da Edge Function para igualar ao CRM |
+| `src/components/cases/SendWhatsAppButton.tsx` | Adicionar logging detalhado e normalização de quebras de linha |
+
+---
+
+## Próximos Passos Após Implementação
+
+1. Aguardar o preview recompilar completamente
+2. Forçar refresh com Ctrl+Shift+R (hard reload)
+3. Testar enviando o template "Contato Inicial"
+4. Verificar no console se `hasNewlines: true`
+5. Verificar nos logs da Edge Function se `\n` está presente
+
+---
+
+## Nota Importante
+
+Se após essas alterações o problema persistir COM `hasNewlines: false` no console, isso confirmará que há um problema no **build/cache do Vite** que está corrompendo os template literals. Nesse caso, será necessário converter os templates para usar `\n` explícito em vez de quebras de linha literais.
 
