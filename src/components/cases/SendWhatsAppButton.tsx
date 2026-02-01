@@ -316,17 +316,23 @@ export function SendWhatsAppButton({
 
     setIsSending(true);
     
+    // Normalizar quebras de linha para garantir consistência
+    const normalizedMessage = message.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
     console.log('[WhatsApp Cases] Iniciando envio:', { 
       phone,
       numero: String(phone),
       templateId: selectedTemplate,
       leadId,
+      messagePreview: normalizedMessage.substring(0, 100),
+      hasNewlines: normalizedMessage.includes('\n'),
+      messageLength: normalizedMessage.length,
     });
 
     try {
       const { data, error } = await supabase.functions.invoke('send-whatsapp', {
         body: { 
-          mensagem: message, 
+          mensagem: normalizedMessage, 
           numero: String(phone) 
         },
       });
