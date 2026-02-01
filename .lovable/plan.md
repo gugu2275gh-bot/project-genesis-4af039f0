@@ -1,127 +1,115 @@
 
 
-# Plano: Indicador de Parcela em Atraso no Grid de Contratos
+# Plano: Remover Campo de Edição de Telefone do WhatsApp nos Casos Técnicos
 
 ## Objetivo
 
-Adicionar um indicador visual (badge) no grid de contratos do Financeiro para identificar rapidamente contratos que possuem parcelas em atraso.
+Modificar o componente `SendWhatsAppButton` para usar o telefone diretamente do banco de dados, sem exibir o campo de edição manual. Seguindo o mesmo padrão do envio de cobrança em Pagamentos.
 
 ---
 
-## Análise Técnica
+## O que será alterado
 
-### Estrutura Atual
+### Componente `SendWhatsAppButton.tsx`
 
-O hook `useContracts` já busca pagamentos junto aos contratos, mas não inclui o campo `due_date`:
+**Remover:**
+- Estado `editedPhone` 
+- `useEffect` que inicializa o número
+- Função `getPhoneValidation`
+- Todo o bloco JSX do campo de telefone (linhas 414-438)
 
-```typescript
-payments (
-  id, amount, status, paid_at, installment_number
-)
-```
+**Manter:**
+- Seleção de templates
+- Preview da mensagem
+- Botão de envio
 
-### O que falta
-
-- Incluir `due_date` na query de pagamentos
-- Criar lógica para detectar pagamentos em atraso
-- Exibir badge visual no grid
+**Modificar:**
+- `handleSend`: usar diretamente `String(phone)` em vez de `editedPhone`
+- Validação: apenas verificar se `phone` existe antes de enviar
 
 ---
 
-## Alterações Propostas
+## Código Atual vs. Novo
 
-### 1. Atualizar o hook `useContracts.ts`
-
-Adicionar `due_date` à query de pagamentos:
+### Antes (com campo editável)
 
 ```typescript
-payments (
-  id, amount, status, paid_at, installment_number, due_date
-)
+// Estados
+const [editedPhone, setEditedPhone] = useState<string>('');
+
+// useEffect para inicializar
+useEffect(() => {
+  if (isOpen && phone) {
+    setEditedPhone(String(phone).replace(/\D/g, ''));
+  }
+}, [isOpen, phone]);
+
+// Validação complexa
+const getPhoneValidation = (phoneStr: string) => { ... };
+const phoneValidation = getPhoneValidation(editedPhone);
+
+// handleSend usa editedPhone
+const { error } = await supabase.functions.invoke('send-whatsapp', {
+  body: { numero: editedPhone, mensagem: message }
+});
 ```
 
-Atualizar o tipo `ContractWithOpportunity`:
+### Depois (direto do banco)
 
 ```typescript
-payments?: Array<{
-  id: string;
-  amount: number;
-  status: string;
-  paid_at: string | null;
-  installment_number: number | null;
-  due_date: string | null;  // NOVO
-}>;
-```
+// Sem estados de edição de telefone
+// Sem useEffect
+// Sem validação complexa
 
-### 2. Atualizar o grid `ContractsList.tsx`
-
-Adicionar função para detectar pagamentos em atraso:
-
-```typescript
-const hasOverduePayments = (contract: typeof contracts[0]) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const payments = contract.payments || [];
-  return payments.some(p => 
-    p.status === 'PENDENTE' && 
-    p.due_date && 
-    new Date(p.due_date) < today
-  );
-};
-```
-
-Adicionar badge de atraso na coluna "Saldo":
-
-```typescript
-{
-  key: 'balance',
-  header: 'Saldo',
-  cell: (contract) => {
-    const { balance } = calculatePaymentStatus(contract);
-    const isFullyPaid = balance <= 0;
-    const isOverdue = hasOverduePayments(contract);
-    
-    return (
-      <div className="flex items-center gap-2">
-        <span className={isFullyPaid ? 'text-emerald-600' : 'text-amber-600'}>
-          {isFullyPaid ? 'Quitado' : formatCurrency(balance, contract.currency)}
-        </span>
-        {isOverdue && (
-          <Badge variant="destructive" className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            Atraso
-          </Badge>
-        )}
-      </div>
-    );
-  },
-},
+// handleSend usa phone diretamente
+const phoneNumber = String(phone).replace(/\D/g, '');
+const { error } = await supabase.functions.invoke('send-whatsapp', {
+  body: { numero: phoneNumber, mensagem: message }
+});
 ```
 
 ---
 
 ## Visual Esperado
 
-| Cliente | Serviço | Status | Valor Total | Pago | Saldo |
-|---------|---------|--------|-------------|------|-------|
-| Breno Teste | Visto Trabalho | Assinado | € 1.500,00 | € 750,00 | € 750,00 🔴 **Atraso** |
-| Maria Silva | Visto Estudante | Assinado | € 1.500,00 | € 1.500,00 | ✅ Quitado |
+O dialog ficará simplificado:
+
+```
+┌─────────────────────────────────────────┐
+│ Enviar WhatsApp para Breno Teste        │
+├─────────────────────────────────────────┤
+│                                         │
+│ Template de Mensagem                    │
+│ ┌─────────────────────────────────────┐ │
+│ │ Contato Inicial                   ▼ │ │
+│ └─────────────────────────────────────┘ │
+│                                         │
+│ Mensagem                                │
+│ ┌─────────────────────────────────────┐ │
+│ │ Olá Breno Teste! 👋                 │ │
+│ │ ...                                 │ │
+│ └─────────────────────────────────────┘ │
+│                                         │
+│                          [ Enviar ]     │
+└─────────────────────────────────────────┘
+```
+
+Sem o campo de telefone - número vem direto do banco.
 
 ---
 
-## Arquivos a Modificar
+## Arquivo a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useContracts.ts` | Adicionar `due_date` na query e no tipo |
-| `src/pages/contracts/ContractsList.tsx` | Adicionar lógica de detecção e badge visual |
+| `src/components/cases/SendWhatsAppButton.tsx` | Remover campo de edição de telefone e usar `phone` diretamente |
 
 ---
 
 ## Benefícios
 
-- **Visibilidade imediata**: Financeiro identifica rapidamente contratos inadimplentes
-- **Ação proativa**: Permite agir antes de suspender o contrato
-- **Zero impacto em performance**: Utiliza dados já carregados (apenas adiciona um campo)
+- **Simplicidade**: Interface mais limpa sem campo desnecessário
+- **Consistência**: Mesmo comportamento de Pagamentos
+- **Menos erros**: Evita edição acidental do número
+- **Confiabilidade**: Número sempre vem do banco de dados
 
