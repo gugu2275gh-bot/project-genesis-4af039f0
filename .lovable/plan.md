@@ -1,115 +1,89 @@
 
+# Plano: Corrigir Lógica de Registro de Mensagem WhatsApp nos Casos Técnicos
 
-# Plano: Remover Campo de Edição de Telefone do WhatsApp nos Casos Técnicos
+## Problema Identificado
 
-## Objetivo
+Ao comparar o envio de WhatsApp entre **CRM Leads** e **Casos Técnicos**, identifiquei uma diferença na inserção de mensagens na tabela `mensagens_cliente`:
 
-Modificar o componente `SendWhatsAppButton` para usar o telefone diretamente do banco de dados, sem exibir o campo de edição manual. Seguindo o mesmo padrão do envio de cobrança em Pagamentos.
-
----
-
-## O que será alterado
-
-### Componente `SendWhatsAppButton.tsx`
-
-**Remover:**
-- Estado `editedPhone` 
-- `useEffect` que inicializa o número
-- Função `getPhoneValidation`
-- Todo o bloco JSX do campo de telefone (linhas 414-438)
-
-**Manter:**
-- Seleção de templates
-- Preview da mensagem
-- Botão de envio
-
-**Modificar:**
-- `handleSend`: usar diretamente `String(phone)` em vez de `editedPhone`
-- Validação: apenas verificar se `phone` existe antes de enviar
+| Módulo | Código | Problema |
+|--------|--------|----------|
+| CRM Leads (`useLeadMessages.ts`) | Não passa `phone_id` | Correto |
+| Casos Técnicos (`SendWhatsAppButton.tsx`) | Passa `phone_id: parseInt(phoneNumber, 10)` | Incorreto |
 
 ---
 
-## Código Atual vs. Novo
+## Análise Técnica
 
-### Antes (com campo editável)
+### O que é `phone_id`?
+
+A coluna `phone_id` na tabela `mensagens_cliente` é do tipo `bigint` e serve para correlacionar mensagens recebidas do webhook com o número de telefone do cliente. **Não deve ser preenchida manualmente** ao enviar mensagens pelo sistema.
+
+### Código Atual (Incorreto)
 
 ```typescript
-// Estados
-const [editedPhone, setEditedPhone] = useState<string>('');
-
-// useEffect para inicializar
-useEffect(() => {
-  if (isOpen && phone) {
-    setEditedPhone(String(phone).replace(/\D/g, ''));
-  }
-}, [isOpen, phone]);
-
-// Validação complexa
-const getPhoneValidation = (phoneStr: string) => { ... };
-const phoneValidation = getPhoneValidation(editedPhone);
-
-// handleSend usa editedPhone
-const { error } = await supabase.functions.invoke('send-whatsapp', {
-  body: { numero: editedPhone, mensagem: message }
+// SendWhatsAppButton.tsx - linha 342-347
+await supabase.from('mensagens_cliente').insert({
+  id_lead: leadId,
+  phone_id: parseInt(phoneNumber, 10) || null,  // INCORRETO
+  mensagem_IA: message,
+  origem: 'SISTEMA',
 });
 ```
 
-### Depois (direto do banco)
+### Código Correto (Como funciona no CRM Leads)
 
 ```typescript
-// Sem estados de edição de telefone
-// Sem useEffect
-// Sem validação complexa
+// useLeadMessages.ts - linha 61-67
+await supabase.from('mensagens_cliente').insert({
+  id_lead: leadId,
+  mensagem_IA: message,
+  origem: 'SISTEMA',
+});
+// Sem phone_id - o campo é preenchido apenas por mensagens recebidas
+```
 
-// handleSend usa phone diretamente
-const phoneNumber = String(phone).replace(/\D/g, '');
-const { error } = await supabase.functions.invoke('send-whatsapp', {
-  body: { numero: phoneNumber, mensagem: message }
+---
+
+## Alteração Proposta
+
+### Arquivo: `src/components/cases/SendWhatsAppButton.tsx`
+
+Remover a linha que insere `phone_id`:
+
+**Antes:**
+```typescript
+await supabase.from('mensagens_cliente').insert({
+  id_lead: leadId,
+  phone_id: parseInt(phoneNumber, 10) || null,
+  mensagem_IA: message,
+  origem: 'SISTEMA',
+});
+```
+
+**Depois:**
+```typescript
+await supabase.from('mensagens_cliente').insert({
+  id_lead: leadId,
+  mensagem_IA: message,
+  origem: 'SISTEMA',
 });
 ```
 
 ---
 
-## Visual Esperado
+## Verificação de Dados
 
-O dialog ficará simplificado:
+Os logs confirmam que ambos os envios funcionaram corretamente via Edge Function. O problema era apenas no registro local:
 
-```
-┌─────────────────────────────────────────┐
-│ Enviar WhatsApp para Breno Teste        │
-├─────────────────────────────────────────┤
-│                                         │
-│ Template de Mensagem                    │
-│ ┌─────────────────────────────────────┐ │
-│ │ Contato Inicial                   ▼ │ │
-│ └─────────────────────────────────────┘ │
-│                                         │
-│ Mensagem                                │
-│ ┌─────────────────────────────────────┐ │
-│ │ Olá Breno Teste! 👋                 │ │
-│ │ ...                                 │ │
-│ └─────────────────────────────────────┘ │
-│                                         │
-│                          [ Enviar ]     │
-└─────────────────────────────────────────┘
-```
-
-Sem o campo de telefone - número vem direto do banco.
+| ID | Origem | phone_id | Status |
+|----|--------|----------|--------|
+| 447 | CRM Leads | `null` | Correto |
+| 446 | Casos Técnicos | `5.53193025099e+11` | Errado |
 
 ---
 
-## Arquivo a Modificar
+## Benefícios da Correção
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/cases/SendWhatsAppButton.tsx` | Remover campo de edição de telefone e usar `phone` diretamente |
-
----
-
-## Benefícios
-
-- **Simplicidade**: Interface mais limpa sem campo desnecessário
-- **Consistência**: Mesmo comportamento de Pagamentos
-- **Menos erros**: Evita edição acidental do número
-- **Confiabilidade**: Número sempre vem do banco de dados
-
+- **Consistência**: Mesmo comportamento entre CRM e Casos Técnicos
+- **Integridade de Dados**: `phone_id` mantido para uso correto (mensagens recebidas do webhook)
+- **Evita Erros**: `parseInt` em números de telefone longos pode causar overflow ou perda de precisão
