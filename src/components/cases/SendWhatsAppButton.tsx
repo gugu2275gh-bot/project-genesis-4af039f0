@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -15,12 +15,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { MessageSquare, Send, Loader2, AlertTriangle } from 'lucide-react';
+import { MessageSquare, Send, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { cn } from '@/lib/utils';
 
 interface MessageTemplate {
   id: string;
@@ -271,29 +269,9 @@ export function SendWhatsAppButton({
   const [selectedTemplate, setSelectedTemplate] = useState<string>('initial_contact');
   const [customMessage, setCustomMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [editedPhone, setEditedPhone] = useState<string>('');
   const { toast } = useToast();
 
   const portalLink = `${window.location.origin}/portal`;
-
-  // Inicializar o número quando o modal abre
-  useEffect(() => {
-    if (isOpen && phone) {
-      // Usar String() para evitar notação científica com bigint
-      setEditedPhone(String(phone).replace(/\D/g, ''));
-    }
-  }, [isOpen, phone]);
-
-  // Validar formato do número
-  const getPhoneValidation = (phoneStr: string) => {
-    const digits = phoneStr.replace(/\D/g, '');
-    if (digits.length === 0) return { valid: false, message: 'Número não informado' };
-    if (digits.length < 10) return { valid: false, message: 'Número muito curto (mínimo 10 dígitos)' };
-    if (digits.length > 15) return { valid: false, message: 'Número muito longo (máximo 15 dígitos)' };
-    return { valid: true, message: null };
-  };
-
-  const phoneValidation = getPhoneValidation(editedPhone);
 
   const processMessage = (message: string) => {
     return message
@@ -317,10 +295,10 @@ export function SendWhatsAppButton({
   };
 
   const handleSend = async () => {
-    if (!editedPhone || !phoneValidation.valid) {
+    if (!phone) {
       toast({
-        title: 'Número inválido',
-        description: phoneValidation.message || 'Por favor, corrija o número de telefone.',
+        title: 'Telefone não encontrado',
+        description: 'O contato não possui número de telefone cadastrado.',
         variant: 'destructive',
       });
       return;
@@ -338,10 +316,12 @@ export function SendWhatsAppButton({
 
     setIsSending(true);
     
-    // Log detalhado para debug
+    // Formatar número diretamente do banco
+    const phoneNumber = String(phone).replace(/\D/g, '');
+    
     console.log('[WhatsApp Cases] Iniciando envio:', { 
-      phoneOriginal: phone, 
-      phoneFormatted: editedPhone,
+      phone,
+      phoneFormatted: phoneNumber,
       templateId: selectedTemplate,
       leadId,
     });
@@ -349,7 +329,7 @@ export function SendWhatsAppButton({
     try {
       const { data, error } = await supabase.functions.invoke('send-whatsapp', {
         body: {
-          numero: editedPhone, // Usa o número editado/validado
+          numero: phoneNumber,
           mensagem: message,
         },
       });
@@ -361,7 +341,7 @@ export function SendWhatsAppButton({
       // Log the message with id_lead for proper tracking
       await supabase.from('mensagens_cliente').insert({
         id_lead: leadId,
-        phone_id: parseInt(editedPhone, 10) || null,
+        phone_id: parseInt(phoneNumber, 10) || null,
         mensagem_IA: message,
         origem: 'SISTEMA',
       });
@@ -411,32 +391,6 @@ export function SendWhatsAppButton({
           <DialogTitle>Enviar WhatsApp para {clientName}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          {/* Campo editável do número WhatsApp */}
-          <div className="space-y-2">
-            <Label>Número WhatsApp</Label>
-            <div className="flex gap-2">
-              <Input
-                value={editedPhone}
-                onChange={(e) => setEditedPhone(e.target.value.replace(/\D/g, ''))}
-                placeholder="Ex: 5531999999999"
-                className={cn(
-                  !phoneValidation.valid && editedPhone && 'border-yellow-500 focus-visible:ring-yellow-500'
-                )}
-              />
-            </div>
-            {!phoneValidation.valid && editedPhone && (
-              <p className="text-xs text-yellow-600 flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                {phoneValidation.message}
-              </p>
-            )}
-            {phoneValidation.valid && (
-              <p className="text-xs text-muted-foreground">
-                ✓ Formato válido ({editedPhone.length} dígitos)
-              </p>
-            )}
-          </div>
-
           <div className="space-y-2">
             <Label>Template de Mensagem</Label>
             <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
@@ -472,7 +426,7 @@ export function SendWhatsAppButton({
           <div className="flex justify-end">
             <Button 
               onClick={handleSend} 
-              disabled={isSending || !phoneValidation.valid}
+              disabled={isSending || !phone}
             >
               {isSending ? (
                 <>
