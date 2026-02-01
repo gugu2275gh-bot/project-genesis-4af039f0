@@ -316,21 +316,18 @@ export function SendWhatsAppButton({
 
     setIsSending(true);
     
-    // Formatar número diretamente do banco
-    const phoneNumber = String(phone).replace(/\D/g, '');
-    
     console.log('[WhatsApp Cases] Iniciando envio:', { 
       phone,
-      phoneFormatted: phoneNumber,
+      numero: String(phone),
       templateId: selectedTemplate,
       leadId,
     });
 
     try {
       const { data, error } = await supabase.functions.invoke('send-whatsapp', {
-        body: {
-          numero: phoneNumber,
-          mensagem: message,
+        body: { 
+          mensagem: message, 
+          numero: String(phone) 
         },
       });
 
