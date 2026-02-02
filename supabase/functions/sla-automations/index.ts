@@ -893,58 +893,133 @@ serve(async (req) => {
     }
 
     // =====================================================
-    // 9. TIE PICKUP REMINDERS
+    // 9. TIE PICKUP REMINDERS (Enhanced with 3-day cycle reminders)
     // =====================================================
     if (shouldRun('TIE_PICKUP')) {
-      console.log('Running TIE_PICKUP automation...')
+      console.log('Running TIE_PICKUP automation (enhanced)...')
+      
+      // Helper to check if TIE reminder was already sent
+      async function tieReminderSent(caseId: string, reminderType: string): Promise<boolean> {
+        const { data } = await supabase
+          .from('tie_pickup_reminders')
+          .select('id')
+          .eq('service_case_id', caseId)
+          .eq('reminder_type', reminderType)
+          .maybeSingle()
+        return !!data
+      }
+      
+      // Fetch cases with TIE ready for direct pickup (no appointment required)
       const { data: tieReady } = await supabase
         .from('service_cases')
         .select(`
-          id, tie_pickup_date, tie_picked_up, client_user_id,
+          id, tie_estimated_ready_date, tie_lot_number, tie_picked_up, 
+          tie_pickup_requires_appointment, tie_ready_notification_sent, 
+          client_user_id, assigned_to_user_id, updated_at,
           opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
         `)
-        .not('tie_pickup_date', 'is', null)
+        .eq('technical_status', 'DISPONIVEL_RETIRADA_TIE')
+        .eq('tie_pickup_requires_appointment', false)
         .eq('tie_picked_up', false)
 
       for (const sc of tieReady || []) {
-        if (!sc.tie_pickup_date) continue
-        const pickupDate = new Date(sc.tie_pickup_date)
-        const daysSinceReady = Math.floor((now.getTime() - pickupDate.getTime()) / (24 * 60 * 60 * 1000))
-
+        const caseData = sc as unknown as { 
+          id: string;
+          tie_estimated_ready_date: string | null;
+          updated_at: string;
+          tie_ready_notification_sent: boolean | null;
+          client_user_id: string | null;
+          assigned_to_user_id: string | null;
+          opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } };
+        }
+        
+        const contact = caseData?.opportunities?.leads?.contacts
+        const leadId = caseData?.opportunities?.leads?.id
+        if (!contact?.phone) continue
+        
+        const clientName = contact.full_name
+        const caseShortId = sc.id.slice(0, 8)
+        
+        // Reference date: tie_estimated_ready_date or case updated_at
+        const referenceDate = caseData.tie_estimated_ready_date 
+          ? new Date(caseData.tie_estimated_ready_date) 
+          : new Date(caseData.updated_at)
+        const daysSinceReady = Math.floor((now.getTime() - referenceDate.getTime()) / (24 * 60 * 60 * 1000))
+        
+        console.log(`TIE case ${caseShortId}: ${daysSinceReady} days since ready`)
+        
+        // Calculate reminder cycle (every 3 days: D3, D6, D9, D12, D15...)
+        // Only send if at least 3 days have passed
         if (daysSinceReady >= slaMap.sla_tie_pickup_reminder_days) {
-          const caseData = sc as unknown as { 
-            opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } };
-            client_user_id: string | null;
-          }
-          const contact = caseData?.opportunities?.leads?.contacts
-          const leadId = caseData?.opportunities?.leads?.id
-          if (!contact?.phone) continue
-
-          const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-          const { data: recentNotif } = await supabase
-            .from('notifications')
-            .select('id')
-            .eq('type', 'tie_pickup')
-            .gt('created_at', last24h.toISOString())
-            .limit(1)
-            .maybeSingle()
-
-          if (!recentNotif) {
-            const msg = templateMap.template_tie_available.replace('{nome}', contact.full_name)
-            await sendWhatsApp(contact.phone, msg, leadId)
-
-            if (sc.client_user_id) {
+          const reminderCycle = Math.floor(daysSinceReady / slaMap.sla_tie_pickup_reminder_days)
+          const reminderKey = `TIE_D${reminderCycle * slaMap.sla_tie_pickup_reminder_days}`
+          
+          if (!(await tieReminderSent(sc.id, reminderKey))) {
+            // Get reminder template
+            const reminderMsg = (templateMap['template_tie_reminder_direct'] || templateMap.template_tie_available)
+              .replace('{nome}', clientName)
+            
+            // Send WhatsApp reminder
+            await sendWhatsApp(contact.phone, reminderMsg, leadId)
+            
+            // Record reminder
+            await supabase.from('tie_pickup_reminders').insert({
+              service_case_id: sc.id,
+              reminder_type: reminderKey
+            })
+            
+            // Create portal notification
+            if (caseData.client_user_id) {
               await supabase.from('notifications').insert({
-                user_id: sc.client_user_id,
-                title: 'TIE disponível',
-                message: 'Seu TIE está disponível para retirada.',
-                type: 'tie_pickup',
+                user_id: caseData.client_user_id,
+                title: 'Lembrete: Retirada do TIE',
+                message: 'Seu TIE continua disponível para retirada. Por favor, retire o mais breve possível.',
+                type: 'tie_pickup_reminder',
               })
             }
+            
+            // D+12: Alert technician
+            if (daysSinceReady >= (slaMap['sla_tie_pickup_tech_alert_days'] || 12)) {
+              const techAlertKey = `TIE_TECH_D${daysSinceReady}`
+              if (!(await tieReminderSent(sc.id, techAlertKey)) && caseData.assigned_to_user_id) {
+                await supabase.from('notifications').insert({
+                  user_id: caseData.assigned_to_user_id,
+                  title: '⚠️ TIE Não Retirado há 12+ dias',
+                  message: `O TIE do caso ${caseShortId} (${clientName}) está disponível há mais de ${daysSinceReady} dias e ainda não foi retirado.`,
+                  type: 'tie_pickup_overdue',
+                })
+                await supabase.from('tie_pickup_reminders').insert({
+                  service_case_id: sc.id,
+                  reminder_type: techAlertKey
+                })
+              }
+            }
+            
+            // D+15: Alert coordinator/manager
+            if (daysSinceReady >= (slaMap['sla_tie_pickup_coord_alert_days'] || 15)) {
+              const coordAlertKey = `TIE_COORD_D${Math.floor(daysSinceReady / 3) * 3}`
+              if (!(await tieReminderSent(sc.id, coordAlertKey))) {
+                const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
+                for (const mgr of managers || []) {
+                  await supabase.from('notifications').insert({
+                    user_id: mgr.user_id,
+                    title: '🚨 TIE Não Retirado há 15+ dias',
+                    message: `Caso ${caseShortId} (${clientName}) com TIE disponível há ${daysSinceReady} dias. Requer atenção.`,
+                    type: 'tie_pickup_critical',
+                  })
+                }
+                await supabase.from('tie_pickup_reminders').insert({
+                  service_case_id: sc.id,
+                  reminder_type: coordAlertKey
+                })
+              }
+            }
+            
             results.tiePickupReminders++
           }
         }
       }
+      console.log(`TIE pickup reminders automation completed. Sent: ${results.tiePickupReminders}`)
     }
 
     // =====================================================

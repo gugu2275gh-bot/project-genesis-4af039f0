@@ -2109,6 +2109,38 @@ export type Database = {
           },
         ]
       }
+      tie_pickup_reminders: {
+        Row: {
+          created_at: string | null
+          id: string
+          reminder_type: string
+          sent_at: string | null
+          service_case_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          reminder_type: string
+          sent_at?: string | null
+          service_case_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          reminder_type?: string
+          sent_at?: string | null
+          service_case_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tie_pickup_reminders_service_case_id_fkey"
+            columns: ["service_case_id"]
+            isOneToOne: false
+            referencedRelation: "service_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_profile_definitions: {
         Row: {
           created_at: string | null

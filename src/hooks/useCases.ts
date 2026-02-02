@@ -736,3 +736,86 @@ export function useCase(id: string | undefined) {
     enabled: !!id,
   });
 }
+
+// Hook to send TIE ready notification with WhatsApp
+export function useTieNotification() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ 
+      caseId, 
+      clientName, 
+      clientPhone,
+      leadId,
+      clientUserId
+    }: { 
+      caseId: string;
+      clientName: string;
+      clientPhone: number | string;
+      leadId: string;
+      clientUserId?: string | null;
+    }) => {
+      // Build WhatsApp message
+      const message = `Ola ${clientName}! Otimas noticias! Seu TIE esta disponivel para retirada. Local: Comisaria de Policia Nacional. Documentos necessarios: Passaporte, Resguardo de Huellas e Comprovante Taxa 790. Voce pode retirar a qualquer momento no horario de atendimento.`;
+      
+      // Send WhatsApp via edge function
+      const { error: whatsappError } = await supabase.functions.invoke('send-whatsapp', {
+        body: { 
+          mensagem: message,
+          numero: String(clientPhone).replace(/\D/g, '')
+        }
+      });
+      
+      if (whatsappError) {
+        console.error('WhatsApp send failed:', whatsappError);
+        // Continue anyway - WhatsApp is best-effort
+      }
+
+      // Record in mensagens_cliente for CRM history
+      await supabase.from('mensagens_cliente').insert({
+        id_lead: leadId,
+        mensagem_IA: message,
+        origem: 'SISTEMA',
+      });
+
+      // Mark case as notified
+      const { error: updateError } = await supabase
+        .from('service_cases')
+        .update({ tie_ready_notification_sent: true })
+        .eq('id', caseId);
+      
+      if (updateError) throw updateError;
+
+      // Record initial reminder
+      await supabase.from('tie_pickup_reminders').insert({
+        service_case_id: caseId,
+        reminder_type: 'TIE_READY'
+      });
+
+      // Create portal notification for client
+      if (clientUserId) {
+        await supabase.from('notifications').insert({
+          user_id: clientUserId,
+          title: 'TIE Disponível para Retirada',
+          message: 'Seu TIE está disponível para retirada na Comisaría. Leve: Passaporte, Resguardo e comprovante Taxa 790.',
+          type: 'tie_pickup',
+        });
+      }
+
+      return { success: true };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      toast({ title: 'Cliente notificado com sucesso!' });
+    },
+    onError: (error) => {
+      toast({ 
+        title: 'Erro ao notificar cliente', 
+        description: error.message, 
+        variant: 'destructive' 
+      });
+    },
+  });
+}
