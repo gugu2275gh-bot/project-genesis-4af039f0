@@ -169,8 +169,23 @@ export function ResguardoUploadSection({
               </div>
             </div>
 
-            {/* Botão para notificar cliente */}
-            {!serviceCase.tie_ready_notification_sent && onNotifyClient && (
+            {/* Notification status */}
+            {!serviceCase.tie_pickup_requires_appointment && (
+              serviceCase.tie_ready_notification_sent ? (
+                <div className="flex items-center gap-2 text-sm text-green-600 p-3 bg-green-50 rounded-lg">
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Cliente notificado automaticamente sobre disponibilidade do TIE</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-amber-600 p-3 bg-amber-50 rounded-lg">
+                  <Clock className="h-4 w-4" />
+                  <span>Notificação será enviada automaticamente ao registrar</span>
+                </div>
+              )
+            )}
+
+            {/* Manual notify button for appointment cases */}
+            {serviceCase.tie_pickup_requires_appointment && !serviceCase.tie_ready_notification_sent && onNotifyClient && (
               <Button 
                 variant="outline" 
                 className="w-full"
@@ -182,7 +197,7 @@ export function ResguardoUploadSection({
               </Button>
             )}
 
-            {serviceCase.tie_ready_notification_sent && (
+            {serviceCase.tie_pickup_requires_appointment && serviceCase.tie_ready_notification_sent && (
               <div className="flex items-center gap-2 text-sm text-green-600">
                 <CheckCircle className="h-4 w-4" />
                 Cliente notificado sobre disponibilidade

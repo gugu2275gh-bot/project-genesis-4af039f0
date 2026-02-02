@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useCase, useCases } from '@/hooks/useCases';
+import { useCase, useCases, useTieNotification } from '@/hooks/useCases';
 import { useDocuments } from '@/hooks/useDocuments';
 import { useRequirements } from '@/hooks/useRequirements';
 import { useProfiles } from '@/hooks/useProfiles';
@@ -49,6 +49,7 @@ export default function CaseDetail() {
   const navigate = useNavigate();
   const { data: serviceCase, isLoading } = useCase(id);
   const { updateStatus, assignCase, submitCase, closeCase, updateCase, approveDocumentation, sendToLegal, registerApproval, confirmClientContact, registerTieAvailable, scheduleTiePickupAppointment, confirmTiePickup, notifyTieReady } = useCases();
+  const tieNotification = useTieNotification();
   const { documents, approveDocument, rejectDocument, markPostProtocolPending } = useDocuments(id);
   const { requirements, createRequirement, updateRequirement, requestExtension, sendToLegal: sendRequirementToLegal } = useRequirements(id);
   const { data: profiles } = useProfiles();
@@ -757,15 +758,32 @@ export default function CaseDetail() {
                       serviceCase={serviceCase}
                       clientName={clientName}
                       clientPhone={clientPhone}
-                      onRegisterTieAvailable={(data) => registerTieAvailable.mutateAsync({ 
-                        id: serviceCase.id, 
-                        lotNumber: data.tie_lot_number,
-                        validityDate: data.tie_validity_date,
-                        estimatedReadyDate: data.tie_estimated_ready_date,
-                        requiresAppointment: data.tie_pickup_requires_appointment,
-                      })}
+                      onRegisterTieAvailable={async (data) => {
+                        // Register TIE availability
+                        await registerTieAvailable.mutateAsync({ 
+                          id: serviceCase.id, 
+                          lotNumber: data.tie_lot_number,
+                          validityDate: data.tie_validity_date,
+                          estimatedReadyDate: data.tie_estimated_ready_date,
+                          requiresAppointment: data.tie_pickup_requires_appointment,
+                        });
+                        
+                        // If no appointment required, automatically send notification
+                        if (!data.tie_pickup_requires_appointment && clientPhone) {
+                          const leadId = serviceCase.opportunities?.leads?.id;
+                          if (leadId) {
+                            await tieNotification.mutateAsync({
+                              caseId: serviceCase.id,
+                              clientName: clientName,
+                              clientPhone: clientPhone,
+                              leadId: leadId,
+                              clientUserId: serviceCase.client_user_id,
+                            });
+                          }
+                        }
+                      }}
                       onNotifyClient={() => notifyTieReady.mutateAsync(serviceCase.id)}
-                      isUpdating={registerTieAvailable.isPending || notifyTieReady.isPending}
+                      isUpdating={registerTieAvailable.isPending || notifyTieReady.isPending || tieNotification.isPending}
                     />
                     <TiePickupSection 
                       serviceCase={serviceCase} 
