@@ -556,6 +556,134 @@ export function useCases() {
     },
   });
 
+  // TIE Pickup Mutations
+  const registerTieAvailable = useMutation({
+    mutationFn: async ({ 
+      id, 
+      lotNumber, 
+      validityDate,
+      estimatedReadyDate,
+      requiresAppointment 
+    }: { 
+      id: string; 
+      lotNumber: string;
+      validityDate?: string;
+      estimatedReadyDate?: string;
+      requiresAppointment: boolean;
+    }) => {
+      const { data, error } = await supabase
+        .from('service_cases')
+        .update({
+          tie_lot_number: lotNumber,
+          tie_validity_date: validityDate || null,
+          tie_estimated_ready_date: estimatedReadyDate || null,
+          tie_pickup_requires_appointment: requiresAppointment,
+          technical_status: 'DISPONIVEL_RETIRADA_TIE',
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      toast({ title: 'TIE registrado como disponível!' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao registrar TIE', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const scheduleTiePickupAppointment = useMutation({
+    mutationFn: async ({ 
+      id, 
+      date, 
+      time, 
+      location 
+    }: { 
+      id: string; 
+      date: string;
+      time?: string;
+      location?: string;
+    }) => {
+      const { data, error } = await supabase
+        .from('service_cases')
+        .update({
+          tie_pickup_appointment_date: date,
+          tie_pickup_appointment_time: time || null,
+          tie_pickup_location: location || null,
+          technical_status: 'AGUARDANDO_CITA_RETIRADA',
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      toast({ title: 'Cita de retirada agendada!' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao agendar cita', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const confirmTiePickup = useMutation({
+    mutationFn: async ({ id, pickupDate }: { id: string; pickupDate: string }) => {
+      const { data, error } = await supabase
+        .from('service_cases')
+        .update({
+          tie_picked_up: true,
+          tie_pickup_date: pickupDate,
+          technical_status: 'TIE_RETIRADO',
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      toast({ title: 'TIE marcado como retirado!' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao confirmar retirada', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const notifyTieReady = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from('service_cases')
+        .update({
+          tie_ready_notification_sent: true,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-cases'] });
+      queryClient.invalidateQueries({ queryKey: ['my-cases'] });
+      toast({ title: 'Cliente notificado sobre disponibilidade do TIE!' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao notificar cliente', description: error.message, variant: 'destructive' });
+    },
+  });
+
   return {
     cases: casesQuery.data ?? [],
     myCases: myCasesQuery.data ?? [],
@@ -575,6 +703,10 @@ export function useCases() {
     updateEmpadronamiento,
     markHuellasCompleted,
     sendHuellasInstructions,
+    registerTieAvailable,
+    scheduleTiePickupAppointment,
+    confirmTiePickup,
+    notifyTieReady,
   };
 }
 

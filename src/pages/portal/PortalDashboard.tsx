@@ -14,7 +14,10 @@ import {
   Calendar,
   Upload,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  CreditCard,
+  MapPin,
+  Clock
 } from 'lucide-react';
 import { format, Locale } from 'date-fns';
 import { ptBR, es, enUS, fr } from 'date-fns/locale';
@@ -31,6 +34,9 @@ const statusColors: Record<string, string> = {
   EM_ACOMPANHAMENTO: 'bg-accent/10 text-accent',
   EXIGENCIA_ORGAO: 'bg-destructive/10 text-destructive',
   AGUARDANDO_RECURSO: 'bg-warning/10 text-warning',
+  DISPONIVEL_RETIRADA_TIE: 'bg-green-100 text-green-800',
+  AGUARDANDO_CITA_RETIRADA: 'bg-blue-100 text-blue-800',
+  TIE_RETIRADO: 'bg-green-100 text-green-800',
   ENCERRADO_APROVADO: 'bg-success/10 text-success',
   ENCERRADO_NEGADO: 'bg-destructive/10 text-destructive',
 };
@@ -67,6 +73,9 @@ const getStatusLabel = (status: string, t: any) => {
     EM_ACOMPANHAMENTO: t.timeline.tracking,
     EXIGENCIA_ORGAO: t.timeline.trackingRequirement,
     AGUARDANDO_RECURSO: t.timeline.trackingAppeal,
+    DISPONIVEL_RETIRADA_TIE: 'TIE Disponível',
+    AGUARDANDO_CITA_RETIRADA: 'Cita Agendada',
+    TIE_RETIRADO: 'TIE Retirado',
     ENCERRADO_APROVADO: t.timeline.approved,
     ENCERRADO_NEGADO: t.timeline.denied,
   };
@@ -93,6 +102,11 @@ export default function PortalDashboard() {
 
   const pendingDocsCases = myCases.filter(c => 
     c.technical_status === 'AGUARDANDO_DOCUMENTOS'
+  );
+
+  // Cases with TIE ready for pickup
+  const tieReadyCases = myCases.filter(c => 
+    ['DISPONIVEL_RETIRADA_TIE', 'AGUARDANDO_CITA_RETIRADA'].includes(c.technical_status || '')
   );
 
   if (isLoading) {
@@ -180,6 +194,75 @@ export default function PortalDashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* TIE Ready Alert */}
+      {tieReadyCases.map((caseItem) => (
+        <Card key={caseItem.id} className="border-green-500/50 bg-green-50 dark:bg-green-950">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 rounded-lg bg-green-100 dark:bg-green-900">
+                <CreditCard className="h-6 w-6 text-green-700 dark:text-green-300" />
+              </div>
+              <div className="flex-1">
+                <p className="font-medium text-green-800 dark:text-green-200">
+                  🎉 Seu TIE está disponível para retirada!
+                </p>
+                <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                  {getServiceLabel(caseItem.service_type, t)}
+                </p>
+                
+                {/* TIE Pickup Details */}
+                <div className="mt-3 space-y-2">
+                  {(caseItem as any).tie_lot_number && (
+                    <p className="text-sm flex items-center gap-2">
+                      <span className="font-medium">Lote:</span>
+                      <span className="font-mono">{(caseItem as any).tie_lot_number}</span>
+                    </p>
+                  )}
+                  
+                  {(caseItem as any).tie_pickup_appointment_date && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <p className="text-sm font-medium text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        Cita Agendada
+                      </p>
+                      <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                        {format(new Date((caseItem as any).tie_pickup_appointment_date), 'dd/MM/yyyy', { locale: dateLocale })}
+                        {(caseItem as any).tie_pickup_appointment_time && (
+                          <span> às {(caseItem as any).tie_pickup_appointment_time}</span>
+                        )}
+                      </p>
+                      {(caseItem as any).tie_pickup_location && (
+                        <p className="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-1 mt-1">
+                          <MapPin className="h-3 w-3" />
+                          {(caseItem as any).tie_pickup_location}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
+                  {!(caseItem as any).tie_pickup_appointment_date && (caseItem as any).tie_estimated_ready_date && (
+                    <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Disponível a partir de {format(new Date((caseItem as any).tie_estimated_ready_date), 'dd/MM/yyyy', { locale: dateLocale })}
+                    </p>
+                  )}
+                </div>
+
+                {/* Instructions */}
+                <div className="mt-3 p-3 bg-muted rounded-lg">
+                  <p className="text-xs font-medium">Documentos necessários para retirada:</p>
+                  <ul className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                    <li>• Passaporte original</li>
+                    <li>• Resguardo de huellas</li>
+                    <li>• Comprovante de pagamento Taxa 790</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
 
       {/* Cases List */}
       <Card>
