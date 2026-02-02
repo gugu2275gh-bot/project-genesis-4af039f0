@@ -1660,9 +1660,15 @@ export type Database = {
           technical_status:
             | Database["public"]["Enums"]["technical_status"]
             | null
+          tie_estimated_ready_date: string | null
           tie_lot_number: string | null
           tie_picked_up: boolean | null
+          tie_pickup_appointment_date: string | null
+          tie_pickup_appointment_time: string | null
           tie_pickup_date: string | null
+          tie_pickup_location: string | null
+          tie_pickup_requires_appointment: boolean | null
+          tie_ready_notification_sent: boolean | null
           tie_resguardo_url: string | null
           tie_validity_date: string | null
           updated_at: string | null
@@ -1728,9 +1734,15 @@ export type Database = {
           technical_status?:
             | Database["public"]["Enums"]["technical_status"]
             | null
+          tie_estimated_ready_date?: string | null
           tie_lot_number?: string | null
           tie_picked_up?: boolean | null
+          tie_pickup_appointment_date?: string | null
+          tie_pickup_appointment_time?: string | null
           tie_pickup_date?: string | null
+          tie_pickup_location?: string | null
+          tie_pickup_requires_appointment?: boolean | null
+          tie_ready_notification_sent?: boolean | null
           tie_resguardo_url?: string | null
           tie_validity_date?: string | null
           updated_at?: string | null
@@ -1796,9 +1808,15 @@ export type Database = {
           technical_status?:
             | Database["public"]["Enums"]["technical_status"]
             | null
+          tie_estimated_ready_date?: string | null
           tie_lot_number?: string | null
           tie_picked_up?: boolean | null
+          tie_pickup_appointment_date?: string | null
+          tie_pickup_appointment_time?: string | null
           tie_pickup_date?: string | null
+          tie_pickup_location?: string | null
+          tie_pickup_requires_appointment?: boolean | null
+          tie_ready_notification_sent?: boolean | null
           tie_resguardo_url?: string | null
           tie_validity_date?: string | null
           updated_at?: string | null

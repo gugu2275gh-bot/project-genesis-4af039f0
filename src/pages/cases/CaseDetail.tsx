@@ -29,6 +29,7 @@ import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { HuellasSection } from '@/components/cases/HuellasSection';
 import { TiePickupSection } from '@/components/cases/TiePickupSection';
+import { ResguardoUploadSection } from '@/components/cases/ResguardoUploadSection';
 import { Switch } from '@/components/ui/switch';
 import { CaseStatusTimeline } from '@/components/cases/CaseStatusTimeline';
 import { TechnicalNotesSection } from '@/components/cases/TechnicalNotesSection';
@@ -47,7 +48,7 @@ export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: serviceCase, isLoading } = useCase(id);
-  const { updateStatus, assignCase, submitCase, closeCase, updateCase, approveDocumentation, sendToLegal, registerApproval, confirmClientContact } = useCases();
+  const { updateStatus, assignCase, submitCase, closeCase, updateCase, approveDocumentation, sendToLegal, registerApproval, confirmClientContact, registerTieAvailable, scheduleTiePickupAppointment, confirmTiePickup, notifyTieReady } = useCases();
   const { documents, approveDocument, rejectDocument, markPostProtocolPending } = useDocuments(id);
   const { requirements, createRequirement, updateRequirement, requestExtension, sendToLegal: sendRequirementToLegal } = useRequirements(id);
   const { data: profiles } = useProfiles();
@@ -751,11 +752,33 @@ export default function CaseDetail() {
 
               {showTieSection && (
                 <TabsContent value="tie" className="m-0">
-                  <TiePickupSection 
-                    serviceCase={serviceCase} 
-                    onUpdate={(data) => updateCase.mutateAsync({ id: serviceCase.id, ...data })}
-                    isUpdating={updateCase.isPending}
-                  />
+                  <div className="space-y-4">
+                    <ResguardoUploadSection
+                      serviceCase={serviceCase}
+                      clientName={clientName}
+                      clientPhone={clientPhone}
+                      onRegisterTieAvailable={(data) => registerTieAvailable.mutateAsync({ 
+                        id: serviceCase.id, 
+                        lotNumber: data.tie_lot_number,
+                        validityDate: data.tie_validity_date,
+                        estimatedReadyDate: data.tie_estimated_ready_date,
+                        requiresAppointment: data.tie_pickup_requires_appointment,
+                      })}
+                      onNotifyClient={() => notifyTieReady.mutateAsync(serviceCase.id)}
+                      isUpdating={registerTieAvailable.isPending || notifyTieReady.isPending}
+                    />
+                    <TiePickupSection 
+                      serviceCase={serviceCase} 
+                      onUpdate={(data) => updateCase.mutateAsync({ id: serviceCase.id, ...data })}
+                      onScheduleAppointment={(data) => scheduleTiePickupAppointment.mutateAsync({ 
+                        id: serviceCase.id, 
+                        date: data.date, 
+                        time: data.time, 
+                        location: data.location 
+                      })}
+                      isUpdating={updateCase.isPending || scheduleTiePickupAppointment.isPending}
+                    />
+                  </div>
                 </TabsContent>
               )}
             </CardContent>

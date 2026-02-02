@@ -25,7 +25,8 @@ import {
   Clock,
   AlertTriangle,
   ExternalLink,
-  Loader2
+  Loader2,
+  Fingerprint
 } from 'lucide-react';
 import { SERVICE_INTEREST_LABELS, DOCUMENT_STATUS_LABELS } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
@@ -43,11 +44,12 @@ const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'
 
 export default function PortalDocuments() {
   const { user } = useAuth();
-  const { cases, isLoading: casesLoading } = useCases();
+  const { cases, isLoading: casesLoading, updateCase } = useCases();
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadingResguardo, setUploadingResguardo] = useState(false);
   
   // Filter cases for current client
   const myCases = cases.filter(c => c.client_user_id === user?.id);
@@ -56,6 +58,11 @@ export default function PortalDocuments() {
   const { documents, documentTypes, isLoading: docsLoading, updateDocument } = useDocuments(selectedCaseId);
 
   const selectedCase = myCases.find(c => c.id === selectedCaseId);
+
+  // Check if case is in status that requires resguardo upload
+  const showResguardoSection = selectedCase && 
+    ['HUELLAS_REALIZADO', 'DISPONIVEL_RETIRADA_TIE', 'AGUARDANDO_CITA_RETIRADA', 'TIE_RETIRADO'].includes(selectedCase.technical_status || '') &&
+    !(selectedCase as any).huellas_resguardo_url;
 
   const handleFileUpload = async (documentId: string, file: File) => {
     // Validate file type
@@ -136,6 +143,75 @@ export default function PortalDocuments() {
     }
   };
 
+  const handleResguardoUpload = async (file: File) => {
+    if (!selectedCase) return;
+
+    // Validate file type
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      toast({
+        title: 'Tipo de arquivo não permitido',
+        description: 'Por favor, envie apenas arquivos PDF, JPG ou PNG.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      toast({
+        title: 'Arquivo muito grande',
+        description: 'O tamanho máximo permitido é 10MB.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUploadingResguardo(true);
+
+    try {
+      // Create unique file path: userId/caseId/resguardo/filename
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${user?.id}/${selectedCaseId}/resguardo/${Date.now()}.${fileExt}`;
+
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('client-documents')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('client-documents')
+        .getPublicUrl(filePath);
+
+      // Update case with resguardo URL
+      await updateCase.mutateAsync({
+        id: selectedCase.id,
+        huellas_resguardo_url: urlData.publicUrl,
+      } as any);
+
+      toast({
+        title: 'Resguardo enviado!',
+        description: 'Seu comprovante de huellas foi enviado. Acompanhe o status do seu TIE.',
+      });
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast({
+        title: 'Erro ao enviar',
+        description: error.message || 'Não foi possível enviar o documento. Tente novamente.',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploadingResguardo(false);
+    }
+  };
+
   if (casesLoading) {
     return (
       <div className="space-y-6">
@@ -190,6 +266,81 @@ export default function PortalDocuments() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Resguardo Upload Section - Only show after huellas is completed */}
+      {showResguardoSection && (
+        <Card className="border-primary/50 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Fingerprint className="h-5 w-5 text-primary" />
+              Comprovante de Comparecimento (Resguardo)
+            </CardTitle>
+            <CardDescription>
+              Após comparecer à cita de huellas, você recebeu um comprovante da Polícia. 
+              Envie-o para darmos continuidade ao seu processo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="p-4 bg-muted rounded-lg">
+                <p className="text-sm font-medium mb-2">Este documento contém:</p>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li>• Número do lote do seu cartão TIE</li>
+                  <li>• Prazo estimado para retirada</li>
+                </ul>
+              </div>
+
+              {uploadingResguardo ? (
+                <Button disabled className="w-full">
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Enviando...
+                </Button>
+              ) : (
+                <div className="relative">
+                  <Input
+                    type="file"
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        handleResguardoUpload(file);
+                      }
+                    }}
+                  />
+                  <Button className="w-full">
+                    <Upload className="h-4 w-4 mr-2" />
+                    Enviar Resguardo
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Resguardo Already Uploaded Confirmation */}
+      {selectedCase && (selectedCase as any).huellas_resguardo_url && (
+        <Card className="border-green-500/50 bg-green-50 dark:bg-green-950">
+          <CardContent className="flex items-center gap-4 pt-6">
+            <CheckCircle2 className="h-8 w-8 text-green-600 shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium text-green-800 dark:text-green-200">
+                Resguardo enviado com sucesso!
+              </p>
+              <p className="text-sm text-green-600 dark:text-green-400">
+                Estamos acompanhando a produção do seu TIE. Avisaremos quando estiver disponível para retirada.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" asChild>
+              <a href={(selectedCase as any).huellas_resguardo_url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-1" />
+                Ver
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Documents List */}
       {selectedCase && (
