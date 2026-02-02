@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Tables, TablesUpdate } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { format } from 'date-fns';
 
 export type ServiceCase = Tables<'service_cases'>;
 export type ServiceCaseUpdate = TablesUpdate<'service_cases'>;
@@ -180,24 +181,73 @@ export function useCases() {
         .eq('id', id)
         .select(`
           *,
-          client_user_id
+          client_user_id,
+          tie_validity_date,
+          opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
         `)
         .single();
       
       if (error) throw error;
 
-      // If approved, create a notification for NPS survey
-      if (result === 'APROVADO' && data.client_user_id) {
-        const npsLink = `${window.location.origin}/nps/${id}`;
-        
-        await supabase
-          .from('notifications')
-          .insert({
-            user_id: data.client_user_id,
-            type: 'nps_survey',
-            title: 'Avalie nosso atendimento!',
-            message: `Seu processo foi concluído. Clique aqui para nos contar como foi sua experiência.`,
-          });
+      // If approved, create NPS notification and send final WhatsApp message
+      if (result === 'APROVADO') {
+        // Create NPS notification
+        if (data.client_user_id) {
+          await supabase
+            .from('notifications')
+            .insert({
+              user_id: data.client_user_id,
+              type: 'nps_survey',
+              title: 'Avalie nosso atendimento!',
+              message: `Seu processo foi concluído. Clique aqui para nos contar como foi sua experiência.`,
+            });
+        }
+
+        // Send final congratulatory WhatsApp message
+        try {
+          const oppData = (data as any).opportunities as { 
+            leads: { id: string; contacts: { full_name: string; phone: number | null } } 
+          };
+          const contact = oppData?.leads?.contacts;
+          const leadId = oppData?.leads?.id;
+          
+          if (contact?.phone) {
+            // Get the closure template
+            const { data: templateData } = await supabase
+              .from('system_config')
+              .select('value')
+              .eq('key', 'template_case_closure_success')
+              .maybeSingle();
+            
+            const template = templateData?.value || 
+              'Parabens, {nome}! Seu processo foi concluido com sucesso! Agradecemos a confianca. Seu TIE e valido ate {validade_tie}. Para futuras necessidades, estamos a disposicao!';
+            
+            const tieValidity = data.tie_validity_date 
+              ? format(new Date(data.tie_validity_date), 'dd/MM/yyyy')
+              : 'consulte seu documento';
+            
+            const finalMessage = template
+              .replace('{nome}', contact.full_name)
+              .replace('{validade_tie}', tieValidity);
+            
+            // Send WhatsApp
+            await supabase.functions.invoke('send-whatsapp', {
+              body: { mensagem: finalMessage, numero: String(contact.phone) }
+            });
+            
+            // Register in CRM chat
+            await supabase.from('mensagens_cliente').insert({
+              id_lead: leadId,
+              mensagem_IA: finalMessage,
+              origem: 'SISTEMA'
+            });
+            
+            console.log('Final congratulatory message sent for case:', id);
+          }
+        } catch (msgError) {
+          console.error('Error sending final message (non-blocking):', msgError);
+          // Don't throw - the case closure should still succeed
+        }
       }
 
       return data;

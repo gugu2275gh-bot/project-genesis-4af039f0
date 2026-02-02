@@ -21,8 +21,9 @@ import {
   Package,
   MapPin
 } from 'lucide-react';
-import { format, addYears } from 'date-fns';
+import { format, addYears, addDays, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useToast } from '@/hooks/use-toast';
 
 interface TiePickupSectionProps {
   serviceCase: {
@@ -58,6 +59,7 @@ interface TiePickupSectionProps {
 }
 
 export function TiePickupSection({ serviceCase, onUpdate, onScheduleAppointment, isUpdating }: TiePickupSectionProps) {
+  const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isPickupDialogOpen, setIsPickupDialogOpen] = useState(false);
   const [isAppointmentDialogOpen, setIsAppointmentDialogOpen] = useState(false);
@@ -78,6 +80,9 @@ export function TiePickupSection({ serviceCase, onUpdate, onScheduleAppointment,
   const requiresAppointment = serviceCase.tie_pickup_requires_appointment;
   const hasAppointment = !!serviceCase.tie_pickup_appointment_date;
 
+  // Calculate minimum date (7 days from today)
+  const minAppointmentDate = format(addDays(new Date(), 7), 'yyyy-MM-dd');
+
   const handleRegisterTie = () => {
     const validityDate = formData.tie_validity_date || format(addYears(new Date(), 1), 'yyyy-MM-dd');
     onUpdate({
@@ -96,6 +101,19 @@ export function TiePickupSection({ serviceCase, onUpdate, onScheduleAppointment,
   };
 
   const handleScheduleAppointment = () => {
+    // Validate minimum 7 days advance
+    const appointmentDate = new Date(appointmentData.date);
+    const minDate = addDays(new Date(), 7);
+    
+    if (isBefore(appointmentDate, minDate)) {
+      toast({
+        title: 'Data inválida',
+        description: 'A cita deve ser agendada com no mínimo 7 dias de antecedência.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     if (onScheduleAppointment) {
       onScheduleAppointment({
         date: appointmentData.date,
@@ -262,9 +280,13 @@ export function TiePickupSection({ serviceCase, onUpdate, onScheduleAppointment,
                           <Label>Data da Cita *</Label>
                           <Input
                             type="date"
+                            min={minAppointmentDate}
                             value={appointmentData.date}
                             onChange={(e) => setAppointmentData({ ...appointmentData, date: e.target.value })}
                           />
+                          <p className="text-xs text-muted-foreground">
+                            Mínimo 7 dias de antecedência para envio de lembretes automáticos
+                          </p>
                         </div>
                         <div className="space-y-2">
                           <Label>Horário</Label>
