@@ -1,294 +1,381 @@
 
-# Plano: Relatórios Financeiros Internos
+# Plano: Pos-Atendimento da Cita de Huellas e Emissao do TIE
 
 ## Visao Geral
 
-Criar uma nova pagina de **Relatórios Financeiros** (`/finance/reports`) com cinco relatórios específicos para gestao financeira interna, acessível a partir do menu Finance.
+Implementar o fluxo completo de pos-atendimento apos a cita de huellas, incluindo:
+- Upload do comprovante (resguardo) pelo cliente no portal
+- Registro do numero de lote pelo tecnico
+- Acompanhamento da producao do TIE
+- Suporte para retirada com ou sem cita previa
+- Transicao de status ate o encerramento do caso
 
 ---
 
-## Estrutura Proposta
+## Fluxo Proposto
 
-### Nova Pagina: `src/pages/finance/FinancialReports.tsx`
-
-Pagina principal com tabs para cada tipo de relatorio:
-
-1. **Contratos com Saldo Pendente** - Cobranca ativa
-2. **Contratos Nao Iniciados** - Atencao ao cliente
-3. **Previsao de Entradas** - Fluxo futuro
-4. **Faturamento Realizado** - Receita consolidada  
-5. **Comissoes Devidas** - Pagamentos a colaboradores
-
----
-
-## Detalhamento Tecnico
-
-### 1. Contratos com Saldo Pendente (Cobrando/A Cobrar)
-
-**Objetivo:** Listar contratos ASSINADOS onde `payment_status = 'INICIADO'` mas ainda tem saldo devedor
-
-**Dados necessarios:**
-- Contratos com status ASSINADO e payment_status = INICIADO
-- Total de pagamentos CONFIRMADO vs total_fee
-- Destaque visual para contratos em atraso (parcelas vencidas)
-
-**Colunas:**
-| Cliente | Servico | Valor Total | Pago | Saldo | Parcelas Vencidas | Proxima Parcela | Acoes |
-
-**Acoes disponiveis:**
-- Ver contrato
-- Enviar cobranca WhatsApp (se em atraso)
-
----
-
-### 2. Contratos Nao Iniciados (Assinados sem Pagamento)
-
-**Objetivo:** Listar contratos ASSINADOS onde `payment_status = 'NAO_INICIADO'`
-
-**Logica:** 
-- Contrato foi assinado mas nenhum pagamento foi confirmado ainda
-- Pode indicar cliente com problemas ou contrato a cancelar
-
-**Colunas:**
-| Cliente | Servico | Valor Total | Data Assinatura | Dias sem Pagamento | Primeira Parcela | Acoes |
-
-**Acoes disponiveis:**
-- Ver contrato
-- Cancelar contrato (com confirmacao)
-- Enviar lembrete WhatsApp
-
-**Destaque visual:**
-- Amarelo: 7-14 dias sem pagamento
-- Vermelho: 15+ dias sem pagamento
-
----
-
-### 3. Previsao de Entradas Futuras
-
-**Objetivo:** Listar pagamentos PENDENTE com due_date no futuro
-
-**Agrupamento:** Por mes (proximos 6 meses)
-
-**Dados:**
-```
-Fevereiro 2026:  €5.400 (8 parcelas)
-Marco 2026:      €4.200 (6 parcelas)
-...
-```
-
-**Colunas detalhadas:**
-| Cliente | Contrato | Parcela | Valor | Vencimento |
-
-**Totais:**
-- Total previsto proximo mes
-- Total previsto 3 meses
-- Total previsto 6 meses
-
----
-
-### 4. Faturamento Realizado (Periodo)
-
-**Objetivo:** Consolidar receita recebida em um periodo, separando COM e SEM fatura fiscal
-
-**Fonte de dados:** Reutilizar logica do BillingReport.tsx existente
-
-**Metricas:**
-- Total faturado (com fatura fiscal - contas ES)
-- Total recebido informal (PIX, PayPal, Dinheiro)
-- IVA a recolher (21% sobre faturado)
-
-**Filtros:**
-- Periodo (data inicial/final)
-- Conta de recebimento
-- Com/Sem fatura
-
-**Exportacao:** Excel e PDF
-
----
-
-### 5. Comissoes Devidas a Colaboradores
-
-**Objetivo:** Resumo de comissoes pendentes com opcao de marcar como paga
-
-**Dados:** Reutilizar hook useCommissions
-
-**Divisao:**
-- **A Pagar (Captadores):** Comissoes que a empresa deve pagar a indicadores
-- **A Receber (Fornecedores):** Comissoes que fornecedores devem a empresa
-
-**Colunas:**
-| Colaborador | Tipo | Cliente | Base | Taxa | Valor | Status | Acoes |
-
-**Acoes:**
-- Marcar como paga
-- Ver detalhes
-
----
-
-## Novo Hook: `useFinancialReports.ts`
-
-```typescript
-// Busca dados agregados para os relatorios financeiros
-export function useFinancialReports() {
-  // 1. Contratos com saldo pendente
-  const contractsWithBalance = useQuery({...});
-  
-  // 2. Contratos nao iniciados
-  const contractsNotStarted = useQuery({...});
-  
-  // 3. Previsao de entradas (pagamentos futuros)
-  const futurePayments = useQuery({...});
-  
-  // Metricas calculadas
-  return {
-    contractsWithBalance,
-    contractsNotStarted,
-    futurePayments,
-    // Totais
-    totalPendingToCollect,
-    totalFutureRevenue,
-    ...
-  };
-}
+```text
+HUELLAS_REALIZADO
+       │
+       ▼ (Cliente envia resguardo no portal)
+  Upload Resguardo → Tecnico visualiza e extrai numero de lote
+       │
+       ▼ (Tecnico registra lote e data prevista)
+DISPONIVEL_RETIRADA_TIE
+       │
+       ├─────────────────────┬──────────────────────┐
+       │                     │                      │
+  SEM CITA            COM CITA (opcional)     ACOMPANHAMENTO
+  (Retirada direta)   (Agendar retirada)      (Lote/producao)
+       │                     │                      │
+       │                     ▼                      │
+       │          AGUARDANDO_CITA_RETIRADA          │
+       │                     │                      │
+       └─────────────────────┴──────────────────────┘
+                             │
+                             ▼ (Cliente retira TIE)
+                       TIE_RETIRADO
+                             │
+                             ▼
+                    ENCERRADO_APROVADO
 ```
 
 ---
 
-## Navegacao
+## Alteracoes no Banco de Dados
 
-### Atualizar Sidebar
+### Novos campos em `service_cases`
 
-Adicionar link no menu Finance:
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| `huellas_resguardo_url` | text | URL do comprovante de comparecimento enviado pelo cliente (ja existe) |
+| `tie_resguardo_url` | text | URL do comprovante de retirada do TIE (ja existe) |
+| `tie_lot_number` | text | Numero do lote do cartao TIE (ja existe) |
+| `tie_validity_date` | date | Data de validade do TIE (ja existe) |
+| `tie_pickup_date` | date | Data em que o TIE foi retirado (ja existe) |
+| `tie_picked_up` | boolean | Se o TIE foi retirado (ja existe) |
+| `tie_pickup_requires_appointment` | boolean | Se requer cita para retirada (NOVO) |
+| `tie_pickup_appointment_date` | date | Data da cita para retirada (NOVO) |
+| `tie_pickup_appointment_time` | time | Horario da cita (NOVO) |
+| `tie_pickup_location` | text | Local de retirada (NOVO) |
+| `tie_ready_notification_sent` | boolean | Se o cliente foi notificado que TIE esta pronto (NOVO) |
+| `tie_estimated_ready_date` | date | Data estimada de disponibilidade do TIE (NOVO) |
 
+### Migracao SQL
+
+```sql
+ALTER TABLE service_cases 
+ADD COLUMN IF NOT EXISTS tie_pickup_requires_appointment boolean DEFAULT false,
+ADD COLUMN IF NOT EXISTS tie_pickup_appointment_date date,
+ADD COLUMN IF NOT EXISTS tie_pickup_appointment_time time,
+ADD COLUMN IF NOT EXISTS tie_pickup_location text,
+ADD COLUMN IF NOT EXISTS tie_ready_notification_sent boolean DEFAULT false,
+ADD COLUMN IF NOT EXISTS tie_estimated_ready_date date;
 ```
-Financeiro/
-  ├── Pagamentos
-  ├── Fluxo de Caixa
-  ├── Comissoes
-  ├── Faturas
-  └── Relatorios Financeiros  <-- NOVO
-```
 
-### Atualizar App.tsx
+---
 
-Adicionar rota:
+## Componentes Frontend
 
-```typescript
-<Route path="/finance/reports" element={<FinancialReports />} />
-```
+### 1. Novo Componente: `ResguardoUploadSection.tsx`
+
+Componente para o tecnico visualizar o resguardo enviado pelo cliente e extrair informacoes:
+
+**Funcionalidades:**
+- Exibir link para visualizar resguardo enviado pelo cliente
+- Campo para registrar numero de lote
+- Campo para data estimada de disponibilidade
+- Botao para notificar cliente quando TIE estiver pronto
+
+**Localizacao:** `src/components/cases/ResguardoUploadSection.tsx`
+
+### 2. Atualizar: `TiePickupSection.tsx`
+
+Expandir para suportar os dois cenarios de retirada:
+
+**Adicionar:**
+- Toggle: "Requer agendamento para retirada?"
+- Se SIM: Campos para data/hora/local da cita de retirada
+- Se NAO: Mensagem indicando retirada direta no prazo
+- Botao para enviar instrucoes de retirada ao cliente
+- Card de acompanhamento do lote (status da producao)
+- Botao para marcar TIE como retirado
+
+### 3. Atualizar: `PortalDocuments.tsx`
+
+Adicionar secao especial para upload do resguardo de huellas:
+
+**Nova secao:**
+- Card destacado apos status HUELLAS_REALIZADO
+- Upload especifico para "Comprovante de Huellas (Resguardo)"
+- Instrucoes sobre o que contem o documento
+- Confirmacao visual apos envio
+
+### 4. Atualizar: `PortalDashboard.tsx`
+
+Adicionar cards de acompanhamento para:
+- Status do TIE (quando disponivel)
+- Instrucoes de retirada
+- Data/hora da cita de retirada (se aplicavel)
 
 ---
 
 ## Arquivos a Criar/Modificar
 
-| Arquivo | Acao |
-|---------|------|
-| `src/pages/finance/FinancialReports.tsx` | Criar - Pagina principal com tabs |
-| `src/hooks/useFinancialReports.ts` | Criar - Hook para queries agregadas |
-| `src/components/layout/Sidebar.tsx` | Modificar - Adicionar link |
-| `src/App.tsx` | Modificar - Adicionar rota |
+| Arquivo | Acao | Descricao |
+|---------|------|-----------|
+| `src/components/cases/ResguardoUploadSection.tsx` | Criar | Nova secao para gerenciar resguardo |
+| `src/components/cases/TiePickupSection.tsx` | Modificar | Adicionar fluxo com/sem cita |
+| `src/pages/portal/PortalDocuments.tsx` | Modificar | Adicionar upload de resguardo |
+| `src/pages/portal/PortalDashboard.tsx` | Modificar | Adicionar cards de status TIE |
+| `src/hooks/useCases.ts` | Modificar | Adicionar mutations para TIE |
+| `src/pages/cases/CaseDetail.tsx` | Modificar | Integrar nova secao de resguardo |
+| `supabase/migrations/XXXXX_add_tie_pickup_fields.sql` | Criar | Adicionar novos campos |
 
 ---
 
-## Componentes Auxiliares
+## Hook `useCases.ts` - Novas Mutations
 
-### Cards de Metricas (Reutilizar StatsCard)
+```typescript
+// Registrar resguardo de huellas
+const uploadHuellasResguardo = useMutation({
+  mutationFn: async ({ id, resguardoUrl }: { id: string; resguardoUrl: string }) => {
+    // Atualiza url do resguardo e transiciona status
+  }
+});
 
-- Total a Receber (contratos ativos)
-- Contratos em Atraso
-- Previsao Proximos 30 dias
-- Comissoes Pendentes
+// Registrar TIE disponivel para retirada
+const registerTieAvailable = useMutation({
+  mutationFn: async ({ 
+    id, 
+    lotNumber, 
+    validityDate,
+    estimatedReadyDate,
+    requiresAppointment 
+  }: {...}) => {
+    // Atualiza campos do TIE e transiciona para DISPONIVEL_RETIRADA_TIE
+  }
+});
 
-### Tabela com Acoes
+// Agendar cita de retirada
+const scheduleTiePickupAppointment = useMutation({
+  mutationFn: async ({ 
+    id, 
+    date, 
+    time, 
+    location 
+  }: {...}) => {
+    // Registra cita e transiciona para AGUARDANDO_CITA_RETIRADA
+  }
+});
 
-Cada relatorio tera sua propria tabela com:
-- Ordenacao por coluna
-- Busca
-- Exportacao Excel/PDF
-- Acoes contextuais (ver, cobrar, cancelar)
+// Confirmar retirada do TIE
+const confirmTiePickup = useMutation({
+  mutationFn: async ({ id, pickupDate }: { id: string; pickupDate: string }) => {
+    // Marca como retirado e transiciona para TIE_RETIRADO
+  }
+});
 
----
-
-## Fluxo de Dados
-
+// Finalizar caso apos retirada
+const finalizeCaseAfterTie = useMutation({
+  mutationFn: async (id: string) => {
+    // Transiciona para ENCERRADO_APROVADO
+  }
+});
 ```
-contracts (status=ASSINADO)
-    │
-    ├── payment_status='INICIADO' + saldo > 0 → Rel. 1 (Saldo Pendente)
-    │
-    └── payment_status='NAO_INICIADO' → Rel. 2 (Nao Iniciados)
 
-payments (status=PENDENTE, due_date > hoje)
-    │
-    └── Agrupado por mes → Rel. 3 (Previsao)
+---
 
-cash_flow (type=ENTRADA, category=SERVICOS)
-    │
-    └── Filtrado por periodo → Rel. 4 (Faturamento)
+## Portal do Cliente - Fluxo de Upload do Resguardo
 
-commissions (status=PENDENTE)
-    │
-    └── Agrupado por tipo → Rel. 5 (Comissoes)
+### Nova secao em PortalDocuments
+
+Quando `technical_status === 'HUELLAS_REALIZADO'`:
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  📄 Comprovante de Comparecimento (Resguardo)              │
+│                                                             │
+│  Apos comparecer a cita de huellas, voce recebeu um         │
+│  comprovante da Policia. Envie-o para darmos continuidade.  │
+│                                                             │
+│  Este documento contem:                                      │
+│  • Numero do lote do seu cartao TIE                         │
+│  • Prazo estimado para retirada                             │
+│                                                             │
+│  [Selecionar arquivo]  [Enviar Resguardo]                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Apos envio:**
+- Salvar em `huellas_resguardo_url`
+- Notificar tecnico responsavel
+- Exibir mensagem de confirmacao
+
+---
+
+## Fluxo de Retirada - Duas Modalidades
+
+### Modalidade 1: Sem Cita (Retirada Direta)
+
+Alguns locais permitem retirada direta sem agendamento:
+
+1. Tecnico marca `tie_pickup_requires_appointment = false`
+2. Registra `tie_estimated_ready_date` com base no resguardo
+3. Sistema envia WhatsApp ao cliente quando data chegar
+4. Cliente comparece e retira
+5. Tecnico marca `tie_picked_up = true`
+
+### Modalidade 2: Com Cita (Requer Agendamento)
+
+Locais que exigem agendamento previo:
+
+1. Tecnico marca `tie_pickup_requires_appointment = true`
+2. Solicita agendamento (similar ao fluxo de huellas)
+3. Registra `tie_pickup_appointment_date/time/location`
+4. Status transiciona para `AGUARDANDO_CITA_RETIRADA`
+5. Sistema envia lembretes ao cliente (D-3, D-1)
+6. Apos cita, tecnico marca como retirado
+
+---
+
+## Notificacoes e Mensagens WhatsApp
+
+### Templates de Mensagem
+
+**1. Resguardo Recebido:**
+```
+Ola {nome}! Recebemos seu comprovante de huellas. 
+Estamos acompanhando a producao do seu TIE. 
+Avisaremos assim que estiver disponivel para retirada.
+```
+
+**2. TIE Disponivel (Sem Cita):**
+```
+Otimas noticias, {nome}! Seu TIE ja esta disponivel para retirada.
+
+Local: {local}
+Documentos necessarios:
+- Passaporte original
+- Resguardo de huellas
+- Comprovante Taxa 790
+
+Voce pode retirar a qualquer momento no horario de atendimento.
+```
+
+**3. TIE Disponivel (Com Cita):**
+```
+Otimas noticias, {nome}! Seu TIE ja esta disponivel.
+
+Para retirar, e necessario agendar uma cita previa.
+Estamos providenciando o agendamento e informaremos a data/hora.
+```
+
+**4. Cita de Retirada Agendada:**
+```
+{nome}, sua cita para retirada do TIE foi agendada!
+
+Data: {data}
+Horario: {hora}
+Local: {local}
+
+Leve: Passaporte, Resguardo, Comprovante Taxa 790.
+```
+
+---
+
+## Interface do Tecnico - Secao Expandida
+
+### Card de Resguardo e Lote
+
+Visivel apos `HUELLAS_REALIZADO`:
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  📋 Resguardo e Lote do TIE                                 │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Resguardo do Cliente:                                       │
+│  [📄 Ver Documento]  ✓ Enviado em 02/02/2026                │
+│                                                              │
+│  Numero do Lote: [_______________]                          │
+│  Data Estimada de Disponibilidade: [__/__/____]             │
+│                                                              │
+│  Requer agendamento para retirada?                          │
+│  ( ) Nao - Cliente pode retirar diretamente                 │
+│  ( ) Sim - Sera necessario agendar cita                     │
+│                                                              │
+│  [Registrar TIE Disponivel]                                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Card de Retirada (Com Cita)
+
+Quando `tie_pickup_requires_appointment = true`:
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  🎫 Agendar Retirada do TIE                                 │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Data da Cita: [__/__/____]                                 │
+│  Horario: [__:__]                                           │
+│  Local: [_______________________]                           │
+│                                                              │
+│  [Confirmar Agendamento]                                    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Secao Tecnica
 
-### Queries Principais
+### Tipos TypeScript
 
-**1. Contratos com Saldo Pendente:**
-```sql
-SELECT c.*, 
-  SUM(CASE WHEN p.status = 'CONFIRMADO' THEN p.amount ELSE 0 END) as paid,
-  c.total_fee - SUM(...) as balance
-FROM contracts c
-LEFT JOIN payments p ON p.contract_id = c.id
-WHERE c.status = 'ASSINADO' 
-  AND c.payment_status = 'INICIADO'
-GROUP BY c.id
-HAVING balance > 0
+```typescript
+// Novos campos no ServiceCase
+interface ServiceCaseTieFields {
+  huellas_resguardo_url?: string | null;
+  tie_resguardo_url?: string | null;
+  tie_lot_number?: string | null;
+  tie_validity_date?: string | null;
+  tie_pickup_date?: string | null;
+  tie_picked_up?: boolean | null;
+  tie_pickup_requires_appointment?: boolean | null;
+  tie_pickup_appointment_date?: string | null;
+  tie_pickup_appointment_time?: string | null;
+  tie_pickup_location?: string | null;
+  tie_ready_notification_sent?: boolean | null;
+  tie_estimated_ready_date?: string | null;
+}
 ```
 
-**2. Contratos Nao Iniciados:**
-```sql
-SELECT * FROM contracts
-WHERE status = 'ASSINADO'
-  AND payment_status = 'NAO_INICIADO'
-ORDER BY signed_at ASC
-```
+### Transicoes de Status
 
-**3. Previsao de Entradas:**
-```sql
-SELECT 
-  DATE_TRUNC('month', due_date) as month,
-  SUM(amount) as total,
-  COUNT(*) as count
-FROM payments
-WHERE status = 'PENDENTE'
-  AND due_date >= CURRENT_DATE
-GROUP BY month
-ORDER BY month
-```
+| De | Para | Gatilho |
+|----|------|---------|
+| HUELLAS_REALIZADO | DISPONIVEL_RETIRADA_TIE | Tecnico registra lote |
+| DISPONIVEL_RETIRADA_TIE | AGUARDANDO_CITA_RETIRADA | Cita agendada (se requer) |
+| DISPONIVEL_RETIRADA_TIE | TIE_RETIRADO | Retirada confirmada (sem cita) |
+| AGUARDANDO_CITA_RETIRADA | TIE_RETIRADO | Retirada confirmada |
+| TIE_RETIRADO | ENCERRADO_APROVADO | Finalizacao do caso |
 
-### Dependencias Existentes Reutilizadas
+### Storage para Resguardo
 
-- `useContracts` - Lista de contratos com pagamentos
-- `usePayments` - Lista de pagamentos
-- `useCommissions` - Comissoes
-- `useCashFlow` - Faturamento
-- `exportToExcel/PDF` - Funcoes de exportacao
-- `StatsCard` - Componente de metricas
-- `DataTable` - Tabela com ordenacao
+Utilizar bucket `client-documents` existente:
+- Path: `{userId}/{caseId}/resguardo/{timestamp}.pdf`
+- RLS ja configurada para permitir upload pelo cliente
 
 ---
 
-## Estimativa de Complexidade
+## Resumo de Implementacao
 
-| Componente | Esforco |
-|------------|---------|
-| FinancialReports.tsx | Alto (pagina principal com 5 tabs) |
-| useFinancialReports.ts | Medio (queries agregadas) |
-| Sidebar/App.tsx | Baixo (apenas adicionar links) |
+1. **Migracao SQL** - Adicionar novos campos para cita de retirada
+2. **Hook useCases** - Adicionar 5 novas mutations
+3. **ResguardoUploadSection** - Novo componente para tecnico
+4. **TiePickupSection** - Expandir com fluxo com/sem cita
+5. **PortalDocuments** - Adicionar upload de resguardo
+6. **PortalDashboard** - Cards de status TIE
+7. **CaseDetail** - Integrar nova secao
 
-**Total estimado:** 1 iteracao de desenvolvimento
+**Estimativa:** 1-2 iteracoes de desenvolvimento
