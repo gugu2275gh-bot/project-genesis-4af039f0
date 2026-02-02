@@ -1019,6 +1019,185 @@ serve(async (req) => {
           }
         }
       }
+
+      // =====================================================
+      // TIE PICKUP APPOINTMENT REMINDERS (COM CITA)
+      // =====================================================
+      const { data: tieCitaCases } = await supabase
+        .from('service_cases')
+        .select(`
+          id, tie_pickup_appointment_date, tie_pickup_appointment_time,
+          tie_pickup_location, tie_picked_up, client_user_id, assigned_to_user_id,
+          opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
+        `)
+        .eq('technical_status', 'AGUARDANDO_CITA_RETIRADA')
+        .eq('tie_picked_up', false)
+
+      console.log(`Found ${tieCitaCases?.length || 0} cases with TIE pickup appointments`)
+
+      for (const sc of tieCitaCases || []) {
+        if (!sc.tie_pickup_appointment_date) continue
+        
+        const caseData = sc as unknown as { 
+          id: string;
+          tie_pickup_appointment_date: string;
+          tie_pickup_appointment_time: string | null;
+          tie_pickup_location: string | null;
+          client_user_id: string | null;
+          assigned_to_user_id: string | null;
+          opportunities: { leads: { id: string; contacts: { full_name: string; phone: number | null } } };
+        }
+        
+        const contact = caseData?.opportunities?.leads?.contacts
+        const leadId = caseData?.opportunities?.leads?.id
+        if (!contact?.phone) continue
+        
+        const clientName = contact.full_name
+        const caseShortId = sc.id.slice(0, 8)
+        
+        const appointmentDate = new Date(sc.tie_pickup_appointment_date)
+        const daysUntilAppointment = Math.floor((appointmentDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+        const daysSinceAppointment = Math.floor((now.getTime() - appointmentDate.getTime()) / (24 * 60 * 60 * 1000))
+        
+        console.log(`TIE cita case ${caseShortId}: ${daysUntilAppointment} days until appointment`)
+        
+        // PRE-CITA: D-3 Reminder
+        if (daysUntilAppointment >= 2 && daysUntilAppointment <= 3) {
+          if (!(await tieReminderSent(sc.id, 'CITA_D3'))) {
+            const d3Template = templateMap['template_tie_pickup_d3'] || 
+              'Ola {nome}! Lembrete: sua cita para retirada do TIE esta marcada para {data} as {hora}. Local: {local}. Leve: Passaporte, Resguardo e Taxa 790.'
+            
+            const msg = d3Template
+              .replace('{nome}', clientName)
+              .replace('{data}', sc.tie_pickup_appointment_date)
+              .replace('{hora}', caseData.tie_pickup_appointment_time || 'horário marcado')
+              .replace('{local}', caseData.tie_pickup_location || 'local indicado')
+            
+            await sendWhatsApp(contact.phone, msg, leadId)
+            
+            await supabase.from('tie_pickup_reminders').insert({
+              service_case_id: sc.id,
+              reminder_type: 'CITA_D3'
+            })
+            
+            if (caseData.client_user_id) {
+              await supabase.from('notifications').insert({
+                user_id: caseData.client_user_id,
+                title: 'Lembrete: Cita de Retirada em 3 dias',
+                message: `Sua cita para retirada do TIE é em ${sc.tie_pickup_appointment_date}.`,
+                type: 'tie_pickup_reminder',
+              })
+            }
+            
+            results.tiePickupReminders++
+            console.log(`D-3 reminder sent for case ${caseShortId}`)
+          }
+        }
+        
+        // PRE-CITA: D-1 Reminder
+        if (daysUntilAppointment >= 0 && daysUntilAppointment <= 1) {
+          if (!(await tieReminderSent(sc.id, 'CITA_D1'))) {
+            const d1Template = templateMap['template_tie_pickup_d1'] || 
+              'Ola {nome}! Amanha e sua cita de retirada do TIE! {hora} em {local}. Documentos: Passaporte, Resguardo, Taxa 790. Boa sorte!'
+            
+            const msg = d1Template
+              .replace('{nome}', clientName)
+              .replace('{hora}', caseData.tie_pickup_appointment_time || 'horário marcado')
+              .replace('{local}', caseData.tie_pickup_location || 'local indicado')
+            
+            await sendWhatsApp(contact.phone, msg, leadId)
+            
+            await supabase.from('tie_pickup_reminders').insert({
+              service_case_id: sc.id,
+              reminder_type: 'CITA_D1'
+            })
+            
+            if (caseData.client_user_id) {
+              await supabase.from('notifications').insert({
+                user_id: caseData.client_user_id,
+                title: 'Lembrete: Cita de Retirada AMANHÃ!',
+                message: `Amanhã é sua cita para retirada do TIE. Boa sorte!`,
+                type: 'tie_pickup_reminder',
+              })
+            }
+            
+            results.tiePickupReminders++
+            console.log(`D-1 reminder sent for case ${caseShortId}`)
+          }
+        }
+        
+        // POST-CITA: Verification every 3 days
+        if (daysSinceAppointment >= 3) {
+          const verificationCycle = Math.floor(daysSinceAppointment / 3)
+          const verificationKey = `POST_CITA_D${verificationCycle * 3}`
+          
+          if (!(await tieReminderSent(sc.id, verificationKey))) {
+            const postCitaTemplate = templateMap['template_tie_post_cita_verification'] || 
+              'Ola {nome}! Sua cita de retirada do TIE era dia {data}. Voce conseguiu retirar seu documento com sucesso? Por favor, confirme para darmos continuidade.'
+            
+            const msg = postCitaTemplate
+              .replace('{nome}', clientName)
+              .replace('{data}', sc.tie_pickup_appointment_date)
+            
+            await sendWhatsApp(contact.phone, msg, leadId)
+            
+            await supabase.from('tie_pickup_reminders').insert({
+              service_case_id: sc.id,
+              reminder_type: verificationKey
+            })
+            
+            if (caseData.client_user_id) {
+              await supabase.from('notifications').insert({
+                user_id: caseData.client_user_id,
+                title: 'Confirme a retirada do TIE',
+                message: 'Você conseguiu retirar seu TIE? Por favor, confirme pelo portal.',
+                type: 'tie_pickup_verification',
+              })
+            }
+            
+            results.tiePickupReminders++
+            console.log(`Post-cita verification (${verificationKey}) sent for case ${caseShortId}`)
+            
+            // D+12: Alert technician
+            if (daysSinceAppointment >= 12) {
+              const techAlertKey = `CITA_TECH_D${verificationCycle * 3}`
+              if (!(await tieReminderSent(sc.id, techAlertKey)) && caseData.assigned_to_user_id) {
+                await supabase.from('notifications').insert({
+                  user_id: caseData.assigned_to_user_id,
+                  title: '⚠️ TIE Não Confirmado após Cita',
+                  message: `Caso ${caseShortId} (${clientName}) - cita há ${daysSinceAppointment} dias, TIE não confirmado como retirado.`,
+                  type: 'tie_pickup_overdue',
+                })
+                await supabase.from('tie_pickup_reminders').insert({
+                  service_case_id: sc.id,
+                  reminder_type: techAlertKey
+                })
+              }
+            }
+            
+            // D+15: Alert coordinator/manager
+            if (daysSinceAppointment >= 15) {
+              const coordAlertKey = `CITA_COORD_D${verificationCycle * 3}`
+              if (!(await tieReminderSent(sc.id, coordAlertKey))) {
+                const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
+                for (const mgr of managers || []) {
+                  await supabase.from('notifications').insert({
+                    user_id: mgr.user_id,
+                    title: '🚨 TIE Não Retirado após Cita',
+                    message: `Caso ${caseShortId} (${clientName}) com cita há ${daysSinceAppointment} dias. Requer atenção.`,
+                    type: 'tie_pickup_critical',
+                  })
+                }
+                await supabase.from('tie_pickup_reminders').insert({
+                  service_case_id: sc.id,
+                  reminder_type: coordAlertKey
+                })
+              }
+            }
+          }
+        }
+      }
+      
       console.log(`TIE pickup reminders automation completed. Sent: ${results.tiePickupReminders}`)
     }
 

@@ -295,12 +295,12 @@ if (shouldRun('TIE_PICKUP')) {
 
 ## Resumo de Implementacao
 
-1. **Migracao SQL** - Adicionar templates para pre-cita, pos-cita e encerramento
-2. **Edge Function** - Adicionar logica para AGUARDANDO_CITA_RETIRADA (D-3, D-1, pos-cita)
-3. **useCases.ts** - Modificar `closeCase` para enviar WhatsApp final
-4. **TiePickupSection** - Validar antecedencia de 7 dias
+1. ✅ **Migracao SQL** - Templates para pre-cita, pos-cita e encerramento adicionados
+2. ✅ **Edge Function** - Logica para AGUARDANDO_CITA_RETIRADA (D-3, D-1, pos-cita) implementada
+3. ✅ **useCases.ts** - `closeCase` envia WhatsApp final automaticamente
+4. ✅ **TiePickupSection** - Validacao de antecedencia de 7 dias implementada
 
-**Estimativa:** 1 iteracao de desenvolvimento
+**Status:** IMPLEMENTADO
 
 ---
 
