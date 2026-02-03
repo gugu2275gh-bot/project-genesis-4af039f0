@@ -144,6 +144,41 @@ export function useLeads() {
     },
   });
 
+  const deleteLead = useMutation({
+    mutationFn: async (leadId: string) => {
+      // Verificar se tem oportunidades vinculadas
+      const { data: opportunities } = await supabase
+        .from('opportunities')
+        .select('id')
+        .eq('lead_id', leadId)
+        .limit(1);
+      
+      if (opportunities && opportunities.length > 0) {
+        throw new Error('Este lead possui oportunidades vinculadas e não pode ser excluído.');
+      }
+      
+      // Excluir registros relacionados em cascata
+      await supabase.from('interactions').delete().eq('lead_id', leadId);
+      await supabase.from('tasks').delete().eq('related_lead_id', leadId);
+      await supabase.from('mensagens_cliente').delete().eq('id_lead', leadId);
+      
+      // Excluir lead
+      const { error } = await supabase.from('leads').delete().eq('id', leadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast({ title: 'Lead excluído com sucesso' });
+    },
+    onError: (error) => {
+      toast({ 
+        title: 'Erro ao excluir lead', 
+        description: error.message, 
+        variant: 'destructive' 
+      });
+    },
+  });
+
   return {
     leads: leadsQuery.data ?? [],
     isLoading: leadsQuery.isLoading,
@@ -151,6 +186,7 @@ export function useLeads() {
     createLead,
     updateLead,
     confirmInterest,
+    deleteLead,
   };
 }
 

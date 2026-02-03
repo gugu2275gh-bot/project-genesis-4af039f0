@@ -9,19 +9,30 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe } from 'lucide-react';
+import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2 } from 'lucide-react';
 import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, INTERACTION_CHANNEL_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LeadChat } from '@/components/crm/LeadChat';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export default function LeadDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: lead, isLoading } = useLead(id);
-  const { updateLead, confirmInterest } = useLeads();
+  const { updateLead, confirmInterest, deleteLead } = useLeads();
   const { interactions, createInteraction } = useInteractions(lead?.contact_id, id);
   const { data: profiles } = useProfiles();
   
@@ -72,6 +83,11 @@ export default function LeadDetail() {
     await updateLead.mutateAsync({ id: lead.id, status: status as any });
   };
 
+  const handleDeleteLead = async () => {
+    await deleteLead.mutateAsync(lead.id);
+    navigate('/crm/leads');
+  };
+
   const handleAssign = async (userId: string) => {
     await updateLead.mutateAsync({ id: lead.id, assigned_to_user_id: userId === 'unassigned' ? null : userId });
   };
@@ -89,12 +105,39 @@ export default function LeadDetail() {
         }
         description={`Lead criado em ${format(new Date(lead.created_at!), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
         actions={
-          !lead.interest_confirmed && (
-            <Button onClick={handleConfirmInterest} disabled={confirmInterest.isPending}>
-              <Check className="h-4 w-4 mr-2" />
-              {confirmInterest.isPending ? 'Confirmando...' : 'Confirmar Interesse'}
-            </Button>
-          )
+          <div className="flex items-center gap-2">
+            {!lead.interest_confirmed && (
+              <Button onClick={handleConfirmInterest} disabled={confirmInterest.isPending}>
+                <Check className="h-4 w-4 mr-2" />
+                {confirmInterest.isPending ? 'Confirmando...' : 'Confirmar Interesse'}
+              </Button>
+            )}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="icon">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir Lead</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tem certeza que deseja excluir este lead? Esta ação não pode ser desfeita.
+                    Todas as interações e tarefas relacionadas também serão excluídas.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteLead}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {deleteLead.isPending ? 'Excluindo...' : 'Confirmar Exclusão'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         }
       />
 
