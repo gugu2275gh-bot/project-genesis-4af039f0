@@ -1,152 +1,122 @@
 
 
-# Plano: Adicionar Funcionalidade de Exclusao de Lead
+# Plano: Corrigir Atualização do Chat WhatsApp Após Envio
 
-## Visao Geral
+## Problema Identificado
 
-Implementar a opcao de excluir leads, com confirmacao de seguranca e tratamento adequado de registros relacionados.
+A mensagem é enviada com sucesso (WhatsApp recebido + salva no banco), mas a interface não atualiza para mostrar a nova mensagem na conversa.
 
----
+## Causa Raiz
 
-## Consideracoes Importantes
+1. **Timing da invalidação**: O `invalidateQueries` pode estar sendo chamado antes do banco confirmar o INSERT
+2. **Problema de closure**: O `leadId` usado no `onSuccess` vem do escopo do hook, não dos dados retornados
 
-Antes de excluir um lead, e necessario considerar os registros relacionados:
+## Solução Proposta
 
-| Tabela Relacionada | Impacto |
-|--------------------|---------|
-| `interactions` | Historico de interacoes com o lead |
-| `opportunities` | Oportunidades criadas a partir do lead |
-| `tasks` | Tarefas relacionadas ao lead |
-| `mensagens_cliente` | Mensagens do WhatsApp |
+Modificar o hook `useLeadMessages.ts` para:
 
-**Opcoes de implementacao:**
-1. **Soft Delete**: Marcar como "arquivado/excluido" sem remover do banco (recomendado)
-2. **Hard Delete**: Remover permanentemente (com CASCADE ou bloqueio se houver dados relacionados)
+1. Usar o callback `onSuccess` com os dados retornados para garantir consistência
+2. Adicionar atualização otimista para feedback imediato ao usuário
+3. Garantir que a invalidação ocorra após o sucesso confirmado
 
 ---
 
-## Implementacao Proposta
+## Alterações
 
-### 1. Hook `useLeads.ts` - Adicionar Mutacao de Exclusao
-
-Adicionar funcao `deleteLead` que:
-- Verifica se o lead tem oportunidades/contratos ativos
-- Se tiver dados criticos, impede exclusao e informa usuario
-- Se nao tiver, permite exclusao com confirmacao
+### Hook `useLeadMessages.ts`
 
 ```typescript
-const deleteLead = useMutation({
-  mutationFn: async (leadId: string) => {
-    // Verificar se tem oportunidades
-    const { data: opportunities } = await supabase
-      .from('opportunities')
-      .select('id')
-      .eq('lead_id', leadId)
-      .limit(1);
+const sendMessage = useMutation({
+  mutationFn: async ({ leadId, message }: { leadId: string; message: string }) => {
+    // ... código existente do webhook ...
     
-    if (opportunities && opportunities.length > 0) {
-      throw new Error('Este lead possui oportunidades vinculadas e nao pode ser excluido.');
-    }
-    
-    // Excluir interacoes relacionadas
-    await supabase.from('interactions').delete().eq('lead_id', leadId);
-    
-    // Excluir lead
-    const { error } = await supabase.from('leads').delete().eq('id', leadId);
+    const { data, error } = await supabase
+      .from('mensagens_cliente')
+      .insert({
+        id_lead: leadId,
+        mensagem_IA: message,
+        origem: 'SISTEMA',
+      })
+      .select()
+      .single();
+
     if (error) throw error;
+    return { data, leadId }; // Retornar leadId junto com data
   },
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['leads'] });
-    toast({ title: 'Lead excluido com sucesso' });
+  onSuccess: (result) => {
+    // Usar leadId do resultado para garantir consistência
+    queryClient.invalidateQueries({ queryKey: ['lead-messages', result.leadId] });
+    toast.success('Mensagem enviada');
   },
-  onError: (error) => {
-    toast({ 
-      title: 'Erro ao excluir lead', 
-      description: error.message, 
-      variant: 'destructive' 
-    });
+  onError: (error: Error) => {
+    console.error('Erro ao enviar mensagem:', error);
+    toast.error('Erro ao enviar mensagem: ' + error.message);
   },
 });
 ```
 
----
+### Adicionar Atualização Otimista (Opcional mas Recomendado)
 
-### 2. Pagina `LeadDetail.tsx` - Botao de Exclusao
+Para feedback imediato, adicionar a mensagem localmente antes de salvar:
 
-Adicionar botao de exclusao no cabecalho com dialogo de confirmacao:
-
-- Icone de lixeira no canto superior direito
-- Ao clicar, abre AlertDialog pedindo confirmacao
-- Se confirmado, executa exclusao e redireciona para lista
-
----
-
-### 3. Opcional: Lista de Leads com Acao de Exclusao
-
-Adicionar coluna de acoes na tabela com opcao de exclusao rapida (com confirmacao).
-
----
-
-## Fluxo de Usuario
-
-```text
-Usuario na pagina de detalhe do lead
-              │
-              ▼
-Clica no botao "Excluir Lead"
-              │
-              ▼
-┌─────────────────────────────────────┐
-│  AlertDialog de Confirmacao:        │
-│  "Tem certeza que deseja excluir    │
-│  este lead? Esta acao nao pode      │
-│  ser desfeita."                     │
-│  [Cancelar] [Confirmar Exclusao]    │
-└─────────────────────────────────────┘
-              │
-              ▼ (Se confirmar)
-┌─────────────────────────────────────┐
-│  Verifica se tem oportunidades      │
-│  - Se sim: Erro + Mensagem          │
-│  - Se nao: Exclui + Redireciona     │
-└─────────────────────────────────────┘
+```typescript
+onMutate: async ({ leadId, message }) => {
+  // Cancelar queries pendentes
+  await queryClient.cancelQueries({ queryKey: ['lead-messages', leadId] });
+  
+  // Snapshot do estado atual
+  const previousMessages = queryClient.getQueryData(['lead-messages', leadId]);
+  
+  // Adicionar mensagem otimisticamente
+  const optimisticMessage = {
+    id: Date.now(), // ID temporário
+    created_at: new Date().toISOString(),
+    id_lead: leadId,
+    mensagem_IA: message,
+    mensagem_cliente: null,
+    origem: 'SISTEMA',
+    phone_id: null,
+  };
+  
+  queryClient.setQueryData(['lead-messages', leadId], (old: LeadMessage[] = []) => [
+    ...old,
+    optimisticMessage,
+  ]);
+  
+  return { previousMessages };
+},
+onError: (err, variables, context) => {
+  // Reverter em caso de erro
+  if (context?.previousMessages) {
+    queryClient.setQueryData(['lead-messages', variables.leadId], context.previousMessages);
+  }
+  toast.error('Erro ao enviar mensagem: ' + err.message);
+},
+onSettled: (data, error, variables) => {
+  // Sempre revalidar após mutação
+  queryClient.invalidateQueries({ queryKey: ['lead-messages', variables.leadId] });
+},
 ```
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Alteracao |
+| Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useLeads.ts` | Adicionar mutacao `deleteLead` |
-| `src/pages/crm/LeadDetail.tsx` | Adicionar botao e AlertDialog de exclusao |
+| `src/hooks/useLeadMessages.ts` | Corrigir callback `onSuccess` e adicionar atualização otimista |
 
 ---
 
-## Secao Tecnica
+## Benefícios
 
-### Verificacao de Dados Relacionados
-
-Antes de excluir, verificar:
-1. Oportunidades (`opportunities.lead_id`)
-2. Contratos via oportunidades
-3. Casos de servico via oportunidades
-
-Se houver qualquer dado critico, bloquear exclusao com mensagem explicativa.
-
-### Exclusao em Cascata Segura
-
-Ordem de exclusao:
-1. `interactions` onde `lead_id = X`
-2. `tasks` onde `related_lead_id = X`
-3. `mensagens_cliente` onde `id_lead = X`
-4. `leads` onde `id = X`
-
-**Nota:** O contato (`contacts`) nao sera excluido, pois pode estar vinculado a outros registros.
+1. **Feedback imediato**: Usuário vê a mensagem instantaneamente
+2. **Consistência**: Invalidação usa o `leadId` correto do contexto da mutação
+3. **Resiliência**: Se houver erro, o estado é revertido automaticamente
 
 ---
 
 ## Estimativa
 
-1 iteracao de desenvolvimento
+Correção simples - 1 iteração
 
