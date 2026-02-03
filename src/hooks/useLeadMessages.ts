@@ -69,15 +69,47 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
         .single();
 
       if (error) throw error;
-      return data;
+      return { data, leadId }; // Return leadId for consistent invalidation
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lead-messages', leadId] });
+    onMutate: async ({ leadId, message }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['lead-messages', leadId] });
+      
+      // Snapshot the previous value
+      const previousMessages = queryClient.getQueryData<LeadMessage[]>(['lead-messages', leadId]);
+      
+      // Optimistically add the new message
+      const optimisticMessage: LeadMessage = {
+        id: Date.now(), // Temporary ID
+        created_at: new Date().toISOString(),
+        id_lead: leadId,
+        mensagem_IA: message,
+        mensagem_cliente: null,
+        origem: 'SISTEMA',
+        phone_id: null,
+      };
+      
+      queryClient.setQueryData<LeadMessage[]>(['lead-messages', leadId], (old = []) => [
+        ...old,
+        optimisticMessage,
+      ]);
+      
+      return { previousMessages, leadId };
+    },
+    onError: (err: Error, variables, context) => {
+      // Revert to previous state on error
+      if (context?.previousMessages) {
+        queryClient.setQueryData(['lead-messages', context.leadId], context.previousMessages);
+      }
+      console.error('Erro ao enviar mensagem:', err);
+      toast.error('Erro ao enviar mensagem: ' + err.message);
+    },
+    onSuccess: (result) => {
       toast.success('Mensagem enviada');
     },
-    onError: (error: Error) => {
-      console.error('Erro ao enviar mensagem:', error);
-      toast.error('Erro ao enviar mensagem: ' + error.message);
+    onSettled: (data, error, variables) => {
+      // Always revalidate after mutation settles
+      queryClient.invalidateQueries({ queryKey: ['lead-messages', variables.leadId] });
     },
   });
 
