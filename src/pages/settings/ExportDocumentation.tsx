@@ -1,14 +1,17 @@
-import { useState } from 'react';
+ import { useState } from 'react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, Download, Loader2, CheckCircle } from 'lucide-react';
+ import { FileText, Download, Loader2, CheckCircle, Code } from 'lucide-react';
 import { generateCustomerJourneyDocument } from '@/lib/generate-journey-document';
+ import { generateTechnicalDocsPDF } from '@/lib/generate-technical-docs';
 import { toast } from 'sonner';
 
 export default function ExportDocumentation() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+   const [isGeneratingTechnical, setIsGeneratingTechnical] = useState(false);
+   const [isTechnicalComplete, setIsTechnicalComplete] = useState(false);
 
   const handleExport = async () => {
     setIsGenerating(true);
@@ -25,6 +28,22 @@ export default function ExportDocumentation() {
       setIsGenerating(false);
     }
   };
+ 
+   const handleExportTechnical = async () => {
+     setIsGeneratingTechnical(true);
+     setIsTechnicalComplete(false);
+     
+     try {
+       generateTechnicalDocsPDF();
+       setIsTechnicalComplete(true);
+       toast.success('Documentação técnica gerada com sucesso!');
+     } catch (error) {
+       console.error('Erro ao gerar documentação técnica:', error);
+       toast.error('Erro ao gerar documentação. Tente novamente.');
+     } finally {
+       setIsGeneratingTechnical(false);
+     }
+   };
 
   return (
     <div className="space-y-6">
@@ -88,6 +107,56 @@ export default function ExportDocumentation() {
             </Button>
           </CardContent>
         </Card>
+ 
+         <Card>
+           <CardHeader>
+             <CardTitle className="flex items-center gap-2">
+               <Code className="h-5 w-5" />
+               Documentação Técnica
+             </CardTitle>
+             <CardDescription>
+               Respostas técnicas detalhadas sobre stack, arquitetura e infraestrutura do sistema
+             </CardDescription>
+           </CardHeader>
+           <CardContent className="space-y-4">
+             <div className="text-sm text-muted-foreground space-y-2">
+               <p>Este documento responde às 20 perguntas técnicas:</p>
+               <ul className="list-disc list-inside space-y-1 ml-2">
+                 <li>Seção A: Stack Tecnológica (8 itens)</li>
+                 <li>Seção B: Arquitetura e Integrações (4 itens)</li>
+                 <li>Seção C: Documentação Técnica e Funcional (3 itens)</li>
+                 <li>Seção D: Roadmap do Sistema</li>
+                 <li>Seção E: Licenças, Dependências e Custos (3 itens)</li>
+                 <li>Seção F: Metodologia de Desenvolvimento</li>
+                 <li>Anexo: Métricas de Complexidade</li>
+               </ul>
+             </div>
+ 
+             <Button 
+               onClick={handleExportTechnical} 
+               disabled={isGeneratingTechnical}
+               className="w-full"
+               size="lg"
+             >
+               {isGeneratingTechnical ? (
+                 <>
+                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                   Gerando PDF...
+                 </>
+               ) : isTechnicalComplete ? (
+                 <>
+                   <CheckCircle className="mr-2 h-4 w-4" />
+                   PDF gerado! Clique para gerar novamente
+                 </>
+               ) : (
+                 <>
+                   <Download className="mr-2 h-4 w-4" />
+                   Baixar Documentação Técnica (PDF)
+                 </>
+               )}
+             </Button>
+           </CardContent>
+         </Card>
       </div>
     </div>
   );
