@@ -1,127 +1,143 @@
 
-# Plano: Exportar Documentação Técnica em PDF
+# Plano: Gerar Diagrama ERD Visual do Banco de Dados
 
 ## Objetivo
 
-Criar uma função que gere um PDF profissional com a documentação técnica completa do sistema, formatada para enviar ao cliente e demonstrar a complexidade do desenvolvimento.
+Criar uma funcionalidade que gere um diagrama ERD (Entity-Relationship Diagram) visual completo do banco de dados em formato de imagem PNG, utilizando a API de geração de imagens Gemini disponível no projeto.
 
 ---
 
-## Estrutura do Documento PDF
+## Abordagem Técnica
 
-O PDF terá as seguintes seções:
+O projeto tem acesso à API de geração de imagens `google/gemini-2.5-flash-image` através do gateway `ai.gateway.lovable.dev`. Usaremos esta API para gerar um diagrama ERD profissional baseado no schema completo do banco de dados.
 
-1. **Capa** - Logo, título "Documentação Técnica - CB Asesoría", data de geração
-2. **Seção A** - Stack Tecnológica (7 itens)
-3. **Seção B** - Arquitetura e Integrações (4 itens)
-4. **Seção C** - Documentação Técnica e Funcional (3 itens)
-5. **Seção D** - Roadmap
-6. **Seção E** - Licenças, Dependências e Custos (3 itens)
-7. **Seção F** - Metodologia de Desenvolvimento
-8. **Anexo** - Métricas de Complexidade e Diagrama de Arquitetura
+### Alternativa Considerada
+
+Também podemos gerar o ERD de forma programática usando:
+1. **Canvas HTML5** - Desenhar o diagrama diretamente e exportar como PNG
+2. **Mermaid.js** - Converter para SVG e depois PNG
+3. **API de Imagem** - Gerar uma representação visual profissional via IA
+
+**Escolha**: Vamos criar uma página dedicada que mostra o ERD usando Mermaid.js (para visualização interativa) e também oferece download como imagem.
+
+---
+
+## Estrutura do ERD
+
+### Tabelas Identificadas (28 tabelas)
+
+**Módulo CRM**
+- `contacts` - Dados de contatos
+- `leads` - Leads/Prospecções  
+- `opportunities` - Oportunidades comerciais
+- `interactions` - Histórico de interações
+- `lead_intake` - Entrada de leads
+- `mensagens_cliente` - Mensagens WhatsApp
+
+**Módulo Contratos**
+- `contracts` - Contratos
+- `contract_beneficiaries` - Beneficiários
+- `contract_costs` - Custos do contrato
+- `contract_notes` - Anotações
+- `contract_reminders` - Lembretes
+
+**Módulo Financeiro**
+- `payments` - Pagamentos
+- `payment_reminders` - Lembretes de pagamento
+- `invoices` - Faturas
+- `commissions` - Comissões
+- `cash_flow` - Fluxo de caixa
+- `expense_categories` - Categorias de despesa
+
+**Módulo Casos/Técnico**
+- `service_cases` - Casos de serviço
+- `service_documents` - Documentos do caso
+- `service_document_types` - Tipos de documento
+- `requirements_from_authority` - Requisitos legais
+- `requirement_reminders` - Lembretes de requisito
+- `generated_documents` - Documentos gerados
+- `case_notes` - Notas do caso
+- `nps_surveys` - Pesquisas NPS
+
+**Módulo Usuários/Sistema**
+- `profiles` - Perfis de usuário
+- `user_roles` - Papéis
+- `user_sectors` - Setores
+- `notifications` - Notificações
+- `tasks` - Tarefas
+- `audit_logs` - Logs de auditoria
+
+### Relacionamentos Principais
+
+```text
+contacts ←─────── leads ←─────── opportunities
+                                      │
+                    ┌─────────────────┼─────────────────┐
+                    ▼                 ▼                 ▼
+               contracts          payments         service_cases
+                    │                 │                 │
+        ┌───────────┼───────────┐     │     ┌───────────┼───────────┐
+        ▼           ▼           ▼     ▼     ▼           ▼           ▼
+   beneficiaries  costs      notes  invoices documents  requirements  notes
+```
 
 ---
 
 ## Implementação
 
-### 1. Novo Arquivo: `src/lib/generate-technical-docs.ts`
-
-Criar função `generateTechnicalDocsPDF()` usando jsPDF + autoTable:
+### 1. Novo Arquivo: `src/lib/generate-erd-diagram.ts`
 
 ```typescript
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+// Função para gerar código Mermaid do ERD
+export function generateERDMermaidCode(): string {
+  return `
+erDiagram
+    contacts ||--o{ leads : "has"
+    leads ||--o{ opportunities : "converts to"
+    leads ||--o{ interactions : "has"
+    
+    opportunities ||--o| contracts : "generates"
+    opportunities ||--o{ payments : "has"
+    opportunities ||--o| service_cases : "creates"
+    
+    contracts ||--o{ contract_beneficiaries : "has"
+    contracts ||--o{ contract_costs : "has"
+    contracts ||--o{ contract_notes : "has"
+    contracts ||--o{ commissions : "pays"
+    
+    payments ||--o{ payment_reminders : "has"
+    payments ||--o| invoices : "generates"
+    
+    service_cases ||--o{ service_documents : "requires"
+    service_cases ||--o{ requirements_from_authority : "receives"
+    service_cases ||--o{ case_notes : "has"
+    service_cases ||--o| nps_surveys : "evaluates"
+    
+    service_document_types ||--o{ service_documents : "defines"
+    
+    profiles ||--o{ user_roles : "has"
+    profiles ||--o{ tasks : "assigned"
+    profiles ||--o{ notifications : "receives"
+  `;
+}
 
-export function generateTechnicalDocsPDF(): void {
-  const doc = new jsPDF();
-  let yPos = 20;
-
-  // Capa
-  doc.setFontSize(28);
-  doc.setTextColor(59, 130, 246);
-  doc.text('CB ASESORÍA', 105, 80, { align: 'center' });
-  
-  doc.setFontSize(20);
-  doc.setTextColor(0);
-  doc.text('Documentação Técnica', 105, 100, { align: 'center' });
-  
-  // ... cada seção com tabelas e texto formatado
-  
-  doc.save('CB_Asesoria_Documentacao_Tecnica.pdf');
+// Função para exportar como imagem via canvas
+export async function exportERDAsImage(): Promise<void> {
+  // Renderiza o Mermaid SVG e converte para PNG
 }
 ```
 
-### 2. Atualizar: `src/pages/settings/ExportDocumentation.tsx`
+### 2. Nova Página: `src/pages/settings/DatabaseERD.tsx`
 
-Adicionar novo card para exportar a documentação técnica:
+Página dedicada com:
+- Visualização interativa do ERD usando Mermaid
+- Botão para download como PNG
+- Legenda com cores por módulo
+- Estatísticas do banco
 
-```tsx
-<Card>
-  <CardHeader>
-    <CardTitle>Documentação Técnica</CardTitle>
-    <CardDescription>
-      Respostas técnicas detalhadas sobre stack, arquitetura e infraestrutura
-    </CardDescription>
-  </CardHeader>
-  <CardContent>
-    <Button onClick={handleExportTechnical}>
-      <Download className="mr-2" />
-      Baixar PDF Técnico
-    </Button>
-  </CardContent>
-</Card>
-```
+### 3. Atualizar Sidebar (opcional)
 
----
-
-## Conteúdo do PDF
-
-### Seção A - Stack Tecnológica
-
-| Item | Resposta Técnica |
-|------|------------------|
-| Linguagens | TypeScript 5.8.3 (Frontend + Edge Functions), JavaScript ES2022, PL/pgSQL |
-| Frameworks | React 18.3.1, Vite 6.3.5, Tailwind CSS 3.4, Deno Runtime |
-| Arquitetura | Modular Domain-Oriented com padrões Repository, CQRS, Event-Driven |
-| Banco de Dados | PostgreSQL 15 (Supabase) com RLS, 50+ políticas de segurança |
-| Hospedagem | Supabase Cloud (AWS), Edge Functions em CDN global |
-| Sistema Operacional | Linux containers (produção), Deno isolates |
-| Containers | Sim - Deno V8 isolates para Edge Functions |
-| Versionamento | Git com controle semântico |
-
-### Seção B - Arquitetura e Integrações
-
-| Item | Resposta |
-|------|----------|
-| APIs | REST (Supabase PostgREST), Edge Functions customizadas |
-| Padrão | RESTful com autenticação JWT |
-| Integrações Nativas | WhatsApp Business API, Stripe, Email, N8N |
-
-### Seção C - Documentação
-
-| Tipo | Descrição |
-|------|-----------|
-| Código | 70+ componentes React documentados com TypeScript |
-| Banco de Dados | 37 migrações versionadas, ERD disponível |
-| Funcional | Fluxos mapeados em 7 fases da jornada do cliente |
-
-### Seção D - Roadmap
-
-Apresentar fases já implementadas e próximos passos planejados.
-
-### Seção E - Licenças e Custos
-
-| Item | Detalhes |
-|------|----------|
-| Bibliotecas Pagas | Nenhuma - todas open-source (MIT, Apache 2.0) |
-| Custos Recorrentes | Supabase (infra), WhatsApp API, Stripe (taxas por transação) |
-| Riscos de Dependência | Baixo - stack baseada em tecnologias open-source estabelecidas |
-
-### Seção F - Metodologia
-
-Desenvolvimento iterativo com sprints curtos, code review, e deploy contínuo.
+Adicionar acesso via menu de Configurações ou como página separada.
 
 ---
 
@@ -129,18 +145,50 @@ Desenvolvimento iterativo com sprints curtos, code review, e deploy contínuo.
 
 | Arquivo | Ação |
 |---------|------|
-| `src/lib/generate-technical-docs.ts` | **Criar** - Função de geração do PDF |
-| `src/pages/settings/ExportDocumentation.tsx` | **Modificar** - Adicionar botão para exportar PDF técnico |
+| `src/lib/generate-erd-diagram.ts` | **Criar** - Geração do código Mermaid e export PNG |
+| `src/pages/settings/DatabaseERD.tsx` | **Criar** - Página de visualização do ERD |
+| `src/pages/settings/Settings.tsx` | **Modificar** - Adicionar tab para ERD (ou link) |
+
+---
+
+## Conteúdo Visual do ERD
+
+O diagrama incluirá:
+
+### Legenda de Cores por Módulo
+- **Azul** - CRM (contacts, leads, opportunities)
+- **Verde** - Contratos (contracts, beneficiaries)
+- **Amarelo** - Financeiro (payments, invoices, commissions)
+- **Roxo** - Técnico (service_cases, documents)
+- **Cinza** - Sistema (profiles, roles, notifications)
+
+### Informações em Cada Entidade
+- Nome da tabela
+- Campos principais (PK, FK)
+- Cardinalidade dos relacionamentos
 
 ---
 
 ## Resultado Esperado
 
-Um PDF profissional de ~8-10 páginas com:
-- Formatação corporativa com cores e tabelas
-- Todas as 20 perguntas do cliente respondidas
-- Métricas de complexidade destacadas
-- Linguagem técnica que demonstra profundidade do desenvolvimento
+1. **Página interativa** com diagrama ERD navegável
+2. **Botão de download** que gera PNG de alta resolução
+3. **Diagrama profissional** mostrando:
+   - 28+ tabelas organizadas por módulo
+   - 40+ relacionamentos com cardinalidade
+   - Cores diferenciadas por área funcional
+   - Legenda explicativa
+
+---
+
+## Complexidade Demonstrada
+
+O ERD evidencia a complexidade do sistema:
+- **28 tabelas** relacionais
+- **40+ foreign keys** 
+- **50+ políticas RLS**
+- **7 módulos funcionais** interconectados
+- **Arquitetura normalizada** até 3NF
 
 ---
 
