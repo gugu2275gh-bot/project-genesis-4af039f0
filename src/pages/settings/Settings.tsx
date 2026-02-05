@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/ui/page-header';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { Users, Clock, Settings as SettingsIcon, FileText, Bell, Layers, Briefcase, UserCog, Table2, ChevronDown, Database } from 'lucide-react';
+import { Users, Clock, Settings as SettingsIcon, FileText, Bell, Layers, Briefcase, UserCog, Table2, ChevronDown, Database, Download } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -110,6 +110,10 @@ export default function Settings() {
           <TabsTrigger value="erd" className="gap-2">
             <Database className="h-4 w-4" />
             <span className="hidden sm:inline">ERD</span>
+          </TabsTrigger>
+          <TabsTrigger value="export" className="gap-2">
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Exportar</span>
           </TabsTrigger>
         </TabsList>
 
