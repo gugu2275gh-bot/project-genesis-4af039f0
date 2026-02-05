@@ -106,10 +106,6 @@ export default function Settings() {
             <SettingsIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Sistema</span>
           </TabsTrigger>
-          <TabsTrigger value="export" className="gap-2">
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Exportar</span>
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="users">
