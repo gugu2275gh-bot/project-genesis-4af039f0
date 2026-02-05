@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/ui/page-header';
 import { useAuth } from '@/contexts/AuthContext';
+ import { useSuperuser } from '@/hooks/useSuperuser';
 import { Navigate } from 'react-router-dom';
 import { Users, Clock, Settings as SettingsIcon, FileText, Bell, Layers, Briefcase, UserCog, Table2, ChevronDown, Database, Download } from 'lucide-react';
 import {
@@ -25,6 +26,7 @@ const TABLE_TABS = ['profiles', 'sectors', 'service-types'] as const;
 
 export default function Settings() {
   const { hasRole } = useAuth();
+   const { isSuperuser } = useSuperuser();
   const [activeTab, setActiveTab] = useState('users');
 
   // Only admins and managers can access settings
@@ -107,14 +109,18 @@ export default function Settings() {
             <SettingsIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Sistema</span>
           </TabsTrigger>
-          <TabsTrigger value="erd" className="gap-2">
-            <Database className="h-4 w-4" />
-            <span className="hidden sm:inline">ERD</span>
-          </TabsTrigger>
-          <TabsTrigger value="export" className="gap-2">
-            <Download className="h-4 w-4" />
-            <span className="hidden sm:inline">Exportar</span>
-          </TabsTrigger>
+           {isSuperuser && (
+             <>
+               <TabsTrigger value="erd" className="gap-2">
+                 <Database className="h-4 w-4" />
+                 <span className="hidden sm:inline">ERD</span>
+               </TabsTrigger>
+               <TabsTrigger value="export" className="gap-2">
+                 <Download className="h-4 w-4" />
+                 <span className="hidden sm:inline">Exportar</span>
+               </TabsTrigger>
+             </>
+           )}
         </TabsList>
 
         <TabsContent value="users">
@@ -149,13 +155,17 @@ export default function Settings() {
           <SystemSettings />
         </TabsContent>
 
-        <TabsContent value="export">
-          <ExportDocumentation />
-        </TabsContent>
-
-        <TabsContent value="erd">
-          <DatabaseERD />
-        </TabsContent>
+         {isSuperuser && (
+           <>
+             <TabsContent value="export">
+               <ExportDocumentation />
+             </TabsContent>
+ 
+             <TabsContent value="erd">
+               <DatabaseERD />
+             </TabsContent>
+           </>
+         )}
       </Tabs>
     </div>
   );
