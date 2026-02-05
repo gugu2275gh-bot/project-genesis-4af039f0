@@ -1,111 +1,114 @@
 
-# Plano: Melhorar Apresentação de Mensagens com Botões WhatsApp
+# Plano: Limpeza Completa dos Dados de Teste
 
-## Problema Identificado
+## Resumo dos Dados Atuais
 
-Mensagens do WhatsApp que contêm botões de quick reply (NativeFlowMessage) estão sendo exibidas como JSON bruto no chat, tornando a leitura confusa.
+| Tabela | Registros | Ação |
+|--------|-----------|------|
+| `contacts` | 35 | Limpar |
+| `leads` | 34 | Limpar |
+| `opportunities` | 11 | Limpar |
+| `contracts` | 7 | Limpar |
+| `payments` | 10 | Limpar |
+| `service_cases` | 4 | Limpar |
+| `tasks` | 15 | Limpar |
+| `interactions` | 35 | Limpar |
+| `documents` | 1 | Limpar |
+| `mensagens_cliente` | 450 | Limpar |
+| `case_notes` | 1 | Limpar |
+| `profiles` | 8 | **Manter** |
 
-**Exemplo do JSON atual:**
-```json
-{"NativeFlowMessage":{"buttons":[{"name":"quick_reply","buttonParamsJSON":"{\"id\":\"a\",\"display_text\":\"Visto Estudante\"...}
+---
+
+## O Que Será Preservado
+
+- **Perfis de usuário** (`profiles`) - Todos os 8 usuários do sistema
+- **Roles e permissões** (`user_roles`, `superusers`)
+- **Configurações do sistema** (`sla_configurations`, `service_sectors`, `service_types`, `document_types`, `user_profile_definitions`)
+- **Estrutura do banco de dados**
+
+---
+
+## Ordem de Limpeza (respeita foreign keys)
+
+A limpeza será executada na seguinte ordem para evitar erros de dependência:
+
+1. **Nível 4** (mais dependentes):
+   - `mensagens_cliente` (mensagens do chat)
+   - `interactions` (interações)
+   - `case_notes` (notas de casos)
+   - `contract_notes` (notas de contratos)
+   - `contract_costs` (custos de contratos)
+   - `documents` (documentos)
+   - `notifications` (notificações)
+
+2. **Nível 3**:
+   - `payments` (pagamentos)
+   - `tasks` (tarefas)
+   - `service_cases` (casos técnicos)
+
+3. **Nível 2**:
+   - `contracts` (contratos)
+
+4. **Nível 1**:
+   - `opportunities` (oportunidades)
+
+5. **Nível 0** (base):
+   - `leads` (leads)
+   - `contacts` (contatos)
+
+---
+
+## Implementação
+
+Executarei uma migração SQL com `TRUNCATE CASCADE` ou `DELETE` respeitando a ordem:
+
+```sql
+-- Limpar dados de teste mantendo estrutura e configurações
+
+-- Nível 4: Dependentes diretos
+DELETE FROM mensagens_cliente;
+DELETE FROM interactions;
+DELETE FROM case_notes;
+DELETE FROM contract_notes;
+DELETE FROM contract_costs;
+DELETE FROM documents;
+DELETE FROM notifications;
+
+-- Nível 3
+DELETE FROM payments;
+DELETE FROM tasks;
+DELETE FROM service_cases;
+
+-- Nível 2
+DELETE FROM contracts;
+
+-- Nível 1
+DELETE FROM opportunities;
+
+-- Nível 0: Base
+DELETE FROM leads;
+DELETE FROM contacts;
 ```
 
 ---
 
-## Solução Proposta
+## Resultado Final
 
-Criar uma função de parsing que detecta mensagens com estrutura de botões WhatsApp e exibe de forma amigável:
-
-1. **Detectar** se a mensagem é um JSON de NativeFlowMessage
-2. **Extrair** o texto principal (`body.text`) e a opção selecionada (`selectedIndex`)
-3. **Renderizar** de forma elegante, mostrando apenas a opção escolhida pelo cliente
-
----
-
-## Resultado Visual
-
-**Antes:**
-```
-{"NativeFlowMessage":{"buttons":[{"name":"quick_reply"...
-```
-
-**Depois:**
-```
-📋 Escolha o assunto:
-✅ Visto Estudante
-```
+Após a limpeza:
+- Sistema completamente limpo para novos testes
+- Usuários e configurações mantidos
+- Todas as funcionalidades operacionais
+- Pronto para novo ciclo de testes
 
 ---
 
-## Implementação Técnica
+## Impacto no Sistema
 
-Vou adicionar uma função `parseWhatsAppMessage` no componente `LeadChat.tsx` que:
-
-```typescript
-// Detecta e parseia mensagens de botões WhatsApp
-function parseWhatsAppMessage(content: string) {
-  try {
-    // Tenta fazer parse do JSON
-    const parsed = JSON.parse(content);
-    
-    if (parsed.NativeFlowMessage) {
-      const { buttons, body, selectedIndex } = parsed.NativeFlowMessage;
-      const bodyText = body?.text || 'Opções:';
-      
-      // Extrai os display_text de cada botão
-      const options = buttons?.map(btn => {
-        const params = JSON.parse(btn.buttonParamsJSON);
-        return params.display_text;
-      }) || [];
-      
-      return {
-        isFlowMessage: true,
-        bodyText,
-        options,
-        selectedIndex,
-        selectedOption: options[selectedIndex] || null
-      };
-    }
-  } catch {
-    // Não é JSON, retorna null
-  }
-  return null;
-}
-```
-
-A renderização será condicional:
-
-```tsx
-{(() => {
-  const flowData = parseWhatsAppMessage(msg.content);
-  if (flowData) {
-    return (
-      <div className="space-y-1">
-        <p className="text-sm font-medium">{flowData.bodyText}</p>
-        <div className="flex items-center gap-2 bg-white/50 rounded px-2 py-1">
-          <CheckCircle className="h-4 w-4 text-green-600" />
-          <span className="text-sm">{flowData.selectedOption}</span>
-        </div>
-      </div>
-    );
-  }
-  return <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>;
-})()}
-```
-
----
-
-## Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/crm/LeadChat.tsx` | Adicionar função de parsing e renderização condicional |
-
----
-
-## Benefícios
-
-- ✅ Mensagens de botões ficam legíveis
-- ✅ Mostra claramente a opção selecionada pelo cliente
-- ✅ Mantém compatibilidade com mensagens normais de texto
-- ✅ Visual consistente com o restante do chat
+| Aspecto | Impacto |
+|---------|---------|
+| Login/Auth | Nenhum - usuários mantidos |
+| Configurações | Nenhum - preservadas |
+| Dashboard | Mostrará zeros até novos dados |
+| CRM | Pronto para novos leads |
+| Portal cliente | Sem dados até novos contratos |
