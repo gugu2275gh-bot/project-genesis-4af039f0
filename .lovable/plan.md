@@ -1,326 +1,225 @@
 
-# Plano: Adicionar Diagramas Visuais à Página ERD
+# Plano: Superusuários para Abas Exportar e ERD
 
 ## Objetivo
 
-Expandir a página ERD existente para incluir três novos diagramas visuais, todos usando o mesmo padrão de visualização Mermaid.js e exportação de imagem:
+Criar uma tabela de **superusuários** no banco de dados para controlar a visibilidade das abas "Exportar" e "ERD" em Configurações. Apenas os 4 emails especificados terão acesso.
 
-1. **Arquitetura Adotada** - Diagrama de arquitetura do sistema
-2. **Diagrama de Componentes de Alto Nível** - Estrutura de componentes React
-3. **Documentação Funcional dos Módulos** - Fluxograma dos módulos funcionais
+---
+
+## Emails Autorizados (Superusuários)
+
+| Email | Acesso |
+|-------|--------|
+| paulohpl@icloud.com | ERD + Exportar |
+| rvbarros@gmail.com | ERD + Exportar |
+| brenoluizsales@gmail.com | ERD + Exportar |
+| gustavohb16@outlook.com | ERD + Exportar |
+
+---
+
+## Arquitetura
+
+Para outros administradores, esses usuários aparecerão como "Administrador" normal. A distinção de SUPERUSUÁRIO será invisível na interface - apenas controla funcionalidades ocultas.
 
 ---
 
 ## Implementação
 
-### 1. Atualizar: `src/lib/generate-erd-diagram.ts`
+### 1. Migração: Criar Tabela `superusers`
 
-Adicionar três novas funções geradoras de código Mermaid:
+```sql
+-- Tabela de superusuários
+CREATE TABLE public.superusers (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  email text NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(user_id),
+  UNIQUE(email)
+);
+
+-- Habilitar RLS
+ALTER TABLE public.superusers ENABLE ROW LEVEL SECURITY;
+
+-- Função para verificar se usuário é superusuário
+CREATE OR REPLACE FUNCTION public.is_superuser(_user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.superusers
+    WHERE user_id = _user_id
+  )
+$$;
+
+-- Política: Apenas superusuários podem ver a tabela
+CREATE POLICY "Superusers can view superusers table"
+ON public.superusers
+FOR SELECT
+TO authenticated
+USING (public.is_superuser(auth.uid()));
+
+-- Inserir os 4 superusuários (será feito via INSERT separado após usuários existirem)
+```
+
+### 2. Inserir Superusuários
+
+Após a migração, inserir os emails na tabela vinculando aos user_ids correspondentes:
+
+```sql
+-- Inserir superusuários baseado no email dos profiles
+INSERT INTO public.superusers (user_id, email)
+SELECT p.id, p.email 
+FROM profiles p 
+WHERE p.email IN (
+  'paulohpl@icloud.com',
+  'rvbarros@gmail.com', 
+  'brenoluizsales@gmail.com',
+  'gustavohb16@outlook.com'
+);
+```
+
+### 3. Criar Hook: `src/hooks/useSuperuser.ts`
 
 ```typescript
-// Arquitetura do Sistema
-export function generateArchitectureMermaidCode(): string {
-  return `flowchart TB
-    subgraph Cliente["🖥️ Frontend"]
-      React["React 18.3.1"]
-      Vite["Vite 6.3.5"]
-      TailwindCSS["Tailwind CSS"]
-      ReactQuery["TanStack Query"]
-    end
-    
-    subgraph Edge["⚡ Edge Functions"]
-      WhatsApp["WhatsApp Webhook"]
-      Stripe["Stripe Webhook"]
-      SLA["SLA Automations"]
-      AdminUser["Admin Create User"]
-    end
-    
-    subgraph Supabase["☁️ Supabase Cloud"]
-      Auth["Auth (JWT)"]
-      PostgREST["PostgREST API"]
-      Realtime["Realtime Subscriptions"]
-      Storage["Storage Buckets"]
-    end
-    
-    subgraph Database["🗄️ PostgreSQL"]
-      RLS["Row Level Security"]
-      Triggers["Database Triggers"]
-      Functions["PL/pgSQL Functions"]
-    end
-    
-    subgraph External["🔗 Integrações Externas"]
-      WhatsAppAPI["WhatsApp Business API"]
-      StripeAPI["Stripe Payments"]
-      N8N["N8N Workflows"]
-    end
-    
-    Cliente --> Supabase
-    Cliente --> Edge
-    Edge --> Database
-    Edge --> External
-    Supabase --> Database
-  `;
-}
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
-// Componentes de Alto Nível
-export function generateComponentsMermaidCode(): string {
-  return `flowchart LR
-    subgraph Pages["📄 Pages (15+)"]
-      Dashboard
-      CRM["CRM (Leads, Contacts, Opportunities)"]
-      Contracts
-      Finance["Finance (Payments, Invoices)"]
-      Cases["Legal/Technical Cases"]
-      Portal["Client Portal"]
-      Settings
-    end
-    
-    subgraph Components["🧩 Components (70+)"]
-      Layout["Layout (Header, Sidebar, MainLayout)"]
-      UI["UI Library (40+ components)"]
-      Forms["Form Components"]
-      Tables["Data Tables"]
-      Charts["Charts & Reports"]
-    end
-    
-    subgraph Hooks["🪝 Hooks (40+)"]
-      DataHooks["Data Hooks (useCases, usePayments...)"]
-      AuthHooks["Auth Hooks"]
-      UIHooks["UI Hooks (useToast, useMobile)"]
-    end
-    
-    subgraph State["📊 State Management"]
-      ReactQuery["TanStack Query (Server State)"]
-      Context["React Context (Auth, Language)"]
-    end
-    
-    Pages --> Components
-    Pages --> Hooks
-    Components --> Hooks
-    Hooks --> State
-  `;
-}
+export function useSuperuser() {
+  const { user } = useAuth();
 
-// Documentação Funcional dos Módulos
-export function generateModulesMermaidCode(): string {
-  return `flowchart TD
-    subgraph CRM["📞 CRM"]
-      Lead["Lead Intake"]
-      Contact["Gestão de Contatos"]
-      Opp["Oportunidades"]
-      Lead --> Contact
-      Contact --> Opp
-    end
-    
-    subgraph Contracts["📋 Contratos"]
-      Contract["Criação de Contrato"]
-      Beneficiary["Beneficiários"]
-      Costs["Custos & Honorários"]
-      Contract --> Beneficiary
-      Contract --> Costs
-    end
-    
-    subgraph Finance["💰 Financeiro"]
-      Payment["Pagamentos"]
-      Invoice["Faturas"]
-      Commission["Comissões"]
-      CashFlow["Fluxo de Caixa"]
-      Payment --> Invoice
-      Payment --> CashFlow
-      Contract --> Commission
-    end
-    
-    subgraph Technical["⚙️ Técnico"]
-      Case["Casos de Serviço"]
-      Docs["Documentos"]
-      Requirements["Requerimentos"]
-      NPS["Pesquisa NPS"]
-      Case --> Docs
-      Case --> Requirements
-      Case --> NPS
-    end
-    
-    subgraph Portal["🌐 Portal Cliente"]
-      PortalDash["Dashboard"]
-      PortalDocs["Meus Documentos"]
-      PortalPay["Meus Pagamentos"]
-      PortalMsg["Mensagens"]
-    end
-    
-    Opp --> Contract
-    Opp --> Payment
-    Opp --> Case
-    Case --> Portal
-  `;
+  const { data: isSuperuser = false, isLoading } = useQuery({
+    queryKey: ['superuser', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return false;
+      
+      const { data, error } = await supabase
+        .from('superusers')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error checking superuser status:', error);
+        return false;
+      }
+      
+      return !!data;
+    },
+    enabled: !!user?.id,
+  });
+
+  return { isSuperuser, isLoading };
 }
 ```
 
-### 2. Atualizar: `src/pages/settings/DatabaseERD.tsx`
+### 4. Atualizar: `src/pages/settings/Settings.tsx`
 
-Transformar a página em uma visualização com Tabs para os 4 diagramas:
+```typescript
+import { useSuperuser } from '@/hooks/useSuperuser';
 
-```tsx
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
-export default function DatabaseERD() {
-  const [activeTab, setActiveTab] = useState('erd');
+export default function Settings() {
+  const { hasRole } = useAuth();
+  const { isSuperuser } = useSuperuser();
   
-  // Refs para cada diagrama
-  const erdContainerRef = useRef<HTMLDivElement>(null);
-  const archContainerRef = useRef<HTMLDivElement>(null);
-  const compContainerRef = useRef<HTMLDivElement>(null);
-  const modulesContainerRef = useRef<HTMLDivElement>(null);
+  // ... resto do código
   
   return (
-    <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="erd">
-            <Database className="h-4 w-4 mr-2" />
-            ERD Banco de Dados
-          </TabsTrigger>
-          <TabsTrigger value="architecture">
-            <Server className="h-4 w-4 mr-2" />
-            Arquitetura
-          </TabsTrigger>
-          <TabsTrigger value="components">
-            <Layers className="h-4 w-4 mr-2" />
-            Componentes
-          </TabsTrigger>
-          <TabsTrigger value="modules">
-            <GitBranch className="h-4 w-4 mr-2" />
-            Módulos Funcionais
-          </TabsTrigger>
-        </TabsList>
+    <Tabs>
+      <TabsList>
+        {/* Abas normais visíveis para ADMIN/MANAGER */}
+        <TabsTrigger value="users">Usuários</TabsTrigger>
+        <TabsTrigger value="sla">SLAs</TabsTrigger>
+        {/* ... outras abas normais */}
         
-        <TabsContent value="erd">
-          {/* ERD existente */}
-        </TabsContent>
-        
-        <TabsContent value="architecture">
-          {/* Diagrama de Arquitetura */}
-        </TabsContent>
-        
-        <TabsContent value="components">
-          {/* Diagrama de Componentes */}
-        </TabsContent>
-        
-        <TabsContent value="modules">
-          {/* Documentação Funcional */}
-        </TabsContent>
-      </Tabs>
-    </div>
+        {/* Abas visíveis APENAS para superusuários */}
+        {isSuperuser && (
+          <>
+            <TabsTrigger value="erd">ERD</TabsTrigger>
+            <TabsTrigger value="export">Exportar</TabsTrigger>
+          </>
+        )}
+      </TabsList>
+      
+      {/* TabsContent também condicionais */}
+      {isSuperuser && (
+        <>
+          <TabsContent value="erd">
+            <DatabaseERD />
+          </TabsContent>
+          <TabsContent value="export">
+            <ExportDocumentation />
+          </TabsContent>
+        </>
+      )}
+    </Tabs>
   );
 }
 ```
 
 ---
 
-## Estrutura dos Novos Diagramas
-
-### Diagrama 1: Arquitetura Adotada
-
-Mostrará a arquitetura em camadas:
-
-```text
-┌─────────────────────────────────────────────────────────┐
-│                    Frontend (React)                      │
-│  React 18 │ Vite │ Tailwind CSS │ TanStack Query        │
-├─────────────────────────────────────────────────────────┤
-│                  Edge Functions (Deno)                   │
-│  WhatsApp │ Stripe │ SLA Automations │ Admin Functions  │
-├─────────────────────────────────────────────────────────┤
-│                   Supabase Cloud                         │
-│  Auth (JWT) │ PostgREST │ Realtime │ Storage            │
-├─────────────────────────────────────────────────────────┤
-│                   PostgreSQL 15                          │
-│  RLS Policies │ Triggers │ PL/pgSQL Functions           │
-├─────────────────────────────────────────────────────────┤
-│                Integrações Externas                      │
-│  WhatsApp API │ Stripe Payments │ N8N Workflows         │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Diagrama 2: Componentes de Alto Nível
-
-Estrutura de componentes React:
-
-| Categoria | Quantidade | Exemplos |
-|-----------|------------|----------|
-| Pages | 15+ | Dashboard, CRM, Contracts, Finance, Portal |
-| Components | 70+ | Layout, UI Library, Forms, Tables, Charts |
-| Hooks | 40+ | useCases, usePayments, useLeads, useAuth |
-| Contexts | 2 | AuthContext, LanguageContext |
-
-### Diagrama 3: Documentação Funcional dos Módulos
-
-Fluxo operacional entre módulos:
-
-```text
-Lead Intake → Contato → Oportunidade
-                           │
-          ┌────────────────┼────────────────┐
-          ▼                ▼                ▼
-      Contrato         Pagamentos      Caso Técnico
-          │                │                │
-    ┌─────┴─────┐    ┌─────┴─────┐    ┌─────┴─────┐
-    ▼           ▼    ▼           ▼    ▼           ▼
-Beneficiários Custos Faturas  Fluxo  Docs    Requerimentos
-                                               │
-                                               ▼
-                                          Portal Cliente
-```
-
----
-
-## Funcionalidades Mantidas
-
-Cada diagrama terá:
-- Controles de zoom (Zoom In/Out, Reset)
-- Botão de download PNG (alta resolução)
-- Botão de download SVG
-- Legenda explicativa
-- Cards com estatísticas relevantes
-
----
-
-## Arquivos a Modificar
+## Arquivos a Criar/Modificar
 
 | Arquivo | Ação |
 |---------|------|
-| `src/lib/generate-erd-diagram.ts` | **Modificar** - Adicionar 3 novas funções de geração |
-| `src/pages/settings/DatabaseERD.tsx` | **Modificar** - Adicionar tabs e renderização dos novos diagramas |
+| **Migração SQL** | **Criar** - Tabela `superusers` + função `is_superuser` + RLS |
+| **INSERT SQL** | **Executar** - Inserir os 4 emails como superusuários |
+| `src/hooks/useSuperuser.ts` | **Criar** - Hook para verificar status de superusuário |
+| `src/pages/settings/Settings.tsx` | **Modificar** - Condicionar abas ERD/Exportar ao superusuário |
 
 ---
 
-## Estatísticas por Diagrama
+## Fluxo de Verificação
 
-### Arquitetura
-- 5 camadas principais
-- 6 Edge Functions
-- 4 serviços Supabase
-- 3 integrações externas
-
-### Componentes
-- 15+ páginas
-- 70+ componentes
-- 40+ hooks customizados
-- 2 contexts globais
-
-### Módulos Funcionais
-- 5 módulos principais
-- 7 fases da jornada do cliente
-- 28 tabelas de banco
-- Fluxo end-to-end documentado
+```text
+Usuário logado
+      │
+      ▼
+┌─────────────────┐
+│ É ADMIN/MANAGER?│
+└────────┬────────┘
+         │ Sim
+         ▼
+┌─────────────────┐
+│ Acessa Settings │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────┐
+│ É SUPERUSUÁRIO?     │
+│ (consulta tabela)   │
+└────────┬────────────┘
+    Sim  │  Não
+    ┌────┴────┐
+    ▼         ▼
+Vê ERD    Não vê
+e Export  ERD/Export
+```
 
 ---
 
-## Resultado Esperado
+## Segurança
 
-Uma página de visualização completa com 4 abas:
-1. **ERD** - Diagrama de entidade-relacionamento (já existe)
-2. **Arquitetura** - Stack técnica em camadas
-3. **Componentes** - Estrutura de componentes React
-4. **Módulos Funcionais** - Fluxo operacional do sistema
+- A verificação é feita **no servidor** via query ao banco
+- RLS protege a tabela `superusers` (apenas superusuários veem)
+- Função `is_superuser` usa `SECURITY DEFINER` para evitar recursão
+- Nenhum dado sensível exposto no frontend
 
-Cada aba terá visualização interativa com zoom e exportação para imagem PNG/SVG.
+---
+
+## Resultado Final
+
+| Tipo de Usuário | Abas Visíveis em Configurações |
+|-----------------|-------------------------------|
+| ADMIN normal | Usuários, Tabelas, SLAs, Documentos, Notificações, Sistema |
+| SUPERUSUÁRIO | Todas acima + **ERD** + **Exportar** |
+| MANAGER | Usuários, Tabelas, SLAs, Documentos, Notificações, Sistema |
+| Outros | Sem acesso a /settings |
+
