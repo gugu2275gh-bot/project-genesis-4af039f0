@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, MessageCircle, RefreshCw } from 'lucide-react';
+import { Send, MessageCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,38 @@ import { useQueryClient } from '@tanstack/react-query';
 interface LeadChatProps {
   leadId: string;
   contactPhone: string | number | null;
+}
+
+// Parse WhatsApp NativeFlowMessage (button responses)
+function parseWhatsAppFlowMessage(content: string) {
+  try {
+    const parsed = JSON.parse(content);
+    
+    if (parsed.NativeFlowMessage) {
+      const { buttons, body, selectedIndex } = parsed.NativeFlowMessage;
+      const bodyText = body?.text || 'Opções:';
+      
+      const options = buttons?.map((btn: { buttonParamsJSON: string }) => {
+        try {
+          const params = JSON.parse(btn.buttonParamsJSON);
+          return params.display_text;
+        } catch {
+          return null;
+        }
+      }).filter(Boolean) || [];
+      
+      return {
+        isFlowMessage: true,
+        bodyText,
+        options,
+        selectedIndex,
+        selectedOption: typeof selectedIndex === 'number' ? options[selectedIndex] : null
+      };
+    }
+  } catch {
+    // Not JSON, return null
+  }
+  return null;
 }
 
 export function LeadChat({ leadId, contactPhone }: LeadChatProps) {
@@ -147,7 +179,23 @@ export function LeadChat({ leadId, contactPhone }: LeadChatProps) {
                     )}>
                       {getSenderLabel(msg.type, msg.origem)}
                     </p>
-                    <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                    {(() => {
+                      const flowData = parseWhatsAppFlowMessage(msg.content);
+                      if (flowData) {
+                        return (
+                          <div className="space-y-1">
+                            <p className="text-sm">{flowData.bodyText}</p>
+                            {flowData.selectedOption && (
+                              <div className="flex items-center gap-1.5 bg-white/50 dark:bg-white/10 rounded px-2 py-1 mt-1">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                                <span className="text-sm font-medium">{flowData.selectedOption}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      return <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>;
+                    })()}
                     <p
                       className={cn(
                         'text-[10px] mt-1',
