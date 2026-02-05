@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PageHeader } from '@/components/ui/page-header';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { Users, Clock, Settings as SettingsIcon, FileText, Bell, Download, Layers, Briefcase, UserCog, Table2, ChevronDown } from 'lucide-react';
+import { Users, Clock, Settings as SettingsIcon, FileText, Bell, Layers, Briefcase, UserCog, Table2, ChevronDown, Database } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +19,7 @@ import ExportDocumentation from './ExportDocumentation';
 import SectorsManagement from './SectorsManagement';
 import ServiceTypesManagement from './ServiceTypesManagement';
 import UserProfilesManagement from './UserProfilesManagement';
+import DatabaseERD from './DatabaseERD';
 
 const TABLE_TABS = ['profiles', 'sectors', 'service-types'] as const;
 
@@ -106,6 +107,10 @@ export default function Settings() {
             <SettingsIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Sistema</span>
           </TabsTrigger>
+          <TabsTrigger value="erd" className="gap-2">
+            <Database className="h-4 w-4" />
+            <span className="hidden sm:inline">ERD</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="users">
@@ -142,6 +147,10 @@ export default function Settings() {
 
         <TabsContent value="export">
           <ExportDocumentation />
+        </TabsContent>
+
+        <TabsContent value="erd">
+          <DatabaseERD />
         </TabsContent>
       </Tabs>
     </div>
