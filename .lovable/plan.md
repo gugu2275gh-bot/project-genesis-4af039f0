@@ -1,225 +1,247 @@
 
-# Plano: Superusuários para Abas Exportar e ERD
 
-## Objetivo
+# Plano: Corrigir Renderização dos Diagramas
 
-Criar uma tabela de **superusuários** no banco de dados para controlar a visibilidade das abas "Exportar" e "ERD" em Configurações. Apenas os 4 emails especificados terão acesso.
+## Problema Identificado
 
----
+Os diagramas não estão sendo renderizados corretamente devido a:
 
-## Emails Autorizados (Superusuários)
-
-| Email | Acesso |
-|-------|--------|
-| paulohpl@icloud.com | ERD + Exportar |
-| rvbarros@gmail.com | ERD + Exportar |
-| brenoluizsales@gmail.com | ERD + Exportar |
-| gustavohb16@outlook.com | ERD + Exportar |
+1. **IDs do Mermaid conflitantes** - Quando a aba muda, o mesmo ID pode causar erro no Mermaid
+2. **Verificação de innerHTML incorreta** - A condição `!innerHTML` pode impedir re-renderização após erros
+3. **Estado de loading compartilhado** - Todos os diagramas usam o mesmo `isLoading`, causando comportamento incorreto
 
 ---
 
-## Arquitetura
+## Correções Necessárias
 
-Para outros administradores, esses usuários aparecerão como "Administrador" normal. A distinção de SUPERUSUÁRIO será invisível na interface - apenas controla funcionalidades ocultas.
+### 1. Usar IDs únicos por renderização
 
----
-
-## Implementação
-
-### 1. Migração: Criar Tabela `superusers`
-
-```sql
--- Tabela de superusuários
-CREATE TABLE public.superusers (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  email text NOT NULL,
-  created_at timestamptz DEFAULT now(),
-  UNIQUE(user_id),
-  UNIQUE(email)
-);
-
--- Habilitar RLS
-ALTER TABLE public.superusers ENABLE ROW LEVEL SECURITY;
-
--- Função para verificar se usuário é superusuário
-CREATE OR REPLACE FUNCTION public.is_superuser(_user_id uuid)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.superusers
-    WHERE user_id = _user_id
-  )
-$$;
-
--- Política: Apenas superusuários podem ver a tabela
-CREATE POLICY "Superusers can view superusers table"
-ON public.superusers
-FOR SELECT
-TO authenticated
-USING (public.is_superuser(auth.uid()));
-
--- Inserir os 4 superusuários (será feito via INSERT separado após usuários existirem)
-```
-
-### 2. Inserir Superusuários
-
-Após a migração, inserir os emails na tabela vinculando aos user_ids correspondentes:
-
-```sql
--- Inserir superusuários baseado no email dos profiles
-INSERT INTO public.superusers (user_id, email)
-SELECT p.id, p.email 
-FROM profiles p 
-WHERE p.email IN (
-  'paulohpl@icloud.com',
-  'rvbarros@gmail.com', 
-  'brenoluizsales@gmail.com',
-  'gustavohb16@outlook.com'
-);
-```
-
-### 3. Criar Hook: `src/hooks/useSuperuser.ts`
+Gerar IDs dinâmicos com timestamp ou contador para evitar conflitos do Mermaid:
 
 ```typescript
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+// Antes
+const { svg } = await mermaid.render('arch-diagram', code);
 
-export function useSuperuser() {
-  const { user } = useAuth();
-
-  const { data: isSuperuser = false, isLoading } = useQuery({
-    queryKey: ['superuser', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return false;
-      
-      const { data, error } = await supabase
-        .from('superusers')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      if (error) {
-        console.error('Error checking superuser status:', error);
-        return false;
-      }
-      
-      return !!data;
-    },
-    enabled: !!user?.id,
-  });
-
-  return { isSuperuser, isLoading };
-}
+// Depois
+const uniqueId = `arch-diagram-${Date.now()}`;
+const { svg } = await mermaid.render(uniqueId, code);
 ```
 
-### 4. Atualizar: `src/pages/settings/Settings.tsx`
+### 2. Rastrear estado de renderização individualmente
+
+Criar estado separado para cada diagrama:
 
 ```typescript
-import { useSuperuser } from '@/hooks/useSuperuser';
+// Antes
+const [isLoading, setIsLoading] = useState(true);
 
-export default function Settings() {
-  const { hasRole } = useAuth();
-  const { isSuperuser } = useSuperuser();
+// Depois
+const [loadingStates, setLoadingStates] = useState({
+  erd: true,
+  architecture: false,
+  components: false,
+  modules: false
+});
+
+const [renderedTabs, setRenderedTabs] = useState({
+  erd: false,
+  architecture: false,
+  components: false,
+  modules: false
+});
+```
+
+### 3. Corrigir lógica de verificação de renderização
+
+Substituir verificação de `innerHTML` por estado controlado:
+
+```typescript
+// Antes
+if (activeTab === 'architecture' && !archContainerRef.current.innerHTML)
+
+// Depois
+if (activeTab === 'architecture' && !renderedTabs.architecture)
+```
+
+### 4. Limpar container antes de re-renderizar
+
+Garantir que o container esteja limpo antes de nova renderização:
+
+```typescript
+const renderDiagram = async (type, containerRef, generateCode) => {
+  if (!containerRef.current) return;
   
-  // ... resto do código
+  // Limpar container
+  containerRef.current.innerHTML = '';
   
-  return (
-    <Tabs>
-      <TabsList>
-        {/* Abas normais visíveis para ADMIN/MANAGER */}
-        <TabsTrigger value="users">Usuários</TabsTrigger>
-        <TabsTrigger value="sla">SLAs</TabsTrigger>
-        {/* ... outras abas normais */}
-        
-        {/* Abas visíveis APENAS para superusuários */}
-        {isSuperuser && (
-          <>
-            <TabsTrigger value="erd">ERD</TabsTrigger>
-            <TabsTrigger value="export">Exportar</TabsTrigger>
-          </>
-        )}
-      </TabsList>
-      
-      {/* TabsContent também condicionais */}
-      {isSuperuser && (
-        <>
-          <TabsContent value="erd">
-            <DatabaseERD />
-          </TabsContent>
-          <TabsContent value="export">
-            <ExportDocumentation />
-          </TabsContent>
-        </>
-      )}
-    </Tabs>
-  );
-}
+  const uniqueId = `${type}-diagram-${Date.now()}`;
+  const code = generateCode();
+  const { svg } = await mermaid.render(uniqueId, code);
+  containerRef.current.innerHTML = svg;
+  
+  // Marcar como renderizado
+  setRenderedTabs(prev => ({ ...prev, [type]: true }));
+};
 ```
 
 ---
 
-## Arquivos a Criar/Modificar
+## Arquivo a Modificar
 
 | Arquivo | Ação |
 |---------|------|
-| **Migração SQL** | **Criar** - Tabela `superusers` + função `is_superuser` + RLS |
-| **INSERT SQL** | **Executar** - Inserir os 4 emails como superusuários |
-| `src/hooks/useSuperuser.ts` | **Criar** - Hook para verificar status de superusuário |
-| `src/pages/settings/Settings.tsx` | **Modificar** - Condicionar abas ERD/Exportar ao superusuário |
+| `src/pages/settings/DatabaseERD.tsx` | **Modificar** - Corrigir lógica de renderização e IDs |
 
 ---
 
-## Fluxo de Verificação
+## Código Corrigido
 
-```text
-Usuário logado
-      │
-      ▼
-┌─────────────────┐
-│ É ADMIN/MANAGER?│
-└────────┬────────┘
-         │ Sim
-         ▼
-┌─────────────────┐
-│ Acessa Settings │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────────┐
-│ É SUPERUSUÁRIO?     │
-│ (consulta tabela)   │
-└────────┬────────────┘
-    Sim  │  Não
-    ┌────┴────┐
-    ▼         ▼
-Vê ERD    Não vê
-e Export  ERD/Export
+```typescript
+export default function DatabaseERD() {
+  const [activeTab, setActiveTab] = useState('erd');
+  const erdContainerRef = useRef<HTMLDivElement>(null);
+  const archContainerRef = useRef<HTMLDivElement>(null);
+  const compContainerRef = useRef<HTMLDivElement>(null);
+  const modulesContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Estados individuais de loading e renderização
+  const [loadingStates, setLoadingStates] = useState({
+    erd: true,
+    architecture: false,
+    components: false,
+    modules: false
+  });
+  const [renderedTabs, setRenderedTabs] = useState({
+    erd: false,
+    architecture: false,
+    components: false,
+    modules: false
+  });
+  const [zooms, setZooms] = useState({ erd: 1, architecture: 1, components: 1, modules: 1 });
+
+  const renderDiagram = useCallback(async (
+    type: keyof typeof renderedTabs,
+    containerRef: React.RefObject<HTMLDivElement>,
+    generateCode: () => string
+  ) => {
+    if (!containerRef.current) return;
+    
+    try {
+      // Marcar como loading
+      setLoadingStates(prev => ({ ...prev, [type]: true }));
+      
+      // Limpar container
+      containerRef.current.innerHTML = '';
+      
+      // Usar ID único para evitar conflitos
+      const uniqueId = `${type}-diagram-${Date.now()}`;
+      const code = generateCode();
+      const { svg } = await mermaid.render(uniqueId, code);
+      
+      containerRef.current.innerHTML = svg;
+      
+      // Marcar como renderizado com sucesso
+      setRenderedTabs(prev => ({ ...prev, [type]: true }));
+      setLoadingStates(prev => ({ ...prev, [type]: false }));
+    } catch (error) {
+      console.error(`Error rendering ${type} diagram:`, error);
+      toast.error(`Erro ao renderizar diagrama de ${type}`);
+      setLoadingStates(prev => ({ ...prev, [type]: false }));
+    }
+  }, []);
+
+  // Renderizar ERD inicial
+  useEffect(() => {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#3B82F6',
+        primaryTextColor: '#1F2937',
+        primaryBorderColor: '#60A5FA',
+        lineColor: '#9CA3AF',
+        secondaryColor: '#F3F4F6',
+        tertiaryColor: '#E5E7EB'
+      },
+      flowchart: {
+        useMaxWidth: false,
+        htmlLabels: true
+      },
+      er: {
+        layoutDirection: 'TB',
+        minEntityWidth: 100,
+        minEntityHeight: 75,
+        entityPadding: 15,
+        useMaxWidth: false
+      }
+    });
+
+    renderDiagram('erd', erdContainerRef, generateERDMermaidCode);
+  }, [renderDiagram]);
+
+  // Renderizar outros diagramas quando aba for selecionada
+  useEffect(() => {
+    if (activeTab === 'architecture' && !renderedTabs.architecture) {
+      renderDiagram('architecture', archContainerRef, generateArchitectureMermaidCode);
+    } else if (activeTab === 'components' && !renderedTabs.components) {
+      renderDiagram('components', compContainerRef, generateComponentsMermaidCode);
+    } else if (activeTab === 'modules' && !renderedTabs.modules) {
+      renderDiagram('modules', modulesContainerRef, generateModulesMermaidCode);
+    }
+  }, [activeTab, renderedTabs, renderDiagram]);
+
+  // Atualizar função de container para usar loading individual
+  const renderDiagramContainer = (
+    containerRef: React.RefObject<HTMLDivElement>, 
+    tab: keyof typeof zooms
+  ) => (
+    <div className="overflow-auto border rounded-lg bg-white p-4" style={{ maxHeight: '70vh' }}>
+      {loadingStates[tab] && (
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      )}
+      <div 
+        ref={containerRef}
+        className="mermaid-container"
+        style={{ 
+          transform: `scale(${zooms[tab]})`,
+          transformOrigin: 'top left',
+          minHeight: loadingStates[tab] ? 0 : 'auto',
+          display: loadingStates[tab] ? 'none' : 'block'
+        }}
+      />
+    </div>
+  );
+
+  // ... resto do componente permanece igual
+}
 ```
 
 ---
 
-## Segurança
+## Resumo das Mudanças
 
-- A verificação é feita **no servidor** via query ao banco
-- RLS protege a tabela `superusers` (apenas superusuários veem)
-- Função `is_superuser` usa `SECURITY DEFINER` para evitar recursão
-- Nenhum dado sensível exposto no frontend
+| Mudança | Benefício |
+|---------|-----------|
+| IDs únicos com timestamp | Evita conflitos do Mermaid |
+| Estados de loading individuais | Cada diagrama tem seu próprio indicador |
+| Estado de renderização por aba | Controle preciso sem depender de innerHTML |
+| Limpar container antes de renderizar | Garante estado limpo |
+| useCallback no renderDiagram | Evita re-criação desnecessária da função |
 
 ---
 
-## Resultado Final
+## Resultado Esperado
 
-| Tipo de Usuário | Abas Visíveis em Configurações |
-|-----------------|-------------------------------|
-| ADMIN normal | Usuários, Tabelas, SLAs, Documentos, Notificações, Sistema |
-| SUPERUSUÁRIO | Todas acima + **ERD** + **Exportar** |
-| MANAGER | Usuários, Tabelas, SLAs, Documentos, Notificações, Sistema |
-| Outros | Sem acesso a /settings |
+Após as correções:
+- Aba **ERD**: Renderiza corretamente (já funciona)
+- Aba **Arquitetura**: Renderiza o flowchart de camadas do sistema
+- Aba **Componentes**: Renderiza o diagrama de estrutura React
+- Aba **Módulos Funcionais**: Renderiza o fluxograma de módulos
+
+Cada aba terá:
+- Spinner de loading individual
+- Controles de zoom funcionais
+- Exportação PNG e SVG funcionando
 
