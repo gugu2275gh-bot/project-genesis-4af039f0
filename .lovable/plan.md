@@ -1,197 +1,326 @@
 
-# Plano: Gerar Diagrama ERD Visual do Banco de Dados
+# Plano: Adicionar Diagramas Visuais à Página ERD
 
 ## Objetivo
 
-Criar uma funcionalidade que gere um diagrama ERD (Entity-Relationship Diagram) visual completo do banco de dados em formato de imagem PNG, utilizando a API de geração de imagens Gemini disponível no projeto.
+Expandir a página ERD existente para incluir três novos diagramas visuais, todos usando o mesmo padrão de visualização Mermaid.js e exportação de imagem:
 
----
-
-## Abordagem Técnica
-
-O projeto tem acesso à API de geração de imagens `google/gemini-2.5-flash-image` através do gateway `ai.gateway.lovable.dev`. Usaremos esta API para gerar um diagrama ERD profissional baseado no schema completo do banco de dados.
-
-### Alternativa Considerada
-
-Também podemos gerar o ERD de forma programática usando:
-1. **Canvas HTML5** - Desenhar o diagrama diretamente e exportar como PNG
-2. **Mermaid.js** - Converter para SVG e depois PNG
-3. **API de Imagem** - Gerar uma representação visual profissional via IA
-
-**Escolha**: Vamos criar uma página dedicada que mostra o ERD usando Mermaid.js (para visualização interativa) e também oferece download como imagem.
-
----
-
-## Estrutura do ERD
-
-### Tabelas Identificadas (28 tabelas)
-
-**Módulo CRM**
-- `contacts` - Dados de contatos
-- `leads` - Leads/Prospecções  
-- `opportunities` - Oportunidades comerciais
-- `interactions` - Histórico de interações
-- `lead_intake` - Entrada de leads
-- `mensagens_cliente` - Mensagens WhatsApp
-
-**Módulo Contratos**
-- `contracts` - Contratos
-- `contract_beneficiaries` - Beneficiários
-- `contract_costs` - Custos do contrato
-- `contract_notes` - Anotações
-- `contract_reminders` - Lembretes
-
-**Módulo Financeiro**
-- `payments` - Pagamentos
-- `payment_reminders` - Lembretes de pagamento
-- `invoices` - Faturas
-- `commissions` - Comissões
-- `cash_flow` - Fluxo de caixa
-- `expense_categories` - Categorias de despesa
-
-**Módulo Casos/Técnico**
-- `service_cases` - Casos de serviço
-- `service_documents` - Documentos do caso
-- `service_document_types` - Tipos de documento
-- `requirements_from_authority` - Requisitos legais
-- `requirement_reminders` - Lembretes de requisito
-- `generated_documents` - Documentos gerados
-- `case_notes` - Notas do caso
-- `nps_surveys` - Pesquisas NPS
-
-**Módulo Usuários/Sistema**
-- `profiles` - Perfis de usuário
-- `user_roles` - Papéis
-- `user_sectors` - Setores
-- `notifications` - Notificações
-- `tasks` - Tarefas
-- `audit_logs` - Logs de auditoria
-
-### Relacionamentos Principais
-
-```text
-contacts ←─────── leads ←─────── opportunities
-                                      │
-                    ┌─────────────────┼─────────────────┐
-                    ▼                 ▼                 ▼
-               contracts          payments         service_cases
-                    │                 │                 │
-        ┌───────────┼───────────┐     │     ┌───────────┼───────────┐
-        ▼           ▼           ▼     ▼     ▼           ▼           ▼
-   beneficiaries  costs      notes  invoices documents  requirements  notes
-```
+1. **Arquitetura Adotada** - Diagrama de arquitetura do sistema
+2. **Diagrama de Componentes de Alto Nível** - Estrutura de componentes React
+3. **Documentação Funcional dos Módulos** - Fluxograma dos módulos funcionais
 
 ---
 
 ## Implementação
 
-### 1. Novo Arquivo: `src/lib/generate-erd-diagram.ts`
+### 1. Atualizar: `src/lib/generate-erd-diagram.ts`
+
+Adicionar três novas funções geradoras de código Mermaid:
 
 ```typescript
-// Função para gerar código Mermaid do ERD
-export function generateERDMermaidCode(): string {
-  return `
-erDiagram
-    contacts ||--o{ leads : "has"
-    leads ||--o{ opportunities : "converts to"
-    leads ||--o{ interactions : "has"
+// Arquitetura do Sistema
+export function generateArchitectureMermaidCode(): string {
+  return `flowchart TB
+    subgraph Cliente["🖥️ Frontend"]
+      React["React 18.3.1"]
+      Vite["Vite 6.3.5"]
+      TailwindCSS["Tailwind CSS"]
+      ReactQuery["TanStack Query"]
+    end
     
-    opportunities ||--o| contracts : "generates"
-    opportunities ||--o{ payments : "has"
-    opportunities ||--o| service_cases : "creates"
+    subgraph Edge["⚡ Edge Functions"]
+      WhatsApp["WhatsApp Webhook"]
+      Stripe["Stripe Webhook"]
+      SLA["SLA Automations"]
+      AdminUser["Admin Create User"]
+    end
     
-    contracts ||--o{ contract_beneficiaries : "has"
-    contracts ||--o{ contract_costs : "has"
-    contracts ||--o{ contract_notes : "has"
-    contracts ||--o{ commissions : "pays"
+    subgraph Supabase["☁️ Supabase Cloud"]
+      Auth["Auth (JWT)"]
+      PostgREST["PostgREST API"]
+      Realtime["Realtime Subscriptions"]
+      Storage["Storage Buckets"]
+    end
     
-    payments ||--o{ payment_reminders : "has"
-    payments ||--o| invoices : "generates"
+    subgraph Database["🗄️ PostgreSQL"]
+      RLS["Row Level Security"]
+      Triggers["Database Triggers"]
+      Functions["PL/pgSQL Functions"]
+    end
     
-    service_cases ||--o{ service_documents : "requires"
-    service_cases ||--o{ requirements_from_authority : "receives"
-    service_cases ||--o{ case_notes : "has"
-    service_cases ||--o| nps_surveys : "evaluates"
+    subgraph External["🔗 Integrações Externas"]
+      WhatsAppAPI["WhatsApp Business API"]
+      StripeAPI["Stripe Payments"]
+      N8N["N8N Workflows"]
+    end
     
-    service_document_types ||--o{ service_documents : "defines"
-    
-    profiles ||--o{ user_roles : "has"
-    profiles ||--o{ tasks : "assigned"
-    profiles ||--o{ notifications : "receives"
+    Cliente --> Supabase
+    Cliente --> Edge
+    Edge --> Database
+    Edge --> External
+    Supabase --> Database
   `;
 }
 
-// Função para exportar como imagem via canvas
-export async function exportERDAsImage(): Promise<void> {
-  // Renderiza o Mermaid SVG e converte para PNG
+// Componentes de Alto Nível
+export function generateComponentsMermaidCode(): string {
+  return `flowchart LR
+    subgraph Pages["📄 Pages (15+)"]
+      Dashboard
+      CRM["CRM (Leads, Contacts, Opportunities)"]
+      Contracts
+      Finance["Finance (Payments, Invoices)"]
+      Cases["Legal/Technical Cases"]
+      Portal["Client Portal"]
+      Settings
+    end
+    
+    subgraph Components["🧩 Components (70+)"]
+      Layout["Layout (Header, Sidebar, MainLayout)"]
+      UI["UI Library (40+ components)"]
+      Forms["Form Components"]
+      Tables["Data Tables"]
+      Charts["Charts & Reports"]
+    end
+    
+    subgraph Hooks["🪝 Hooks (40+)"]
+      DataHooks["Data Hooks (useCases, usePayments...)"]
+      AuthHooks["Auth Hooks"]
+      UIHooks["UI Hooks (useToast, useMobile)"]
+    end
+    
+    subgraph State["📊 State Management"]
+      ReactQuery["TanStack Query (Server State)"]
+      Context["React Context (Auth, Language)"]
+    end
+    
+    Pages --> Components
+    Pages --> Hooks
+    Components --> Hooks
+    Hooks --> State
+  `;
+}
+
+// Documentação Funcional dos Módulos
+export function generateModulesMermaidCode(): string {
+  return `flowchart TD
+    subgraph CRM["📞 CRM"]
+      Lead["Lead Intake"]
+      Contact["Gestão de Contatos"]
+      Opp["Oportunidades"]
+      Lead --> Contact
+      Contact --> Opp
+    end
+    
+    subgraph Contracts["📋 Contratos"]
+      Contract["Criação de Contrato"]
+      Beneficiary["Beneficiários"]
+      Costs["Custos & Honorários"]
+      Contract --> Beneficiary
+      Contract --> Costs
+    end
+    
+    subgraph Finance["💰 Financeiro"]
+      Payment["Pagamentos"]
+      Invoice["Faturas"]
+      Commission["Comissões"]
+      CashFlow["Fluxo de Caixa"]
+      Payment --> Invoice
+      Payment --> CashFlow
+      Contract --> Commission
+    end
+    
+    subgraph Technical["⚙️ Técnico"]
+      Case["Casos de Serviço"]
+      Docs["Documentos"]
+      Requirements["Requerimentos"]
+      NPS["Pesquisa NPS"]
+      Case --> Docs
+      Case --> Requirements
+      Case --> NPS
+    end
+    
+    subgraph Portal["🌐 Portal Cliente"]
+      PortalDash["Dashboard"]
+      PortalDocs["Meus Documentos"]
+      PortalPay["Meus Pagamentos"]
+      PortalMsg["Mensagens"]
+    end
+    
+    Opp --> Contract
+    Opp --> Payment
+    Opp --> Case
+    Case --> Portal
+  `;
 }
 ```
 
-### 2. Nova Página: `src/pages/settings/DatabaseERD.tsx`
+### 2. Atualizar: `src/pages/settings/DatabaseERD.tsx`
 
-Página dedicada com:
-- Visualização interativa do ERD usando Mermaid
-- Botão para download como PNG
-- Legenda com cores por módulo
-- Estatísticas do banco
+Transformar a página em uma visualização com Tabs para os 4 diagramas:
 
-### 3. Atualizar Sidebar (opcional)
+```tsx
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-Adicionar acesso via menu de Configurações ou como página separada.
+export default function DatabaseERD() {
+  const [activeTab, setActiveTab] = useState('erd');
+  
+  // Refs para cada diagrama
+  const erdContainerRef = useRef<HTMLDivElement>(null);
+  const archContainerRef = useRef<HTMLDivElement>(null);
+  const compContainerRef = useRef<HTMLDivElement>(null);
+  const modulesContainerRef = useRef<HTMLDivElement>(null);
+  
+  return (
+    <div className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="erd">
+            <Database className="h-4 w-4 mr-2" />
+            ERD Banco de Dados
+          </TabsTrigger>
+          <TabsTrigger value="architecture">
+            <Server className="h-4 w-4 mr-2" />
+            Arquitetura
+          </TabsTrigger>
+          <TabsTrigger value="components">
+            <Layers className="h-4 w-4 mr-2" />
+            Componentes
+          </TabsTrigger>
+          <TabsTrigger value="modules">
+            <GitBranch className="h-4 w-4 mr-2" />
+            Módulos Funcionais
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="erd">
+          {/* ERD existente */}
+        </TabsContent>
+        
+        <TabsContent value="architecture">
+          {/* Diagrama de Arquitetura */}
+        </TabsContent>
+        
+        <TabsContent value="components">
+          {/* Diagrama de Componentes */}
+        </TabsContent>
+        
+        <TabsContent value="modules">
+          {/* Documentação Funcional */}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+```
 
 ---
 
-## Arquivos a Criar/Modificar
+## Estrutura dos Novos Diagramas
+
+### Diagrama 1: Arquitetura Adotada
+
+Mostrará a arquitetura em camadas:
+
+```text
+┌─────────────────────────────────────────────────────────┐
+│                    Frontend (React)                      │
+│  React 18 │ Vite │ Tailwind CSS │ TanStack Query        │
+├─────────────────────────────────────────────────────────┤
+│                  Edge Functions (Deno)                   │
+│  WhatsApp │ Stripe │ SLA Automations │ Admin Functions  │
+├─────────────────────────────────────────────────────────┤
+│                   Supabase Cloud                         │
+│  Auth (JWT) │ PostgREST │ Realtime │ Storage            │
+├─────────────────────────────────────────────────────────┤
+│                   PostgreSQL 15                          │
+│  RLS Policies │ Triggers │ PL/pgSQL Functions           │
+├─────────────────────────────────────────────────────────┤
+│                Integrações Externas                      │
+│  WhatsApp API │ Stripe Payments │ N8N Workflows         │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Diagrama 2: Componentes de Alto Nível
+
+Estrutura de componentes React:
+
+| Categoria | Quantidade | Exemplos |
+|-----------|------------|----------|
+| Pages | 15+ | Dashboard, CRM, Contracts, Finance, Portal |
+| Components | 70+ | Layout, UI Library, Forms, Tables, Charts |
+| Hooks | 40+ | useCases, usePayments, useLeads, useAuth |
+| Contexts | 2 | AuthContext, LanguageContext |
+
+### Diagrama 3: Documentação Funcional dos Módulos
+
+Fluxo operacional entre módulos:
+
+```text
+Lead Intake → Contato → Oportunidade
+                           │
+          ┌────────────────┼────────────────┐
+          ▼                ▼                ▼
+      Contrato         Pagamentos      Caso Técnico
+          │                │                │
+    ┌─────┴─────┐    ┌─────┴─────┐    ┌─────┴─────┐
+    ▼           ▼    ▼           ▼    ▼           ▼
+Beneficiários Custos Faturas  Fluxo  Docs    Requerimentos
+                                               │
+                                               ▼
+                                          Portal Cliente
+```
+
+---
+
+## Funcionalidades Mantidas
+
+Cada diagrama terá:
+- Controles de zoom (Zoom In/Out, Reset)
+- Botão de download PNG (alta resolução)
+- Botão de download SVG
+- Legenda explicativa
+- Cards com estatísticas relevantes
+
+---
+
+## Arquivos a Modificar
 
 | Arquivo | Ação |
 |---------|------|
-| `src/lib/generate-erd-diagram.ts` | **Criar** - Geração do código Mermaid e export PNG |
-| `src/pages/settings/DatabaseERD.tsx` | **Criar** - Página de visualização do ERD |
-| `src/pages/settings/Settings.tsx` | **Modificar** - Adicionar tab para ERD (ou link) |
+| `src/lib/generate-erd-diagram.ts` | **Modificar** - Adicionar 3 novas funções de geração |
+| `src/pages/settings/DatabaseERD.tsx` | **Modificar** - Adicionar tabs e renderização dos novos diagramas |
 
 ---
 
-## Conteúdo Visual do ERD
+## Estatísticas por Diagrama
 
-O diagrama incluirá:
+### Arquitetura
+- 5 camadas principais
+- 6 Edge Functions
+- 4 serviços Supabase
+- 3 integrações externas
 
-### Legenda de Cores por Módulo
-- **Azul** - CRM (contacts, leads, opportunities)
-- **Verde** - Contratos (contracts, beneficiaries)
-- **Amarelo** - Financeiro (payments, invoices, commissions)
-- **Roxo** - Técnico (service_cases, documents)
-- **Cinza** - Sistema (profiles, roles, notifications)
+### Componentes
+- 15+ páginas
+- 70+ componentes
+- 40+ hooks customizados
+- 2 contexts globais
 
-### Informações em Cada Entidade
-- Nome da tabela
-- Campos principais (PK, FK)
-- Cardinalidade dos relacionamentos
+### Módulos Funcionais
+- 5 módulos principais
+- 7 fases da jornada do cliente
+- 28 tabelas de banco
+- Fluxo end-to-end documentado
 
 ---
 
 ## Resultado Esperado
 
-1. **Página interativa** com diagrama ERD navegável
-2. **Botão de download** que gera PNG de alta resolução
-3. **Diagrama profissional** mostrando:
-   - 28+ tabelas organizadas por módulo
-   - 40+ relacionamentos com cardinalidade
-   - Cores diferenciadas por área funcional
-   - Legenda explicativa
+Uma página de visualização completa com 4 abas:
+1. **ERD** - Diagrama de entidade-relacionamento (já existe)
+2. **Arquitetura** - Stack técnica em camadas
+3. **Componentes** - Estrutura de componentes React
+4. **Módulos Funcionais** - Fluxo operacional do sistema
 
----
-
-## Complexidade Demonstrada
-
-O ERD evidencia a complexidade do sistema:
-- **28 tabelas** relacionais
-- **40+ foreign keys** 
-- **50+ políticas RLS**
-- **7 módulos funcionais** interconectados
-- **Arquitetura normalizada** até 3NF
-
----
-
-## Estimativa
-
-1-2 iterações de desenvolvimento
+Cada aba terá visualização interativa com zoom e exportação para imagem PNG/SVG.
