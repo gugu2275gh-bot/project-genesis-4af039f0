@@ -26,9 +26,50 @@ import {
   const archContainerRef = useRef<HTMLDivElement>(null);
   const compContainerRef = useRef<HTMLDivElement>(null);
   const modulesContainerRef = useRef<HTMLDivElement>(null);
-   const [isLoading, setIsLoading] = useState(true);
+   const [loadingStates, setLoadingStates] = useState({
+     erd: true,
+     architecture: false,
+     components: false,
+     modules: false
+   });
+   const [renderedTabs, setRenderedTabs] = useState({
+     erd: false,
+     architecture: false,
+     components: false,
+     modules: false
+   });
   const [zooms, setZooms] = useState({ erd: 1, architecture: 1, components: 1, modules: 1 });
  
+   const renderDiagram = useCallback(async (
+     type: keyof typeof renderedTabs,
+     containerRef: React.RefObject<HTMLDivElement>,
+     generateCode: () => string
+   ) => {
+     if (!containerRef.current) return;
+     
+     try {
+       setLoadingStates(prev => ({ ...prev, [type]: true }));
+       
+       // Clear container before rendering
+       containerRef.current.innerHTML = '';
+       
+       // Use unique ID to avoid Mermaid conflicts
+       const uniqueId = `${type}-diagram-${Date.now()}`;
+       const code = generateCode();
+       const { svg } = await mermaid.render(uniqueId, code);
+       
+       containerRef.current.innerHTML = svg;
+       
+       setRenderedTabs(prev => ({ ...prev, [type]: true }));
+       setLoadingStates(prev => ({ ...prev, [type]: false }));
+     } catch (error) {
+       console.error(`Error rendering ${type} diagram:`, error);
+       toast.error(`Erro ao renderizar diagrama de ${type}`);
+       setLoadingStates(prev => ({ ...prev, [type]: false }));
+     }
+   }, []);
+ 
+   // Initialize Mermaid and render ERD on mount
    useEffect(() => {
      mermaid.initialize({
        startOnLoad: false,
@@ -41,6 +82,10 @@ import {
          secondaryColor: '#F3F4F6',
          tertiaryColor: '#E5E7EB'
        },
+       flowchart: {
+         useMaxWidth: false,
+         htmlLabels: true
+       },
        er: {
          layoutDirection: 'TB',
          minEntityWidth: 100,
@@ -50,38 +95,19 @@ import {
        }
      });
  
-    renderDiagram('erd', erdContainerRef, generateERDMermaidCode, 'erd-diagram');
-   }, []);
+     renderDiagram('erd', erdContainerRef, generateERDMermaidCode);
+   }, [renderDiagram]);
  
+   // Render other diagrams when tab is selected
   useEffect(() => {
-    if (activeTab === 'architecture' && archContainerRef.current && !archContainerRef.current.innerHTML) {
-      renderDiagram('architecture', archContainerRef, generateArchitectureMermaidCode, 'arch-diagram');
-    } else if (activeTab === 'components' && compContainerRef.current && !compContainerRef.current.innerHTML) {
-      renderDiagram('components', compContainerRef, generateComponentsMermaidCode, 'comp-diagram');
-    } else if (activeTab === 'modules' && modulesContainerRef.current && !modulesContainerRef.current.innerHTML) {
-      renderDiagram('modules', modulesContainerRef, generateModulesMermaidCode, 'modules-diagram');
+    if (activeTab === 'architecture' && !renderedTabs.architecture) {
+      renderDiagram('architecture', archContainerRef, generateArchitectureMermaidCode);
+    } else if (activeTab === 'components' && !renderedTabs.components) {
+      renderDiagram('components', compContainerRef, generateComponentsMermaidCode);
+    } else if (activeTab === 'modules' && !renderedTabs.modules) {
+      renderDiagram('modules', modulesContainerRef, generateModulesMermaidCode);
     }
-  }, [activeTab]);
-
-  const renderDiagram = async (
-    _type: string,
-    containerRef: React.RefObject<HTMLDivElement>,
-    generateCode: () => string,
-    diagramId: string
-  ) => {
-    if (!containerRef.current) return;
-     try {
-       setIsLoading(true);
-      const code = generateCode();
-      const { svg } = await mermaid.render(diagramId, code);
-       containerRef.current.innerHTML = svg;
-       setIsLoading(false);
-     } catch (error) {
-       console.error('Error rendering ERD:', error);
-      toast.error('Erro ao renderizar diagrama');
-       setIsLoading(false);
-     }
-   };
+   }, [activeTab, renderedTabs, renderDiagram]);
  
   const handleDownloadPNG = async (containerRef: React.RefObject<HTMLDivElement>, filename: string) => {
      if (!containerRef.current) return;
@@ -204,7 +230,7 @@ import {
 
   const renderDiagramContainer = (containerRef: React.RefObject<HTMLDivElement>, tab: keyof typeof zooms) => (
     <div className="overflow-auto border rounded-lg bg-white p-4" style={{ maxHeight: '70vh' }}>
-      {isLoading && (
+      {loadingStates[tab] && (
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
@@ -215,7 +241,8 @@ import {
         style={{ 
           transform: `scale(${zooms[tab]})`,
           transformOrigin: 'top left',
-          minHeight: isLoading ? 0 : 'auto'
+          minHeight: loadingStates[tab] ? 0 : 'auto',
+          display: loadingStates[tab] ? 'none' : 'block'
         }}
       />
     </div>
