@@ -200,11 +200,12 @@ import {
         clonedSvg.setAttribute('height', String(Math.ceil(exportBox.height)));
 
         const svgData = new XMLSerializer().serializeToString(clonedSvg);
-        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-        const svgUrl = URL.createObjectURL(svgBlob);
+        // Use Data URL instead of Blob URL to avoid tainted canvas security error
+        const svgBase64 = btoa(unescape(encodeURIComponent(svgData)));
+        const svgDataUrl = `data:image/svg+xml;base64,${svgBase64}`;
 
         try {
-          const img = await loadImage(svgUrl);
+          const img = await loadImage(svgDataUrl);
           const scale = 2;
           const canvas = document.createElement('canvas');
           canvas.width = img.naturalWidth * scale;
@@ -230,8 +231,9 @@ import {
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
           toast.success('Diagrama exportado com sucesso!', { id: 'download' });
-        } finally {
-          URL.revokeObjectURL(svgUrl);
+        } catch (innerError) {
+          console.error('Error in PNG generation:', innerError);
+          toast.error('Erro ao gerar PNG', { id: 'download' });
         }
      } catch (error) {
        console.error('Error downloading PNG:', error);
