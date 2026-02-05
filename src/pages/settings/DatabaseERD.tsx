@@ -118,52 +118,121 @@ import {
          toast.error('Diagrama não encontrado', { id: 'download' });
          return;
        }
-       const clonedSvg = svgElement.cloneNode(true) as SVGElement;
-       clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-       const bbox = svgElement.getBBox();
-       const width = Math.max(bbox.width + 100, 1920);
-       const height = Math.max(bbox.height + 100, 1080);
-       clonedSvg.setAttribute('width', String(width));
-       clonedSvg.setAttribute('height', String(height));
-       const svgData = new XMLSerializer().serializeToString(clonedSvg);
-       const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-       const svgUrl = URL.createObjectURL(svgBlob);
-       const img = new Image();
-       img.onload = () => {
-         const canvas = document.createElement('canvas');
-        canvas.width = width * 2;
-         canvas.height = height * 2;
-         const ctx = canvas.getContext('2d');
-         if (!ctx) {
-           toast.error('Erro ao criar canvas', { id: 'download' });
-           return;
-         }
-         ctx.fillStyle = '#FFFFFF';
-         ctx.fillRect(0, 0, canvas.width, canvas.height);
-         ctx.scale(2, 2);
-         ctx.drawImage(img, 50, 50);
-         canvas.toBlob((blob) => {
-           if (!blob) {
-             toast.error('Erro ao gerar imagem', { id: 'download' });
-             return;
-           }
-           const url = URL.createObjectURL(blob);
-           const a = document.createElement('a');
-           a.href = url;
+        const isExternalUrl = (url: string): boolean => {
+          if (url.startsWith('data:') || url.startsWith('blob:')) return false;
+          try {
+            return new URL(url).origin !== window.location.origin;
+          } catch {
+            return false;
+          }
+        };
+
+        const loadImage = (imageUrl: string) =>
+          new Promise<HTMLImageElement>((resolve, reject) => {
+            const img = new Image();
+            // CRITICAL: set crossOrigin BEFORE src for external images
+            if (isExternalUrl(imageUrl)) {
+              img.crossOrigin = 'anonymous';
+            }
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error(`Failed to load image: ${imageUrl}`));
+            img.src = imageUrl;
+          });
+
+        const canvasToBlob = (canvas: HTMLCanvasElement) =>
+          new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) return reject(new Error('Failed to generate PNG blob'));
+                resolve(blob);
+              },
+              'image/png',
+              1.0,
+            );
+          });
+
+        const getSvgExportBox = (svg: SVGElement) => {
+          const padding = 50;
+
+          // Prefer bbox if available (best for diagrams larger than viewport)
+          try {
+            const bbox = (svg as unknown as SVGGraphicsElement).getBBox();
+            if (bbox && bbox.width > 0 && bbox.height > 0) {
+              return {
+                x: bbox.x - padding,
+                y: bbox.y - padding,
+                width: bbox.width + padding * 2,
+                height: bbox.height + padding * 2,
+              };
+            }
+          } catch {
+            // ignore
+          }
+
+          // Fallback to viewBox
+          const vb = (svg as SVGSVGElement).viewBox?.baseVal;
+          if (vb && vb.width > 0 && vb.height > 0) {
+            return {
+              x: vb.x,
+              y: vb.y,
+              width: vb.width,
+              height: vb.height,
+            };
+          }
+
+          // Fallback to DOM rect
+          const rect = svg.getBoundingClientRect();
+          return {
+            x: 0,
+            y: 0,
+            width: Math.max(1920, Math.ceil(rect.width) || 1920),
+            height: Math.max(1080, Math.ceil(rect.height) || 1080),
+          };
+        };
+
+        const exportBox = getSvgExportBox(svgElement);
+
+        const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+        clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        clonedSvg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+        clonedSvg.setAttribute('viewBox', `${exportBox.x} ${exportBox.y} ${exportBox.width} ${exportBox.height}`);
+        clonedSvg.setAttribute('width', String(Math.ceil(exportBox.width)));
+        clonedSvg.setAttribute('height', String(Math.ceil(exportBox.height)));
+
+        const svgData = new XMLSerializer().serializeToString(clonedSvg);
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+        const svgUrl = URL.createObjectURL(svgBlob);
+
+        try {
+          const img = await loadImage(svgUrl);
+          const scale = 2;
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth * scale;
+          canvas.height = img.naturalHeight * scale;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            toast.error('Erro ao criar canvas', { id: 'download' });
+            return;
+          }
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.scale(scale, scale);
+          ctx.drawImage(img, 0, 0);
+
+          const pngBlob = await canvasToBlob(canvas);
+          const url = URL.createObjectURL(pngBlob);
+          const a = document.createElement('a');
+          a.href = url;
           a.download = `CB_Asesoria_${filename}_${new Date().toISOString().split('T')[0]}.png`;
-           document.body.appendChild(a);
-           a.click();
-           document.body.removeChild(a);
-           URL.revokeObjectURL(url);
-           URL.revokeObjectURL(svgUrl);
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
           toast.success('Diagrama exportado com sucesso!', { id: 'download' });
-         }, 'image/png', 1.0);
-       };
-       img.onerror = () => {
-         toast.error('Erro ao carregar imagem', { id: 'download' });
-         URL.revokeObjectURL(svgUrl);
-       };
-       img.src = svgUrl;
+        } finally {
+          URL.revokeObjectURL(svgUrl);
+        }
      } catch (error) {
        console.error('Error downloading PNG:', error);
        toast.error('Erro ao baixar imagem PNG', { id: 'download' });
