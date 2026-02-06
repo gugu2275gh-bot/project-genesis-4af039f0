@@ -15,11 +15,12 @@ interface LeadChatProps {
   contactPhone: string | number | null;
 }
 
-// Parse WhatsApp NativeFlowMessage (button responses)
+// Parse WhatsApp interactive messages (multiple formats)
 function parseWhatsAppFlowMessage(content: string) {
   try {
     const parsed = JSON.parse(content);
     
+    // Formato 1: NativeFlowMessage (existente)
     if (parsed.NativeFlowMessage) {
       const { buttons, body, selectedIndex } = parsed.NativeFlowMessage;
       const bodyText = body?.text || 'Opções:';
@@ -41,6 +42,62 @@ function parseWhatsAppFlowMessage(content: string) {
         selectedOption: typeof selectedIndex === 'number' ? options[selectedIndex] : null
       };
     }
+    
+    // Formato 2: Array de botões direto (quick_reply buttons)
+    if (Array.isArray(parsed)) {
+      const options = parsed
+        .filter((item: { buttonParamsJSON?: string; display_text?: string }) => 
+          item.buttonParamsJSON || item.display_text
+        )
+        .map((item: { buttonParamsJSON?: string; display_text?: string }) => {
+          if (item.buttonParamsJSON) {
+            try {
+              const params = JSON.parse(item.buttonParamsJSON);
+              return params.display_text;
+            } catch {
+              return null;
+            }
+          }
+          return item.display_text;
+        })
+        .filter(Boolean);
+      
+      if (options.length > 0) {
+        return { 
+          isFlowMessage: true, 
+          bodyText: 'Opções:', 
+          options, 
+          selectedIndex: null, 
+          selectedOption: null 
+        };
+      }
+    }
+    
+    // Formato 3: Objeto com body.text e buttons no root
+    if (parsed.body?.text || parsed.buttons) {
+      const bodyText = parsed.body?.text || 'Opções:';
+      const buttons = parsed.buttons || [];
+      const options = buttons.map((btn: { buttonParamsJSON?: string; display_text?: string }) => {
+        if (btn.buttonParamsJSON) {
+          try { 
+            return JSON.parse(btn.buttonParamsJSON).display_text; 
+          } catch { 
+            return btn.display_text || null; 
+          }
+        }
+        return btn.display_text || null;
+      }).filter(Boolean);
+      
+      const selectedIndex = parsed.selectedIndex;
+      return {
+        isFlowMessage: true,
+        bodyText,
+        options,
+        selectedIndex,
+        selectedOption: typeof selectedIndex === 'number' ? options[selectedIndex] : null
+      };
+    }
+    
   } catch {
     // Not JSON, return null
   }
