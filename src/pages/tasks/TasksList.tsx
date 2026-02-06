@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useTasks } from '@/hooks/useTasks';
+import { useTasks, getClientName, TaskWithClient } from '@/hooks/useTasks';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/ui/page-header';
@@ -66,7 +66,7 @@ export default function TasksList() {
     return new Date(dueDate) < new Date();
   };
 
-  const columns: Column<typeof tasks[0]>[] = [
+  const columns: Column<TaskWithClient>[] = [
     {
       key: 'title',
       header: 'Tarefa',
@@ -78,6 +78,18 @@ export default function TasksList() {
           )}
         </div>
       ),
+    },
+    {
+      key: 'client',
+      header: 'Cliente',
+      cell: (task) => {
+        const clientName = getClientName(task);
+        return clientName ? (
+          <span className="text-foreground">{clientName}</span>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        );
+      },
     },
     {
       key: 'status',

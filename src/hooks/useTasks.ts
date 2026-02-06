@@ -12,6 +12,31 @@ export type TaskWithAssignee = Task & {
   assigned_profile?: Tables<'profiles'> | null;
 };
 
+export type TaskWithClient = Task & {
+  related_lead?: {
+    contact?: { full_name: string } | null;
+  } | null;
+  related_opportunity?: {
+    lead?: {
+      contact?: { full_name: string } | null;
+    } | null;
+  } | null;
+  related_service_case?: {
+    opportunity?: {
+      lead?: {
+        contact?: { full_name: string } | null;
+      } | null;
+    } | null;
+  } | null;
+};
+
+export function getClientName(task: TaskWithClient): string | null {
+  return task.related_lead?.contact?.full_name
+    || task.related_opportunity?.lead?.contact?.full_name
+    || task.related_service_case?.opportunity?.lead?.contact?.full_name
+    || null;
+}
+
 export function useTasks() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -22,12 +47,17 @@ export function useTasks() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tasks')
-        .select('*')
+        .select(`
+          *,
+          related_lead:leads(contact:contacts(full_name)),
+          related_opportunity:opportunities(lead:leads(contact:contacts(full_name))),
+          related_service_case:service_cases(opportunity:opportunities(lead:leads(contact:contacts(full_name))))
+        `)
         .order('due_date', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data as Task[];
+      return data as TaskWithClient[];
     },
   });
 
@@ -37,14 +67,19 @@ export function useTasks() {
       if (!user?.id) return [];
       const { data, error } = await supabase
         .from('tasks')
-        .select('*')
+        .select(`
+          *,
+          related_lead:leads(contact:contacts(full_name)),
+          related_opportunity:opportunities(lead:leads(contact:contacts(full_name))),
+          related_service_case:service_cases(opportunity:opportunities(lead:leads(contact:contacts(full_name))))
+        `)
         .eq('assigned_to_user_id', user.id)
         .neq('status', 'CONCLUIDA')
         .neq('status', 'CANCELADA')
         .order('due_date', { ascending: true, nullsFirst: false });
       
       if (error) throw error;
-      return data as Task[];
+      return data as TaskWithClient[];
     },
     enabled: !!user?.id,
   });
