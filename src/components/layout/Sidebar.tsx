@@ -41,7 +41,6 @@ const navItems: NavItem[] = [
       { label: 'Contatos', href: '/crm/contacts' },
     ]
   },
-  { label: 'Jurídico', href: '/legal', icon: Scale, roles: ['ADMIN', 'MANAGER', 'JURIDICO'] },
   { 
     label: 'Financeiro', 
     href: '/finance', 
@@ -57,6 +56,7 @@ const navItems: NavItem[] = [
     ]
   },
   { label: 'Casos Técnicos', href: '/cases', icon: Briefcase, roles: ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'TECNICO'] },
+  { label: 'Jurídico', href: '/legal', icon: Scale, roles: ['ADMIN', 'MANAGER', 'JURIDICO'] },
   { label: 'Tarefas', href: '/tasks', icon: CheckSquare },
   { label: 'Relatórios', href: '/reports', icon: BarChart3, roles: ['ADMIN', 'MANAGER'] },
   { label: 'Configurações', href: '/settings', icon: Settings, roles: ['ADMIN', 'MANAGER'] },
