@@ -1,46 +1,99 @@
 
 
-## Alteração do Menu CRM na Sidebar
+## Exibir Nome do Cliente nas Tarefas
 
-### O que será feito:
-Atualizar a estrutura do menu CRM removendo a opção "Lead Intake" e reordenando os itens restantes.
+### Objetivo
+Quando uma tarefa estiver associada a um Lead, Oportunidade ou Caso de Serviço, exibir o nome do cliente correspondente na lista de tarefas.
 
-### Mudanças no menu:
+### Estrutura de Dados
 
-**Antes:**
-- Lead Intake
-- Leads
-- Contatos
-- Oportunidades
+A tabela `tasks` possui 3 campos de relacionamento:
+- `related_lead_id` → Lead
+- `related_opportunity_id` → Oportunidade
+- `related_service_case_id` → Caso de Serviço
 
-**Depois:**
-- Leads
-- Oportunidades
-- Contatos
+Todos esses caminham para **contacts.full_name**:
+- Lead → Contact (direto)
+- Oportunidade → Lead → Contact
+- Caso de Serviço → Oportunidade → Lead → Contact
 
-### Arquivo a ser modificado:
-- `src/components/layout/Sidebar.tsx` - Atualizar o array `children` do item CRM
+### Alterações Necessárias
 
-### Detalhes técnicos:
+**1. Atualizar o hook `useTasks.ts`**
 
-O array de children do CRM será alterado de:
-```typescript
-children: [
-  { label: 'Lead Intake', href: '/crm/lead-intake' },
-  { label: 'Leads', href: '/crm/leads' },
-  { label: 'Contatos', href: '/crm/contacts' },
-  { label: 'Oportunidades', href: '/crm/opportunities' },
-]
+Modificar as queries para incluir joins com as tabelas relacionadas e buscar o nome do cliente:
+
+```text
+tasks
+├── related_lead:leads(contact:contacts(full_name))
+├── related_opportunity:opportunities(lead:leads(contact:contacts(full_name)))
+└── related_service_case:service_cases(opportunity:opportunities(lead:leads(contact:contacts(full_name))))
 ```
 
-Para:
+- Criar um novo tipo `TaskWithClient` que inclua o campo `client_name` derivado
+- Adicionar lógica para extrair o nome do cliente de qualquer uma das relações
+
+**2. Atualizar a página `TasksList.tsx`**
+
+- Adicionar uma nova coluna "Cliente" na tabela
+- Exibir o nome do cliente quando disponível, ou "-" quando a tarefa não estiver vinculada a nenhum cliente
+- Posicionar a coluna entre "Tarefa" e "Status"
+
+### Resultado Visual
+
+| Tarefa | Cliente | Status | Prazo | Ações |
+|--------|---------|--------|-------|-------|
+| Revisar documentos | João Silva | Pendente | 10/02/2026 | ✓ |
+| Agendar reunião | Maria Santos | Em andamento | 12/02/2026 | ✓ |
+| Tarefa interna | - | Pendente | 15/02/2026 | ✓ |
+
+### Detalhes Técnicos
+
+**Novo tipo no hook:**
 ```typescript
-children: [
-  { label: 'Leads', href: '/crm/leads' },
-  { label: 'Oportunidades', href: '/crm/opportunities' },
-  { label: 'Contatos', href: '/crm/contacts' },
-]
+export type TaskWithClient = Task & {
+  client_name?: string | null;
+  related_lead?: {
+    contact?: { full_name: string } | null;
+  } | null;
+  related_opportunity?: {
+    lead?: {
+      contact?: { full_name: string } | null;
+    } | null;
+  } | null;
+  related_service_case?: {
+    opportunity?: {
+      lead?: {
+        contact?: { full_name: string } | null;
+      } | null;
+    } | null;
+  } | null;
+};
 ```
 
-Esta mudança é simples e afeta apenas a navegação lateral. A página de Lead Intake continuará existindo e acessível diretamente pela URL caso necessário.
+**Função helper para extrair o nome do cliente:**
+```typescript
+function getClientName(task: TaskWithClient): string | null {
+  // Prioridade: Lead direto > Oportunidade > Caso de Serviço
+  return task.related_lead?.contact?.full_name
+    || task.related_opportunity?.lead?.contact?.full_name
+    || task.related_service_case?.opportunity?.lead?.contact?.full_name
+    || null;
+}
+```
+
+**Query Supabase atualizada:**
+```typescript
+.select(`
+  *,
+  related_lead:leads(contact:contacts(full_name)),
+  related_opportunity:opportunities(lead:leads(contact:contacts(full_name))),
+  related_service_case:service_cases(opportunity:opportunities(lead:leads(contact:contacts(full_name))))
+`)
+```
+
+### Arquivos a Modificar
+
+1. `src/hooks/useTasks.ts` - Atualizar queries e adicionar tipos
+2. `src/pages/tasks/TasksList.tsx` - Adicionar coluna de cliente na tabela
 
