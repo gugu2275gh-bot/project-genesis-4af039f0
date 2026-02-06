@@ -2,18 +2,22 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useLead, useLeads } from '@/hooks/useLeads';
 import { useInteractions } from '@/hooks/useInteractions';
 import { useProfiles } from '@/hooks/useProfiles';
+import { useContacts } from '@/hooks/useContacts';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2, Pencil } from 'lucide-react';
 import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, INTERACTION_CHANNEL_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LeadChat } from '@/components/crm/LeadChat';
 import {
@@ -27,17 +31,52 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function LeadDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { data: lead, isLoading } = useLead(id);
   const { updateLead, confirmInterest, deleteLead } = useLeads();
+  const { updateContact } = useContacts();
   const { interactions, createInteraction } = useInteractions(lead?.contact_id, id);
   const { data: profiles } = useProfiles();
   
   const [newNote, setNewNote] = useState('');
   const [interactionChannel, setInteractionChannel] = useState<string>('WHATSAPP');
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    full_name: '',
+    phone: '',
+    email: '',
+  });
+
+  // Sync edit form with lead data
+  useEffect(() => {
+    if (lead?.contacts) {
+      setEditForm({
+        full_name: lead.contacts.full_name || '',
+        phone: lead.contacts.phone?.toString() || '',
+        email: lead.contacts.email || '',
+      });
+    }
+  }, [lead?.contacts]);
+
+  const handleSaveContact = async () => {
+    if (!lead?.contact_id || !editForm.full_name.trim()) return;
+    
+    await updateContact.mutateAsync({
+      id: lead.contact_id,
+      full_name: editForm.full_name.trim(),
+      phone: editForm.phone ? parseInt(editForm.phone.replace(/\D/g, '')) : null,
+      email: editForm.email.trim() || null,
+    });
+    
+    // Invalidate lead query to refresh data
+    queryClient.invalidateQueries({ queryKey: ['leads', id] });
+    setIsEditDialogOpen(false);
+  };
 
   if (isLoading) {
     return (
@@ -144,8 +183,61 @@ export default function LeadDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Lead Info */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Informações do Lead</CardTitle>
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Editar Dados do Cliente</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <div>
+                    <Label htmlFor="edit-name">Nome *</Label>
+                    <Input
+                      id="edit-name"
+                      value={editForm.full_name}
+                      onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                      placeholder="Nome completo"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-phone">Telefone</Label>
+                    <Input
+                      id="edit-phone"
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                      placeholder="Ex: 5511999999999"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-email">E-mail</Label>
+                    <Input
+                      id="edit-email"
+                      type="email"
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      placeholder="email@exemplo.com"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button 
+                      onClick={handleSaveContact} 
+                      disabled={!editForm.full_name.trim() || updateContact.isPending}
+                    >
+                      {updateContact.isPending ? 'Salvando...' : 'Salvar'}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3">
