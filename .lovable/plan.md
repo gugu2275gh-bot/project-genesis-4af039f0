@@ -1,99 +1,121 @@
 
 
-## Exibir Nome do Cliente nas Tarefas
+## Melhorar Parser de Mensagens WhatsApp
 
-### Objetivo
-Quando uma tarefa estiver associada a um Lead, Oportunidade ou Caso de Serviço, exibir o nome do cliente correspondente na lista de tarefas.
+### Problema Identificado
+A mensagem exibida está em formato JSON bruto porque o parser atual (`parseWhatsAppFlowMessage`) só reconhece o formato `NativeFlowMessage`. O formato recebido é diferente - é um array de botões de quick reply diretamente.
 
-### Estrutura de Dados
+### Formatos de Mensagem Suportados Atualmente
+- `{ NativeFlowMessage: { buttons, body, selectedIndex } }`
 
-A tabela `tasks` possui 3 campos de relacionamento:
-- `related_lead_id` → Lead
-- `related_opportunity_id` → Oportunidade
-- `related_service_case_id` → Caso de Serviço
+### Novos Formatos a Suportar
+1. **Array de botões com quick_reply** (formato da imagem)
+2. **Objeto com buttons e body no root** 
+3. **Lista de opções com selectedIndex**
 
-Todos esses caminham para **contacts.full_name**:
-- Lead → Contact (direto)
-- Oportunidade → Lead → Contact
-- Caso de Serviço → Oportunidade → Lead → Contact
+### Solução Proposta
 
-### Alterações Necessárias
+Expandir a função `parseWhatsAppFlowMessage` para detectar e formatar múltiplos tipos de mensagens interativas do WhatsApp:
 
-**1. Atualizar o hook `useTasks.ts`**
-
-Modificar as queries para incluir joins com as tabelas relacionadas e buscar o nome do cliente:
-
-```text
-tasks
-├── related_lead:leads(contact:contacts(full_name))
-├── related_opportunity:opportunities(lead:leads(contact:contacts(full_name)))
-└── related_service_case:service_cases(opportunity:opportunities(lead:leads(contact:contacts(full_name))))
+**Antes (JSON bruto):**
+```
+{"id":"a","display_text":"Visto Estudante","disabled":false},...
 ```
 
-- Criar um novo tipo `TaskWithClient` que inclua o campo `client_name` derivado
-- Adicionar lógica para extrair o nome do cliente de qualquer uma das relações
+**Depois (formatado):**
+```
+📋 Escolha o assunto:
+• Visto Estudante
+• Visto Trabalho  
+• Reagrupamento
+• Renovação Residência ✓ (selecionado)
+• Nacionalidade Residência
+...
+```
 
-**2. Atualizar a página `TasksList.tsx`**
-
-- Adicionar uma nova coluna "Cliente" na tabela
-- Exibir o nome do cliente quando disponível, ou "-" quando a tarefa não estiver vinculada a nenhum cliente
-- Posicionar a coluna entre "Tarefa" e "Status"
-
-### Resultado Visual
-
-| Tarefa | Cliente | Status | Prazo | Ações |
-|--------|---------|--------|-------|-------|
-| Revisar documentos | João Silva | Pendente | 10/02/2026 | ✓ |
-| Agendar reunião | Maria Santos | Em andamento | 12/02/2026 | ✓ |
-| Tarefa interna | - | Pendente | 15/02/2026 | ✓ |
+### Arquivo a Modificar
+- `src/components/crm/LeadChat.tsx`
 
 ### Detalhes Técnicos
 
-**Novo tipo no hook:**
-```typescript
-export type TaskWithClient = Task & {
-  client_name?: string | null;
-  related_lead?: {
-    contact?: { full_name: string } | null;
-  } | null;
-  related_opportunity?: {
-    lead?: {
-      contact?: { full_name: string } | null;
-    } | null;
-  } | null;
-  related_service_case?: {
-    opportunity?: {
-      lead?: {
-        contact?: { full_name: string } | null;
-      } | null;
-    } | null;
-  } | null;
-};
-```
+A função `parseWhatsAppFlowMessage` será expandida para:
 
-**Função helper para extrair o nome do cliente:**
 ```typescript
-function getClientName(task: TaskWithClient): string | null {
-  // Prioridade: Lead direto > Oportunidade > Caso de Serviço
-  return task.related_lead?.contact?.full_name
-    || task.related_opportunity?.lead?.contact?.full_name
-    || task.related_service_case?.opportunity?.lead?.contact?.full_name
-    || null;
+function parseWhatsAppFlowMessage(content: string) {
+  try {
+    const parsed = JSON.parse(content);
+    
+    // Formato 1: NativeFlowMessage (existente)
+    if (parsed.NativeFlowMessage) {
+      // ... código existente
+    }
+    
+    // Formato 2: Array de botões com buttonParamsJSON
+    if (Array.isArray(parsed)) {
+      const options = parsed
+        .filter(item => item.buttonParamsJSON || item.display_text)
+        .map(item => {
+          if (item.buttonParamsJSON) {
+            try {
+              const params = JSON.parse(item.buttonParamsJSON);
+              return params.display_text;
+            } catch { return null; }
+          }
+          return item.display_text;
+        })
+        .filter(Boolean);
+      
+      if (options.length > 0) {
+        return { isFlowMessage: true, bodyText: 'Opções:', options, selectedIndex: null, selectedOption: null };
+      }
+    }
+    
+    // Formato 3: Objeto com body.text e botões/buttons
+    if (parsed.body?.text || parsed.buttons) {
+      const bodyText = parsed.body?.text || 'Opções:';
+      const buttons = parsed.buttons || [];
+      const options = buttons.map(btn => {
+        if (btn.buttonParamsJSON) {
+          try { return JSON.parse(btn.buttonParamsJSON).display_text; }
+          catch { return btn.display_text || null; }
+        }
+        return btn.display_text || null;
+      }).filter(Boolean);
+      
+      const selectedIndex = parsed.selectedIndex;
+      return {
+        isFlowMessage: true,
+        bodyText,
+        options,
+        selectedIndex,
+        selectedOption: typeof selectedIndex === 'number' ? options[selectedIndex] : null
+      };
+    }
+    
+  } catch {
+    // Não é JSON
+  }
+  return null;
 }
 ```
 
-**Query Supabase atualizada:**
-```typescript
-.select(`
-  *,
-  related_lead:leads(contact:contacts(full_name)),
-  related_opportunity:opportunities(lead:leads(contact:contacts(full_name))),
-  related_service_case:service_cases(opportunity:opportunities(lead:leads(contact:contacts(full_name))))
-`)
+### Renderização Melhorada
+
+As opções serão exibidas como lista formatada:
+- Cada opção em uma linha separada com bullet point
+- Opção selecionada destacada com ícone de check
+- Texto do body como título
+
+### Resultado Visual Esperado
+
 ```
-
-### Arquivos a Modificar
-
-1. `src/hooks/useTasks.ts` - Atualizar queries e adicionar tipos
-2. `src/pages/tasks/TasksList.tsx` - Adicionar coluna de cliente na tabela
+📋 Escolha o assunto:
+  ○ Visto Estudante
+  ○ Visto Trabalho
+  ○ Reagrupamento
+  ✓ Renovação Residência (destacado)
+  ○ Nacionalidade Residência
+  ○ Nacionalidade Casamento
+  ○ Outro
+```
 
