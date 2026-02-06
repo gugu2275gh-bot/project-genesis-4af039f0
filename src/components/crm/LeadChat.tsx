@@ -98,6 +98,45 @@ function parseWhatsAppFlowMessage(content: string) {
       };
     }
     
+    // Formato 4: Resposta de quick reply com quotedMessage aninhado
+    // Estrutura: { selectedDisplayText, selectedID, contextInfo.quotedMessage.interactiveMessage.InteractiveMessage }
+    const interactive = parsed?.contextInfo?.quotedMessage?.interactiveMessage?.InteractiveMessage;
+    if (interactive || parsed.selectedDisplayText) {
+      const native = interactive?.NativeFlowMessage;
+      const bodyText = interactive?.body?.text || 'Opções:';
+      
+      // Extrair opções dos botões
+      const options: string[] = [];
+      if (native?.buttons) {
+        for (const btn of native.buttons) {
+          if (btn.buttonParamsJSON) {
+            try {
+              const params = JSON.parse(btn.buttonParamsJSON);
+              if (params.display_text) {
+                options.push(params.display_text);
+              }
+            } catch {
+              // Ignorar botões inválidos
+            }
+          }
+        }
+      }
+      
+      // Determinar a opção selecionada
+      const selectedOption = parsed.selectedDisplayText || 
+        (typeof parsed.selectedIndex === 'number' && options[parsed.selectedIndex]) ||
+        (typeof native?.selectedIndex === 'number' && options[native.selectedIndex]) ||
+        null;
+      
+      return {
+        isFlowMessage: true,
+        bodyText,
+        options,
+        selectedIndex: null,
+        selectedOption
+      };
+    }
+    
   } catch {
     // Not JSON, return null
   }
@@ -240,14 +279,36 @@ export function LeadChat({ leadId, contactPhone }: LeadChatProps) {
                       const flowData = parseWhatsAppFlowMessage(msg.content);
                       if (flowData) {
                         return (
-                          <div className="space-y-1">
-                            <p className="text-sm">{flowData.bodyText}</p>
-                            {flowData.selectedOption && (
-                              <div className="flex items-center gap-1.5 bg-white/50 dark:bg-white/10 rounded px-2 py-1 mt-1">
+                          <div className="space-y-1.5">
+                            <p className="text-sm font-medium">{flowData.bodyText}</p>
+                            {flowData.options.length > 0 ? (
+                              <div className="space-y-1">
+                                {flowData.options.map((option, idx) => {
+                                  const isSelected = flowData.selectedOption === option;
+                                  return (
+                                    <div 
+                                      key={idx} 
+                                      className={cn(
+                                        "flex items-center gap-1.5 text-sm rounded px-2 py-0.5",
+                                        isSelected && "bg-white/50 dark:bg-white/10 font-medium"
+                                      )}
+                                    >
+                                      {isSelected ? (
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                                      ) : (
+                                        <span className="w-3.5 h-3.5 flex items-center justify-center text-muted-foreground flex-shrink-0">○</span>
+                                      )}
+                                      <span>{option}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : flowData.selectedOption ? (
+                              <div className="flex items-center gap-1.5 bg-white/50 dark:bg-white/10 rounded px-2 py-1">
                                 <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
                                 <span className="text-sm font-medium">{flowData.selectedOption}</span>
                               </div>
-                            )}
+                            ) : null}
                           </div>
                         );
                       }
