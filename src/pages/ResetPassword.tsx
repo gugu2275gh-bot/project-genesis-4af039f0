@@ -20,24 +20,41 @@ export default function ResetPasswordPage() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    // Check if user came from a password reset link
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setIsValidSession(true);
-      }
+    const hasHashToken = window.location.hash && window.location.hash.includes('access_token');
+    let resolved = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const resolve = (valid: boolean) => {
+      if (resolved) return;
+      resolved = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      setIsValidSession(valid);
       setChecking(false);
     };
-    checkSession();
 
-    // Listen for auth state changes (when user clicks the reset link)
+    // 1. Set up auth listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
-        setIsValidSession(true);
+        resolve(true);
+      } else if (event === 'SIGNED_IN' && hasHashToken && session) {
+        resolve(true);
       }
     });
 
-    return () => subscription.unsubscribe();
+    if (hasHashToken) {
+      // 2a. Has hash token: wait for the auth event (with 5s safety timeout)
+      timeoutId = setTimeout(() => resolve(false), 5000);
+    } else {
+      // 2b. No hash token: check existing session normally
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        resolve(!!session);
+      });
+    }
+
+    return () => {
+      subscription.unsubscribe();
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
