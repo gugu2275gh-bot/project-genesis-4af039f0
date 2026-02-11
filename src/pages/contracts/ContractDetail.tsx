@@ -26,6 +26,8 @@ import { ContractNotesSection } from '@/components/contracts/ContractNotesSectio
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
+import { ContractPreview } from '@/components/contracts/ContractPreview';
+import { Eye } from 'lucide-react';
 export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -713,6 +715,10 @@ export default function ContractDetail() {
                   <Users className="h-4 w-4 mr-2" />
                   Beneficiários
                 </TabsTrigger>
+                <TabsTrigger value="preview">
+                  <Eye className="h-4 w-4 mr-2" />
+                  Pré-visualização
+                </TabsTrigger>
               </TabsList>
             </CardHeader>
             <CardContent>
@@ -1132,6 +1138,15 @@ export default function ContractDetail() {
               
               <TabsContent value="beneficiaries" className="m-0">
                 <BeneficiariesTab contractId={contract.id} />
+              </TabsContent>
+              
+              <TabsContent value="preview" className="m-0">
+                <ContractPreview
+                  template={(contract as any).contract_template || 'DOCUMENTOS'}
+                  clientName={contract.opportunities?.leads?.contacts?.full_name || ''}
+                  documentNumber={(contract.opportunities?.leads?.contacts as any)?.document_number || ''}
+                  contractNumber={(contract as any).contract_number || ''}
+                />
               </TabsContent>
             </CardContent>
           </Tabs>
