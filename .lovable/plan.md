@@ -1,68 +1,48 @@
 
-# Pre-visualizacao e Edicao do Contrato na Pagina de Detalhes
+# Corrigir Tela de Redefinicao de Senha
 
-## Resumo
+## Problema
 
-Adicionar uma nova aba "Pre-visualizacao" na area destacada (ao lado de "Detalhes" e "Beneficiarios") que mostra o texto completo do contrato (clausulas juridicas) tal como sera gerado no Word, com a possibilidade de editar campos especificos antes de baixar.
+Quando o usuario clica no link de redefinicao de senha enviado por e-mail, a pagina mostra "Link Invalido" porque:
 
-## O que muda
+1. O Supabase redireciona para `/reset-password#access_token=...`
+2. O codigo executa `getSession()` imediatamente -- nao encontra sessao (o token do hash ainda nao foi processado)
+3. `checking` vira `false` e a tela de erro aparece
+4. O evento `PASSWORD_RECOVERY` dispara depois, mas ja e tarde demais
 
-Atualmente a aba "Detalhes" mostra apenas campos administrativos (escopo, parcelamento, idioma). A nova aba "Pre-visualizacao" vai renderizar em HTML o conteudo completo do contrato selecionado (Regularizacion Extraordinaria, Nacionalidad ou Documentos), ja preenchido com os dados do cliente.
+## Solucao
 
-## Funcionalidades
+Modificar o `useEffect` em `src/pages/ResetPassword.tsx` para:
 
-1. **Nova aba "Pre-visualizacao do Contrato"** ao lado de "Detalhes" e "Beneficiarios"
-2. **Renderizacao em HTML** de todas as clausulas do modelo selecionado, com:
-   - Cabecalho com numero do contrato e data
-   - Nome do cliente e documento ja substituidos
-   - Todas as clausulas formatadas (titulos, paragrafos, listas)
-   - Bloco de assinatura
-3. **Campos editaveis inline** para os dados variaveis:
-   - Nome do cliente (editavel)
-   - Numero do documento (editavel)  
-   - Numero do contrato (editavel)
-   - Honorarios/forma de pagamento (campo aberto no texto)
-4. **Botao "Baixar com alteracoes"** que gera o Word com os dados editados
+1. Detectar se ha um token/hash fragment na URL (indicando que o usuario veio do link do e-mail)
+2. Se houver hash, **aguardar** o evento `PASSWORD_RECOVERY` do `onAuthStateChange` antes de marcar `checking` como `false`
+3. Usar um timeout de seguranca (5 segundos) para nao deixar o usuario esperando indefinidamente caso algo falhe
 
-## Fluxo do Usuario
-
-1. Acessa a pagina de detalhes do contrato
-2. Clica na aba "Pre-visualizacao"
-3. Ve o contrato completo renderizado em HTML, com dados do cliente preenchidos
-4. Se necessario, clica em "Editar Pre-visualizacao" para ajustar campos
-5. Clica em "Baixar Contrato Word" para gerar o .docx com as alteracoes
-
-## Detalhes Tecnicos
-
-### 1. Criar componente `src/components/contracts/ContractPreview.tsx`
-
-Novo componente que:
-- Recebe o template selecionado e dados do cliente
-- Renderiza em HTML as clausulas correspondentes (reutilizando o texto de `generate-contract.ts`)
-- Exibe campos editaveis (inputs inline) para nome, documento, numero do contrato
-- Possui estado local para campos editados
-- Botao para baixar o Word com os dados editados
-
-### 2. Refatorar `src/lib/generate-contract.ts`
-
-Extrair o conteudo textual de cada template para uma funcao separada `getContractSections(template)` que retorna um array de secoes com titulo e conteudo. Isso permite:
-- Reutilizar o texto tanto para gerar o Word quanto para renderizar o HTML
-- Manter uma unica fonte de verdade para o conteudo dos contratos
-
-### 3. Atualizar `src/pages/contracts/ContractDetail.tsx`
-
-- Adicionar a nova aba "Pre-visualizacao" no `TabsList`
-- Renderizar o componente `ContractPreview` dentro do `TabsContent`
-- Passar os dados do contrato e cliente como props
-
-### Arquivos envolvidos
+## Arquivo Envolvido
 
 | Arquivo | Acao |
 |---------|------|
-| `src/components/contracts/ContractPreview.tsx` | **Novo** - Componente de pre-visualizacao |
-| `src/lib/generate-contract.ts` | Refatorar para extrair secoes de texto reutilizaveis |
-| `src/pages/contracts/ContractDetail.tsx` | Adicionar aba "Pre-visualizacao" |
+| `src/pages/ResetPassword.tsx` | Corrigir logica do useEffect para aguardar processamento do token |
+
+## Mudanca no Codigo
+
+O `useEffect` sera reescrito para:
+
+```text
+useEffect:
+  1. Configurar onAuthStateChange PRIMEIRO
+     - Se evento = PASSWORD_RECOVERY -> setIsValidSession(true), setChecking(false)
+     - Se evento = SIGNED_IN (e ha hash na URL) -> setIsValidSession(true), setChecking(false)
+  2. Verificar se ha hash fragment na URL
+     - Se SIM: aguardar o evento do listener (com timeout de 5s como fallback)
+     - Se NAO: chamar getSession() normalmente e definir checking = false
+```
+
+Isso garante que o token do hash seja processado pelo Supabase antes de decidir se a sessao e valida ou nao.
 
 ## Resultado Esperado
 
-O usuario podera ver o contrato completo formatado diretamente na pagina, sem precisar baixar o Word primeiro. Campos variaveis (nome, documento, honorarios) serao editaveis inline, e o botao "Baixar" gera o documento com as alteracoes aplicadas.
+1. Usuario clica no link do e-mail
+2. Pagina mostra loading (spinner) por 1-2 segundos enquanto o token e processado
+3. Formulario de nova senha aparece corretamente
+4. Usuario define a nova senha com sucesso
