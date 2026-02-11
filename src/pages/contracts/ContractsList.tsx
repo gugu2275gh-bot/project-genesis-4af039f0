@@ -9,9 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Eye, FileText, AlertTriangle, Clock } from 'lucide-react';
+import { Plus, Search, Eye, FileText, AlertTriangle, Clock, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS } from '@/types/database';
+import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, CONTRACT_TEMPLATE_LABELS } from '@/types/database';
+import { generateContractDocument } from '@/lib/generate-contract';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -24,6 +25,7 @@ export default function ContractsList() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedOpportunity, setSelectedOpportunity] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('NACIONALIDADE');
 
   const availableOpportunities = opportunities.filter(o => 
     (o.status === 'ABERTA' || o.status === 'CONTRATO_EM_ELABORACAO') &&
@@ -40,13 +42,32 @@ export default function ContractsList() {
   const handleCreate = async () => {
     if (!selectedOpportunity) return;
     const opp = opportunities.find(o => o.id === selectedOpportunity);
-    await createContract.mutateAsync({
+    const result = await createContract.mutateAsync({
       opportunity_id: selectedOpportunity,
       service_type: opp?.leads?.service_interest || 'OUTRO',
       status: 'EM_ELABORACAO',
-    });
+      contract_template: selectedTemplate,
+    } as any);
+    
+    // Auto-generate the Word document
+    const clientName = opp?.leads?.contacts?.full_name || 'CLIENTE';
+    const documentNumber = (opp?.leads?.contacts as any)?.document_number || '';
+    const contractNumber = (result as any)?.contract_number || '';
+    
+    try {
+      await generateContractDocument({
+        template: selectedTemplate,
+        clientName,
+        documentNumber,
+        contractNumber,
+      });
+    } catch (e) {
+      console.error('Error generating contract document:', e);
+    }
+    
     setIsDialogOpen(false);
     setSelectedOpportunity('');
+    setSelectedTemplate('NACIONALIDADE');
   };
 
   const calculatePaymentStatus = (contract: typeof contracts[0]) => {
@@ -222,6 +243,34 @@ export default function ContractsList() {
                       </SelectContent>
                     </Select>
                   )}
+                </div>
+                <div>
+                  <Label>Modelo do Contrato</Label>
+                  <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o modelo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="REGULARIZACION_EXTRAORDINARIA">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Regularización Extraordinaria
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="NACIONALIDADE">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Nacionalidad
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="DOCUMENTOS">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Documentos / Certificados
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>

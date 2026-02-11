@@ -12,8 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Send, Check, Save, X, Calendar, FileText, Users, Upload, FileCheck, Loader2, User, Phone, MapPin, CreditCard, Pause, Play, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Send, Check, Save, X, Calendar, FileText, Users, Upload, FileCheck, Loader2, User, Phone, MapPin, CreditCard, Pause, Play, AlertTriangle, Download } from 'lucide-react';
 import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, LANGUAGE_LABELS, CONTRACT_TEMPLATE_LABELS, ContractTemplate, PAYMENT_METHOD_LABELS, PAYMENT_ACCOUNT_LABELS, PaymentAccount } from '@/types/database';
+import { generateContractDocument } from '@/lib/generate-contract';
 import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -41,7 +42,7 @@ export default function ContractDetail() {
     installment_count: '1',
     installment_amount: '',
     first_due_date: '',
-    contract_template: 'GENERICO',
+    contract_template: 'NACIONALIDADE',
     status: 'EM_ELABORACAO',
     // New fields
     contract_number: '',
@@ -331,6 +332,21 @@ export default function ContractDetail() {
         description={`Criado em ${format(new Date(contract.created_at!), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
         actions={
           <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                const cd = contract as any;
+                generateContractDocument({
+                  template: cd.contract_template || 'GENERICO',
+                  clientName: contract.opportunities?.leads?.contacts?.full_name || 'CLIENTE',
+                  documentNumber: (contract.opportunities?.leads?.contacts as any)?.document_number || '',
+                  contractNumber: cd.contract_number || '',
+                });
+              }}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Baixar Contrato Word
+            </Button>
             {canCancel && (
               <Button variant="outline" onClick={() => setShowCancelDialog(true)}>
                 <X className="h-4 w-4 mr-2" />
