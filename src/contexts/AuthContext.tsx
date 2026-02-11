@@ -139,8 +139,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
-    const redirectUrl = `${window.location.origin}/reset-password`;
-    
+    // When requesting password recovery from a Lovable preview domain, the email link can open
+    // an interstitial screen. Use the published URL so users land directly on /reset-password.
+    const origin = window.location.origin;
+    const publishedOrigin = 'https://cbasesoria.lovable.app';
+    const isLovablePreview = origin.includes('lovableproject.com') || origin.includes('id-preview--');
+
+    const redirectBase = isLovablePreview ? publishedOrigin : origin;
+    const redirectUrl = `${redirectBase}/reset-password`;
+
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: redirectUrl,
     });
