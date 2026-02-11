@@ -86,10 +86,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   const { user } = useAuth();
+  // Check if we're on the reset-password route - don't redirect even if user is set
+  // because the PASSWORD_RECOVERY flow sets a session before the user changes their password
+  const isResetPasswordRoute = window.location.pathname === '/reset-password';
 
   return (
     <Routes>
-      <Route path="/auth" element={user ? <Navigate to="/dashboard" /> : <AuthPage />} />
+      <Route path="/auth" element={user && !isResetPasswordRoute ? <Navigate to="/dashboard" /> : <AuthPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/nps/:caseId" element={<NPSSurvey />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
