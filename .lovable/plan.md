@@ -1,98 +1,68 @@
 
-# Geracão Automatica de Contratos Word (.docx) com Preenchimento de Dados do Cliente
+# Pre-visualizacao e Edicao do Contrato na Pagina de Detalhes
 
 ## Resumo
 
-Ao criar um contrato, o usuario seleciona a oportunidade e um dos 3 modelos de contrato. O sistema gera automaticamente um arquivo Word (.docx) com os dados do cliente (nome, documento, data, numero do contrato) ja preenchidos, disponibilizando o download imediato.
+Adicionar uma nova aba "Pre-visualizacao" na area destacada (ao lado de "Detalhes" e "Beneficiarios") que mostra o texto completo do contrato (clausulas juridicas) tal como sera gerado no Word, com a possibilidade de editar campos especificos antes de baixar.
 
-## Os 3 Modelos de Contrato
+## O que muda
 
-| Modelo | Descricao | Uso |
-|--------|-----------|-----|
-| Regularizacion Extraordinaria | Contrato para tramite de regularizacao excepcional | Processos de regularizacao |
-| Nacionalidad | Contrato para nacionalidade espanhola por residencia | Processos de nacionalidade |
-| Documentos | Contrato generico para solicitudes de documentos/certificados | Outros tramites documentais |
+Atualmente a aba "Detalhes" mostra apenas campos administrativos (escopo, parcelamento, idioma). A nova aba "Pre-visualizacao" vai renderizar em HTML o conteudo completo do contrato selecionado (Regularizacion Extraordinaria, Nacionalidad ou Documentos), ja preenchido com os dados do cliente.
 
-## Campos Preenchidos Automaticamente
+## Funcionalidades
 
-Os seguintes campos serao substituidos nos templates com dados do banco:
+1. **Nova aba "Pre-visualizacao do Contrato"** ao lado de "Detalhes" e "Beneficiarios"
+2. **Renderizacao em HTML** de todas as clausulas do modelo selecionado, com:
+   - Cabecalho com numero do contrato e data
+   - Nome do cliente e documento ja substituidos
+   - Todas as clausulas formatadas (titulos, paragrafos, listas)
+   - Bloco de assinatura
+3. **Campos editaveis inline** para os dados variaveis:
+   - Nome do cliente (editavel)
+   - Numero do documento (editavel)  
+   - Numero do contrato (editavel)
+   - Honorarios/forma de pagamento (campo aberto no texto)
+4. **Botao "Baixar com alteracoes"** que gera o Word com os dados editados
 
-- **N. CONTRATO**: Numero sequencial do contrato (`contract_number`)
-- **Data**: Data atual formatada (ex: "11 de febrero de 2026")
-- **CLIENTE (Nome)**: `contacts.full_name` (em maiusculas)
-- **DOCUMENTO (PASAPORTE / NIE / DNI / NIF)**: `contacts.document_number`
+## Fluxo do Usuario
 
-## Mudancas no Fluxo
-
-1. **Dialog "Novo Contrato"** (ContractsList.tsx): Adicionar o terceiro modelo "Documentos Actualizado" ao seletor de templates
-2. **Geracao do .docx**: Criar funcao `generate-contract.ts` que monta o documento Word usando a lib `docx` (ja instalada) com o conteudo completo de cada template
-3. **Botao "Baixar Contrato"** no ContractDetail.tsx: Permitir gerar/baixar o Word preenchido a qualquer momento
+1. Acessa a pagina de detalhes do contrato
+2. Clica na aba "Pre-visualizacao"
+3. Ve o contrato completo renderizado em HTML, com dados do cliente preenchidos
+4. Se necessario, clica em "Editar Pre-visualizacao" para ajustar campos
+5. Clica em "Baixar Contrato Word" para gerar o .docx com as alteracoes
 
 ## Detalhes Tecnicos
 
-### 1. Atualizar o tipo `ContractTemplate` (src/types/database.ts)
+### 1. Criar componente `src/components/contracts/ContractPreview.tsx`
 
-Adicionar o novo template:
-```
-export type ContractTemplate = 'NACIONALIDADE' | 'REGULARIZACION_EXTRAORDINARIA' | 'DOCUMENTOS';
-```
+Novo componente que:
+- Recebe o template selecionado e dados do cliente
+- Renderiza em HTML as clausulas correspondentes (reutilizando o texto de `generate-contract.ts`)
+- Exibe campos editaveis (inputs inline) para nome, documento, numero do contrato
+- Possui estado local para campos editados
+- Botao para baixar o Word com os dados editados
 
-Atualizar labels:
-```
-export const CONTRACT_TEMPLATE_LABELS = {
-  NACIONALIDADE: 'Nacionalidad',
-  REGULARIZACION_EXTRAORDINARIA: 'Regularizacion Extraordinaria',
-  DOCUMENTOS: 'Documentos / Certificados',
-};
-```
+### 2. Refatorar `src/lib/generate-contract.ts`
 
-Nota: O template `GENERICO` sera descontinuado em favor dos 3 modelos especificos. Contratos existentes com `GENERICO` continuarao exibindo normalmente.
+Extrair o conteudo textual de cada template para uma funcao separada `getContractSections(template)` que retorna um array de secoes com titulo e conteudo. Isso permite:
+- Reutilizar o texto tanto para gerar o Word quanto para renderizar o HTML
+- Manter uma unica fonte de verdade para o conteudo dos contratos
 
-### 2. Criar `src/lib/generate-contract.ts`
+### 3. Atualizar `src/pages/contracts/ContractDetail.tsx`
 
-Nova funcao que usa a lib `docx` (mesma usada em `generate-journey-document.ts`) para montar o documento Word completo:
+- Adicionar a nova aba "Pre-visualizacao" no `TabsList`
+- Renderizar o componente `ContractPreview` dentro do `TabsContent`
+- Passar os dados do contrato e cliente como props
 
-- Recebe: `{ template, clientName, documentNumber, contractNumber, date }`
-- Contem o texto integral de cada um dos 3 contratos (copiados dos arquivos Word analisados)
-- Substitui os placeholders pelos dados reais
-- Gera e faz download do .docx via `file-saver`
-
-A estrutura sera:
-- Header com logo (imagem da CB Asesoria ja em `src/assets/`)
-- Cabecalho com numero do contrato e data
-- Todas as clausulas do modelo selecionado
-- Rodape "Sus tramites en buenas manos"
-
-### 3. Atualizar `ContractsList.tsx`
-
-- Trocar os 2 templates atuais pelos 3 novos no dialog de criacao
-- Apos criar o contrato, oferecer download automatico do Word gerado
-
-### 4. Atualizar `ContractDetail.tsx`
-
-- Adicionar botao "Baixar Contrato Word" no cabecalho
-- Ao clicar, gera o .docx preenchido com os dados atuais do contrato/cliente
-- Atualizar o seletor de templates para os 3 novos modelos
-
-### 5. Migracao de dados
-
-- Contratos existentes com template `GENERICO` ou `NACIONALIDADE` serao mapeados automaticamente no codigo (sem migracao de banco necessaria)
-
-## Arquivos Envolvidos
+### Arquivos envolvidos
 
 | Arquivo | Acao |
 |---------|------|
-| `src/types/database.ts` | Atualizar tipo e labels do ContractTemplate |
-| `src/lib/generate-contract.ts` | **Novo** - Funcao de geracao do Word |
-| `src/pages/contracts/ContractsList.tsx` | Atualizar seletor de template (3 opcoes) |
-| `src/pages/contracts/ContractDetail.tsx` | Adicionar botao de download do Word |
-| `pages/contracts/ContractsList.tsx` | Atualizar seletor (arquivo duplicado na raiz) |
+| `src/components/contracts/ContractPreview.tsx` | **Novo** - Componente de pre-visualizacao |
+| `src/lib/generate-contract.ts` | Refatorar para extrair secoes de texto reutilizaveis |
+| `src/pages/contracts/ContractDetail.tsx` | Adicionar aba "Pre-visualizacao" |
 
 ## Resultado Esperado
 
-1. Usuario clica "Novo Contrato"
-2. Seleciona a oportunidade
-3. Seleciona um dos 3 modelos: Regularizacion Extraordinaria, Nacionalidad, ou Documentos
-4. Clica "Criar Contrato"
-5. O contrato e criado no banco e um arquivo Word (.docx) e gerado automaticamente com nome, documento e numero preenchidos
-6. Na pagina do contrato, ha um botao para regenerar/baixar o Word a qualquer momento
+O usuario podera ver o contrato completo formatado diretamente na pagina, sem precisar baixar o Word primeiro. Campos variaveis (nome, documento, honorarios) serao editaveis inline, e o botao "Baixar" gera o documento com as alteracoes aplicadas.
