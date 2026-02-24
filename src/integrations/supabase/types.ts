@@ -392,6 +392,7 @@ export type Database = {
       contract_beneficiaries: {
         Row: {
           birth_date: string | null
+          contact_id: string | null
           contract_id: string
           created_at: string | null
           document_number: string | null
@@ -406,6 +407,7 @@ export type Database = {
         }
         Insert: {
           birth_date?: string | null
+          contact_id?: string | null
           contract_id: string
           created_at?: string | null
           document_number?: string | null
@@ -420,6 +422,7 @@ export type Database = {
         }
         Update: {
           birth_date?: string | null
+          contact_id?: string | null
           contract_id?: string
           created_at?: string | null
           document_number?: string | null
@@ -433,6 +436,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "contract_beneficiaries_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contract_beneficiaries_contract_id_fkey"
             columns: ["contract_id"]
