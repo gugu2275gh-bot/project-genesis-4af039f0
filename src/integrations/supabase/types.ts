@@ -2434,6 +2434,7 @@ export type Database = {
         | "INDICACAO"
         | "OUTRO"
         | "COLABORADOR"
+        | "YOUTUBE"
       payment_method:
         | "CARTAO"
         | "TRANSFERENCIA"
@@ -2674,6 +2675,7 @@ export const Constants = {
         "INDICACAO",
         "OUTRO",
         "COLABORADOR",
+        "YOUTUBE",
       ],
       payment_method: [
         "CARTAO",

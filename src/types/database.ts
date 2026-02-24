@@ -14,6 +14,7 @@ export type OriginChannel =
   | 'SITE'
   | 'INSTAGRAM'
   | 'FACEBOOK'
+  | 'YOUTUBE'
   | 'EMAIL'
   | 'INDICACAO'
   | 'COLABORADOR'
@@ -389,6 +390,7 @@ export const ORIGIN_CHANNEL_LABELS: Record<OriginChannel, string> = {
   SITE: 'Site',
   INSTAGRAM: 'Instagram',
   FACEBOOK: 'Facebook',
+  YOUTUBE: 'YouTube',
   EMAIL: 'Email',
   INDICACAO: 'Indicação',
   COLABORADOR: 'Colaborador',
