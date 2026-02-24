@@ -516,6 +516,26 @@ export const LANGUAGE_LABELS: Record<LanguageCode, string> = {
 export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   PASSAPORTE: 'Passaporte',
   NIE: 'NIE',
+  TIE: 'TIE',
+  OUTRO: 'Outro',
+};
+
+export const CIVIL_STATUS_LABELS: Record<string, string> = {
+  SOLTEIRO: 'Solteiro(a)',
+  CASADO: 'Casado(a)',
+  DIVORCIADO: 'Divorciado(a)',
+  VIUVO: 'Viúvo(a)',
+  SEPARADO: 'Separado(a)',
+  UNIAO_ESTAVEL: 'União Estável',
+};
+
+export const LEGAL_GUARDIAN_RELATIONSHIP_LABELS: Record<string, string> = {
+  PAI: 'Pai',
+  MAE: 'Mãe',
+  AVO: 'Avô/Avó',
+  TIO: 'Tio(a)',
+  TUTOR_LEGAL: 'Tutor Legal',
+  OUTRO: 'Outro',
 };
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {

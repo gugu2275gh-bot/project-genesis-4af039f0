@@ -233,10 +233,14 @@ export type Database = {
       contacts: {
         Row: {
           address: string | null
+          birth_city: string | null
+          birth_date: string | null
+          birth_state: string | null
           civil_status: string | null
           country_of_origin: string | null
           cpf: string | null
           created_at: string | null
+          document_expiry_date: string | null
           document_number: string | null
           document_type: string | null
           education_level: string | null
@@ -247,6 +251,12 @@ export type Database = {
           father_name: string | null
           full_name: string
           id: string
+          legal_guardian_address: string | null
+          legal_guardian_birth_date: string | null
+          legal_guardian_email: string | null
+          legal_guardian_name: string | null
+          legal_guardian_phone: string | null
+          legal_guardian_relationship: string | null
           mother_name: string | null
           nationality: string | null
           onboarding_completed: boolean | null
@@ -259,15 +269,21 @@ export type Database = {
           profession: string | null
           referral_confirmed: boolean | null
           referral_name: string | null
+          second_document_number: string | null
+          second_document_type: string | null
           spain_arrival_date: string | null
           updated_at: string | null
         }
         Insert: {
           address?: string | null
+          birth_city?: string | null
+          birth_date?: string | null
+          birth_state?: string | null
           civil_status?: string | null
           country_of_origin?: string | null
           cpf?: string | null
           created_at?: string | null
+          document_expiry_date?: string | null
           document_number?: string | null
           document_type?: string | null
           education_level?: string | null
@@ -278,6 +294,12 @@ export type Database = {
           father_name?: string | null
           full_name: string
           id?: string
+          legal_guardian_address?: string | null
+          legal_guardian_birth_date?: string | null
+          legal_guardian_email?: string | null
+          legal_guardian_name?: string | null
+          legal_guardian_phone?: string | null
+          legal_guardian_relationship?: string | null
           mother_name?: string | null
           nationality?: string | null
           onboarding_completed?: boolean | null
@@ -290,15 +312,21 @@ export type Database = {
           profession?: string | null
           referral_confirmed?: boolean | null
           referral_name?: string | null
+          second_document_number?: string | null
+          second_document_type?: string | null
           spain_arrival_date?: string | null
           updated_at?: string | null
         }
         Update: {
           address?: string | null
+          birth_city?: string | null
+          birth_date?: string | null
+          birth_state?: string | null
           civil_status?: string | null
           country_of_origin?: string | null
           cpf?: string | null
           created_at?: string | null
+          document_expiry_date?: string | null
           document_number?: string | null
           document_type?: string | null
           education_level?: string | null
@@ -309,6 +337,12 @@ export type Database = {
           father_name?: string | null
           full_name?: string
           id?: string
+          legal_guardian_address?: string | null
+          legal_guardian_birth_date?: string | null
+          legal_guardian_email?: string | null
+          legal_guardian_name?: string | null
+          legal_guardian_phone?: string | null
+          legal_guardian_relationship?: string | null
           mother_name?: string | null
           nationality?: string | null
           onboarding_completed?: boolean | null
@@ -321,6 +355,8 @@ export type Database = {
           profession?: string | null
           referral_confirmed?: boolean | null
           referral_name?: string | null
+          second_document_number?: string | null
+          second_document_type?: string | null
           spain_arrival_date?: string | null
           updated_at?: string | null
         }

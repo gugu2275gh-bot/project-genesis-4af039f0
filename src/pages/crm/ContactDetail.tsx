@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useContact, useContacts, ContactUpdate } from '@/hooks/useContacts';
 import { useLeads } from '@/hooks/useLeads';
@@ -33,9 +33,12 @@ import {
   Loader2,
   MapPin,
   Users,
-  CreditCard
+  CreditCard,
+  Calendar,
+  Briefcase,
+  Baby
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   ORIGIN_CHANNEL_LABELS,
@@ -43,8 +46,20 @@ import {
   LEAD_STATUS_LABELS,
   SERVICE_INTEREST_LABELS,
   DOCUMENT_TYPE_LABELS,
+  CIVIL_STATUS_LABELS,
+  LEGAL_GUARDIAN_RELATIONSHIP_LABELS,
 } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
+
+function calculateAge(birthDate: string | null | undefined): string | null {
+  if (!birthDate) return null;
+  try {
+    const age = differenceInYears(new Date(), new Date(birthDate));
+    return `${age} anos`;
+  } catch {
+    return null;
+  }
+}
 
 export default function ContactDetail() {
   const { id } = useParams<{ id: string }>();
@@ -58,10 +73,8 @@ export default function ContactDetail() {
   const [editedContact, setEditedContact] = useState<Partial<ContactUpdate>>({});
   const [phoneInput, setPhoneInput] = useState('');
 
-  // Get leads for this contact
   const contactLeads = leads.filter(l => l.contact_id === id);
 
-  // Initialize edit state when contact loads
   const handleStartEdit = () => {
     if (contact) {
       setEditedContact({
@@ -76,6 +89,24 @@ export default function ContactDetail() {
         address: contact.address,
         referral_name: contact.referral_name,
         referral_confirmed: contact.referral_confirmed,
+        civil_status: contact.civil_status,
+        profession: contact.profession,
+        cpf: contact.cpf,
+        mother_name: contact.mother_name,
+        father_name: contact.father_name,
+        spain_arrival_date: contact.spain_arrival_date,
+        birth_date: (contact as any).birth_date,
+        birth_city: (contact as any).birth_city,
+        birth_state: (contact as any).birth_state,
+        second_document_type: (contact as any).second_document_type,
+        second_document_number: (contact as any).second_document_number,
+        document_expiry_date: (contact as any).document_expiry_date,
+        legal_guardian_name: (contact as any).legal_guardian_name,
+        legal_guardian_phone: (contact as any).legal_guardian_phone,
+        legal_guardian_email: (contact as any).legal_guardian_email,
+        legal_guardian_address: (contact as any).legal_guardian_address,
+        legal_guardian_birth_date: (contact as any).legal_guardian_birth_date,
+        legal_guardian_relationship: (contact as any).legal_guardian_relationship,
       });
       setPhoneInput(contact.phone?.toString() || '');
       setIsEditing(true);
@@ -106,6 +137,14 @@ export default function ContactDetail() {
     }
   };
 
+  const isMinor = useMemo(() => {
+    const bd = isEditing ? (editedContact as any).birth_date : (contact as any)?.birth_date;
+    if (!bd) return false;
+    try {
+      return differenceInYears(new Date(), new Date(bd)) < 18;
+    } catch { return false; }
+  }, [isEditing, editedContact, contact]);
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -132,6 +171,607 @@ export default function ContactDetail() {
     );
   }
 
+  const c = contact as any; // to access new fields not yet in types
+
+  const renderEditForm = () => (
+    <div className="space-y-4">
+      {/* Nome */}
+      <div>
+        <Label>Nome Completo *</Label>
+        <Input
+          value={editedContact.full_name || ''}
+          onChange={(e) => setEditedContact({ ...editedContact, full_name: e.target.value })}
+        />
+      </div>
+      
+      {/* Telefone / Email */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Telefone</Label>
+          <Input
+            value={phoneInput}
+            onChange={(e) => setPhoneInput(e.target.value)}
+            placeholder="+55 11 99999-9999"
+          />
+        </div>
+        <div>
+          <Label>E-mail</Label>
+          <Input
+            value={editedContact.email || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, email: e.target.value })}
+            type="email"
+          />
+        </div>
+      </div>
+
+      {/* Endereço */}
+      <div>
+        <Label>Endereço Residencial</Label>
+        <Textarea
+          value={editedContact.address || ''}
+          onChange={(e) => setEditedContact({ ...editedContact, address: e.target.value })}
+          placeholder="Endereço completo"
+          rows={2}
+        />
+      </div>
+
+      {/* Data de Nascimento */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Data de Nascimento</Label>
+          <Input
+            type="date"
+            value={(editedContact as any).birth_date || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, birth_date: e.target.value || null } as any)}
+          />
+          {(editedContact as any).birth_date && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Idade: {calculateAge((editedContact as any).birth_date)}
+            </p>
+          )}
+        </div>
+        <div>
+          <Label>Estado Civil</Label>
+          <Select
+            value={editedContact.civil_status || ''}
+            onValueChange={(v) => setEditedContact({ ...editedContact, civil_status: v })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(CIVIL_STATUS_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* País / Cidade / Estado de Nascimento */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div>
+          <Label>País de Nascimento</Label>
+          <Input
+            value={editedContact.country_of_origin || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, country_of_origin: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label>Cidade de Nascimento</Label>
+          <Input
+            value={(editedContact as any).birth_city || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, birth_city: e.target.value } as any)}
+          />
+        </div>
+        <div>
+          <Label>Estado de Nascimento</Label>
+          <Input
+            value={(editedContact as any).birth_state || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, birth_state: e.target.value } as any)}
+          />
+        </div>
+      </div>
+
+      {/* Nacionalidade / Profissão */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Nacionalidade(s)</Label>
+          <Input
+            value={editedContact.nationality || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, nationality: e.target.value })}
+            placeholder="Ex: Brasileira, Portuguesa"
+          />
+        </div>
+        <div>
+          <Label>Profissão</Label>
+          <Input
+            value={editedContact.profession || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, profession: e.target.value })}
+          />
+        </div>
+      </div>
+
+      {/* Nome da Mãe / Pai */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Nome da Mãe</Label>
+          <Input
+            value={editedContact.mother_name || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, mother_name: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label>Nome do Pai</Label>
+          <Input
+            value={editedContact.father_name || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, father_name: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <Separator className="my-4" />
+
+      {/* Documento Principal */}
+      <h4 className="font-medium text-sm text-muted-foreground">Documento Principal</h4>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div>
+          <Label>Tipo de Documento</Label>
+          <Select
+            value={editedContact.document_type || ''}
+            onValueChange={(v) => setEditedContact({ ...editedContact, document_type: v })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>Número do Documento</Label>
+          <Input
+            value={editedContact.document_number || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, document_number: e.target.value })}
+            placeholder="Ex: Y1234567X"
+          />
+        </div>
+        <div>
+          <Label>Validade do Documento</Label>
+          <Input
+            type="date"
+            value={(editedContact as any).document_expiry_date || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, document_expiry_date: e.target.value || null } as any)}
+          />
+        </div>
+      </div>
+
+      {/* Segundo Documento */}
+      <h4 className="font-medium text-sm text-muted-foreground">Segundo Documento (opcional)</h4>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Tipo</Label>
+          <Select
+            value={(editedContact as any).second_document_type || ''}
+            onValueChange={(v) => setEditedContact({ ...editedContact, second_document_type: v } as any)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>Número</Label>
+          <Input
+            value={(editedContact as any).second_document_number || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, second_document_number: e.target.value } as any)}
+          />
+        </div>
+      </div>
+
+      {/* CPF */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>CPF</Label>
+          <Input
+            value={editedContact.cpf || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, cpf: e.target.value })}
+            placeholder="000.000.000-00"
+          />
+        </div>
+        <div>
+          <Label>Data de Entrada na Espanha (ou previsão)</Label>
+          <Input
+            type="date"
+            value={editedContact.spain_arrival_date || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, spain_arrival_date: e.target.value || null })}
+          />
+        </div>
+      </div>
+
+      <Separator className="my-4" />
+
+      {/* Canal / Idioma */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Canal de Origem</Label>
+          <Select
+            value={editedContact.origin_channel || ''}
+            onValueChange={(v: any) => setEditedContact({ ...editedContact, origin_channel: v })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(ORIGIN_CHANNEL_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>Idioma Preferencial</Label>
+          <Select
+            value={editedContact.preferred_language || ''}
+            onValueChange={(v: any) => setEditedContact({ ...editedContact, preferred_language: v })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(LANGUAGE_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Indicação */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Indicado por (Colaborador/Parceiro)</Label>
+          <Input
+            value={editedContact.referral_name || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, referral_name: e.target.value })}
+            placeholder="Nome do colaborador"
+          />
+        </div>
+        <div className="flex items-center gap-2 pt-6">
+          <Checkbox
+            id="referral_confirmed"
+            checked={editedContact.referral_confirmed || false}
+            onCheckedChange={(c) => setEditedContact({ ...editedContact, referral_confirmed: !!c })}
+          />
+          <Label htmlFor="referral_confirmed" className="cursor-pointer">Indicação confirmada</Label>
+        </div>
+      </div>
+
+      {/* Representante Legal (menores) */}
+      {isMinor && (
+        <>
+          <Separator className="my-4" />
+          <h4 className="font-medium flex items-center gap-2">
+            <Baby className="h-4 w-4" />
+            Representante Legal (Menor de Idade)
+          </h4>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label>Nome do Representante</Label>
+              <Input
+                value={(editedContact as any).legal_guardian_name || ''}
+                onChange={(e) => setEditedContact({ ...editedContact, legal_guardian_name: e.target.value } as any)}
+              />
+            </div>
+            <div>
+              <Label>Grau de Parentesco</Label>
+              <Select
+                value={(editedContact as any).legal_guardian_relationship || ''}
+                onValueChange={(v) => setEditedContact({ ...editedContact, legal_guardian_relationship: v } as any)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(LEGAL_GUARDIAN_RELATIONSHIP_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label>Telefone</Label>
+              <Input
+                value={(editedContact as any).legal_guardian_phone || ''}
+                onChange={(e) => setEditedContact({ ...editedContact, legal_guardian_phone: e.target.value } as any)}
+              />
+            </div>
+            <div>
+              <Label>E-mail</Label>
+              <Input
+                value={(editedContact as any).legal_guardian_email || ''}
+                onChange={(e) => setEditedContact({ ...editedContact, legal_guardian_email: e.target.value } as any)}
+                type="email"
+              />
+            </div>
+          </div>
+          <div>
+            <Label>Endereço</Label>
+            <Input
+              value={(editedContact as any).legal_guardian_address || ''}
+              onChange={(e) => setEditedContact({ ...editedContact, legal_guardian_address: e.target.value } as any)}
+            />
+          </div>
+          <div>
+            <Label>Data de Nascimento do Representante</Label>
+            <Input
+              type="date"
+              value={(editedContact as any).legal_guardian_birth_date || ''}
+              onChange={(e) => setEditedContact({ ...editedContact, legal_guardian_birth_date: e.target.value || null } as any)}
+            />
+          </div>
+        </>
+      )}
+      
+      <div className="flex justify-end gap-2 pt-4">
+        <Button variant="outline" onClick={() => setIsEditing(false)}>
+          Cancelar
+        </Button>
+        <Button onClick={handleSave} disabled={updateContact.isPending}>
+          {updateContact.isPending ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4 mr-2" />
+          )}
+          Salvar
+        </Button>
+      </div>
+    </div>
+  );
+
+  const renderViewFields = () => (
+    <div className="grid gap-6 sm:grid-cols-2">
+      <div className="flex items-center gap-3">
+        <Phone className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Telefone</p>
+          <p className="font-medium">{contact.phone || '-'}</p>
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-3">
+        <Mail className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">E-mail</p>
+          <p className="font-medium">{contact.email || '-'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-start gap-3 sm:col-span-2">
+        <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+        <div>
+          <p className="text-sm text-muted-foreground">Endereço Residencial</p>
+          <p className="font-medium">{contact.address || '-'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Calendar className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Data de Nascimento</p>
+          <p className="font-medium">
+            {c.birth_date ? format(new Date(c.birth_date), "dd/MM/yyyy") : '-'}
+            {c.birth_date && (
+              <span className="text-muted-foreground ml-2">({calculateAge(c.birth_date)})</span>
+            )}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <User className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Estado Civil</p>
+          <p className="font-medium">{contact.civil_status ? CIVIL_STATUS_LABELS[contact.civil_status] || contact.civil_status : '-'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Globe className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">País de Nascimento</p>
+          <p className="font-medium">{contact.country_of_origin || '-'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <MapPin className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Cidade / Estado de Nascimento</p>
+          <p className="font-medium">
+            {[c.birth_city, c.birth_state].filter(Boolean).join(', ') || '-'}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Globe className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Nacionalidade(s)</p>
+          <p className="font-medium">{contact.nationality || '-'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Briefcase className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Profissão</p>
+          <p className="font-medium">{contact.profession || '-'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <User className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Nome da Mãe</p>
+          <p className="font-medium">{contact.mother_name || '-'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <User className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Nome do Pai</p>
+          <p className="font-medium">{contact.father_name || '-'}</p>
+        </div>
+      </div>
+
+      <Separator className="sm:col-span-2" />
+
+      {/* Documento Principal */}
+      <div className="flex items-center gap-3">
+        <CreditCard className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Documento Principal</p>
+          <p className="font-medium">
+            {contact.document_type ? DOCUMENT_TYPE_LABELS[contact.document_type] : '-'}
+            {contact.document_number && ` - ${contact.document_number}`}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Calendar className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Validade do Documento</p>
+          <p className="font-medium">
+            {c.document_expiry_date ? format(new Date(c.document_expiry_date), "dd/MM/yyyy") : '-'}
+          </p>
+        </div>
+      </div>
+
+      {/* Segundo Documento */}
+      {(c.second_document_type || c.second_document_number) && (
+        <div className="flex items-center gap-3 sm:col-span-2">
+          <CreditCard className="h-5 w-5 text-muted-foreground" />
+          <div>
+            <p className="text-sm text-muted-foreground">Segundo Documento</p>
+            <p className="font-medium">
+              {c.second_document_type ? DOCUMENT_TYPE_LABELS[c.second_document_type] || c.second_document_type : ''}
+              {c.second_document_number && ` - ${c.second_document_number}`}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3">
+        <FileText className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">CPF</p>
+          <p className="font-medium">{contact.cpf || '-'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Calendar className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Entrada na Espanha</p>
+          <p className="font-medium">
+            {contact.spain_arrival_date ? format(new Date(contact.spain_arrival_date), "dd/MM/yyyy") : '-'}
+          </p>
+        </div>
+      </div>
+
+      <Separator className="sm:col-span-2" />
+
+      <div className="flex items-center gap-3">
+        <Building className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Canal de Origem</p>
+          <p className="font-medium">
+            {ORIGIN_CHANNEL_LABELS[contact.origin_channel || 'OUTRO']}
+          </p>
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-3">
+        <Globe className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Idioma Preferencial</p>
+          <p className="font-medium">
+            {LANGUAGE_LABELS[contact.preferred_language || 'pt']}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 sm:col-span-2">
+        <Users className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Indicado por</p>
+          <p className="font-medium">
+            {contact.referral_name || '-'}
+            {contact.referral_confirmed && contact.referral_name && (
+              <Badge variant="outline" className="ml-2">Confirmado</Badge>
+            )}
+          </p>
+        </div>
+      </div>
+
+      {/* Representante Legal */}
+      {isMinor && c.legal_guardian_name && (
+        <>
+          <Separator className="sm:col-span-2" />
+          <div className="sm:col-span-2">
+            <h4 className="font-medium flex items-center gap-2 mb-4">
+              <Baby className="h-4 w-4" />
+              Representante Legal
+            </h4>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-sm text-muted-foreground">Nome</p>
+                <p className="font-medium">{c.legal_guardian_name}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Parentesco</p>
+                <p className="font-medium">
+                  {c.legal_guardian_relationship ? LEGAL_GUARDIAN_RELATIONSHIP_LABELS[c.legal_guardian_relationship] || c.legal_guardian_relationship : '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Telefone</p>
+                <p className="font-medium">{c.legal_guardian_phone || '-'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">E-mail</p>
+                <p className="font-medium">{c.legal_guardian_email || '-'}</p>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="text-sm text-muted-foreground">Endereço</p>
+                <p className="font-medium">{c.legal_guardian_address || '-'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Data de Nascimento</p>
+                <p className="font-medium">
+                  {c.legal_guardian_birth_date ? format(new Date(c.legal_guardian_birth_date), "dd/MM/yyyy") : '-'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -153,7 +793,6 @@ export default function ContactDetail() {
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main Info */}
         <div className="lg:col-span-2 space-y-6">
           <Card>
             <CardHeader>
@@ -168,252 +807,7 @@ export default function ContactDetail() {
               )}
             </CardHeader>
             <CardContent>
-              {isEditing ? (
-                <div className="space-y-4">
-                  <div>
-                    <Label>Nome Completo *</Label>
-                    <Input
-                      value={editedContact.full_name || ''}
-                      onChange={(e) => setEditedContact({ ...editedContact, full_name: e.target.value })}
-                    />
-                  </div>
-                  
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label>Telefone</Label>
-                      <Input
-                        value={phoneInput}
-                        onChange={(e) => setPhoneInput(e.target.value)}
-                        placeholder="+55 11 99999-9999"
-                      />
-                    </div>
-                    <div>
-                      <Label>E-mail</Label>
-                      <Input
-                        value={editedContact.email || ''}
-                        onChange={(e) => setEditedContact({ ...editedContact, email: e.target.value })}
-                        type="email"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label>Canal de Origem</Label>
-                      <Select
-                        value={editedContact.origin_channel || ''}
-                        onValueChange={(v: any) => setEditedContact({ ...editedContact, origin_channel: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(ORIGIN_CHANNEL_LABELS).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Idioma Preferencial</Label>
-                      <Select
-                        value={editedContact.preferred_language || ''}
-                        onValueChange={(v: any) => setEditedContact({ ...editedContact, preferred_language: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(LANGUAGE_LABELS).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label>País de Origem</Label>
-                      <Input
-                        value={editedContact.country_of_origin || ''}
-                        onChange={(e) => setEditedContact({ ...editedContact, country_of_origin: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Nacionalidade</Label>
-                      <Input
-                        value={editedContact.nationality || ''}
-                        onChange={(e) => setEditedContact({ ...editedContact, nationality: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <Separator className="my-4" />
-
-                  {/* Documento */}
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label>Tipo de Documento</Label>
-                      <Select
-                        value={editedContact.document_type || ''}
-                        onValueChange={(v) => setEditedContact({ ...editedContact, document_type: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Número do Documento</Label>
-                      <Input
-                        value={editedContact.document_number || ''}
-                        onChange={(e) => setEditedContact({ ...editedContact, document_number: e.target.value })}
-                        placeholder="Ex: Y1234567X"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Endereço */}
-                  <div>
-                    <Label>Endereço</Label>
-                    <Textarea
-                      value={editedContact.address || ''}
-                      onChange={(e) => setEditedContact({ ...editedContact, address: e.target.value })}
-                      placeholder="Endereço completo"
-                      rows={2}
-                    />
-                  </div>
-
-                  {/* Indicação */}
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label>Indicado por (Colaborador/Parceiro)</Label>
-                      <Input
-                        value={editedContact.referral_name || ''}
-                        onChange={(e) => setEditedContact({ ...editedContact, referral_name: e.target.value })}
-                        placeholder="Nome do colaborador"
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 pt-6">
-                      <Checkbox
-                        id="referral_confirmed"
-                        checked={editedContact.referral_confirmed || false}
-                        onCheckedChange={(c) => setEditedContact({ ...editedContact, referral_confirmed: !!c })}
-                      />
-                      <Label htmlFor="referral_confirmed" className="cursor-pointer">Indicação confirmada</Label>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button variant="outline" onClick={() => setIsEditing(false)}>
-                      Cancelar
-                    </Button>
-                    <Button onClick={handleSave} disabled={updateContact.isPending}>
-                      {updateContact.isPending ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4 mr-2" />
-                      )}
-                      Salvar
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid gap-6 sm:grid-cols-2">
-                  <div className="flex items-center gap-3">
-                    <Phone className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Telefone</p>
-                      <p className="font-medium">{contact.phone || '-'}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <Mail className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">E-mail</p>
-                      <p className="font-medium">{contact.email || '-'}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <Building className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Canal de Origem</p>
-                      <p className="font-medium">
-                        {ORIGIN_CHANNEL_LABELS[contact.origin_channel || 'OUTRO']}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <Globe className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Idioma Preferencial</p>
-                      <p className="font-medium">
-                        {LANGUAGE_LABELS[contact.preferred_language || 'pt']}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <Globe className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">País de Origem</p>
-                      <p className="font-medium">{contact.country_of_origin || '-'}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <Globe className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Nacionalidade</p>
-                      <p className="font-medium">{contact.nationality || '-'}</p>
-                    </div>
-                  </div>
-
-                  {/* Documento */}
-                  <div className="flex items-center gap-3">
-                    <CreditCard className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Documento</p>
-                      <p className="font-medium">
-                        {contact.document_type ? DOCUMENT_TYPE_LABELS[contact.document_type] : '-'}
-                        {contact.document_number && ` - ${contact.document_number}`}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Endereço */}
-                  <div className="flex items-start gap-3 col-span-2">
-                    <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Endereço</p>
-                      <p className="font-medium">{contact.address || '-'}</p>
-                    </div>
-                  </div>
-
-                  {/* Indicação */}
-                  <div className="flex items-center gap-3 col-span-2">
-                    <Users className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Indicado por</p>
-                      <p className="font-medium">
-                        {contact.referral_name || '-'}
-                        {contact.referral_confirmed && contact.referral_name && (
-                          <Badge variant="outline" className="ml-2">Confirmado</Badge>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {isEditing ? renderEditForm() : renderViewFields()}
             </CardContent>
           </Card>
 
