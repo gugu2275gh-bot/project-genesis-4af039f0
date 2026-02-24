@@ -246,17 +246,25 @@ export type Database = {
           education_level: string | null
           email: string | null
           empadronamiento_address: string | null
+          empadronamiento_city: string | null
+          empadronamiento_since: string | null
           eu_entry_last_6_months: boolean | null
+          eu_entry_location: string | null
           expulsion_history: boolean | null
           father_name: string | null
           full_name: string
+          has_admin_marketing_experience: boolean | null
+          has_eu_family_member: boolean | null
+          has_job_offer: boolean | null
           id: string
+          is_empadronado: boolean | null
           legal_guardian_address: string | null
           legal_guardian_birth_date: string | null
           legal_guardian_email: string | null
           legal_guardian_name: string | null
           legal_guardian_phone: string | null
           legal_guardian_relationship: string | null
+          monthly_income: number | null
           mother_name: string | null
           nationality: string | null
           onboarding_completed: boolean | null
@@ -273,6 +281,7 @@ export type Database = {
           second_document_type: string | null
           spain_arrival_date: string | null
           updated_at: string | null
+          works_remotely: boolean | null
         }
         Insert: {
           address?: string | null
@@ -289,17 +298,25 @@ export type Database = {
           education_level?: string | null
           email?: string | null
           empadronamiento_address?: string | null
+          empadronamiento_city?: string | null
+          empadronamiento_since?: string | null
           eu_entry_last_6_months?: boolean | null
+          eu_entry_location?: string | null
           expulsion_history?: boolean | null
           father_name?: string | null
           full_name: string
+          has_admin_marketing_experience?: boolean | null
+          has_eu_family_member?: boolean | null
+          has_job_offer?: boolean | null
           id?: string
+          is_empadronado?: boolean | null
           legal_guardian_address?: string | null
           legal_guardian_birth_date?: string | null
           legal_guardian_email?: string | null
           legal_guardian_name?: string | null
           legal_guardian_phone?: string | null
           legal_guardian_relationship?: string | null
+          monthly_income?: number | null
           mother_name?: string | null
           nationality?: string | null
           onboarding_completed?: boolean | null
@@ -316,6 +333,7 @@ export type Database = {
           second_document_type?: string | null
           spain_arrival_date?: string | null
           updated_at?: string | null
+          works_remotely?: boolean | null
         }
         Update: {
           address?: string | null
@@ -332,17 +350,25 @@ export type Database = {
           education_level?: string | null
           email?: string | null
           empadronamiento_address?: string | null
+          empadronamiento_city?: string | null
+          empadronamiento_since?: string | null
           eu_entry_last_6_months?: boolean | null
+          eu_entry_location?: string | null
           expulsion_history?: boolean | null
           father_name?: string | null
           full_name?: string
+          has_admin_marketing_experience?: boolean | null
+          has_eu_family_member?: boolean | null
+          has_job_offer?: boolean | null
           id?: string
+          is_empadronado?: boolean | null
           legal_guardian_address?: string | null
           legal_guardian_birth_date?: string | null
           legal_guardian_email?: string | null
           legal_guardian_name?: string | null
           legal_guardian_phone?: string | null
           legal_guardian_relationship?: string | null
+          monthly_income?: number | null
           mother_name?: string | null
           nationality?: string | null
           onboarding_completed?: boolean | null
@@ -359,6 +385,7 @@ export type Database = {
           second_document_type?: string | null
           spain_arrival_date?: string | null
           updated_at?: string | null
+          works_remotely?: boolean | null
         }
         Relationships: []
       }
