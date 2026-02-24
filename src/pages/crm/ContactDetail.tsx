@@ -107,6 +107,18 @@ export default function ContactDetail() {
         legal_guardian_address: (contact as any).legal_guardian_address,
         legal_guardian_birth_date: (contact as any).legal_guardian_birth_date,
         legal_guardian_relationship: (contact as any).legal_guardian_relationship,
+        eu_entry_last_6_months: contact.eu_entry_last_6_months,
+        eu_entry_location: (contact as any).eu_entry_location,
+        has_eu_family_member: (contact as any).has_eu_family_member,
+        works_remotely: (contact as any).works_remotely,
+        monthly_income: (contact as any).monthly_income,
+        has_admin_marketing_experience: (contact as any).has_admin_marketing_experience,
+        education_level: contact.education_level,
+        is_empadronado: (contact as any).is_empadronado,
+        empadronamiento_since: (contact as any).empadronamiento_since,
+        empadronamiento_city: (contact as any).empadronamiento_city,
+        empadronamiento_address: contact.empadronamiento_address,
+        has_job_offer: (contact as any).has_job_offer,
       });
       setPhoneInput(contact.phone?.toString() || '');
       setIsEditing(true);
@@ -395,6 +407,136 @@ export default function ContactDetail() {
             onChange={(e) => setEditedContact({ ...editedContact, spain_arrival_date: e.target.value || null })}
           />
         </div>
+      </div>
+
+      <Separator className="my-4" />
+
+      {/* Perguntas de Qualificação */}
+      <h4 className="font-medium text-sm text-muted-foreground">Informações Adicionais</h4>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="eu_entry_last_6_months"
+            checked={(editedContact as any).eu_entry_last_6_months || false}
+            onCheckedChange={(c) => setEditedContact({ ...editedContact, eu_entry_last_6_months: !!c } as any)}
+          />
+          <Label htmlFor="eu_entry_last_6_months" className="cursor-pointer">Esteve na Europa nos últimos 6 meses?</Label>
+        </div>
+        {(editedContact as any).eu_entry_last_6_months && (
+          <div>
+            <Label>Onde esteve?</Label>
+            <Input
+              value={(editedContact as any).eu_entry_location || ''}
+              onChange={(e) => setEditedContact({ ...editedContact, eu_entry_location: e.target.value } as any)}
+              placeholder="País/cidade"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="has_eu_family_member"
+            checked={(editedContact as any).has_eu_family_member || false}
+            onCheckedChange={(c) => setEditedContact({ ...editedContact, has_eu_family_member: !!c } as any)}
+          />
+          <Label htmlFor="has_eu_family_member" className="cursor-pointer">Possui familiar de 1º grau Europeu/residente na Espanha?</Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="works_remotely"
+            checked={(editedContact as any).works_remotely || false}
+            onCheckedChange={(c) => setEditedContact({ ...editedContact, works_remotely: !!c } as any)}
+          />
+          <Label htmlFor="works_remotely" className="cursor-pointer">Trabalha de forma remota?</Label>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Renda Mensal (€)</Label>
+          <Input
+            type="number"
+            value={(editedContact as any).monthly_income || ''}
+            onChange={(e) => setEditedContact({ ...editedContact, monthly_income: e.target.value ? parseFloat(e.target.value) : null } as any)}
+            placeholder="0.00"
+          />
+        </div>
+        <div className="flex items-center gap-2 pt-6">
+          <Checkbox
+            id="education_level_superior"
+            checked={editedContact.education_level === 'SUPERIOR'}
+            onCheckedChange={(c) => setEditedContact({ ...editedContact, education_level: c ? 'SUPERIOR' : null })}
+          />
+          <Label htmlFor="education_level_superior" className="cursor-pointer">Possui formação superior?</Label>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="has_admin_marketing_experience"
+            checked={(editedContact as any).has_admin_marketing_experience || false}
+            onCheckedChange={(c) => setEditedContact({ ...editedContact, has_admin_marketing_experience: !!c } as any)}
+          />
+          <Label htmlFor="has_admin_marketing_experience" className="cursor-pointer">Experiência em administração/marketing?</Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="has_job_offer"
+            checked={(editedContact as any).has_job_offer || false}
+            onCheckedChange={(c) => setEditedContact({ ...editedContact, has_job_offer: !!c } as any)}
+          />
+          <Label htmlFor="has_job_offer" className="cursor-pointer">Possui oferta de trabalho?</Label>
+        </div>
+      </div>
+
+      <Separator className="my-4" />
+
+      {/* Se já reside na Espanha */}
+      <h4 className="font-medium text-sm text-muted-foreground">Se já reside na Espanha</h4>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="is_empadronado"
+            checked={(editedContact as any).is_empadronado || false}
+            onCheckedChange={(c) => setEditedContact({ ...editedContact, is_empadronado: !!c } as any)}
+          />
+          <Label htmlFor="is_empadronado" className="cursor-pointer">Está empadronado?</Label>
+        </div>
+      </div>
+
+      {(editedContact as any).is_empadronado && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label>Empadronado desde quando?</Label>
+            <Input
+              type="date"
+              value={(editedContact as any).empadronamiento_since || ''}
+              onChange={(e) => setEditedContact({ ...editedContact, empadronamiento_since: e.target.value || null } as any)}
+            />
+          </div>
+          <div>
+            <Label>Cidade do Empadronamiento</Label>
+            <Input
+              value={(editedContact as any).empadronamiento_city || ''}
+              onChange={(e) => setEditedContact({ ...editedContact, empadronamiento_city: e.target.value } as any)}
+              placeholder="Ex: Barcelona"
+            />
+          </div>
+        </div>
+      )}
+
+      <div>
+        <Label>Endereço do Empadronamiento</Label>
+        <Input
+          value={editedContact.empadronamiento_address || ''}
+          onChange={(e) => setEditedContact({ ...editedContact, empadronamiento_address: e.target.value })}
+          placeholder="Endereço completo"
+        />
       </div>
 
       <Separator className="my-4" />
@@ -691,6 +833,108 @@ export default function ContactDetail() {
           </p>
         </div>
       </div>
+
+      <Separator className="sm:col-span-2" />
+
+      {/* Informações Adicionais */}
+      <div className="sm:col-span-2">
+        <h4 className="font-medium text-sm text-muted-foreground mb-3">Informações Adicionais</h4>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Globe className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Esteve na Europa (últimos 6 meses)</p>
+          <p className="font-medium">
+            {c.eu_entry_last_6_months ? 'Sim' : c.eu_entry_last_6_months === false ? 'Não' : '-'}
+            {c.eu_entry_last_6_months && c.eu_entry_location && (
+              <span className="text-muted-foreground ml-1">({c.eu_entry_location})</span>
+            )}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Users className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Familiar Europeu/Residente</p>
+          <p className="font-medium">{c.has_eu_family_member ? 'Sim' : c.has_eu_family_member === false ? 'Não' : '-'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Briefcase className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Trabalho Remoto</p>
+          <p className="font-medium">{c.works_remotely ? 'Sim' : c.works_remotely === false ? 'Não' : '-'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <CreditCard className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Renda Mensal</p>
+          <p className="font-medium">{c.monthly_income ? `€ ${Number(c.monthly_income).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '-'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <FileText className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Formação Superior</p>
+          <p className="font-medium">{contact.education_level === 'SUPERIOR' ? 'Sim' : 'Não'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Briefcase className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Experiência Admin/Marketing</p>
+          <p className="font-medium">{c.has_admin_marketing_experience ? 'Sim' : c.has_admin_marketing_experience === false ? 'Não' : '-'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Briefcase className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Oferta de Trabalho</p>
+          <p className="font-medium">{c.has_job_offer ? 'Sim' : c.has_job_offer === false ? 'Não' : '-'}</p>
+        </div>
+      </div>
+
+      {/* Empadronamiento */}
+      <div className="flex items-center gap-3">
+        <MapPin className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Empadronado</p>
+          <p className="font-medium">
+            {c.is_empadronado ? 'Sim' : c.is_empadronado === false ? 'Não' : '-'}
+            {c.is_empadronado && c.empadronamiento_city && (
+              <span className="text-muted-foreground ml-1">({c.empadronamiento_city})</span>
+            )}
+          </p>
+        </div>
+      </div>
+
+      {c.is_empadronado && c.empadronamiento_since && (
+        <div className="flex items-center gap-3">
+          <Calendar className="h-5 w-5 text-muted-foreground" />
+          <div>
+            <p className="text-sm text-muted-foreground">Empadronado desde</p>
+            <p className="font-medium">{format(new Date(c.empadronamiento_since), "dd/MM/yyyy")}</p>
+          </div>
+        </div>
+      )}
+
+      {contact.empadronamiento_address && (
+        <div className="flex items-start gap-3 sm:col-span-2">
+          <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+          <div>
+            <p className="text-sm text-muted-foreground">Endereço do Empadronamiento</p>
+            <p className="font-medium">{contact.empadronamiento_address}</p>
+          </div>
+        </div>
+      )}
 
       <Separator className="sm:col-span-2" />
 

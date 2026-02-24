@@ -1,0 +1,2 @@
+
+ALTER TYPE origin_channel ADD VALUE IF NOT EXISTS 'YOUTUBE';
