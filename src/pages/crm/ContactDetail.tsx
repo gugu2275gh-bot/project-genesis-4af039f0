@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useContact, useContacts, ContactUpdate } from '@/hooks/useContacts';
 import { useLeads } from '@/hooks/useLeads';
+import { useContactDocuments } from '@/hooks/useContactDocuments';
+import { SERVICE_INTEREST_LABELS as SVC_LABELS_DOC, DOCUMENT_STATUS_LABELS } from '@/types/database';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -74,6 +76,7 @@ export default function ContactDetail() {
   const [phoneInput, setPhoneInput] = useState('');
 
   const contactLeads = leads.filter(l => l.contact_id === id);
+  const { data: contactDocuments = [], isLoading: docsLoading } = useContactDocuments(id);
 
   const handleStartEdit = () => {
     if (contact) {
@@ -1090,6 +1093,84 @@ export default function ContactDetail() {
                       />
                     </div>
                   ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Documents */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Documentos ({contactDocuments.length})
+              </CardTitle>
+              <CardDescription>
+                Documentos anexados e enviados relacionados a este contato
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {docsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-16" />)}
+                </div>
+              ) : contactDocuments.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">
+                  Nenhum documento vinculado a este contato.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {contactDocuments.map(doc => {
+                    const statusColors: Record<string, string> = {
+                      NAO_ENVIADO: 'bg-muted text-muted-foreground',
+                      ENVIADO: 'bg-info/10 text-info',
+                      EM_CONFERENCIA: 'bg-accent/10 text-accent-foreground',
+                      APROVADO: 'bg-success/10 text-success',
+                      REJEITADO: 'bg-destructive/10 text-destructive',
+                    };
+                    return (
+                      <div key={doc.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg border">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-medium">{doc.document_type_name}</p>
+                            {doc.is_required && (
+                              <Badge variant="outline" className="text-xs">Obrigatório</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1 flex-wrap">
+                            <span>{SVC_LABELS_DOC[doc.service_type as keyof typeof SVC_LABELS_DOC] || doc.service_type}</span>
+                            {doc.case_protocol_number && (
+                              <span>Protocolo: {doc.case_protocol_number}</span>
+                            )}
+                            {doc.uploaded_by_name && (
+                              <span className="flex items-center gap-1">
+                                <User className="h-3 w-3" />
+                                {doc.uploaded_by_name}
+                              </span>
+                            )}
+                            {doc.uploaded_at && (
+                              <span>{format(new Date(doc.uploaded_at), "dd/MM/yyyy", { locale: ptBR })}</span>
+                            )}
+                          </div>
+                          {doc.status === 'REJEITADO' && doc.rejection_reason && (
+                            <p className="text-xs text-destructive mt-1">Motivo: {doc.rejection_reason}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className={`border-0 ${statusColors[doc.status] || 'bg-muted'}`}>
+                            {DOCUMENT_STATUS_LABELS[doc.status as keyof typeof DOCUMENT_STATUS_LABELS] || doc.status}
+                          </Badge>
+                          {doc.file_url && (
+                            <Button variant="ghost" size="sm" asChild>
+                              <a href={doc.file_url} target="_blank" rel="noopener noreferrer">
+                                <Globe className="h-4 w-4" />
+                              </a>
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
