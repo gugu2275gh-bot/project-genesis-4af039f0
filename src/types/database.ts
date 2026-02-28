@@ -7,7 +7,8 @@ export type AppRole =
   | 'JURIDICO'
   | 'FINANCEIRO'
   | 'TECNICO'
-  | 'CLIENTE';
+  | 'CLIENTE'
+  | 'ATENDENTE_WHATSAPP';
 
 export type OriginChannel = 
   | 'WHATSAPP'
