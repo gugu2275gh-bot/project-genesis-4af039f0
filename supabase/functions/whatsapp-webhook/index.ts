@@ -33,15 +33,102 @@ interface WebhookPayload {
       };
     }>;
   }>;
-  // Alternative simpler format for N8N/custom webhooks
   phone?: string;
   message?: string;
   name?: string;
   source?: string;
 }
 
+/** Round-robin: pick the ATENDENTE_WHATSAPP user with the fewest recent lead assignments */
+async function getNextAttendant(supabase: ReturnType<typeof createClient>): Promise<string | null> {
+  // Get all active users with role ATENDENTE_WHATSAPP
+  const { data: attendants, error: attError } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .eq('role', 'ATENDENTE_WHATSAPP')
+
+  if (attError || !attendants?.length) {
+    console.log('No ATENDENTE_WHATSAPP users found, falling back to ATENCAO_CLIENTE')
+    // Fallback to ATENCAO_CLIENTE
+    const { data: fallback } = await supabase
+      .from('user_roles')
+      .select('user_id')
+      .eq('role', 'ATENCAO_CLIENTE')
+    if (!fallback?.length) return null
+    // Use first available as fallback
+    return fallback[0].user_id
+  }
+
+  // Filter only active profiles
+  const userIds = attendants.map(a => a.user_id)
+  const { data: activeProfiles } = await supabase
+    .from('profiles')
+    .select('id')
+    .in('id', userIds)
+    .eq('is_active', true)
+
+  if (!activeProfiles?.length) return null
+
+  const activeIds = activeProfiles.map(p => p.id)
+
+  // Count leads assigned to each attendant (created in last 30 days)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const { data: leadCounts } = await supabase
+    .from('leads')
+    .select('assigned_to_user_id')
+    .in('assigned_to_user_id', activeIds)
+    .gte('created_at', thirtyDaysAgo)
+
+  // Build count map
+  const countMap: Record<string, number> = {}
+  for (const id of activeIds) {
+    countMap[id] = 0
+  }
+  for (const lead of leadCounts || []) {
+    if (lead.assigned_to_user_id && countMap[lead.assigned_to_user_id] !== undefined) {
+      countMap[lead.assigned_to_user_id]++
+    }
+  }
+
+  // Pick the one with fewest assignments (round-robin by load)
+  let minCount = Infinity
+  let selectedUserId: string | null = null
+  for (const [userId, count] of Object.entries(countMap)) {
+    if (count < minCount) {
+      minCount = count
+      selectedUserId = userId
+    }
+  }
+
+  return selectedUserId
+}
+
+function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
+  // Format 1: WhatsApp Cloud API format
+  if (payload.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
+    const msg = payload.entry[0].changes[0].value.messages[0]
+    const contacts = payload.entry[0].changes[0].value.contacts
+    return {
+      from: msg.from,
+      body: msg.text?.body || '',
+      timestamp: msg.timestamp,
+      messageId: msg.id,
+      type: msg.type,
+      name: contacts?.[0]?.profile?.name,
+    }
+  }
+  // Format 2: Simple format (N8N/custom integrations)
+  if (payload.phone && payload.message) {
+    return {
+      from: payload.phone.replace(/\D/g, ''),
+      body: payload.message,
+      name: payload.name,
+    }
+  }
+  return null
+}
+
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -79,30 +166,7 @@ serve(async (req) => {
       processed: false,
     })
 
-    // Parse message from different formats
-    let message: WhatsAppMessage | null = null
-
-    // Format 1: WhatsApp Cloud API format
-    if (payload.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
-      const msg = payload.entry[0].changes[0].value.messages[0]
-      const contacts = payload.entry[0].changes[0].value.contacts
-      message = {
-        from: msg.from,
-        body: msg.text?.body || '',
-        timestamp: msg.timestamp,
-        messageId: msg.id,
-        type: msg.type,
-        name: contacts?.[0]?.profile?.name,
-      }
-    }
-    // Format 2: Simple format (N8N/custom integrations)
-    else if (payload.phone && payload.message) {
-      message = {
-        from: payload.phone.replace(/\D/g, ''),
-        body: payload.message,
-        name: payload.name,
-      }
-    }
+    const message = parseMessage(payload)
 
     if (!message || !message.from || !message.body) {
       console.log('No valid message found in payload')
@@ -145,10 +209,10 @@ serve(async (req) => {
     }
 
     // Find or create lead for this contact
-    let lead: { id: string; status: string | null } | null = null
+    let lead: { id: string; status: string | null; assigned_to_user_id: string | null } | null = null
     const { data: existingLead } = await supabase
       .from('leads')
-      .select('id, status')
+      .select('id, status, assigned_to_user_id')
       .eq('contact_id', contact.id)
       .not('status', 'eq', 'ARQUIVADO_SEM_RETORNO')
       .order('created_at', { ascending: false })
@@ -158,15 +222,19 @@ serve(async (req) => {
     lead = existingLead
 
     if (!lead) {
-      // Create new lead
+      // Auto-assign via round-robin
+      const assignedUserId = await getNextAttendant(supabase)
+      console.log('Auto-assigned to user:', assignedUserId)
+
       const { data: newLead, error: leadError } = await supabase
         .from('leads')
         .insert({
           contact_id: contact.id,
           status: 'NOVO',
           notes: 'Lead criado automaticamente via WhatsApp',
+          assigned_to_user_id: assignedUserId,
         })
-        .select('id, status')
+        .select('id, status, assigned_to_user_id')
         .single()
 
       if (leadError || !newLead) {
@@ -181,7 +249,33 @@ serve(async (req) => {
         description: `Mensagem inicial: ${message.body.substring(0, 200)}`,
         status: 'PENDENTE',
         related_lead_id: lead.id,
+        ...(assignedUserId ? { assigned_to_user_id: assignedUserId } : {}),
       })
+
+      // Notify the assigned user
+      if (assignedUserId) {
+        await supabase.from('notifications').insert({
+          user_id: assignedUserId,
+          title: 'Novo lead WhatsApp atribuído a você',
+          message: `${contact.full_name}: ${message.body.substring(0, 100)}...`,
+          type: 'whatsapp_lead_assigned',
+        })
+      }
+    } else if (!lead.assigned_to_user_id) {
+      // Existing lead without assignment — auto-assign now
+      const assignedUserId = await getNextAttendant(supabase)
+      if (assignedUserId) {
+        await supabase.from('leads').update({ assigned_to_user_id: assignedUserId }).eq('id', lead.id)
+        lead.assigned_to_user_id = assignedUserId
+        console.log('Assigned existing unassigned lead to:', assignedUserId)
+
+        await supabase.from('notifications').insert({
+          user_id: assignedUserId,
+          title: 'Lead WhatsApp atribuído a você',
+          message: `${contact.full_name}: ${message.body.substring(0, 100)}...`,
+          type: 'whatsapp_lead_assigned',
+        })
+      }
     }
 
     // Create interaction record
@@ -194,7 +288,7 @@ serve(async (req) => {
       origin_bot: false,
     })
 
-    // Also store in mensagens_cliente for AI processing
+    // Store in mensagens_cliente for AI processing
     await supabase.from('mensagens_cliente').insert({
       id_lead: lead.id,
       phone_id: parseInt(phoneNumber),
@@ -208,22 +302,16 @@ serve(async (req) => {
       .update({ processed: true })
       .eq('raw_payload', payload)
 
-    // Notify assigned user or create notification for attention team
-    const { data: assignedUser } = await supabase
-      .from('leads')
-      .select('assigned_to_user_id')
-      .eq('id', lead.id)
-      .single()
-
-    if (assignedUser?.assigned_to_user_id) {
+    // Notify assigned user about new message (if lead already had assignment)
+    if (lead.assigned_to_user_id) {
       await supabase.from('notifications').insert({
-        user_id: assignedUser.assigned_to_user_id,
+        user_id: lead.assigned_to_user_id,
         title: 'Nova mensagem WhatsApp',
         message: `${contact.full_name}: ${message.body.substring(0, 100)}...`,
         type: 'whatsapp_message',
       })
     } else {
-      // Notify all ATENCAO_CLIENTE users
+      // Notify all ATENCAO_CLIENTE users as fallback
       const { data: attentionUsers } = await supabase
         .from('user_roles')
         .select('user_id')
@@ -244,6 +332,7 @@ serve(async (req) => {
         success: true, 
         contactId: contact.id,
         leadId: lead.id,
+        assignedTo: lead.assigned_to_user_id,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
