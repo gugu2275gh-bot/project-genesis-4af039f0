@@ -285,7 +285,6 @@ export function usePayments() {
           'PAYPAL': 'PAYPAL',
           'CARTAO': 'BRUCKSCHEN_ES',
           'DINHEIRO': 'DINHEIRO',
-          'PARCELAMENTO_MANUAL': 'BRUCKSCHEN_ES',
           'OUTRO': 'OUTRO',
         };
         const paymentAccount = accountMap[payment.payment_method || 'OUTRO'] || 'OUTRO';
