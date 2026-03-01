@@ -48,6 +48,7 @@ export function BeneficiariesTab({ contractId, clientName }: BeneficiariesTabPro
   } = useBeneficiaries(contractId);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [customRelationship, setCustomRelationship] = useState('');
   const [formData, setFormData] = useState<BeneficiaryInsert>({
     contract_id: contractId,
     full_name: '',
@@ -60,9 +61,14 @@ export function BeneficiariesTab({ contractId, clientName }: BeneficiariesTabPro
   });
 
   const handleSubmit = () => {
-    createBeneficiary.mutate(formData, {
+    const submitData = { ...formData };
+    if (formData.relationship === 'OUTRO' && customRelationship) {
+      submitData.relationship = `OUTRO: ${customRelationship}`;
+    }
+    createBeneficiary.mutate(submitData, {
       onSuccess: () => {
         setIsDialogOpen(false);
+        setCustomRelationship('');
         setFormData({
           contract_id: contractId,
           full_name: '',
@@ -188,6 +194,17 @@ export function BeneficiariesTab({ contractId, clientName }: BeneficiariesTabPro
                   </SelectContent>
                 </Select>
               </div>
+
+              {formData.relationship === 'OUTRO' && (
+                <div className="space-y-2">
+                  <Label>Especifique a relação *</Label>
+                  <Input
+                    value={customRelationship}
+                    onChange={(e) => setCustomRelationship(e.target.value)}
+                    placeholder="Descreva a relação com o titular"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
