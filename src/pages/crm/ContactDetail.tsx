@@ -1,10 +1,13 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useContact, useContacts, ContactUpdate } from '@/hooks/useContacts';
 import { useLeads } from '@/hooks/useLeads';
 import { useContactDocuments } from '@/hooks/useContactDocuments';
 import { useContactBeneficiaries } from '@/hooks/useContactBeneficiaries';
-import { SERVICE_INTEREST_LABELS as SVC_LABELS_DOC, DOCUMENT_STATUS_LABELS } from '@/types/database';
+import { useInteractions } from '@/hooks/useInteractions';
+import { supabase } from '@/integrations/supabase/client';
+import { SERVICE_INTEREST_LABELS as SVC_LABELS_DOC, DOCUMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, INTERACTION_CHANNEL_LABELS } from '@/types/database';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ArrowLeft, 
   User, 
@@ -39,7 +43,9 @@ import {
   CreditCard,
   Calendar,
   Briefcase,
-  Baby
+  Baby,
+  MessageSquare,
+  DollarSign
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -79,7 +85,54 @@ export default function ContactDetail() {
   const contactLeads = leads.filter(l => l.contact_id === id);
   const { data: contactDocuments = [], isLoading: docsLoading } = useContactDocuments(id);
   const { beneficiaries: contactBeneficiaries, titular: contactTitular, isLoading: benefLoading } = useContactBeneficiaries(id);
+  const { interactions, createInteraction } = useInteractions(id);
+  
+  const [newNote, setNewNote] = useState('');
+  const [interactionChannel, setInteractionChannel] = useState<string>('WHATSAPP');
 
+  // Fetch payments related to this contact via leads → opportunities → payments
+  const { data: contactPayments = [], isLoading: paymentsLoading } = useQuery({
+    queryKey: ['contact-payments', id],
+    queryFn: async () => {
+      if (!id) return [];
+      // Get leads for this contact
+      const { data: cLeads } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('contact_id', id);
+      if (!cLeads || cLeads.length === 0) return [];
+      
+      const leadIds = cLeads.map(l => l.id);
+      // Get opportunities for those leads
+      const { data: opps } = await supabase
+        .from('opportunities')
+        .select('id')
+        .in('lead_id', leadIds);
+      if (!opps || opps.length === 0) return [];
+      
+      const oppIds = opps.map(o => o.id);
+      // Get payments for those opportunities
+      const { data: payments, error } = await supabase
+        .from('payments')
+        .select('*, contracts(contract_number, service_type)')
+        .in('opportunity_id', oppIds)
+        .order('due_date', { ascending: true });
+      if (error) throw error;
+      return payments || [];
+    },
+    enabled: !!id,
+  });
+
+  const handleAddInteraction = async () => {
+    if (!newNote.trim() || !id) return;
+    await createInteraction.mutateAsync({
+      contact_id: id,
+      channel: interactionChannel as any,
+      direction: 'OUTBOUND',
+      content: newNote,
+    });
+    setNewNote('');
+  };
   const handleStartEdit = () => {
     if (contact) {
       setEditedContact({
@@ -1240,6 +1293,123 @@ export default function ContactDetail() {
                   })}
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Payments */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Pagamentos ({contactPayments.length})
+              </CardTitle>
+              <CardDescription>Pagamentos vinculados a este cliente</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {paymentsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2].map(i => <Skeleton key={i} className="h-16" />)}
+                </div>
+              ) : contactPayments.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">
+                  Nenhum pagamento vinculado a este cliente.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {contactPayments.map((payment: any) => (
+                    <div key={payment.id} className="flex items-center justify-between p-3 rounded-lg border">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">
+                            € {Number(payment.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </p>
+                          {payment.installment_number && (
+                            <Badge variant="outline" className="text-xs">
+                              Parcela {payment.installment_number}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+                          {payment.due_date && (
+                            <span>Vencimento: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
+                          )}
+                          {payment.contracts?.contract_number && (
+                            <span>{payment.contracts.contract_number}</span>
+                          )}
+                        </div>
+                      </div>
+                      <StatusBadge
+                        status={payment.status || 'PENDENTE'}
+                        label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Interactions */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5" />
+                Interações Sistema
+              </CardTitle>
+              <CardDescription>Registre comunicações com o cliente</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <Select value={interactionChannel} onValueChange={setInteractionChannel}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(INTERACTION_CHANNEL_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Textarea
+                    placeholder="Descreva a interação..."
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    className="flex-1"
+                    rows={2}
+                  />
+                  <Button onClick={handleAddInteraction} disabled={createInteraction.isPending}>
+                    <MessageSquare className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                  {interactions.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      Nenhuma interação registrada
+                    </p>
+                  ) : (
+                    interactions.map((interaction) => (
+                      <div
+                        key={interaction.id}
+                        className="p-4 rounded-lg bg-muted/50 space-y-2"
+                      >
+                        <div className="flex items-center justify-between">
+                          <StatusBadge
+                            status={interaction.channel || 'OUTRO'}
+                            label={INTERACTION_CHANNEL_LABELS[interaction.channel || 'OUTRO']}
+                          />
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Calendar className="h-3 w-3" />
+                            {format(new Date(interaction.created_at!), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                          </div>
+                        </div>
+                        <p className="text-sm">{interaction.content}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
