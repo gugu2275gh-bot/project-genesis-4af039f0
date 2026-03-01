@@ -70,14 +70,17 @@ export type ContractStatus =
 
 export type ContractTemplate = 'NACIONALIDADE' | 'GENERICO' | 'REGULARIZACION_EXTRAORDINARIA' | 'DOCUMENTOS';
 
-export type PaymentMethod =
+export type PaymentMethod = 
   | 'CARTAO'
   | 'TRANSFERENCIA'
   | 'PIX'
   | 'PAYPAL'
-  | 'PARCELAMENTO_MANUAL'
   | 'DINHEIRO'
   | 'OUTRO';
+
+export type PaymentForm = 
+  | 'UNICO'
+  | 'PARCELADO';
 
 export type PaymentStatus = 
   | 'PENDENTE'
@@ -553,9 +556,13 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   TRANSFERENCIA: 'Transferência',
   PIX: 'PIX',
   PAYPAL: 'PayPal',
-  PARCELAMENTO_MANUAL: 'Parcelamento Manual',
   DINHEIRO: 'Dinheiro',
   OUTRO: 'Outro',
+};
+
+export const PAYMENT_FORM_LABELS: Record<PaymentForm, string> = {
+  UNICO: 'Pagamento Único',
+  PARCELADO: 'Parcelado',
 };
 
 export type PaymentAccount = 

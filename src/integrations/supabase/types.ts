@@ -1464,6 +1464,7 @@ export type Database = {
           opportunity_id: string
           original_due_date: string | null
           paid_at: string | null
+          payment_form: Database["public"]["Enums"]["payment_form"] | null
           payment_link: string | null
           payment_method: Database["public"]["Enums"]["payment_method"] | null
           receipt_approved_at: string | null
@@ -1497,6 +1498,7 @@ export type Database = {
           opportunity_id: string
           original_due_date?: string | null
           paid_at?: string | null
+          payment_form?: Database["public"]["Enums"]["payment_form"] | null
           payment_link?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
           receipt_approved_at?: string | null
@@ -1530,6 +1532,7 @@ export type Database = {
           opportunity_id?: string
           original_due_date?: string | null
           paid_at?: string | null
+          payment_form?: Database["public"]["Enums"]["payment_form"] | null
           payment_link?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
           receipt_approved_at?: string | null
@@ -2539,6 +2542,7 @@ export type Database = {
         | "OUTRO"
         | "COLABORADOR"
         | "YOUTUBE"
+      payment_form: "UNICO" | "PARCELADO"
       payment_method:
         | "CARTAO"
         | "TRANSFERENCIA"
@@ -2793,6 +2797,7 @@ export const Constants = {
         "COLABORADOR",
         "YOUTUBE",
       ],
+      payment_form: ["UNICO", "PARCELADO"],
       payment_method: [
         "CARTAO",
         "TRANSFERENCIA",

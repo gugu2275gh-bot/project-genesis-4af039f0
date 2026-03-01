@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText, Download, CheckCircle, Clock, FileCheck, MessageSquare, Users } from 'lucide-react';
-import { PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/database';
+import { PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_FORM_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format, differenceInDays, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -34,6 +34,7 @@ export default function PaymentsList() {
     opportunity_id: '',
     amount: '',
     payment_method: 'PIX' as any,
+    payment_form: 'UNICO' as any,
     custom_payment_method: '',
     transfer_origin: '' as '' | 'BRASIL' | 'ESPANHA',
     beneficiary_contact_id: '' as string,
@@ -120,6 +121,7 @@ export default function PaymentsList() {
       vat_rate: newPayment.apply_vat ? vatRate : null,
       vat_amount: vatAmount,
       payment_method: newPayment.payment_method,
+      payment_form: newPayment.payment_form,
       status: 'PENDENTE',
       beneficiary_contact_id: newPayment.beneficiary_contact_id || null,
     });
@@ -129,6 +131,7 @@ export default function PaymentsList() {
       opportunity_id: '',
       amount: '',
       payment_method: 'PIX',
+      payment_form: 'UNICO',
       custom_payment_method: '',
       transfer_origin: '',
       beneficiary_contact_id: '',
@@ -229,6 +232,11 @@ export default function PaymentsList() {
       key: 'payment_method',
       header: 'Método',
       cell: (payment) => PAYMENT_METHOD_LABELS[payment.payment_method || 'OUTRO'],
+    },
+    {
+      key: 'payment_form',
+      header: 'Forma',
+      cell: (payment) => PAYMENT_FORM_LABELS[(payment as any).payment_form || 'UNICO'],
     },
     {
       key: 'status',
@@ -520,7 +528,23 @@ export default function PaymentsList() {
                           <SelectItem key={value} value={value}>{label}</SelectItem>
                         ))}
                       </SelectContent>
-                </Select>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Forma de Pagamento</Label>
+                    <Select 
+                      value={newPayment.payment_form} 
+                      onValueChange={(v: any) => setNewPayment({ ...newPayment, payment_form: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(PAYMENT_FORM_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
