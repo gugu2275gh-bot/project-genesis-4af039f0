@@ -13,8 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2, Pencil } from 'lucide-react';
+import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2, Pencil, ShieldAlert } from 'lucide-react';
 import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, INTERACTION_CHANNEL_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
+import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useState, useEffect } from 'react';
@@ -42,6 +43,8 @@ export default function LeadDetail() {
   const { updateContact } = useContacts();
   const { interactions, createInteraction } = useInteractions(lead?.contact_id, id);
   const { data: profiles } = useProfiles();
+  const { hasAnyRole } = useAuth();
+  const canReassign = hasAnyRole(['ADMIN', 'MANAGER', 'SUPERVISOR']);
   
   const [newNote, setNewNote] = useState('');
   const [interactionChannel, setInteractionChannel] = useState<string>('WHATSAPP');
@@ -308,25 +311,31 @@ export default function LeadDetail() {
 
             <div>
               <p className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
-                <UserPlus className="h-4 w-4" />
+                {canReassign ? <ShieldAlert className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
                 Responsável
               </p>
-              <Select 
-                value={lead.assigned_to_user_id || 'unassigned'} 
-                onValueChange={handleAssign}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Não atribuído" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unassigned">Não atribuído</SelectItem>
-                  {profiles?.map((profile) => (
-                    <SelectItem key={profile.id} value={profile.id}>
-                      {profile.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {canReassign ? (
+                <Select 
+                  value={lead.assigned_to_user_id || 'unassigned'} 
+                  onValueChange={handleAssign}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Não atribuído" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Não atribuído</SelectItem>
+                    {profiles?.map((profile) => (
+                      <SelectItem key={profile.id} value={profile.id}>
+                        {profile.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="font-medium text-sm">
+                  {profiles?.find(p => p.id === lead.assigned_to_user_id)?.full_name || 'Não atribuído'}
+                </p>
+              )}
             </div>
 
             {lead.interest_confirmed && (

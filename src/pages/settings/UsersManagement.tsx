@@ -71,6 +71,7 @@ const ROLE_LABELS: Record<AppRole, string> = {
   TECNICO: 'Técnico',
   CLIENTE: 'Cliente',
   ATENDENTE_WHATSAPP: 'Atendente WhatsApp',
+  SUPERVISOR: 'Supervisor',
 };
 
 const ROLE_COLORS: Record<AppRole, string> = {
@@ -82,6 +83,7 @@ const ROLE_COLORS: Record<AppRole, string> = {
   TECNICO: 'bg-warning/10 text-warning',
   CLIENTE: 'bg-muted text-muted-foreground',
   ATENDENTE_WHATSAPP: 'bg-emerald-500/10 text-emerald-600',
+  SUPERVISOR: 'bg-violet-500/10 text-violet-600',
 };
 
 interface UserWithRoles {
