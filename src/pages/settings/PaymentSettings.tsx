@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Save } from 'lucide-react';
+import { Save, Percent } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface AccountForm {
@@ -25,6 +25,46 @@ export default function PaymentSettings() {
   const [espanhaForm, setEspanhaForm] = useState<AccountForm>(emptyForm);
   const [brasilId, setBrasilId] = useState<string | null>(null);
   const [espanhaId, setEspanhaId] = useState<string | null>(null);
+  const [ivaRate, setIvaRate] = useState<string>('21');
+  const [ivaLoaded, setIvaLoaded] = useState(false);
+
+  // Fetch IVA rate from system_config
+  const { data: ivaConfig } = useQuery({
+    queryKey: ['system-config', 'default_vat_rate'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('system_config')
+        .select('value')
+        .eq('key', 'default_vat_rate')
+        .maybeSingle();
+      if (error) throw error;
+      return data?.value || '21';
+    },
+  });
+
+  useEffect(() => {
+    if (ivaConfig && !ivaLoaded) {
+      setIvaRate(ivaConfig);
+      setIvaLoaded(true);
+    }
+  }, [ivaConfig, ivaLoaded]);
+
+  const saveIvaMutation = useMutation({
+    mutationFn: async (rate: string) => {
+      const { error } = await supabase
+        .from('system_config')
+        .upsert(
+          { key: 'default_vat_rate', value: rate, description: 'Taxa padrão de IVA (%)' },
+          { onConflict: 'key' }
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-config', 'default_vat_rate'] });
+      toast.success('Taxa de IVA salva com sucesso');
+    },
+    onError: () => toast.error('Erro ao salvar taxa de IVA'),
+  });
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['payment-accounts'],
@@ -166,8 +206,42 @@ export default function PaymentSettings() {
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold">Pagamentos</h3>
-        <p className="text-sm text-muted-foreground">Configure as contas bancárias para recebimento de pagamentos</p>
+        <p className="text-sm text-muted-foreground">Configure as contas bancárias e impostos para pagamentos</p>
       </div>
+
+      {/* IVA Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Percent className="h-4 w-4" /> Taxa de IVA Padrão
+          </CardTitle>
+          <CardDescription>Percentual aplicado automaticamente ao criar novos pagamentos com IVA</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-end gap-4">
+            <div className="flex-1 max-w-[200px]">
+              <Label>Percentual (%)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={ivaRate}
+                onChange={(e) => setIvaRate(e.target.value)}
+                placeholder="21"
+              />
+            </div>
+            <Button
+              onClick={() => saveIvaMutation.mutate(ivaRate)}
+              disabled={saveIvaMutation.isPending}
+              className="gap-2"
+            >
+              <Save className="h-4 w-4" />
+              {saveIvaMutation.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
         {renderCountryCard('Conta Brasil', '🇧🇷', 'BRASIL', brasilForm, setBrasilForm)}
