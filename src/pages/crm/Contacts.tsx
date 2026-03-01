@@ -4,6 +4,7 @@ import { useContacts, ContactInsert } from '@/hooks/useContacts';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -61,7 +62,15 @@ export default function Contacts() {
       key: 'full_name',
       header: 'Nome',
       cell: (contact) => (
-        <div className="font-medium">{contact.full_name}</div>
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{contact.full_name}</span>
+          {contact.is_beneficiary && (
+            <Badge variant="outline" className="text-xs gap-1 border-primary/30 text-primary">
+              <Users className="h-3 w-3" />
+              Beneficiário
+            </Badge>
+          )}
+        </div>
       ),
     },
     {
