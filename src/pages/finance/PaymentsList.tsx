@@ -440,8 +440,8 @@ export default function PaymentsList() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="_none">Titular</SelectItem>
-                        {oppBeneficiaries.filter(b => b.contact_id).map((ben) => (
-                          <SelectItem key={ben.id} value={ben.contact_id!}>
+                        {oppBeneficiaries.map((ben) => (
+                          <SelectItem key={ben.id} value={ben.contact_id || ben.id}>
                             <div className="flex items-center gap-2">
                               <Users className="h-4 w-4" />
                               {ben.full_name}
