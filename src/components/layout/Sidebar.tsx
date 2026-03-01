@@ -110,8 +110,15 @@ export function Sidebar() {
           {filteredNavItems.map((item) => {
             const hasChildren = item.children && item.children.length > 0;
             const childActive = hasChildren && item.children?.some(child => location.pathname.startsWith(child.href));
-            const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/') || childActive;
-            const showChildren = hasChildren && (location.pathname.startsWith(item.href) || childActive);
+            // Check if another top-level item matches the current path more specifically
+            const isExactOrChildMatch = location.pathname === item.href || childActive;
+            const isPathPrefix = location.pathname.startsWith(item.href + '/');
+            // Avoid marking parent as active when a sibling top-level item owns the path
+            const isStolenByOtherItem = !hasChildren ? false : filteredNavItems.some(
+              other => other.href !== item.href && !other.children && location.pathname.startsWith(other.href)
+            );
+            const isActive = isExactOrChildMatch || (isPathPrefix && !isStolenByOtherItem);
+            const showChildren = hasChildren && (isActive);
             
             return (
               <li key={item.href}>
