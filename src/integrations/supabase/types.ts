@@ -2400,6 +2400,7 @@ export type Database = {
         | "TECNICO"
         | "CLIENTE"
         | "ATENDENTE_WHATSAPP"
+        | "SUPERVISOR"
       contract_status:
         | "EM_ELABORACAO"
         | "EM_REVISAO"
@@ -2642,6 +2643,7 @@ export const Constants = {
         "TECNICO",
         "CLIENTE",
         "ATENDENTE_WHATSAPP",
+        "SUPERVISOR",
       ],
       contract_status: [
         "EM_ELABORACAO",
