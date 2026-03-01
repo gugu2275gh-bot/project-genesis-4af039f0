@@ -341,23 +341,6 @@ export default function ContractDetail() {
         description={`Criado em ${format(new Date(contract.created_at!), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
         actions={
           <div className="flex gap-2 flex-wrap">
-            {canDownloadPdf && (
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  const cd = contract as any;
-                  generateContractDocument({
-                    template: cd.contract_template || 'GENERICO',
-                    clientName: contract.opportunities?.leads?.contacts?.full_name || 'CLIENTE',
-                    documentNumber: (contract.opportunities?.leads?.contacts as any)?.document_number || '',
-                    contractNumber: cd.contract_number || '',
-                  });
-                }}
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Baixar Contrato Word
-              </Button>
-            )}
             {canCancel && (
               <Button variant="outline" onClick={() => setShowCancelDialog(true)}>
                 <X className="h-4 w-4 mr-2" />
