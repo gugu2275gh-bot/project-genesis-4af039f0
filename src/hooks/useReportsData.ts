@@ -129,7 +129,7 @@ export function useReportsData(filters: ReportFilters) {
         .order('created_at', { ascending: false });
 
       if (status && status !== 'all') {
-        query = query.eq('status', status as 'EM_ELABORACAO' | 'EM_REVISAO' | 'ENVIADO' | 'ASSINADO' | 'CANCELADO');
+        query = query.eq('status', status as 'EM_ELABORACAO' | 'APROVADO' | 'REPROVADO' | 'ASSINADO' | 'CANCELADO');
       }
 
       const { data, error } = await query;

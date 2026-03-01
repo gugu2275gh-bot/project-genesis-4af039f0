@@ -31,7 +31,7 @@ export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: contract, isLoading } = useContract(id);
-  const { updateContract, sendForSignature, markAsSigned, cancelContract, suspendContract, reactivateContract, approveContract, rejectContract } = useContracts();
+  const { updateContract, sendForApproval, markAsSigned, cancelContract, suspendContract, reactivateContract, approveContract, rejectContract } = useContracts();
   const { data: profiles = [] } = useProfiles();
   
   const [formData, setFormData] = useState({
@@ -209,8 +209,8 @@ export default function ContractDetail() {
     setIsEditing(false);
   };
 
-  const handleSendForSignature = async () => {
-    await sendForSignature.mutateAsync(contract.id);
+  const handleSendForApproval = async () => {
+    await sendForApproval.mutateAsync(contract.id);
   };
 
   const handleMarkAsSignedWithUpload = async () => {
@@ -289,15 +289,9 @@ export default function ContractDetail() {
   const contractData = contract as any;
   const isSuspended = contractData.is_suspended === true;
 
-  const canEdit = contract.status === 'EM_ELABORACAO' || contract.status === 'EM_REVISAO';
-  const canSend = contract.status === 'EM_REVISAO' && 
-    contract.scope_summary && 
-    contract.total_fee && 
-    contract.installment_conditions &&
-    contract.installment_count &&
-    contract.first_due_date;
-  const canApprove = contract.status === 'ENVIADO';
-  const canReject = contract.status === 'ENVIADO';
+  const canEdit = contract.status === 'EM_ELABORACAO';
+  const canApprove = contract.status === 'EM_ELABORACAO';
+  const canReject = contract.status === 'EM_ELABORACAO';
   const canSign = contract.status === 'APROVADO';
   const canDownloadContract = contract.status === 'APROVADO' || contract.status === 'ASSINADO';
   const canCancel = contract.status !== 'CANCELADO';
@@ -344,12 +338,6 @@ export default function ContractDetail() {
               <Button variant="outline" onClick={() => setShowCancelDialog(true)}>
                 <X className="h-4 w-4 mr-2" />
                 Cancelar Contrato
-              </Button>
-            )}
-            {canSend && (
-              <Button onClick={handleSendForSignature} disabled={sendForSignature.isPending}>
-                <Send className="h-4 w-4 mr-2" />
-                {sendForSignature.isPending ? 'Enviando...' : 'Enviar para Aprovação'}
               </Button>
             )}
             {canApprove && (
