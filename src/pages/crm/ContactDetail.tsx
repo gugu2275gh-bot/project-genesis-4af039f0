@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 import { useContact, useContacts, ContactUpdate } from '@/hooks/useContacts';
 import { useLeads } from '@/hooks/useLeads';
@@ -10,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { SERVICE_INTEREST_LABELS as SVC_LABELS_DOC, DOCUMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, INTERACTION_CHANNEL_LABELS } from '@/types/database';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,7 +47,8 @@ import {
   Briefcase,
   Baby,
   MessageSquare,
-  DollarSign
+  DollarSign,
+  Plus
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -1193,43 +1196,15 @@ export default function ContactDetail() {
           </Card>
 
           {/* Serviços como Beneficiário */}
-          {contact.is_beneficiary && beneficiaryServiceCases.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  Trâmites como Beneficiário ({beneficiaryServiceCases.length})
-                </CardTitle>
-                <CardDescription>Casos técnicos vinculados a este beneficiário</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {beneficiaryServiceCases.map((sc: any) => (
-                    <div 
-                      key={sc.id} 
-                      className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => navigate(`/cases/${sc.id}`)}
-                    >
-                      <div>
-                        <p className="font-medium">
-                          {SERVICE_INTEREST_LABELS[sc.service_type as keyof typeof SERVICE_INTEREST_LABELS] || sc.service_type}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Setor: {sc.sector} • Criado em {format(new Date(sc.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                        </p>
-                      </div>
-                      <StatusBadge 
-                        status={sc.technical_status || 'CONTATO_INICIAL'} 
-                        label={sc.technical_status} 
-                      />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+          {contact.is_beneficiary && (
+            <BeneficiaryServicesSection
+              contactId={id!}
+              contact={contact}
+              beneficiaryServiceCases={beneficiaryServiceCases}
+              benefCasesLoading={benefCasesLoading}
+              navigate={navigate}
+            />
           )}
-
-          {/* Documents */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1510,5 +1485,205 @@ export default function ContactDetail() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ---- Beneficiary Services Section ----
+import { SERVICE_SECTOR_LABELS as SECTOR_LABELS_MAP, TECHNICAL_STATUS_LABELS } from '@/types/database';
+
+function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCases, benefCasesLoading, navigate }: {
+  contactId: string;
+  contact: any;
+  beneficiaryServiceCases: any[];
+  benefCasesLoading: boolean;
+  navigate: (path: string) => void;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [showNewDialog, setShowNewDialog] = useState(false);
+  const [serviceType, setServiceType] = useState('');
+  const [sector, setSector] = useState('');
+
+  // Fetch titular's opportunities
+  const { data: titularOpportunities = [], isLoading: oppsLoading } = useQuery({
+    queryKey: ['titular-opportunities', contact.linked_principal_contact_id],
+    queryFn: async () => {
+      const titularId = contact.linked_principal_contact_id;
+      if (!titularId) return [];
+      const { data: leads } = await supabase.from('leads').select('id').eq('contact_id', titularId);
+      if (!leads?.length) return [];
+      const { data: opps } = await supabase.from('opportunities').select('id, lead_id, status, total_amount').in('lead_id', leads.map(l => l.id));
+      return opps || [];
+    },
+    enabled: !!contact.linked_principal_contact_id && showNewDialog,
+  });
+
+  // Find contract_beneficiary record for this contact
+  const { data: beneficiaryRecord } = useQuery({
+    queryKey: ['beneficiary-record', contactId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contract_beneficiaries')
+        .select('id, contract_id')
+        .eq('contact_id', contactId)
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!contactId && showNewDialog,
+  });
+
+  const createServiceMutation = useMutation({
+    mutationFn: async () => {
+      if (!titularOpportunities.length) throw new Error('Nenhuma oportunidade encontrada para o titular');
+      if (!serviceType || !sector) throw new Error('Selecione tipo de serviço e setor');
+
+      const opportunityId = titularOpportunities[0].id;
+
+      // Create service case
+      const { data: newCase, error: caseError } = await supabase
+        .from('service_cases')
+        .insert([{
+          opportunity_id: opportunityId,
+          service_type: serviceType as any,
+          sector: sector as any,
+          technical_status: 'CONTATO_INICIAL' as any,
+        }])
+        .select()
+        .single();
+
+      if (caseError) throw caseError;
+
+      // Link to beneficiary record
+      if (beneficiaryRecord) {
+        const { error: linkError } = await supabase
+          .from('contract_beneficiaries')
+          .update({ service_case_id: newCase.id })
+          .eq('id', beneficiaryRecord.id);
+        if (linkError) throw linkError;
+      }
+
+      return newCase;
+    },
+    onSuccess: (newCase) => {
+      queryClient.invalidateQueries({ queryKey: ['beneficiary-service-cases'] });
+      toast({ title: 'Serviço criado com sucesso' });
+      setShowNewDialog(false);
+      setServiceType('');
+      setSector('');
+      navigate(`/cases/${newCase.id}`);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Erro ao criar serviço', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Trâmites como Beneficiário ({beneficiaryServiceCases.length})
+              </CardTitle>
+              <CardDescription>Casos técnicos vinculados a este beneficiário</CardDescription>
+            </div>
+            <Button size="sm" onClick={() => setShowNewDialog(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              Novo Serviço
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {benefCasesLoading ? (
+            <div className="space-y-3">
+              {[1, 2].map(i => <Skeleton key={i} className="h-16" />)}
+            </div>
+          ) : beneficiaryServiceCases.length === 0 ? (
+            <p className="text-muted-foreground text-center py-4">
+              Nenhum trâmite vinculado a este beneficiário.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {beneficiaryServiceCases.map((sc: any) => (
+                <div
+                  key={sc.id}
+                  className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => navigate(`/cases/${sc.id}`)}
+                >
+                  <div>
+                    <p className="font-medium">
+                      {SERVICE_INTEREST_LABELS[sc.service_type as keyof typeof SERVICE_INTEREST_LABELS] || sc.service_type}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Setor: {SECTOR_LABELS_MAP[sc.sector as keyof typeof SECTOR_LABELS_MAP] || sc.sector} • Criado em {format(new Date(sc.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                    </p>
+                  </div>
+                  <StatusBadge
+                    status={sc.technical_status || 'CONTATO_INICIAL'}
+                    label={TECHNICAL_STATUS_LABELS[sc.technical_status as keyof typeof TECHNICAL_STATUS_LABELS] || sc.technical_status}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Serviço para Beneficiário</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Tipo de Serviço *</Label>
+              <Select value={serviceType} onValueChange={setServiceType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o serviço" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SERVICE_INTEREST_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Setor *</Label>
+              <Select value={sector} onValueChange={setSector}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o setor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SECTOR_LABELS_MAP).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {!contact.linked_principal_contact_id && (
+              <p className="text-sm text-destructive">
+                Este beneficiário não está vinculado a um titular. Vincule-o primeiro.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => createServiceMutation.mutate()}
+              disabled={!serviceType || !sector || !contact.linked_principal_contact_id || createServiceMutation.isPending}
+            >
+              {createServiceMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Criar Serviço
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
