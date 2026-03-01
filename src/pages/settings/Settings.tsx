@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { useAuth } from '@/contexts/AuthContext';
  import { useSuperuser } from '@/hooks/useSuperuser';
 import { Navigate } from 'react-router-dom';
-import { Users, Clock, Settings as SettingsIcon, FileText, Bell, Layers, Briefcase, UserCog, Table2, ChevronDown, Database, Download } from 'lucide-react';
+import { Users, Clock, Settings as SettingsIcon, FileText, Bell, Layers, Briefcase, UserCog, Table2, ChevronDown, Database, Download, Wallet } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +21,7 @@ import SectorsManagement from './SectorsManagement';
 import ServiceTypesManagement from './ServiceTypesManagement';
 import UserProfilesManagement from './UserProfilesManagement';
 import DatabaseERD from './DatabaseERD';
+import PaymentSettings from './PaymentSettings';
 
 const TABLE_TABS = ['profiles', 'sectors', 'service-types'] as const;
 
@@ -105,6 +106,10 @@ export default function Settings() {
             <Bell className="h-4 w-4" />
             <span className="hidden sm:inline">Notificações</span>
           </TabsTrigger>
+          <TabsTrigger value="payment-settings" className="gap-2">
+            <Wallet className="h-4 w-4" />
+            <span className="hidden sm:inline">Pagamento</span>
+          </TabsTrigger>
           <TabsTrigger value="system" className="gap-2">
             <SettingsIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Sistema</span>
@@ -149,6 +154,10 @@ export default function Settings() {
 
         <TabsContent value="notifications">
           <NotificationPreferences />
+        </TabsContent>
+
+        <TabsContent value="payment-settings">
+          <PaymentSettings />
         </TabsContent>
 
         <TabsContent value="system">

@@ -1354,6 +1354,50 @@ export type Database = {
           },
         ]
       }
+      payment_accounts: {
+        Row: {
+          account_details: string | null
+          account_name: string
+          bank_name: string | null
+          country: string
+          created_at: string | null
+          created_by_user_id: string | null
+          id: string
+          is_active: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_details?: string | null
+          account_name: string
+          bank_name?: string | null
+          country: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          account_details?: string | null
+          account_name?: string
+          bank_name?: string | null
+          country?: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_accounts_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_reminders: {
         Row: {
           created_at: string
