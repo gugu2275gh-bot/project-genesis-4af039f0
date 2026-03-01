@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { usePayments } from '@/hooks/usePayments';
 import { supabase } from '@/integrations/supabase/client';
 import { useOpportunities } from '@/hooks/useOpportunities';
+import { useQuery } from '@tanstack/react-query';
 import { useReceipts } from '@/hooks/useReceipts';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
@@ -12,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText, Download, CheckCircle, Clock, FileCheck, MessageSquare, Users } from 'lucide-react';
 import { PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -35,6 +37,22 @@ export default function PaymentsList() {
     custom_payment_method: '',
     transfer_origin: '' as '' | 'BRASIL' | 'ESPANHA',
     beneficiary_contact_id: '' as string,
+    discount_type: '' as '' | 'PERCENTUAL' | 'VALOR',
+    discount_value: '',
+    apply_vat: false,
+  });
+
+  // Fetch default VAT rate from system config
+  const { data: defaultVatRate } = useQuery({
+    queryKey: ['system-config', 'default_vat_rate'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('system_config')
+        .select('value')
+        .eq('key', 'default_vat_rate')
+        .maybeSingle();
+      return parseFloat(data?.value || '21');
+    },
   });
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState('');
@@ -73,11 +91,34 @@ export default function PaymentsList() {
     })();
   }, [newPayment.opportunity_id]);
 
+  // Calculate amounts based on discount and VAT
+  const calculatedAmounts = useMemo(() => {
+    const gross = parseFloat(newPayment.amount) || 0;
+    let discountAmount = 0;
+    if (newPayment.discount_type === 'PERCENTUAL') {
+      discountAmount = gross * ((parseFloat(newPayment.discount_value) || 0) / 100);
+    } else if (newPayment.discount_type === 'VALOR') {
+      discountAmount = parseFloat(newPayment.discount_value) || 0;
+    }
+    const afterDiscount = Math.max(0, gross - discountAmount);
+    const vatRate = newPayment.apply_vat ? (defaultVatRate || 21) / 100 : 0;
+    const vatAmount = afterDiscount * vatRate;
+    const finalAmount = afterDiscount + vatAmount;
+    return { gross, discountAmount, afterDiscount, vatAmount, finalAmount, vatRate };
+  }, [newPayment.amount, newPayment.discount_type, newPayment.discount_value, newPayment.apply_vat, defaultVatRate]);
+
   const handleCreate = async () => {
     if (!newPayment.opportunity_id || !newPayment.amount) return;
+    const { gross, discountAmount, vatAmount, finalAmount, vatRate } = calculatedAmounts;
     await createPayment.mutateAsync({
       opportunity_id: newPayment.opportunity_id,
-      amount: parseFloat(newPayment.amount),
+      amount: finalAmount,
+      gross_amount: gross,
+      discount_type: newPayment.discount_type || null,
+      discount_value: parseFloat(newPayment.discount_value) || 0,
+      apply_vat: newPayment.apply_vat,
+      vat_rate: newPayment.apply_vat ? vatRate : null,
+      vat_amount: vatAmount,
       payment_method: newPayment.payment_method,
       status: 'PENDENTE',
       beneficiary_contact_id: newPayment.beneficiary_contact_id || null,
@@ -91,6 +132,9 @@ export default function PaymentsList() {
       custom_payment_method: '',
       transfer_origin: '',
       beneficiary_contact_id: '',
+      discount_type: '',
+      discount_value: '',
+      apply_vat: false,
     });
   };
 
@@ -454,7 +498,7 @@ export default function PaymentsList() {
                 )}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>Valor (€)</Label>
+                    <Label>Valor Bruto (€)</Label>
                     <Input
                       type="number"
                       value={newPayment.amount}
@@ -479,13 +523,74 @@ export default function PaymentsList() {
                     </Select>
                   </div>
                 </div>
-                {newPayment.payment_method === 'OUTRO' && (
+
+                {/* Discount */}
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>Detalhe a forma de pagamento</Label>
-                    <Input
-                      value={newPayment.custom_payment_method}
-                      onChange={(e) => setNewPayment({ ...newPayment, custom_payment_method: e.target.value })}
-                    />
+                    <Label>Tipo de Desconto</Label>
+                    <Select
+                      value={newPayment.discount_type || '_none'}
+                      onValueChange={(v) => setNewPayment({ ...newPayment, discount_type: v === '_none' ? '' : v as any })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sem desconto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Sem desconto</SelectItem>
+                        <SelectItem value="PERCENTUAL">Percentual (%)</SelectItem>
+                        <SelectItem value="VALOR">Valor fixo (€)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {newPayment.discount_type && (
+                    <div>
+                      <Label>{newPayment.discount_type === 'PERCENTUAL' ? 'Desconto (%)' : 'Desconto (€)'}</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={newPayment.discount_value}
+                        onChange={(e) => setNewPayment({ ...newPayment, discount_value: e.target.value })}
+                        placeholder={newPayment.discount_type === 'PERCENTUAL' ? '10' : '100.00'}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* IVA */}
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <Label>Aplicar IVA ({defaultVatRate || 21}%)</Label>
+                    <p className="text-xs text-muted-foreground">Imposto sobre Valor Acrescentado</p>
+                  </div>
+                  <Switch
+                    checked={newPayment.apply_vat}
+                    onCheckedChange={(checked) => setNewPayment({ ...newPayment, apply_vat: checked })}
+                  />
+                </div>
+
+                {/* Calculation Summary */}
+                {(newPayment.amount && (newPayment.discount_type || newPayment.apply_vat)) && (
+                  <div className="rounded-lg border bg-muted/50 p-3 space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Valor Bruto</span>
+                      <span>€ {calculatedAmounts.gross.toFixed(2)}</span>
+                    </div>
+                    {calculatedAmounts.discountAmount > 0 && (
+                      <div className="flex justify-between text-destructive">
+                        <span>Desconto</span>
+                        <span>- € {calculatedAmounts.discountAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {newPayment.apply_vat && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">IVA ({defaultVatRate || 21}%)</span>
+                        <span>+ € {calculatedAmounts.vatAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-semibold border-t pt-1">
+                      <span>Total Final</span>
+                      <span>€ {calculatedAmounts.finalAmount.toFixed(2)}</span>
+                    </div>
                   </div>
                 )}
                 <div>
