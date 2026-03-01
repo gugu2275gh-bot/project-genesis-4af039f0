@@ -359,7 +359,7 @@ export default function LeadDetail() {
           <Tabs defaultValue="chat" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="chat">Chat WhatsApp</TabsTrigger>
-              <TabsTrigger value="interactions">Interações Sistema</TabsTrigger>
+              <TabsTrigger value="interactions">Histórico de Anotações</TabsTrigger>
             </TabsList>
             
             <TabsContent value="chat" className="mt-4">
