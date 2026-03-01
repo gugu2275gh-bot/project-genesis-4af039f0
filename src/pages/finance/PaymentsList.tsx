@@ -30,7 +30,7 @@ export default function PaymentsList() {
     opportunity_id: '',
     amount: '',
     payment_method: 'PIX' as any,
-    payment_link: '',
+    custom_payment_method: '',
   });
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState('');
@@ -56,7 +56,6 @@ export default function PaymentsList() {
       opportunity_id: newPayment.opportunity_id,
       amount: parseFloat(newPayment.amount),
       payment_method: newPayment.payment_method,
-      payment_link: newPayment.payment_link || null,
       status: 'PENDENTE',
     });
     setIsDialogOpen(false);
@@ -64,7 +63,7 @@ export default function PaymentsList() {
       opportunity_id: '',
       amount: '',
       payment_method: 'PIX',
-      payment_link: '',
+      custom_payment_method: '',
     });
   };
 
@@ -429,14 +428,16 @@ export default function PaymentsList() {
                     </Select>
                   </div>
                 </div>
-                <div>
-                  <Label>Link de Pagamento</Label>
-                  <Input
-                    value={newPayment.payment_link}
-                    onChange={(e) => setNewPayment({ ...newPayment, payment_link: e.target.value })}
-                    placeholder="https://..."
-                  />
-                </div>
+                {newPayment.payment_method === 'OUTRO' && (
+                  <div>
+                    <Label>Especifique a forma de pagamento</Label>
+                    <Input
+                      value={newPayment.custom_payment_method}
+                      onChange={(e) => setNewPayment({ ...newPayment, custom_payment_method: e.target.value })}
+                      placeholder="Ex: Bizum, MBWay, etc."
+                    />
+                  </div>
+                )}
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancelar
