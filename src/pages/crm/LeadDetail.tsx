@@ -106,7 +106,6 @@ export default function LeadDetail() {
 
   const handleConfirmInterest = async () => {
     await confirmInterest.mutateAsync(lead.id);
-    navigate('/crm/opportunities');
   };
 
   const handleAddInteraction = async () => {
@@ -122,7 +121,11 @@ export default function LeadDetail() {
   };
 
   const handleStatusChange = async (status: string) => {
-    await updateLead.mutateAsync({ id: lead.id, status: status as any });
+    if (status === 'INTERESSE_CONFIRMADO' && !lead.interest_confirmed) {
+      await handleConfirmInterest();
+    } else {
+      await updateLead.mutateAsync({ id: lead.id, status: status as any });
+    }
   };
 
   const handleDeleteLead = async () => {
@@ -148,12 +151,6 @@ export default function LeadDetail() {
         description={`Lead criado em ${format(new Date(lead.created_at!), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
         actions={
           <div className="flex items-center gap-2">
-            {!lead.interest_confirmed && (
-              <Button onClick={handleConfirmInterest} disabled={confirmInterest.isPending}>
-                <Check className="h-4 w-4 mr-2" />
-                {confirmInterest.isPending ? 'Confirmando...' : 'Confirmar Interesse'}
-              </Button>
-            )}
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="icon">
