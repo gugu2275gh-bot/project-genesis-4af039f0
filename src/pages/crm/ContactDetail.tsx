@@ -83,6 +83,24 @@ export default function ContactDetail() {
   const [phoneInput, setPhoneInput] = useState('');
 
   const contactLeads = leads.filter(l => l.contact_id === id);
+
+  // Leads que têm pelo menos um pagamento confirmado = serviços
+  const { data: confirmedLeadIds = [] } = useQuery({
+    queryKey: ['confirmed-lead-ids', id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data: cLeads } = await supabase.from('leads').select('id').eq('contact_id', id);
+      if (!cLeads?.length) return [];
+      const { data: opps } = await supabase.from('opportunities').select('id, lead_id').in('lead_id', cLeads.map(l => l.id));
+      if (!opps?.length) return [];
+      const { data: payments } = await supabase.from('payments').select('opportunity_id').in('opportunity_id', opps.map(o => o.id)).eq('status', 'CONFIRMADO');
+      if (!payments?.length) return [];
+      const oppIds = new Set(payments.map(p => p.opportunity_id));
+      return opps.filter(o => oppIds.has(o.id)).map(o => o.lead_id);
+    },
+    enabled: !!id,
+  });
+  const confirmedLeads = contactLeads.filter(l => confirmedLeadIds.includes(l.id));
   const { data: contactDocuments = [], isLoading: docsLoading } = useContactDocuments(id);
   const { beneficiaries: contactBeneficiaries, titular: contactTitular, isLoading: benefLoading } = useContactBeneficiaries(id);
   const { interactions } = useInteractions(id);
@@ -1100,22 +1118,23 @@ export default function ContactDetail() {
             </CardContent>
           </Card>
 
-          {/* Related Leads */}
+          {/* Serviços (leads com pagamento confirmado) */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Leads Vinculados ({contactLeads.length})
+                <Briefcase className="h-5 w-5" />
+                Serviços ({confirmedLeads.length})
               </CardTitle>
+              <CardDescription>Atendimentos com pagamento confirmado</CardDescription>
             </CardHeader>
             <CardContent>
-              {contactLeads.length === 0 ? (
+              {confirmedLeads.length === 0 ? (
                 <p className="text-muted-foreground text-center py-4">
-                  Nenhum lead vinculado a este contato.
+                  Nenhum serviço ativo para este cliente.
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {contactLeads.map(lead => (
+                  {confirmedLeads.map(lead => (
                     <div 
                       key={lead.id} 
                       className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
