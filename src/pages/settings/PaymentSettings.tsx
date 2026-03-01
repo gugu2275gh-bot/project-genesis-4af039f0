@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,34 +7,24 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Plus, Pencil, Trash2, Building2 } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { toast } from 'sonner';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-interface PaymentAccount {
-  id: string;
-  country: string;
+interface AccountForm {
   account_name: string;
-  bank_name: string | null;
-  account_details: string | null;
-  is_active: boolean;
-  created_at: string;
+  bank_name: string;
+  account_details: string;
 }
+
+const emptyForm: AccountForm = { account_name: '', bank_name: '', account_details: '' };
 
 export default function PaymentSettings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingAccount, setEditingAccount] = useState<PaymentAccount | null>(null);
-  const [form, setForm] = useState({
-    country: 'BRASIL',
-    account_name: '',
-    bank_name: '',
-    account_details: '',
-  });
+  const [brasilForm, setBrasilForm] = useState<AccountForm>(emptyForm);
+  const [espanhaForm, setEspanhaForm] = useState<AccountForm>(emptyForm);
+  const [brasilId, setBrasilId] = useState<string | null>(null);
+  const [espanhaId, setEspanhaId] = useState<string | null>(null);
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['payment-accounts'],
@@ -42,34 +32,57 @@ export default function PaymentSettings() {
       const { data, error } = await supabase
         .from('payment_accounts')
         .select('*')
-        .order('country', { ascending: true })
-        .order('account_name', { ascending: true });
+        .order('country', { ascending: true });
       if (error) throw error;
-      return data as PaymentAccount[];
+      return data;
     },
   });
 
+  useEffect(() => {
+    const brasil = accounts.find(a => a.country === 'BRASIL');
+    const espanha = accounts.find(a => a.country === 'ESPANHA');
+    if (brasil) {
+      setBrasilId(brasil.id);
+      setBrasilForm({
+        account_name: brasil.account_name || '',
+        bank_name: brasil.bank_name || '',
+        account_details: brasil.account_details || '',
+      });
+    } else {
+      setBrasilId(null);
+    }
+    if (espanha) {
+      setEspanhaId(espanha.id);
+      setEspanhaForm({
+        account_name: espanha.account_name || '',
+        bank_name: espanha.bank_name || '',
+        account_details: espanha.account_details || '',
+      });
+    } else {
+      setEspanhaId(null);
+    }
+  }, [accounts]);
+
   const saveMutation = useMutation({
-    mutationFn: async (values: typeof form & { id?: string }) => {
-      if (values.id) {
+    mutationFn: async ({ country, form, existingId }: { country: string; form: AccountForm; existingId: string | null }) => {
+      if (existingId) {
         const { error } = await supabase
           .from('payment_accounts')
           .update({
-            country: values.country,
-            account_name: values.account_name,
-            bank_name: values.bank_name || null,
-            account_details: values.account_details || null,
+            account_name: form.account_name,
+            bank_name: form.bank_name || null,
+            account_details: form.account_details || null,
           })
-          .eq('id', values.id);
+          .eq('id', existingId);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('payment_accounts')
           .insert({
-            country: values.country,
-            account_name: values.account_name,
-            bank_name: values.bank_name || null,
-            account_details: values.account_details || null,
+            country,
+            account_name: form.account_name,
+            bank_name: form.bank_name || null,
+            account_details: form.account_details || null,
             created_by_user_id: user?.id,
           });
         if (error) throw error;
@@ -77,191 +90,89 @@ export default function PaymentSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-accounts'] });
-      toast.success(editingAccount ? 'Conta atualizada' : 'Conta cadastrada');
-      resetForm();
+      toast.success('Dados salvos com sucesso');
     },
-    onError: () => toast.error('Erro ao salvar conta'),
+    onError: () => toast.error('Erro ao salvar dados'),
   });
 
-  const toggleMutation = useMutation({
-    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { error } = await supabase
-        .from('payment_accounts')
-        .update({ is_active })
-        .eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payment-accounts'] });
-      toast.success('Status atualizado');
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('payment_accounts')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payment-accounts'] });
-      toast.success('Conta removida');
-    },
-    onError: () => toast.error('Erro ao remover conta'),
-  });
-
-  const resetForm = () => {
-    setForm({ country: 'BRASIL', account_name: '', bank_name: '', account_details: '' });
-    setEditingAccount(null);
-    setIsDialogOpen(false);
-  };
-
-  const handleEdit = (account: PaymentAccount) => {
-    setEditingAccount(account);
-    setForm({
-      country: account.country,
-      account_name: account.account_name,
-      bank_name: account.bank_name || '',
-      account_details: account.account_details || '',
-    });
-    setIsDialogOpen(true);
-  };
-
-  const handleSubmit = () => {
+  const handleSave = (country: 'BRASIL' | 'ESPANHA') => {
+    const form = country === 'BRASIL' ? brasilForm : espanhaForm;
+    const existingId = country === 'BRASIL' ? brasilId : espanhaId;
     if (!form.account_name.trim()) {
       toast.error('Nome da conta é obrigatório');
       return;
     }
-    saveMutation.mutate({ ...form, id: editingAccount?.id });
+    saveMutation.mutate({ country, form, existingId });
   };
 
-  const brasilAccounts = accounts.filter(a => a.country === 'BRASIL');
-  const espanhaAccounts = accounts.filter(a => a.country === 'ESPANHA');
-
-  const renderTable = (title: string, items: PaymentAccount[], flag: string) => (
+  const renderCountryCard = (
+    title: string,
+    flag: string,
+    country: 'BRASIL' | 'ESPANHA',
+    form: AccountForm,
+    setForm: (f: AccountForm) => void,
+  ) => (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="flex items-center gap-2">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
           <span>{flag}</span> {title}
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        {items.length === 0 ? (
-          <p className="text-muted-foreground text-sm">Nenhuma conta cadastrada.</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome da Conta</TableHead>
-                <TableHead>Banco</TableHead>
-                <TableHead>Detalhes</TableHead>
-                <TableHead>Ativa</TableHead>
-                <TableHead className="w-24">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((account) => (
-                <TableRow key={account.id}>
-                  <TableCell className="font-medium">{account.account_name}</TableCell>
-                  <TableCell>{account.bank_name || '-'}</TableCell>
-                  <TableCell className="max-w-xs truncate">{account.account_details || '-'}</TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={account.is_active}
-                      onCheckedChange={(checked) =>
-                        toggleMutation.mutate({ id: account.id, is_active: checked })
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(account)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteMutation.mutate(account.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+      <CardContent className="space-y-4">
+        <div>
+          <Label>Nome da Conta</Label>
+          <Input
+            value={form.account_name}
+            onChange={(e) => setForm({ ...form, account_name: e.target.value })}
+            placeholder="Ex: Conta Principal"
+          />
+        </div>
+        <div>
+          <Label>Banco</Label>
+          <Input
+            value={form.bank_name}
+            onChange={(e) => setForm({ ...form, bank_name: e.target.value })}
+            placeholder="Ex: Banco do Brasil / CaixaBank"
+          />
+        </div>
+        <div>
+          <Label>Detalhes da Conta</Label>
+          <Textarea
+            value={form.account_details}
+            onChange={(e) => setForm({ ...form, account_details: e.target.value })}
+            rows={3}
+            placeholder="IBAN, agência, número da conta, etc."
+          />
+        </div>
+        <div className="flex justify-end">
+          <Button
+            onClick={() => handleSave(country)}
+            disabled={saveMutation.isPending}
+            className="gap-2"
+          >
+            <Save className="h-4 w-4" />
+            {saveMutation.isPending ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
 
+  if (isLoading) {
+    return <p className="text-muted-foreground text-sm">Carregando...</p>;
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold">Contas de Pagamento</h3>
-          <p className="text-sm text-muted-foreground">Cadastre as contas bancárias do Brasil e da Espanha</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); else setIsDialogOpen(true); }}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Nova Conta
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{editingAccount ? 'Editar Conta' : 'Nova Conta'}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>País</Label>
-                <Select value={form.country} onValueChange={(v) => setForm({ ...form, country: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="BRASIL">🇧🇷 Brasil</SelectItem>
-                    <SelectItem value="ESPANHA">🇪🇸 Espanha</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Nome da Conta</Label>
-                <Input
-                  value={form.account_name}
-                  onChange={(e) => setForm({ ...form, account_name: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Banco</Label>
-                <Input
-                  value={form.bank_name}
-                  onChange={(e) => setForm({ ...form, bank_name: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Detalhes da Conta</Label>
-                <Textarea
-                  value={form.account_details}
-                  onChange={(e) => setForm({ ...form, account_details: e.target.value })}
-                  rows={3}
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={resetForm}>Cancelar</Button>
-                <Button onClick={handleSubmit} disabled={saveMutation.isPending}>
-                  {saveMutation.isPending ? 'Salvando...' : 'Salvar'}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+      <div>
+        <h3 className="text-lg font-semibold">Pagamentos</h3>
+        <p className="text-sm text-muted-foreground">Configure as contas bancárias para recebimento de pagamentos</p>
       </div>
 
-      {renderTable('Contas do Brasil', brasilAccounts, '🇧🇷')}
-      {renderTable('Contas da Espanha', espanhaAccounts, '🇪🇸')}
+      <div className="grid gap-6 md:grid-cols-2">
+        {renderCountryCard('Conta Brasil', '🇧🇷', 'BRASIL', brasilForm, setBrasilForm)}
+        {renderCountryCard('Conta Espanha', '🇪🇸', 'ESPANHA', espanhaForm, setEspanhaForm)}
+      </div>
     </div>
   );
 }
