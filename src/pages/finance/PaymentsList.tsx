@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText, Download, CheckCircle, Clock, FileCheck, MessageSquare } from 'lucide-react';
 import { PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -31,6 +32,7 @@ export default function PaymentsList() {
     amount: '',
     payment_method: 'PIX' as any,
     custom_payment_method: '',
+    transfer_origin: '' as '' | 'BRASIL' | 'ESPANHA',
   });
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState('');
@@ -64,6 +66,7 @@ export default function PaymentsList() {
       amount: '',
       payment_method: 'PIX',
       custom_payment_method: '',
+      transfer_origin: '',
     });
   };
 
@@ -437,6 +440,31 @@ export default function PaymentsList() {
                     />
                   </div>
                 )}
+                <div>
+                  <Label className="mb-3 block">Origem da transferência</Label>
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="origin-brasil"
+                        checked={newPayment.transfer_origin === 'BRASIL'}
+                        onCheckedChange={(checked) =>
+                          setNewPayment({ ...newPayment, transfer_origin: checked ? 'BRASIL' : '' })
+                        }
+                      />
+                      <Label htmlFor="origin-brasil" className="font-normal cursor-pointer">Brasil</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="origin-espanha"
+                        checked={newPayment.transfer_origin === 'ESPANHA'}
+                        onCheckedChange={(checked) =>
+                          setNewPayment({ ...newPayment, transfer_origin: checked ? 'ESPANHA' : '' })
+                        }
+                      />
+                      <Label htmlFor="origin-espanha" className="font-normal cursor-pointer">Espanha</Label>
+                    </div>
+                  </div>
+                </div>
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancelar
