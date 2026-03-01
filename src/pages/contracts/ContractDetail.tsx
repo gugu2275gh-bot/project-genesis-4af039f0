@@ -11,14 +11,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Send, Check, Save, X, Calendar, FileText, Users, Upload, FileCheck, Loader2, User, Phone, MapPin, CreditCard, Pause, Play, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Send, Check, Save, X, Calendar, FileText, Upload, FileCheck, Loader2, User, Phone, MapPin, CreditCard, Pause, Play, AlertTriangle } from 'lucide-react';
 import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, LANGUAGE_LABELS, CONTRACT_TEMPLATE_LABELS, ContractTemplate, PAYMENT_METHOD_LABELS, PAYMENT_ACCOUNT_LABELS, PaymentAccount } from '@/types/database';
 import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { BeneficiariesTab } from '@/components/contracts/BeneficiariesTab';
 import { Badge } from '@/components/ui/badge';
 import { ContractCostsSection } from '@/components/contracts/ContractCostsSection';
 import { ContractNotesSection } from '@/components/contracts/ContractNotesSection';
@@ -727,37 +725,23 @@ export default function ContractDetail() {
           </Card>
         </div>
 
-        {/* Contract Details with Tabs */}
+        {/* Contract Preview */}
         <Card className="lg:col-span-2">
-          <Tabs defaultValue="beneficiaries">
-            <CardHeader>
-              <TabsList>
-                <TabsTrigger value="beneficiaries">
-                  <Users className="h-4 w-4 mr-2" />
-                  Beneficiários
-                </TabsTrigger>
-                <TabsTrigger value="preview">
-                  <Eye className="h-4 w-4 mr-2" />
-                  Pré-visualização
-                </TabsTrigger>
-              </TabsList>
-            </CardHeader>
-            <CardContent>
-              <TabsContent value="beneficiaries" className="m-0">
-                <BeneficiariesTab contractId={contract.id} />
-              </TabsContent>
-              
-              <TabsContent value="preview" className="m-0">
-                <ContractPreview
-                  template={(contract as any).contract_template || 'DOCUMENTOS'}
-                  clientName={contract.opportunities?.leads?.contacts?.full_name || ''}
-                  documentNumber={(contract.opportunities?.leads?.contacts as any)?.document_number || ''}
-                  contractNumber={(contract as any).contract_number || ''}
-                  canDownload={canDownloadContract}
-                />
-              </TabsContent>
-            </CardContent>
-          </Tabs>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Eye className="h-4 w-4" />
+              Pré-visualização
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ContractPreview
+              template={(contract as any).contract_template || 'DOCUMENTOS'}
+              clientName={contract.opportunities?.leads?.contacts?.full_name || ''}
+              documentNumber={(contract.opportunities?.leads?.contacts as any)?.document_number || ''}
+              contractNumber={(contract as any).contract_number || ''}
+              canDownload={canDownloadContract}
+            />
+          </CardContent>
         </Card>
       </div>
 
