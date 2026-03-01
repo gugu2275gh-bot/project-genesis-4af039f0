@@ -38,9 +38,9 @@ const navItems: NavItem[] = [
     children: [
       { label: 'Leads', href: '/crm/leads' },
       { label: 'Oportunidades', href: '/crm/opportunities' },
-      { label: 'Contatos', href: '/crm/contacts' },
     ]
   },
+  { label: 'Ficha do Cliente', href: '/crm/contacts', icon: FileText, roles: ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE'] },
   { 
     label: 'Financeiro', 
     href: '/finance', 
