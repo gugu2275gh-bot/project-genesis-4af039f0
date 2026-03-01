@@ -79,11 +79,14 @@ export default function ContactDetail() {
   const { toast } = useToast();
   const { data: contact, isLoading, error } = useContact(id);
   const { updateContact } = useContacts();
-  const { leads } = useLeads();
+  const { leads, createLeadForContact } = useLeads();
   
   const [isEditing, setIsEditing] = useState(false);
   const [editedContact, setEditedContact] = useState<Partial<ContactUpdate>>({});
   const [phoneInput, setPhoneInput] = useState('');
+  const [showNewServiceDialog, setShowNewServiceDialog] = useState(false);
+  const [newServiceInterest, setNewServiceInterest] = useState<string>('OUTRO');
+  const [newServiceNotes, setNewServiceNotes] = useState('');
 
   const contactLeads = leads.filter(l => l.contact_id === id);
 
@@ -245,6 +248,23 @@ export default function ContactDetail() {
         description: error.message,
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleCreateNewService = async () => {
+    if (!id) return;
+    try {
+      const newLead = await createLeadForContact.mutateAsync({
+        contact_id: id,
+        service_interest: newServiceInterest,
+        notes: newServiceNotes || undefined,
+      });
+      setShowNewServiceDialog(false);
+      setNewServiceInterest('OUTRO');
+      setNewServiceNotes('');
+      navigate(`/crm/leads/${newLead.id}`);
+    } catch (error) {
+      // toast handled by hook
     }
   };
 
@@ -1116,6 +1136,7 @@ export default function ContactDetail() {
   );
 
   return (
+    <>
     <div className="space-y-6">
       <PageHeader
         title={contact.full_name}
@@ -1156,12 +1177,18 @@ export default function ContactDetail() {
 
           {/* Serviços (leads com pagamento confirmado) */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Briefcase className="h-5 w-5" />
-                Serviços ({confirmedLeads.length})
-              </CardTitle>
-              <CardDescription>Atendimentos com pagamento confirmado</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Briefcase className="h-5 w-5" />
+                  Serviços ({confirmedLeads.length})
+                </CardTitle>
+                <CardDescription>Atendimentos com pagamento confirmado</CardDescription>
+              </div>
+              <Button size="sm" onClick={() => setShowNewServiceDialog(true)}>
+                <Plus className="h-4 w-4 mr-1" />
+                Novo Serviço
+              </Button>
             </CardHeader>
             <CardContent>
               {confirmedLeads.length === 0 ? (
@@ -1485,6 +1512,49 @@ export default function ContactDetail() {
         </div>
       </div>
     </div>
+
+      {/* Dialog Novo Serviço */}
+      <Dialog open={showNewServiceDialog} onOpenChange={setShowNewServiceDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Serviço para {contact.full_name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Tipo de Serviço</Label>
+              <Select value={newServiceInterest} onValueChange={setNewServiceInterest}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SERVICE_INTEREST_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Notas (opcional)</Label>
+              <Textarea
+                value={newServiceNotes}
+                onChange={(e) => setNewServiceNotes(e.target.value)}
+                placeholder="Observações sobre o novo serviço..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewServiceDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateNewService} disabled={createLeadForContact.isPending}>
+              {createLeadForContact.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Criar Lead
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
