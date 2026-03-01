@@ -37,6 +37,8 @@ export type LeadStatus =
   | 'DADOS_INCOMPLETOS'
   | 'INTERESSE_PENDENTE'
   | 'INTERESSE_CONFIRMADO'
+  | 'STANDBY'
+  | 'FOLLOW_UP'
   | 'ARQUIVADO_SEM_RETORNO';
 
 export type OpportunityStatus = 
@@ -374,6 +376,8 @@ export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
   DADOS_INCOMPLETOS: 'Dados Incompletos',
   INTERESSE_PENDENTE: 'Interesse Pendente',
   INTERESSE_CONFIRMADO: 'Interesse Confirmado',
+  STANDBY: 'Standby',
+  FOLLOW_UP: 'Follow-up',
   ARQUIVADO_SEM_RETORNO: 'Arquivado',
 };
 
