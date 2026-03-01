@@ -1159,70 +1159,6 @@ export default function ContactDetail() {
             </CardContent>
           </Card>
 
-          {/* Beneficiários / Titular */}
-          {(contactBeneficiaries.length > 0 || contactTitular) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  {contactTitular ? 'Titular Vinculado' : `Beneficiários (${contactBeneficiaries.length})`}
-                </CardTitle>
-                <CardDescription>
-                  {contactTitular 
-                    ? 'Este contato é beneficiário vinculado ao titular abaixo' 
-                    : 'Beneficiários vinculados a este titular'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {benefLoading ? (
-                  <Skeleton className="h-16" />
-                ) : contactTitular ? (
-                  <div
-                    className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => contactTitular.contact_id && navigate(`/crm/contacts/${contactTitular.contact_id}`)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium">{contactTitular.full_name}</p>
-                        <p className="text-sm text-muted-foreground">Titular</p>
-                      </div>
-                    </div>
-                    {contactTitular.contact_id && (
-                      <Badge variant="outline">Ver Ficha</Badge>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {contactBeneficiaries.map(ben => (
-                      <div
-                        key={ben.id}
-                        className={`flex items-center justify-between p-3 rounded-lg border ${ben.contact_id ? 'cursor-pointer hover:bg-muted/50' : ''} transition-colors`}
-                        onClick={() => ben.contact_id && navigate(`/crm/contacts/${ben.contact_id}`)}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-secondary/50 flex items-center justify-center">
-                            <User className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{ben.full_name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {ben.relationship || 'Beneficiário'}
-                            </p>
-                          </div>
-                        </div>
-                        {ben.contact_id && (
-                          <Badge variant="outline">Ver Ficha</Badge>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
 
           {/* Documents */}
           <Card>
@@ -1431,6 +1367,71 @@ export default function ContactDetail() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Beneficiários / Titular */}
+          {(contactBeneficiaries.length > 0 || contactTitular) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  {contactTitular ? 'Titular Vinculado' : `Beneficiários (${contactBeneficiaries.length})`}
+                </CardTitle>
+                <CardDescription>
+                  {contactTitular 
+                    ? 'Este contato é beneficiário vinculado ao titular abaixo' 
+                    : 'Beneficiários vinculados a este titular'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {benefLoading ? (
+                  <Skeleton className="h-16" />
+                ) : contactTitular ? (
+                  <div
+                    className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => contactTitular.contact_id && navigate(`/crm/contacts/${contactTitular.contact_id}`)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{contactTitular.full_name}</p>
+                        <p className="text-sm text-muted-foreground">Titular</p>
+                      </div>
+                    </div>
+                    {contactTitular.contact_id && (
+                      <Badge variant="outline">Ver Ficha</Badge>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {contactBeneficiaries.map(ben => (
+                      <div
+                        key={ben.id}
+                        className={`flex items-center justify-between p-3 rounded-lg border ${ben.contact_id ? 'cursor-pointer hover:bg-muted/50' : ''} transition-colors`}
+                        onClick={() => ben.contact_id && navigate(`/crm/contacts/${ben.contact_id}`)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-secondary/50 flex items-center justify-center">
+                            <User className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{ben.full_name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {ben.relationship || 'Beneficiário'}
+                            </p>
+                          </div>
+                        </div>
+                        {ben.contact_id && (
+                          <Badge variant="outline">Ver Ficha</Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>
