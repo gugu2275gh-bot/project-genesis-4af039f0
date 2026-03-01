@@ -1175,7 +1175,8 @@ export default function ContactDetail() {
             </CardContent>
           </Card>
 
-          {/* Serviços (leads com pagamento confirmado) */}
+          {/* Serviços (leads com pagamento confirmado) - esconder para beneficiários */}
+          {!contact.is_beneficiary && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
@@ -1221,6 +1222,7 @@ export default function ContactDetail() {
               )}
             </CardContent>
           </Card>
+          )}
 
           {/* Serviços como Beneficiário */}
           {contact.is_beneficiary && (
