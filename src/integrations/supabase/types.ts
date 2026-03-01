@@ -2546,6 +2546,7 @@ export type Database = {
         | "OUTRO"
         | "PAYPAL"
         | "PARCELAMENTO_MANUAL"
+        | "DINHEIRO"
       payment_status:
         | "PENDENTE"
         | "EM_ANALISE"
@@ -2799,6 +2800,7 @@ export const Constants = {
         "OUTRO",
         "PAYPAL",
         "PARCELAMENTO_MANUAL",
+        "DINHEIRO",
       ],
       payment_status: [
         "PENDENTE",
