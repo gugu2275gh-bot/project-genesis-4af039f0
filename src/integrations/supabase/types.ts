@@ -1450,11 +1450,15 @@ export type Database = {
       payments: {
         Row: {
           amount: number
+          apply_vat: boolean | null
           beneficiary_contact_id: string | null
           contract_id: string | null
           created_at: string | null
           currency: string | null
+          discount_type: string | null
+          discount_value: number | null
           due_date: string | null
+          gross_amount: number | null
           id: string
           installment_number: number | null
           opportunity_id: string
@@ -1474,14 +1478,20 @@ export type Database = {
           status: Database["public"]["Enums"]["payment_status"] | null
           transaction_id: string | null
           updated_at: string | null
+          vat_amount: number | null
+          vat_rate: number | null
         }
         Insert: {
           amount: number
+          apply_vat?: boolean | null
           beneficiary_contact_id?: string | null
           contract_id?: string | null
           created_at?: string | null
           currency?: string | null
+          discount_type?: string | null
+          discount_value?: number | null
           due_date?: string | null
+          gross_amount?: number | null
           id?: string
           installment_number?: number | null
           opportunity_id: string
@@ -1501,14 +1511,20 @@ export type Database = {
           status?: Database["public"]["Enums"]["payment_status"] | null
           transaction_id?: string | null
           updated_at?: string | null
+          vat_amount?: number | null
+          vat_rate?: number | null
         }
         Update: {
           amount?: number
+          apply_vat?: boolean | null
           beneficiary_contact_id?: string | null
           contract_id?: string | null
           created_at?: string | null
           currency?: string | null
+          discount_type?: string | null
+          discount_value?: number | null
           due_date?: string | null
+          gross_amount?: number | null
           id?: string
           installment_number?: number | null
           opportunity_id?: string
@@ -1528,6 +1544,8 @@ export type Database = {
           status?: Database["public"]["Enums"]["payment_status"] | null
           transaction_id?: string | null
           updated_at?: string | null
+          vat_amount?: number | null
+          vat_rate?: number | null
         }
         Relationships: [
           {

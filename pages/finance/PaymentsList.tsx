@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Search, Check, DollarSign, User } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format } from 'date-fns';
@@ -28,6 +29,10 @@ export default function PaymentsList() {
     amount: '',
     payment_method: 'PIX' as any,
     payment_link: '',
+    discount_type: '' as '' | 'PERCENTUAL' | 'VALOR',
+    discount_value: '',
+    apply_vat: false,
+    vat_rate: '21',
   });
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState('');
@@ -52,15 +57,38 @@ export default function PaymentsList() {
     return matchesSearch && matchesStatus;
   });
 
+  // Calculate final amount with discount and VAT
+  const calculatedAmounts = (() => {
+    const gross = parseFloat(newPayment.amount) || 0;
+    let discountAmount = 0;
+    if (newPayment.discount_type === 'PERCENTUAL') {
+      discountAmount = gross * ((parseFloat(newPayment.discount_value) || 0) / 100);
+    } else if (newPayment.discount_type === 'VALOR') {
+      discountAmount = parseFloat(newPayment.discount_value) || 0;
+    }
+    const afterDiscount = Math.max(0, gross - discountAmount);
+    const vatRate = newPayment.apply_vat ? (parseFloat(newPayment.vat_rate) || 0) / 100 : 0;
+    const vatAmount = afterDiscount * vatRate;
+    const finalAmount = afterDiscount + vatAmount;
+    return { gross, discountAmount, afterDiscount, vatAmount, finalAmount };
+  })();
+
   const handleCreate = async () => {
     if (!newPayment.opportunity_id || !newPayment.amount) return;
+    const { gross, vatAmount, finalAmount } = calculatedAmounts;
     await createPayment.mutateAsync({
       opportunity_id: newPayment.opportunity_id,
-      amount: parseFloat(newPayment.amount),
+      amount: finalAmount,
+      gross_amount: gross,
+      discount_type: newPayment.discount_type || null,
+      discount_value: newPayment.discount_type ? (parseFloat(newPayment.discount_value) || 0) : null,
+      apply_vat: newPayment.apply_vat,
+      vat_rate: newPayment.apply_vat ? (parseFloat(newPayment.vat_rate) || 0) / 100 : null,
+      vat_amount: vatAmount,
       payment_method: newPayment.payment_method,
       payment_link: newPayment.payment_link || null,
       status: 'PENDENTE',
-    });
+    } as any);
     setIsDialogOpen(false);
     setSelectedClientId('');
     setNewPayment({
@@ -68,6 +96,10 @@ export default function PaymentsList() {
       amount: '',
       payment_method: 'PIX',
       payment_link: '',
+      discount_type: '',
+      discount_value: '',
+      apply_vat: false,
+      vat_rate: '21',
     });
   };
 
@@ -247,14 +279,82 @@ export default function PaymentsList() {
                     </Select>
                   </div>
                 </div>
-                <div>
-                  <Label>Link de Pagamento</Label>
-                  <Input
-                    value={newPayment.payment_link}
-                    onChange={(e) => setNewPayment({ ...newPayment, payment_link: e.target.value })}
-                    placeholder="https://..."
-                  />
+                {/* Desconto */}
+                <div className="space-y-2">
+                  <Label>Desconto</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select
+                      value={newPayment.discount_type}
+                      onValueChange={(v: 'PERCENTUAL' | 'VALOR') => setNewPayment({ ...newPayment, discount_type: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sem desconto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PERCENTUAL">Percentual (%)</SelectItem>
+                        <SelectItem value="VALOR">Valor fixo (€)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {newPayment.discount_type && (
+                      <Input
+                        type="number"
+                        value={newPayment.discount_value}
+                        onChange={(e) => setNewPayment({ ...newPayment, discount_value: e.target.value })}
+                        placeholder={newPayment.discount_type === 'PERCENTUAL' ? '10' : '100.00'}
+                      />
+                    )}
+                  </div>
                 </div>
+
+                {/* IVA */}
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <Label className="text-sm font-medium">Aplicar IVA</Label>
+                    <p className="text-xs text-muted-foreground">Imposto sobre valor acrescentado</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {newPayment.apply_vat && (
+                      <Input
+                        type="number"
+                        value={newPayment.vat_rate}
+                        onChange={(e) => setNewPayment({ ...newPayment, vat_rate: e.target.value })}
+                        className="w-20 h-8 text-sm"
+                        placeholder="21"
+                      />
+                    )}
+                    {newPayment.apply_vat && <span className="text-sm text-muted-foreground">%</span>}
+                    <Switch
+                      checked={newPayment.apply_vat}
+                      onCheckedChange={(checked) => setNewPayment({ ...newPayment, apply_vat: checked })}
+                    />
+                  </div>
+                </div>
+
+                {/* Resumo do cálculo */}
+                {parseFloat(newPayment.amount) > 0 && (newPayment.discount_type || newPayment.apply_vat) && (
+                  <div className="rounded-lg bg-muted/50 p-3 space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span>Valor bruto</span>
+                      <span>€{calculatedAmounts.gross.toFixed(2)}</span>
+                    </div>
+                    {newPayment.discount_type && calculatedAmounts.discountAmount > 0 && (
+                      <div className="flex justify-between text-destructive">
+                        <span>Desconto {newPayment.discount_type === 'PERCENTUAL' ? `(${newPayment.discount_value}%)` : ''}</span>
+                        <span>-€{calculatedAmounts.discountAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {newPayment.apply_vat && (
+                      <div className="flex justify-between">
+                        <span>IVA ({newPayment.vat_rate}%)</span>
+                        <span>+€{calculatedAmounts.vatAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-semibold border-t pt-1">
+                      <span>Total final</span>
+                      <span>€{calculatedAmounts.finalAmount.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancelar
