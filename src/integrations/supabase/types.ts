@@ -257,6 +257,7 @@ export type Database = {
           has_eu_family_member: boolean | null
           has_job_offer: boolean | null
           id: string
+          is_beneficiary: boolean
           is_empadronado: boolean | null
           legal_guardian_address: string | null
           legal_guardian_birth_date: string | null
@@ -264,6 +265,7 @@ export type Database = {
           legal_guardian_name: string | null
           legal_guardian_phone: string | null
           legal_guardian_relationship: string | null
+          linked_principal_contact_id: string | null
           monthly_income: number | null
           mother_name: string | null
           nationality: string | null
@@ -309,6 +311,7 @@ export type Database = {
           has_eu_family_member?: boolean | null
           has_job_offer?: boolean | null
           id?: string
+          is_beneficiary?: boolean
           is_empadronado?: boolean | null
           legal_guardian_address?: string | null
           legal_guardian_birth_date?: string | null
@@ -316,6 +319,7 @@ export type Database = {
           legal_guardian_name?: string | null
           legal_guardian_phone?: string | null
           legal_guardian_relationship?: string | null
+          linked_principal_contact_id?: string | null
           monthly_income?: number | null
           mother_name?: string | null
           nationality?: string | null
@@ -361,6 +365,7 @@ export type Database = {
           has_eu_family_member?: boolean | null
           has_job_offer?: boolean | null
           id?: string
+          is_beneficiary?: boolean
           is_empadronado?: boolean | null
           legal_guardian_address?: string | null
           legal_guardian_birth_date?: string | null
@@ -368,6 +373,7 @@ export type Database = {
           legal_guardian_name?: string | null
           legal_guardian_phone?: string | null
           legal_guardian_relationship?: string | null
+          linked_principal_contact_id?: string | null
           monthly_income?: number | null
           mother_name?: string | null
           nationality?: string | null
@@ -387,7 +393,15 @@ export type Database = {
           updated_at?: string | null
           works_remotely?: boolean | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "contacts_linked_principal_contact_id_fkey"
+            columns: ["linked_principal_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       contract_beneficiaries: {
         Row: {

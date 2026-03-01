@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Phone, Mail } from 'lucide-react';
+import { Plus, Search, Phone, Mail, Users } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ORIGIN_CHANNEL_LABELS, LANGUAGE_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 
@@ -18,6 +19,8 @@ export default function Contacts() {
   const [search, setSearch] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [phoneInput, setPhoneInput] = useState('');
+  const [isBeneficiary, setIsBeneficiary] = useState(false);
+  const [principalContactId, setPrincipalContactId] = useState<string>('');
   const [newContact, setNewContact] = useState<Omit<Partial<ContactInsert>, 'phone'>>({
     full_name: '',
     email: '',
@@ -33,14 +36,18 @@ export default function Contacts() {
 
   const handleCreate = async () => {
     if (!newContact.full_name) return;
-    // Convert phone string to number
+    if (isBeneficiary && !principalContactId) return;
     const phoneNumber = phoneInput ? parseInt(phoneInput.replace(/\D/g, ''), 10) : null;
     await createContact.mutateAsync({ 
       ...newContact, 
-      phone: phoneNumber || undefined 
+      phone: phoneNumber || undefined,
+      is_beneficiary: isBeneficiary,
+      linked_principal_contact_id: isBeneficiary ? principalContactId : null,
     } as ContactInsert);
     setIsDialogOpen(false);
     setPhoneInput('');
+    setIsBeneficiary(false);
+    setPrincipalContactId('');
     setNewContact({
       full_name: '',
       email: '',
@@ -195,6 +202,40 @@ export default function Contacts() {
                     />
                   </div>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="is_beneficiary"
+                    checked={isBeneficiary}
+                    onCheckedChange={(checked) => {
+                      setIsBeneficiary(!!checked);
+                      if (!checked) setPrincipalContactId('');
+                    }}
+                  />
+                  <Label htmlFor="is_beneficiary" className="flex items-center gap-1">
+                    <Users className="h-4 w-4" />
+                    É Beneficiário
+                  </Label>
+                </div>
+                {isBeneficiary && (
+                  <div>
+                    <Label>Contato Principal (Titular) *</Label>
+                    <Select
+                      value={principalContactId}
+                      onValueChange={setPrincipalContactId}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o titular..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {contacts
+                          .filter(c => !c.is_beneficiary)
+                          .map((c) => (
+                            <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancelar
