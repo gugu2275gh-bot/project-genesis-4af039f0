@@ -32,7 +32,7 @@ export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: contract, isLoading } = useContract(id);
-  const { updateContract, sendForSignature, markAsSigned, cancelContract, suspendContract, reactivateContract } = useContracts();
+  const { updateContract, sendForSignature, markAsSigned, cancelContract, suspendContract, reactivateContract, approveContract, rejectContract } = useContracts();
   const { data: profiles = [] } = useProfiles();
   
   const [formData, setFormData] = useState({
@@ -72,6 +72,10 @@ export default function ContractDetail() {
   const [showSignDialog, setShowSignDialog] = useState(false);
   const [signDialogFile, setSignDialogFile] = useState<File | null>(null);
   const [isSigningWithUpload, setIsSigningWithUpload] = useState(false);
+  
+  // State for reject dialog
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
   
   // Get assigned user name for display
   const assignedUser = profiles.find(p => p.id === (contract as any)?.assigned_to_user_id);
@@ -293,7 +297,10 @@ export default function ContractDetail() {
     contract.installment_conditions &&
     contract.installment_count &&
     contract.first_due_date;
-  const canSign = contract.status === 'ENVIADO';
+  const canApprove = contract.status === 'ENVIADO';
+  const canReject = contract.status === 'ENVIADO';
+  const canSign = contract.status === 'APROVADO';
+  const canDownloadPdf = contract.status === 'APROVADO' || contract.status === 'ASSINADO';
   const canCancel = contract.status !== 'CANCELADO';
   const canSuspend = contract.status === 'ASSINADO' && !isSuspended;
   const canReactivate = isSuspended;
@@ -333,22 +340,24 @@ export default function ContractDetail() {
         }
         description={`Criado em ${format(new Date(contract.created_at!), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
         actions={
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                const cd = contract as any;
-                generateContractDocument({
-                  template: cd.contract_template || 'GENERICO',
-                  clientName: contract.opportunities?.leads?.contacts?.full_name || 'CLIENTE',
-                  documentNumber: (contract.opportunities?.leads?.contacts as any)?.document_number || '',
-                  contractNumber: cd.contract_number || '',
-                });
-              }}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Baixar Contrato Word
-            </Button>
+          <div className="flex gap-2 flex-wrap">
+            {canDownloadPdf && (
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  const cd = contract as any;
+                  generateContractDocument({
+                    template: cd.contract_template || 'GENERICO',
+                    clientName: contract.opportunities?.leads?.contacts?.full_name || 'CLIENTE',
+                    documentNumber: (contract.opportunities?.leads?.contacts as any)?.document_number || '',
+                    contractNumber: cd.contract_number || '',
+                  });
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Baixar Contrato Word
+              </Button>
+            )}
             {canCancel && (
               <Button variant="outline" onClick={() => setShowCancelDialog(true)}>
                 <X className="h-4 w-4 mr-2" />
@@ -363,7 +372,19 @@ export default function ContractDetail() {
             {canSend && (
               <Button onClick={handleSendForSignature} disabled={sendForSignature.isPending}>
                 <Send className="h-4 w-4 mr-2" />
-                {sendForSignature.isPending ? 'Enviando...' : 'Enviar para Assinatura'}
+                {sendForSignature.isPending ? 'Enviando...' : 'Enviar para Aprovação'}
+              </Button>
+            )}
+            {canApprove && (
+              <Button onClick={() => approveContract.mutateAsync(contract.id)} disabled={approveContract.isPending}>
+                <Check className="h-4 w-4 mr-2" />
+                {approveContract.isPending ? 'Aprovando...' : 'Aprovar Contrato'}
+              </Button>
+            )}
+            {canReject && (
+              <Button variant="destructive" onClick={() => setShowRejectDialog(true)}>
+                <X className="h-4 w-4 mr-2" />
+                Reprovar Contrato
               </Button>
             )}
             {canSign && (
@@ -459,7 +480,46 @@ export default function ContractDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para Marcar como Assinado com Upload Obrigatório */}
+      {/* Reject Contract Dialog */}
+      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reprovar Contrato</DialogTitle>
+            <DialogDescription>
+              O contrato será devolvido para revisão e o responsável será notificado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label>Motivo da Reprovação *</Label>
+              <Textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Informe o motivo da reprovação..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRejectDialog(false)}>
+              Voltar
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={async () => {
+                if (!rejectionReason.trim()) return;
+                await rejectContract.mutateAsync({ id: contract.id, reason: rejectionReason });
+                setShowRejectDialog(false);
+                setRejectionReason('');
+              }}
+              disabled={!rejectionReason.trim() || rejectContract.isPending}
+            >
+              {rejectContract.isPending ? 'Reprovando...' : 'Confirmar Reprovação'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showSignDialog} onOpenChange={(open) => {
         setShowSignDialog(open);
         if (!open) setSignDialogFile(null);

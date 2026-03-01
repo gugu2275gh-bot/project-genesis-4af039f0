@@ -1,0 +1,3 @@
+-- Add APROVADO and REPROVADO to contract_status enum
+ALTER TYPE public.contract_status ADD VALUE IF NOT EXISTS 'APROVADO' AFTER 'ENVIADO';
+ALTER TYPE public.contract_status ADD VALUE IF NOT EXISTS 'REPROVADO' AFTER 'APROVADO';

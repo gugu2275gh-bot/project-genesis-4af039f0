@@ -2449,6 +2449,8 @@ export type Database = {
         | "EM_ELABORACAO"
         | "EM_REVISAO"
         | "ENVIADO"
+        | "APROVADO"
+        | "REPROVADO"
         | "ASSINADO"
         | "CANCELADO"
       decision_result: "APROVADO" | "NEGADO" | "EM_ANDAMENTO" | "NULO"
@@ -2693,6 +2695,8 @@ export const Constants = {
         "EM_ELABORACAO",
         "EM_REVISAO",
         "ENVIADO",
+        "APROVADO",
+        "REPROVADO",
         "ASSINADO",
         "CANCELADO",
       ],
