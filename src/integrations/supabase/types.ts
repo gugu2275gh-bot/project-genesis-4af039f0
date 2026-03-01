@@ -1447,6 +1447,7 @@ export type Database = {
       payments: {
         Row: {
           amount: number
+          beneficiary_contact_id: string | null
           contract_id: string | null
           created_at: string | null
           currency: string | null
@@ -1473,6 +1474,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          beneficiary_contact_id?: string | null
           contract_id?: string | null
           created_at?: string | null
           currency?: string | null
@@ -1499,6 +1501,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          beneficiary_contact_id?: string | null
           contract_id?: string | null
           created_at?: string | null
           currency?: string | null
@@ -1524,6 +1527,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "payments_beneficiary_contact_id_fkey"
+            columns: ["beneficiary_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payments_contract_id_fkey"
             columns: ["contract_id"]

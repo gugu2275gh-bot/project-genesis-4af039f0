@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePayments } from '@/hooks/usePayments';
+import { supabase } from '@/integrations/supabase/client';
 import { useOpportunities } from '@/hooks/useOpportunities';
 import { useReceipts } from '@/hooks/useReceipts';
 import { PageHeader } from '@/components/ui/page-header';
@@ -11,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText, Download, CheckCircle, Clock, FileCheck, MessageSquare } from 'lucide-react';
+import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText, Download, CheckCircle, Clock, FileCheck, MessageSquare, Users } from 'lucide-react';
 import { PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format, differenceInDays, isBefore } from 'date-fns';
@@ -33,6 +34,7 @@ export default function PaymentsList() {
     payment_method: 'PIX' as any,
     custom_payment_method: '',
     transfer_origin: '' as '' | 'BRASIL' | 'ESPANHA',
+    beneficiary_contact_id: '' as string,
   });
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState('');
@@ -52,6 +54,25 @@ export default function PaymentsList() {
     return matchesSearch && matchesStatus;
   });
 
+  // Fetch beneficiaries for the selected opportunity
+  const [oppBeneficiaries, setOppBeneficiaries] = useState<Array<{ id: string; full_name: string; contact_id: string | null }>>([]);
+  
+  useEffect(() => {
+    if (!newPayment.opportunity_id) { setOppBeneficiaries([]); return; }
+    (async () => {
+      const { data: contracts } = await supabase
+        .from('contracts')
+        .select('id')
+        .eq('opportunity_id', newPayment.opportunity_id);
+      if (!contracts?.length) { setOppBeneficiaries([]); return; }
+      const { data: bens } = await supabase
+        .from('contract_beneficiaries')
+        .select('id, full_name, contact_id')
+        .eq('contract_id', contracts[0].id);
+      setOppBeneficiaries(bens || []);
+    })();
+  }, [newPayment.opportunity_id]);
+
   const handleCreate = async () => {
     if (!newPayment.opportunity_id || !newPayment.amount) return;
     await createPayment.mutateAsync({
@@ -59,14 +80,17 @@ export default function PaymentsList() {
       amount: parseFloat(newPayment.amount),
       payment_method: newPayment.payment_method,
       status: 'PENDENTE',
+      beneficiary_contact_id: newPayment.beneficiary_contact_id || null,
     });
     setIsDialogOpen(false);
+    setOppBeneficiaries([]);
     setNewPayment({
       opportunity_id: '',
       amount: '',
       payment_method: 'PIX',
       custom_payment_method: '',
       transfer_origin: '',
+      beneficiary_contact_id: '',
     });
   };
 
@@ -404,6 +428,30 @@ export default function PaymentsList() {
                     </Select>
                   )}
                 </div>
+                {oppBeneficiaries.length > 0 && (
+                  <div>
+                    <Label>Beneficiário (opcional)</Label>
+                    <Select 
+                      value={newPayment.beneficiary_contact_id || '_none'} 
+                      onValueChange={(v) => setNewPayment({ ...newPayment, beneficiary_contact_id: v === '_none' ? '' : v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Titular (sem beneficiário específico)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Titular</SelectItem>
+                        {oppBeneficiaries.filter(b => b.contact_id).map((ben) => (
+                          <SelectItem key={ben.id} value={ben.contact_id!}>
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4" />
+                              {ben.full_name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Valor (€)</Label>

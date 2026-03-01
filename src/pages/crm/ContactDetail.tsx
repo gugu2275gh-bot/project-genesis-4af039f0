@@ -105,37 +105,70 @@ export default function ContactDetail() {
   const { beneficiaries: contactBeneficiaries, titular: contactTitular, isLoading: benefLoading } = useContactBeneficiaries(id);
   const { interactions } = useInteractions(id);
 
-  // Fetch payments related to this contact via leads → opportunities → payments
+  // Fetch payments related to this contact
+  // For regular contacts: via leads → opportunities → payments
+  // For beneficiary contacts: via beneficiary_contact_id
   const { data: contactPayments = [], isLoading: paymentsLoading } = useQuery({
-    queryKey: ['contact-payments', id],
+    queryKey: ['contact-payments', id, contact?.is_beneficiary],
     queryFn: async () => {
       if (!id) return [];
-      // Get leads for this contact
+
+      // 1. Payments as beneficiary (beneficiary_contact_id = this contact)
+      const { data: benefPayments } = await supabase
+        .from('payments')
+        .select('*, contracts(contract_number, service_type)')
+        .eq('beneficiary_contact_id', id)
+        .order('due_date', { ascending: true });
+
+      // 2. Payments as titular (via leads → opportunities)
       const { data: cLeads } = await supabase
         .from('leads')
         .select('id')
         .eq('contact_id', id);
-      if (!cLeads || cLeads.length === 0) return [];
       
-      const leadIds = cLeads.map(l => l.id);
-      // Get opportunities for those leads
-      const { data: opps } = await supabase
-        .from('opportunities')
-        .select('id')
-        .in('lead_id', leadIds);
-      if (!opps || opps.length === 0) return [];
-      
-      const oppIds = opps.map(o => o.id);
-      // Get payments for those opportunities
-      const { data: payments, error } = await supabase
-        .from('payments')
-        .select('*, contracts(contract_number, service_type)')
-        .in('opportunity_id', oppIds)
-        .order('due_date', { ascending: true });
-      if (error) throw error;
-      return payments || [];
+      let titularPayments: any[] = [];
+      if (cLeads && cLeads.length > 0) {
+        const leadIds = cLeads.map(l => l.id);
+        const { data: opps } = await supabase
+          .from('opportunities')
+          .select('id')
+          .in('lead_id', leadIds);
+        if (opps && opps.length > 0) {
+          const oppIds = opps.map(o => o.id);
+          const { data: payments, error } = await supabase
+            .from('payments')
+            .select('*, contracts(contract_number, service_type)')
+            .in('opportunity_id', oppIds)
+            .order('due_date', { ascending: true });
+          if (!error) titularPayments = payments || [];
+        }
+      }
+
+      // Merge and deduplicate
+      const allPayments = [...(benefPayments || []), ...titularPayments];
+      const seen = new Set<string>();
+      return allPayments.filter(p => {
+        if (seen.has(p.id)) return false;
+        seen.add(p.id);
+        return true;
+      });
     },
     enabled: !!id,
+  });
+
+  // Fetch service cases linked to this beneficiary via contract_beneficiaries
+  const { data: beneficiaryServiceCases = [], isLoading: benefCasesLoading } = useQuery({
+    queryKey: ['beneficiary-service-cases', id, contact?.is_beneficiary],
+    queryFn: async () => {
+      if (!id || !contact?.is_beneficiary) return [];
+      const { data } = await supabase
+        .from('contract_beneficiaries')
+        .select('*, service_cases:service_case_id(id, service_type, sector, technical_status, created_at)')
+        .eq('contact_id', id)
+        .not('service_case_id', 'is', null);
+      return (data || []).filter((b: any) => b.service_cases).map((b: any) => b.service_cases);
+    },
+    enabled: !!id && !!contact?.is_beneficiary,
   });
 
   const handleStartEdit = () => {
@@ -1159,6 +1192,42 @@ export default function ContactDetail() {
             </CardContent>
           </Card>
 
+          {/* Serviços como Beneficiário */}
+          {contact.is_beneficiary && beneficiaryServiceCases.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Trâmites como Beneficiário ({beneficiaryServiceCases.length})
+                </CardTitle>
+                <CardDescription>Casos técnicos vinculados a este beneficiário</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {beneficiaryServiceCases.map((sc: any) => (
+                    <div 
+                      key={sc.id} 
+                      className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => navigate(`/cases/${sc.id}`)}
+                    >
+                      <div>
+                        <p className="font-medium">
+                          {SERVICE_INTEREST_LABELS[sc.service_type as keyof typeof SERVICE_INTEREST_LABELS] || sc.service_type}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Setor: {sc.sector} • Criado em {format(new Date(sc.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                        </p>
+                      </div>
+                      <StatusBadge 
+                        status={sc.technical_status || 'CONTATO_INICIAL'} 
+                        label={sc.technical_status} 
+                      />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Documents */}
           <Card>
@@ -1261,13 +1330,19 @@ export default function ContactDetail() {
                   {contactPayments.map((payment: any) => (
                     <div key={payment.id} className="flex items-center justify-between p-3 rounded-lg border">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium">
                             € {Number(payment.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </p>
                           {payment.installment_number && (
                             <Badge variant="outline" className="text-xs">
                               Parcela {payment.installment_number}
+                            </Badge>
+                          )}
+                          {payment.beneficiary_contact_id === id && (
+                            <Badge variant="outline" className="text-xs gap-1 border-primary/30 text-primary">
+                              <Users className="h-3 w-3" />
+                              Beneficiário
                             </Badge>
                           )}
                         </div>
