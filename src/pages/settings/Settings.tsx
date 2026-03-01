@@ -96,7 +96,7 @@ export default function Settings() {
                 className={activeTab === 'payment-settings' ? 'bg-accent' : ''}
               >
                 <Wallet className="h-4 w-4 mr-2" />
-                Contas de Pagamento
+                Pagamentos
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
