@@ -85,10 +85,7 @@ export default function ContactDetail() {
   const contactLeads = leads.filter(l => l.contact_id === id);
   const { data: contactDocuments = [], isLoading: docsLoading } = useContactDocuments(id);
   const { beneficiaries: contactBeneficiaries, titular: contactTitular, isLoading: benefLoading } = useContactBeneficiaries(id);
-  const { interactions, createInteraction } = useInteractions(id);
-  
-  const [newNote, setNewNote] = useState('');
-  const [interactionChannel, setInteractionChannel] = useState<string>('WHATSAPP');
+  const { interactions } = useInteractions(id);
 
   // Fetch payments related to this contact via leads → opportunities → payments
   const { data: contactPayments = [], isLoading: paymentsLoading } = useQuery({
@@ -123,16 +120,6 @@ export default function ContactDetail() {
     enabled: !!id,
   });
 
-  const handleAddInteraction = async () => {
-    if (!newNote.trim() || !id) return;
-    await createInteraction.mutateAsync({
-      contact_id: id,
-      channel: interactionChannel as any,
-      direction: 'OUTBOUND',
-      content: newNote,
-    });
-    setNewNote('');
-  };
   const handleStartEdit = () => {
     if (contact) {
       setEditedContact({
@@ -1356,33 +1343,10 @@ export default function ContactDetail() {
                 <MessageSquare className="h-5 w-5" />
                 Interações Sistema
               </CardTitle>
-              <CardDescription>Registre comunicações com o cliente</CardDescription>
+              <CardDescription>Histórico de comunicações com o cliente</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex gap-2">
-                  <Select value={interactionChannel} onValueChange={setInteractionChannel}>
-                    <SelectTrigger className="w-[140px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(INTERACTION_CHANNEL_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Textarea
-                    placeholder="Descreva a interação..."
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    className="flex-1"
-                    rows={2}
-                  />
-                  <Button onClick={handleAddInteraction} disabled={createInteraction.isPending}>
-                    <MessageSquare className="h-4 w-4" />
-                  </Button>
-                </div>
-
                 <div className="space-y-3 max-h-[400px] overflow-y-auto">
                   {interactions.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">
