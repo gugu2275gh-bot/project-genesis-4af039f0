@@ -369,7 +369,7 @@ export default function LeadDetail() {
             <TabsContent value="interactions" className="mt-4">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Histórico de Interações</CardTitle>
+                  <CardTitle className="text-lg">Histórico de Anotações</CardTitle>
                   <CardDescription>Registre todas as comunicações com o cliente</CardDescription>
                 </CardHeader>
                 <CardContent>
