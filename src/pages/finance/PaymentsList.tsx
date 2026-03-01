@@ -520,9 +520,20 @@ export default function PaymentsList() {
                           <SelectItem key={value} value={value}>{label}</SelectItem>
                         ))}
                       </SelectContent>
-                    </Select>
+                </Select>
                   </div>
                 </div>
+
+                {newPayment.payment_method === 'OUTRO' && (
+                  <div>
+                    <Label>Detalhe do método de pagamento *</Label>
+                    <Input
+                      value={newPayment.custom_payment_method}
+                      onChange={(e) => setNewPayment({ ...newPayment, custom_payment_method: e.target.value })}
+                      placeholder="Descreva o método de pagamento"
+                    />
+                  </div>
+                )}
 
                 {/* Discount */}
                 <div className="grid grid-cols-2 gap-4">

@@ -81,6 +81,7 @@ export default function CashFlow() {
   } = useCashFlow(startDate, endDate);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [customAccountDetail, setCustomAccountDetail] = useState('');
   const [formData, setFormData] = useState<CashFlowInsert>({
     type: 'ENTRADA',
     category: '',
@@ -91,9 +92,14 @@ export default function CashFlow() {
   });
 
   const handleSubmit = () => {
-    createEntry.mutate(formData, {
+    const submitData = { ...formData };
+    if (formData.payment_account === 'OUTRO' && customAccountDetail) {
+      submitData.description = `[Conta: ${customAccountDetail}] ${formData.description || ''}`.trim();
+    }
+    createEntry.mutate(submitData, {
       onSuccess: () => {
         setIsDialogOpen(false);
+        setCustomAccountDetail('');
         setFormData({
           type: 'ENTRADA',
           category: '',
@@ -285,6 +291,17 @@ export default function CashFlow() {
                 </div>
               )}
 
+              {(formData.category === 'OUTROS') && (
+                <div className="space-y-2">
+                  <Label>Detalhe da categoria *</Label>
+                  <Input
+                    value={formData.subcategory || ''}
+                    onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
+                    placeholder="Especifique a categoria"
+                  />
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>Descrição</Label>
                 <Input
@@ -315,7 +332,7 @@ export default function CashFlow() {
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
-                      {PAYMENT_ACCOUNTS.map((acc) => (
+                    {PAYMENT_ACCOUNTS.map((acc) => (
                         <SelectItem key={acc.value} value={acc.value}>
                           {acc.label}
                         </SelectItem>
@@ -324,6 +341,17 @@ export default function CashFlow() {
                   </Select>
                 </div>
               </div>
+
+              {formData.payment_account === 'OUTRO' && (
+                <div className="space-y-2">
+                  <Label>Detalhe da conta *</Label>
+                  <Input
+                    value={customAccountDetail}
+                    onChange={(e) => setCustomAccountDetail(e.target.value)}
+                    placeholder="Especifique a conta de pagamento"
+                  />
+                </div>
+              )}
 
               <Button onClick={handleSubmit} className="w-full" disabled={createEntry.isPending}>
                 {createEntry.isPending ? 'Salvando...' : 'Registrar Lançamento'}
