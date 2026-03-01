@@ -54,6 +54,7 @@ export type InteractionChannel =
   | 'EMAIL'
   | 'LIGACAO'
   | 'REUNIAO'
+  | 'CASO_TECNICO'
   | 'OUTRO';
 
 export type InteractionDirection = 'INBOUND' | 'OUTBOUND';
@@ -573,6 +574,7 @@ export const INTERACTION_CHANNEL_LABELS: Record<InteractionChannel, string> = {
   EMAIL: 'Email',
   LIGACAO: 'Ligação',
   REUNIAO: 'Reunião',
+  CASO_TECNICO: 'Caso Técnico',
   OUTRO: 'Outro',
 };
 

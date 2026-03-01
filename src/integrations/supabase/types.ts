@@ -2488,6 +2488,7 @@ export type Database = {
         | "LIGACAO"
         | "REUNIAO"
         | "OUTRO"
+        | "CASO_TECNICO"
       interaction_direction: "INBOUND" | "OUTBOUND"
       language_code: "pt" | "es" | "en" | "fr" | "ca"
       lead_status:
@@ -2728,7 +2729,14 @@ export const Constants = {
         "APROVADO",
         "REJEITADO",
       ],
-      interaction_channel: ["WHATSAPP", "EMAIL", "LIGACAO", "REUNIAO", "OUTRO"],
+      interaction_channel: [
+        "WHATSAPP",
+        "EMAIL",
+        "LIGACAO",
+        "REUNIAO",
+        "OUTRO",
+        "CASO_TECNICO",
+      ],
       interaction_direction: ["INBOUND", "OUTBOUND"],
       language_code: ["pt", "es", "en", "fr", "ca"],
       lead_status: [
