@@ -3,6 +3,7 @@ import { usePayments } from '@/hooks/usePayments';
 import { supabase } from '@/integrations/supabase/client';
 import { useOpportunities } from '@/hooks/useOpportunities';
 import { useQuery } from '@tanstack/react-query';
+import { Tables } from '@/integrations/supabase/types';
 import { useReceipts } from '@/hooks/useReceipts';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
@@ -37,11 +38,31 @@ export default function PaymentsList() {
     payment_form: 'UNICO' as any,
     custom_payment_method: '',
     transfer_origin: '' as '' | 'BRASIL' | 'ESPANHA',
+    payment_account_id: '',
     beneficiary_contact_id: '' as string,
     discount_type: '' as '' | 'PERCENTUAL' | 'VALOR',
     discount_value: '',
     apply_vat: false,
   });
+
+  // Fetch payment accounts
+  const { data: paymentAccounts = [] } = useQuery({
+    queryKey: ['payment-accounts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payment_accounts')
+        .select('*')
+        .eq('is_active', true)
+        .order('country');
+      if (error) throw error;
+      return data as Tables<'payment_accounts'>[];
+    },
+  });
+
+  // Filter accounts by transfer origin
+  const filteredAccounts = paymentAccounts.filter(a => 
+    !newPayment.transfer_origin || a.country === newPayment.transfer_origin
+  );
 
   // Fetch default VAT rate from system config
   const { data: defaultVatRate } = useQuery({
@@ -134,6 +155,7 @@ export default function PaymentsList() {
       payment_form: 'UNICO',
       custom_payment_method: '',
       transfer_origin: '',
+      payment_account_id: '',
       beneficiary_contact_id: '',
       discount_type: '',
       discount_value: '',
@@ -559,6 +581,71 @@ export default function PaymentsList() {
                   </div>
                 )}
 
+                {newPayment.payment_method === 'TRANSFERENCIA' && (
+                  <div className="space-y-4 rounded-lg border p-3">
+                    <Label className="text-sm font-semibold">Dados da Transferência</Label>
+                    <div>
+                      <Label>Origem *</Label>
+                      <div className="flex items-center gap-6 mt-1">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="transfer-origin-brasil"
+                            checked={newPayment.transfer_origin === 'BRASIL'}
+                            onCheckedChange={(checked) =>
+                              setNewPayment({ ...newPayment, transfer_origin: checked ? 'BRASIL' : '', payment_account_id: '' })
+                            }
+                          />
+                          <Label htmlFor="transfer-origin-brasil" className="font-normal cursor-pointer">Brasil</Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="transfer-origin-espanha"
+                            checked={newPayment.transfer_origin === 'ESPANHA'}
+                            onCheckedChange={(checked) =>
+                              setNewPayment({ ...newPayment, transfer_origin: checked ? 'ESPANHA' : '', payment_account_id: '' })
+                            }
+                          />
+                          <Label htmlFor="transfer-origin-espanha" className="font-normal cursor-pointer">Espanha</Label>
+                        </div>
+                      </div>
+                    </div>
+                    {newPayment.transfer_origin && (
+                      <div>
+                        <Label>Conta Bancária *</Label>
+                        {filteredAccounts.length === 0 ? (
+                          <p className="text-sm text-muted-foreground mt-1">Nenhuma conta cadastrada para {newPayment.transfer_origin === 'BRASIL' ? 'Brasil' : 'Espanha'}.</p>
+                        ) : (
+                          <Select
+                            value={newPayment.payment_account_id}
+                            onValueChange={(v) => setNewPayment({ ...newPayment, payment_account_id: v })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione a conta bancária" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {filteredAccounts.map((acc) => (
+                                <SelectItem key={acc.id} value={acc.id}>
+                                  {acc.bank_name ? `${acc.bank_name} - ` : ''}{acc.account_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                    )}
+                    {newPayment.payment_account_id && (() => {
+                      const selectedAcc = paymentAccounts.find(a => a.id === newPayment.payment_account_id);
+                      if (!selectedAcc?.account_details) return null;
+                      return (
+                        <div className="rounded bg-muted/50 p-2 text-xs text-muted-foreground whitespace-pre-line">
+                          <span className="font-medium text-foreground">Dados bancários:</span>
+                          <br />{selectedAcc.account_details}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
                 {/* Discount */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -628,38 +715,45 @@ export default function PaymentsList() {
                     </div>
                   </div>
                 )}
-                <div>
-                  <Label className="mb-3 block">Origem da transferência</Label>
-                  <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="origin-brasil"
-                        checked={newPayment.transfer_origin === 'BRASIL'}
-                        onCheckedChange={(checked) =>
-                          setNewPayment({ ...newPayment, transfer_origin: checked ? 'BRASIL' : '' })
-                        }
-                      />
-                      <Label htmlFor="origin-brasil" className="font-normal cursor-pointer">Brasil</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="origin-espanha"
-                        checked={newPayment.transfer_origin === 'ESPANHA'}
-                        onCheckedChange={(checked) =>
-                          setNewPayment({ ...newPayment, transfer_origin: checked ? 'ESPANHA' : '' })
-                        }
-                      />
-                      <Label htmlFor="origin-espanha" className="font-normal cursor-pointer">Espanha</Label>
+                {newPayment.payment_method !== 'TRANSFERENCIA' && (
+                  <div>
+                    <Label className="mb-3 block">Origem da transferência</Label>
+                    <div className="flex items-center gap-6">
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="origin-brasil"
+                          checked={newPayment.transfer_origin === 'BRASIL'}
+                          onCheckedChange={(checked) =>
+                            setNewPayment({ ...newPayment, transfer_origin: checked ? 'BRASIL' : '' })
+                          }
+                        />
+                        <Label htmlFor="origin-brasil" className="font-normal cursor-pointer">Brasil</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="origin-espanha"
+                          checked={newPayment.transfer_origin === 'ESPANHA'}
+                          onCheckedChange={(checked) =>
+                            setNewPayment({ ...newPayment, transfer_origin: checked ? 'ESPANHA' : '' })
+                          }
+                        />
+                        <Label htmlFor="origin-espanha" className="font-normal cursor-pointer">Espanha</Label>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancelar
                   </Button>
                   <Button 
                     onClick={handleCreate} 
-                    disabled={!newPayment.opportunity_id || !newPayment.amount || createPayment.isPending}
+                    disabled={
+                      !newPayment.opportunity_id || 
+                      !newPayment.amount || 
+                      createPayment.isPending ||
+                      (newPayment.payment_method === 'TRANSFERENCIA' && (!newPayment.transfer_origin || !newPayment.payment_account_id))
+                    }
                   >
                     {createPayment.isPending ? 'Criando...' : 'Criar Pagamento'}
                   </Button>
