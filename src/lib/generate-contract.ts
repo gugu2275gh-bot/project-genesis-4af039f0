@@ -11,6 +11,7 @@ import {
   Header,
 } from 'docx';
 import { saveAs } from 'file-saver';
+import jsPDF from 'jspdf';
 import logoImage from '@/assets/logo-cb-asesoria.png';
 
 export interface ContractData {
@@ -719,46 +720,105 @@ export function getContractSections(data: ContractData): ContractSection[] {
 }
 
 export async function generateContractDocument(data: ContractData): Promise<void> {
-  const date = data.date || new Date();
-  const dateStr = formatDateSpanish(date);
+  const sections = getContractSections(data);
+  
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 14;
+  const maxWidth = pageWidth - margin * 2;
+  let y = 20;
+  const lineHeight = 5.5;
 
-  let children: Paragraph[];
+  const checkPage = (needed: number) => {
+    if (y + needed > doc.internal.pageSize.getHeight() - 20) {
+      doc.addPage();
+      y = 20;
+    }
+  };
 
-  switch (data.template) {
-    case 'REGULARIZACION_EXTRAORDINARIA':
-      children = buildRegularizacionExtraordinaria(data, dateStr);
-      break;
-    case 'NACIONALIDADE':
-      children = buildNacionalidad(data, dateStr);
-      break;
-    case 'DOCUMENTOS':
-      children = buildDocumentos(data, dateStr);
-      break;
-    default:
-      // Fallback for GENERICO or unknown
-      children = buildDocumentos(data, dateStr);
-      break;
+  for (const section of sections) {
+    switch (section.type) {
+      case 'heading':
+        checkPage(14);
+        y += 4;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        const headLines = doc.splitTextToSize(section.text, maxWidth);
+        doc.text(headLines, margin, y);
+        y += headLines.length * 6 + 2;
+        break;
+
+      case 'paragraph':
+        checkPage(10);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', section.bold ? 'bold' : section.italic ? 'italic' : 'normal');
+        const paraLines = doc.splitTextToSize(section.text, maxWidth);
+        for (const line of paraLines) {
+          checkPage(lineHeight);
+          doc.text(line, margin, y);
+          y += lineHeight;
+        }
+        y += 1.5;
+        break;
+
+      case 'bullet':
+        checkPage(10);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        const bulletLines = doc.splitTextToSize(section.text, maxWidth - 8);
+        doc.text('•', margin + 2, y);
+        for (let i = 0; i < bulletLines.length; i++) {
+          checkPage(lineHeight);
+          doc.text(bulletLines[i], margin + 8, y);
+          y += lineHeight;
+        }
+        y += 1;
+        break;
+
+      case 'numbered':
+        checkPage(10);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        const numLines = doc.splitTextToSize(section.text, maxWidth - 4);
+        for (let i = 0; i < numLines.length; i++) {
+          checkPage(lineHeight);
+          doc.text(numLines[i], margin + 4, y);
+          y += lineHeight;
+        }
+        y += 1;
+        break;
+
+      case 'empty':
+        y += 4;
+        break;
+
+      case 'signature':
+        checkPage(10);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(section.text, margin, y);
+        y += lineHeight + 2;
+        break;
+    }
   }
 
-  const doc = new Document({
-    sections: [
-      {
-        properties: {},
-        children,
-        footers: {
-          default: footerParagraph(),
-        },
-      },
-    ],
-  });
+  // Footer on each page
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(136, 136, 136);
+    doc.text('Sus trámites en buenas manos.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+  }
 
-  const blob = await Packer.toBlob(doc);
   const templateName = data.template === 'REGULARIZACION_EXTRAORDINARIA'
     ? 'Regularizacion_Extraordinaria'
     : data.template === 'NACIONALIDADE'
     ? 'Nacionalidad'
     : 'Documentos';
 
-  const fileName = `Contrato_${templateName}_${data.clientName.replace(/\s+/g, '_')}_${data.contractNumber || 'SN'}.docx`;
-  saveAs(blob, fileName);
+  const fileName = `Contrato_${templateName}_${data.clientName.replace(/\s+/g, '_')}_${data.contractNumber || 'SN'}.pdf`;
+  doc.save(fileName);
 }

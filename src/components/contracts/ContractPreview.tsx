@@ -100,7 +100,7 @@ export function ContractPreview({ template, clientName, documentNumber, contract
           {canDownload && (
             <Button size="sm" onClick={handleDownload}>
               <Download className="h-4 w-4 mr-1" />
-              Baixar Contrato Word
+              Baixar Contrato PDF
             </Button>
           )}
         </div>
