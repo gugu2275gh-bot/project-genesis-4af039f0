@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2, Pencil, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2, Pencil, ShieldAlert, X } from 'lucide-react';
 import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, INTERACTION_CHANNEL_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -41,14 +41,16 @@ export default function LeadDetail() {
   const { data: lead, isLoading } = useLead(id);
   const { updateLead, confirmInterest, deleteLead } = useLeads();
   const { updateContact } = useContacts();
-  const { interactions, createInteraction } = useInteractions(lead?.contact_id, id);
+  const { interactions, createInteraction, updateInteraction, deleteInteraction, isEditable } = useInteractions(lead?.contact_id, id);
   const { data: profiles } = useProfiles();
-  const { hasAnyRole } = useAuth();
+  const { hasAnyRole, user } = useAuth();
   const canReassign = hasAnyRole(['ADMIN', 'MANAGER', 'SUPERVISOR']);
   
   const [newNote, setNewNote] = useState('');
   const [interactionChannel, setInteractionChannel] = useState<string>('WHATSAPP');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingInteractionId, setEditingInteractionId] = useState<string | null>(null);
+  const [editingInteractionContent, setEditingInteractionContent] = useState('');
   const [editForm, setEditForm] = useState({
     full_name: '',
     phone: '',
@@ -414,9 +416,83 @@ export default function LeadDetail() {
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Calendar className="h-3 w-3" />
                                 {format(new Date(interaction.created_at!), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                                {isEditable(interaction.created_at) && interaction.created_by_user_id === user?.id && (
+                                  <div className="flex items-center gap-1 ml-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => {
+                                        setEditingInteractionId(interaction.id);
+                                        setEditingInteractionContent(interaction.content || '');
+                                      }}
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive">
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Excluir Interação</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Tem certeza que deseja excluir esta interação?
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={() => deleteInteraction.mutateAsync(interaction.id)}
+                                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                          >
+                                            Excluir
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                            <p className="text-sm">{interaction.content}</p>
+                            {editingInteractionId === interaction.id ? (
+                              <div className="flex gap-2">
+                                <Textarea
+                                  value={editingInteractionContent}
+                                  onChange={(e) => setEditingInteractionContent(e.target.value)}
+                                  rows={2}
+                                  className="flex-1"
+                                />
+                                <div className="flex flex-col gap-1">
+                                  <Button
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={async () => {
+                                      await updateInteraction.mutateAsync({
+                                        id: interaction.id,
+                                        content: editingInteractionContent,
+                                      });
+                                      setEditingInteractionId(null);
+                                    }}
+                                    disabled={updateInteraction.isPending}
+                                  >
+                                    <Check className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => setEditingInteractionId(null)}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm">{interaction.content}</p>
+                            )}
                           </div>
                         ))
                       )}
