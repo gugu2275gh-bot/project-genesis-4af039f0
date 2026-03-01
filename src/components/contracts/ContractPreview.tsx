@@ -10,9 +10,10 @@ interface ContractPreviewProps {
   clientName: string;
   documentNumber: string;
   contractNumber: string;
+  canDownload?: boolean;
 }
 
-export function ContractPreview({ template, clientName, documentNumber, contractNumber }: ContractPreviewProps) {
+export function ContractPreview({ template, clientName, documentNumber, contractNumber, canDownload = false }: ContractPreviewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(clientName);
   const [editedDocument, setEditedDocument] = useState(documentNumber);
@@ -96,10 +97,12 @@ export function ContractPreview({ template, clientName, documentNumber, contract
               Editar Pré-visualização
             </Button>
           )}
-          <Button size="sm" onClick={handleDownload}>
-            <Download className="h-4 w-4 mr-1" />
-            Baixar Contrato Word
-          </Button>
+          {canDownload && (
+            <Button size="sm" onClick={handleDownload}>
+              <Download className="h-4 w-4 mr-1" />
+              Baixar Contrato Word
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>

@@ -299,7 +299,7 @@ export default function ContractDetail() {
   const canApprove = contract.status === 'ENVIADO';
   const canReject = contract.status === 'ENVIADO';
   const canSign = contract.status === 'APROVADO';
-  
+  const canDownloadContract = contract.status === 'APROVADO' || contract.status === 'ASSINADO';
   const canCancel = contract.status !== 'CANCELADO';
   const canSuspend = contract.status === 'ASSINADO' && !isSuspended;
   const canReactivate = isSuspended;
@@ -770,6 +770,7 @@ export default function ContractDetail() {
                   clientName={contract.opportunities?.leads?.contacts?.full_name || ''}
                   documentNumber={(contract.opportunities?.leads?.contacts as any)?.document_number || ''}
                   contractNumber={(contract as any).contract_number || ''}
+                  canDownload={canDownloadContract}
                 />
               </TabsContent>
             </CardContent>
