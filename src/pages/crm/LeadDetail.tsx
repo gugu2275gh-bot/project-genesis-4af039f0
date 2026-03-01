@@ -1,5 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLead, useLeads } from '@/hooks/useLeads';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { useInteractions } from '@/hooks/useInteractions';
 import { useProfiles } from '@/hooks/useProfiles';
 import { useContacts } from '@/hooks/useContacts';
@@ -13,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2, Pencil, ShieldAlert, X, Pause, CalendarClock } from 'lucide-react';
+import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2, Pencil, ShieldAlert, X, Pause, CalendarClock, RefreshCw } from 'lucide-react';
 import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, INTERACTION_CHANNEL_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -39,7 +41,28 @@ export default function LeadDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: lead, isLoading } = useLead(id);
-  const { updateLead, confirmInterest, deleteLead } = useLeads();
+  const { updateLead, confirmInterest, deleteLead, createLeadForContact } = useLeads();
+
+  // Check if lead has a cancelled contract (via opportunity)
+  const { data: hasCancelledContract } = useQuery({
+    queryKey: ['lead-cancelled-contract', id],
+    queryFn: async () => {
+      if (!id) return false;
+      const { data: opps } = await supabase
+        .from('opportunities')
+        .select('id')
+        .eq('lead_id', id);
+      if (!opps?.length) return false;
+      const { data: contracts } = await supabase
+        .from('contracts')
+        .select('id')
+        .in('opportunity_id', opps.map(o => o.id))
+        .eq('status', 'CANCELADO')
+        .limit(1);
+      return (contracts?.length ?? 0) > 0;
+    },
+    enabled: !!id,
+  });
   const { updateContact } = useContacts();
   const { interactions, createInteraction, updateInteraction, deleteInteraction, isEditable } = useInteractions(lead?.contact_id, id);
   const { data: profiles } = useProfiles();
@@ -152,6 +175,20 @@ export default function LeadDetail() {
     navigate('/crm/leads');
   };
 
+  const handleNewService = async () => {
+    if (!lead?.contact_id) return;
+    try {
+      const newLead = await createLeadForContact.mutateAsync({
+        contact_id: lead.contact_id,
+        service_interest: lead.service_interest || 'OUTRO',
+        notes: `Novo serviço originado do lead anterior (contrato cancelado)`,
+      });
+      navigate(`/crm/leads/${newLead.id}`);
+    } catch (error) {
+      // toast handled by hook
+    }
+  };
+
   const handleAssign = async (userId: string) => {
     await updateLead.mutateAsync({ id: lead.id, assigned_to_user_id: userId === 'unassigned' ? null : userId });
   };
@@ -170,6 +207,12 @@ export default function LeadDetail() {
         description={`Lead criado em ${format(new Date(lead.created_at!), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
         actions={
           <div className="flex items-center gap-2">
+            {hasCancelledContract && (
+              <Button onClick={handleNewService} disabled={createLeadForContact.isPending} variant="outline">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                {createLeadForContact.isPending ? 'Criando...' : 'Novo Serviço'}
+              </Button>
+            )}
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="icon">

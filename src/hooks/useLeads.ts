@@ -179,6 +179,32 @@ export function useLeads() {
     },
   });
 
+  const createLeadForContact = useMutation({
+    mutationFn: async ({ contact_id, service_interest, notes }: { contact_id: string; service_interest: string; notes?: string }) => {
+      const { data, error } = await supabase
+        .from('leads')
+        .insert({
+          contact_id,
+          service_interest: service_interest as any,
+          notes: notes || null,
+          status: 'NOVO' as any,
+          created_by_user_id: user?.id,
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast({ title: 'Novo lead criado com sucesso' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao criar lead', description: error.message, variant: 'destructive' });
+    },
+  });
+
   return {
     leads: leadsQuery.data ?? [],
     isLoading: leadsQuery.isLoading,
@@ -187,6 +213,7 @@ export function useLeads() {
     updateLead,
     confirmInterest,
     deleteLead,
+    createLeadForContact,
   };
 }
 
