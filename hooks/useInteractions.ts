@@ -57,10 +57,58 @@ export function useInteractions(contactId?: string, leadId?: string) {
     },
   });
 
+  const updateInteraction = useMutation({
+    mutationFn: async ({ id, content }: { id: string; content: string }) => {
+      const { data, error } = await supabase
+        .from('interactions')
+        .update({ content })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['interactions'] });
+      toast({ title: 'Interação atualizada' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao atualizar interação', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteInteraction = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('interactions')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['interactions'] });
+      toast({ title: 'Interação excluída' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao excluir interação', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const isEditable = (createdAt: string | null) => {
+    if (!createdAt) return false;
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diffMs = now.getTime() - created.getTime();
+    return diffMs <= 30 * 60 * 1000;
+  };
+
   return {
     interactions: interactionsQuery.data ?? [],
     isLoading: interactionsQuery.isLoading,
     error: interactionsQuery.error,
     createInteraction,
+    updateInteraction,
+    deleteInteraction,
+    isEditable,
   };
 }
