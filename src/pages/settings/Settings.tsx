@@ -23,7 +23,7 @@ import UserProfilesManagement from './UserProfilesManagement';
 import DatabaseERD from './DatabaseERD';
 import PaymentSettings from './PaymentSettings';
 
-const TABLE_TABS = ['profiles', 'sectors', 'service-types'] as const;
+const TABLE_TABS = ['profiles', 'sectors', 'service-types', 'payment-settings'] as const;
 
 export default function Settings() {
   const { hasRole } = useAuth();
@@ -65,7 +65,7 @@ export default function Settings() {
                 }`}
               >
                 <Table2 className="h-4 w-4" />
-                <span className="hidden sm:inline">Cadastro de Tabelas</span>
+                <span className="hidden sm:inline">Cadastros Gerais</span>
                 <ChevronDown className="h-3 w-3" />
               </button>
             </DropdownMenuTrigger>
@@ -91,6 +91,13 @@ export default function Settings() {
                 <Briefcase className="h-4 w-4 mr-2" />
                 Tipos de Serviço
               </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => handleTableTabSelect('payment-settings')}
+                className={activeTab === 'payment-settings' ? 'bg-accent' : ''}
+              >
+                <Wallet className="h-4 w-4 mr-2" />
+                Contas de Pagamento
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -105,10 +112,6 @@ export default function Settings() {
           <TabsTrigger value="notifications" className="gap-2">
             <Bell className="h-4 w-4" />
             <span className="hidden sm:inline">Notificações</span>
-          </TabsTrigger>
-          <TabsTrigger value="payment-settings" className="gap-2">
-            <Wallet className="h-4 w-4" />
-            <span className="hidden sm:inline">Pagamento</span>
           </TabsTrigger>
           <TabsTrigger value="system" className="gap-2">
             <SettingsIcon className="h-4 w-4" />
