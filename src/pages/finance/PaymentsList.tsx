@@ -430,11 +430,10 @@ export default function PaymentsList() {
                 </div>
                 {newPayment.payment_method === 'OUTRO' && (
                   <div>
-                    <Label>Especifique a forma de pagamento</Label>
+                    <Label>Detalhe a forma de pagamento</Label>
                     <Input
                       value={newPayment.custom_payment_method}
                       onChange={(e) => setNewPayment({ ...newPayment, custom_payment_method: e.target.value })}
-                      placeholder="Ex: Bizum, MBWay, etc."
                     />
                   </div>
                 )}
