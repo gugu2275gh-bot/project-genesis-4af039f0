@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { usePayments } from '@/hooks/usePayments';
 import { useOpportunities } from '@/hooks/useOpportunities';
+import { useContacts } from '@/hooks/useContacts';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Check, DollarSign } from 'lucide-react';
+import { Plus, Search, Check, DollarSign, User } from 'lucide-react';
 import { PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format } from 'date-fns';
@@ -17,9 +18,11 @@ import { ptBR } from 'date-fns/locale';
 export default function PaymentsList() {
   const { payments, isLoading, createPayment, confirmPayment } = usePayments();
   const { opportunities } = useOpportunities();
+  const { contacts } = useContacts();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState('');
   const [newPayment, setNewPayment] = useState({
     opportunity_id: '',
     amount: '',
@@ -30,7 +33,16 @@ export default function PaymentsList() {
   const [transactionId, setTransactionId] = useState('');
 
   const availableOpportunities = opportunities.filter(o => 
-    o.status === 'CONTRATO_ASSINADO' || o.status === 'PAGAMENTO_PENDENTE'
+    (o.status === 'CONTRATO_ASSINADO' || o.status === 'PAGAMENTO_PENDENTE') &&
+    (!selectedClientId || o.leads?.contact_id === selectedClientId)
+  );
+
+  // Get unique clients that have available opportunities
+  const clientsWithOpportunities = contacts.filter(c => 
+    opportunities.some(o => 
+      (o.status === 'CONTRATO_ASSINADO' || o.status === 'PAGAMENTO_PENDENTE') &&
+      o.leads?.contact_id === c.id
+    )
   );
 
   const filteredPayments = payments.filter(p => {
@@ -50,6 +62,7 @@ export default function PaymentsList() {
       status: 'PENDENTE',
     });
     setIsDialogOpen(false);
+    setSelectedClientId('');
     setNewPayment({
       opportunity_id: '',
       amount: '',
@@ -147,10 +160,44 @@ export default function PaymentsList() {
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label>Oportunidade</Label>
-                  {availableOpportunities.length === 0 ? (
+                  <Label>Cliente *</Label>
+                  {clientsWithOpportunities.length === 0 ? (
                     <p className="text-sm text-muted-foreground mt-2">
-                      Não há oportunidades com contrato assinado.
+                      Não há clientes com oportunidades disponíveis.
+                    </p>
+                  ) : (
+                    <Select 
+                      value={selectedClientId} 
+                      onValueChange={(v) => {
+                        setSelectedClientId(v);
+                        setNewPayment({ ...newPayment, opportunity_id: '' });
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione um cliente" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clientsWithOpportunities.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4" />
+                              {client.full_name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <div>
+                  <Label>Oportunidade *</Label>
+                  {!selectedClientId ? (
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Selecione um cliente primeiro.
+                    </p>
+                  ) : availableOpportunities.length === 0 ? (
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Não há oportunidades disponíveis para este cliente.
                     </p>
                   ) : (
                     <Select 
@@ -165,7 +212,7 @@ export default function PaymentsList() {
                           <SelectItem key={opp.id} value={opp.id}>
                             <div className="flex items-center gap-2">
                               <DollarSign className="h-4 w-4" />
-                              {opp.leads?.contacts?.full_name}
+                              {opp.total_amount ? `€${opp.total_amount}` : 'Oportunidade'} - {opp.status}
                             </div>
                           </SelectItem>
                         ))}
@@ -214,7 +261,7 @@ export default function PaymentsList() {
                   </Button>
                   <Button 
                     onClick={handleCreate} 
-                    disabled={!newPayment.opportunity_id || !newPayment.amount || createPayment.isPending}
+                    disabled={!selectedClientId || !newPayment.opportunity_id || !newPayment.amount || createPayment.isPending}
                   >
                     {createPayment.isPending ? 'Criando...' : 'Criar Pagamento'}
                   </Button>
