@@ -1137,6 +1137,7 @@ export type Database = {
           contact_id: string
           created_at: string | null
           created_by_user_id: string | null
+          follow_up_date: string | null
           id: string
           interest_confirmed: boolean | null
           notes: string | null
@@ -1152,6 +1153,7 @@ export type Database = {
           contact_id: string
           created_at?: string | null
           created_by_user_id?: string | null
+          follow_up_date?: string | null
           id?: string
           interest_confirmed?: boolean | null
           notes?: string | null
@@ -1167,6 +1169,7 @@ export type Database = {
           contact_id?: string
           created_at?: string | null
           created_by_user_id?: string | null
+          follow_up_date?: string | null
           id?: string
           interest_confirmed?: boolean | null
           notes?: string | null
@@ -2497,6 +2500,8 @@ export type Database = {
         | "INTERESSE_PENDENTE"
         | "INTERESSE_CONFIRMADO"
         | "ARQUIVADO_SEM_RETORNO"
+        | "STANDBY"
+        | "FOLLOW_UP"
       opportunity_status:
         | "ABERTA"
         | "CONTRATO_EM_ELABORACAO"
@@ -2745,6 +2750,8 @@ export const Constants = {
         "INTERESSE_PENDENTE",
         "INTERESSE_CONFIRMADO",
         "ARQUIVADO_SEM_RETORNO",
+        "STANDBY",
+        "FOLLOW_UP",
       ],
       opportunity_status: [
         "ABERTA",
