@@ -346,11 +346,6 @@ export default function ContractDetail() {
                 Cancelar Contrato
               </Button>
             )}
-            {canEdit && !isEditing && (
-              <Button variant="outline" onClick={() => setIsEditing(true)}>
-                Editar
-              </Button>
-            )}
             {canSend && (
               <Button onClick={handleSendForSignature} disabled={sendForSignature.isPending}>
                 <Send className="h-4 w-4 mr-2" />
