@@ -96,7 +96,7 @@ export function useSLAMonitoring() {
       const { data: pendingContracts, count: contractsPendingSignature } = await supabase
         .from('contracts')
         .select('id, created_at, opportunity_id', { count: 'exact' })
-        .eq('status', 'ENVIADO')
+        .eq('status', 'APROVADO')
         .lt('created_at', contractDeadline.toISOString());
 
       pendingContracts?.forEach((contract) => {

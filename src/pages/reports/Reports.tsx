@@ -155,7 +155,7 @@ export default function Reports() {
     },
     contracts: {
       total: contracts.length,
-      pending: contracts.filter((c) => c.status === 'EM_ELABORACAO' || c.status === 'EM_REVISAO').length,
+      pending: contracts.filter((c) => c.status === 'EM_ELABORACAO').length,
       signed: contracts.filter((c) => c.status === 'ASSINADO').length,
     },
     payments: {

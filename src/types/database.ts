@@ -60,8 +60,6 @@ export type InteractionDirection = 'INBOUND' | 'OUTBOUND';
 
 export type ContractStatus = 
   | 'EM_ELABORACAO'
-  | 'EM_REVISAO'
-  | 'ENVIADO'
   | 'APROVADO'
   | 'REPROVADO'
   | 'ASSINADO'
@@ -455,8 +453,6 @@ export const TECHNICAL_STATUS_DESCRIPTIONS: Record<string, string> = {
 
 export const CONTRACT_STATUS_LABELS: Record<ContractStatus, string> = {
   EM_ELABORACAO: 'Em Elaboração',
-  EM_REVISAO: 'Em Revisão',
-  ENVIADO: 'Enviado',
   APROVADO: 'Aprovado',
   REPROVADO: 'Reprovado',
   ASSINADO: 'Assinado',

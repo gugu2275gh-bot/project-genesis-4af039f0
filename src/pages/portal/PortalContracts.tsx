@@ -26,8 +26,8 @@ import jsPDF from 'jspdf';
 
 const statusConfig: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
   EM_ELABORACAO: { icon: Clock, color: 'text-muted-foreground', bg: 'bg-muted' },
-  EM_REVISAO: { icon: Clock, color: 'text-info', bg: 'bg-info/10' },
-  ENVIADO: { icon: PenTool, color: 'text-warning', bg: 'bg-warning/10' },
+  APROVADO: { icon: CheckCircle2, color: 'text-info', bg: 'bg-info/10' },
+  REPROVADO: { icon: FileText, color: 'text-warning', bg: 'bg-warning/10' },
   ASSINADO: { icon: CheckCircle2, color: 'text-success', bg: 'bg-success/10' },
   CANCELADO: { icon: FileText, color: 'text-destructive', bg: 'bg-destructive/10' },
 };
@@ -257,7 +257,7 @@ export default function PortalContracts() {
                   )}
 
                   <div className="flex gap-2 mt-4">
-                    {status === 'ENVIADO' && (
+                    {status === 'APROVADO' && (
                       <Button 
                         onClick={() => handleSignContract(contract.id)}
                         disabled={markAsSigned.isPending}
@@ -270,7 +270,7 @@ export default function PortalContracts() {
                         Assinar Contrato
                       </Button>
                     )}
-                    {(status === 'ASSINADO' || status === 'ENVIADO') && (
+                    {(status === 'ASSINADO' || status === 'APROVADO') && (
                       <Button 
                         variant="outline"
                         onClick={() => handleDownloadContract(contract)}

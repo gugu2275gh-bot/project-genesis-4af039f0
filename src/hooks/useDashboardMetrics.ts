@@ -135,7 +135,7 @@ export function useDashboardMetrics() {
 
       const allContracts = contracts || [];
       const pendingContracts = allContracts.filter(c => 
-        ['EM_ELABORACAO', 'EM_REVISAO', 'ENVIADO'].includes(c.status || '')
+        ['EM_ELABORACAO'].includes(c.status || '')
       ).length;
       const signedContracts = allContracts.filter(c => 
         c.status === 'ASSINADO' &&

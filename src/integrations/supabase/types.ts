@@ -2447,8 +2447,6 @@ export type Database = {
         | "SUPERVISOR"
       contract_status:
         | "EM_ELABORACAO"
-        | "EM_REVISAO"
-        | "ENVIADO"
         | "APROVADO"
         | "REPROVADO"
         | "ASSINADO"
@@ -2693,8 +2691,6 @@ export const Constants = {
       ],
       contract_status: [
         "EM_ELABORACAO",
-        "EM_REVISAO",
-        "ENVIADO",
         "APROVADO",
         "REPROVADO",
         "ASSINADO",

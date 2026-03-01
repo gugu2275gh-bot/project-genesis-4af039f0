@@ -104,12 +104,12 @@ export function useContracts() {
     },
   });
 
-  const sendForSignature = useMutation({
+  const sendForApproval = useMutation({
     mutationFn: async (id: string) => {
       const { data, error } = await supabase
         .from('contracts')
         .update({
-          status: 'ENVIADO',
+          status: 'EM_ELABORACAO',
           updated_by_user_id: user?.id,
         })
         .eq('id', id)
@@ -117,19 +117,11 @@ export function useContracts() {
         .single();
       
       if (error) throw error;
-
-      // Update opportunity status
-      await supabase
-        .from('opportunities')
-        .update({ status: 'CONTRATO_ENVIADO' })
-        .eq('id', data.opportunity_id);
-
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contracts'] });
-      queryClient.invalidateQueries({ queryKey: ['opportunities'] });
-      toast({ title: 'Contrato enviado para assinatura' });
+      toast({ title: 'Contrato enviado para aprovação' });
     },
     onError: (error) => {
       toast({ title: 'Erro ao enviar contrato', description: error.message, variant: 'destructive' });
@@ -386,11 +378,11 @@ export function useContracts() {
 
   const rejectContract = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      // 1. Update contract status to REPROVADO then back to EM_REVISAO
+      // 1. Update contract status to REPROVADO
       const { data: contract, error } = await supabase
         .from('contracts')
         .update({
-          status: 'EM_REVISAO' as any,
+          status: 'REPROVADO' as any,
           updated_by_user_id: user?.id,
         })
         .eq('id', id)
@@ -434,7 +426,7 @@ export function useContracts() {
     error: contractsQuery.error,
     createContract,
     updateContract,
-    sendForSignature,
+    sendForApproval,
     markAsSigned,
     cancelContract,
     suspendContract,
