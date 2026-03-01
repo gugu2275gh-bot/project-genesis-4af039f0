@@ -1,48 +1,50 @@
 
-# Corrigir Tela de Redefinicao de Senha
+# Plano: Novo Contrato/Serviço a partir de Lead com Contrato Cancelado
 
-## Problema
+## Recomendacao de UX
 
-Quando o usuario clica no link de redefinicao de senha enviado por e-mail, a pagina mostra "Link Invalido" porque:
+A melhor abordagem e colocar o botao **na Ficha do Cliente (ContactDetail)**, na seccao de Servicos/Leads. Motivos:
 
-1. O Supabase redireciona para `/reset-password#access_token=...`
-2. O codigo executa `getSession()` imediatamente -- nao encontra sessao (o token do hash ainda nao foi processado)
-3. `checking` vira `false` e a tela de erro aparece
-4. O evento `PASSWORD_RECOVERY` dispara depois, mas ja e tarde demais
+1. **Ficha do Cliente** e o ponto central onde se ve todo o historico - leads, contratos, pagamentos. Faz sentido iniciar um novo ciclo a partir dali.
+2. Na ficha ja existem os leads listados. Adicionar um botao "Novo Lead / Novo Servico" ali permite criar um novo lead para o mesmo contato, reiniciando o fluxo completo (Lead -> Oportunidade -> Contrato).
+3. Manter tambem um botao contextual no **LeadDetail** quando o lead tem um contrato cancelado, permitindo "Reabrir como Novo Lead" diretamente.
 
-## Solucao
+O historico fica preservado porque o lead antigo e sua oportunidade/contrato cancelado permanecem intactos. O novo lead gera uma nova oportunidade e novo contrato.
 
-Modificar o `useEffect` em `src/pages/ResetPassword.tsx` para:
+## Alteracoes Tecnicas
 
-1. Detectar se ha um token/hash fragment na URL (indicando que o usuario veio do link do e-mail)
-2. Se houver hash, **aguardar** o evento `PASSWORD_RECOVERY` do `onAuthStateChange` antes de marcar `checking` como `false`
-3. Usar um timeout de seguranca (5 segundos) para nao deixar o usuario esperando indefinidamente caso algo falhe
+### 1. Ficha do Cliente (ContactDetail.tsx) - Botao "Novo Servico"
+- Na seccao onde os leads do cliente sao listados, adicionar um botao "+ Novo Servico"
+- Ao clicar, abre um Dialog para selecionar o tipo de servico (service_interest) e notas iniciais
+- Cria um novo Lead vinculado ao mesmo contact_id com status "NOVO"
+- Navega para o detalhe do novo lead criado
 
-## Arquivo Envolvido
+### 2. Lead Detail (LeadDetail.tsx) - Botao "Novo Servico" contextual
+- Quando o lead tem status INTERESSE_CONFIRMADO e sua oportunidade possui um contrato CANCELADO, exibir um botao "Iniciar Novo Servico"
+- Esse botao cria um novo lead para o mesmo contato com status NOVO e navega para ele
 
-| Arquivo | Acao |
-|---------|------|
-| `src/pages/ResetPassword.tsx` | Corrigir logica do useEffect para aguardar processamento do token |
+### 3. Hook useLeads.ts - Nova mutacao createLeadForContact
+- Adicionar uma mutacao `createLeadForContact` que recebe `contact_id`, `service_interest` e `notes`
+- Cria o lead com status NOVO e retorna os dados para navegacao
 
-## Mudanca no Codigo
+### 4. Sem alteracoes no banco de dados
+- Nenhuma migracao necessaria. O modelo atual ja suporta multiplos leads por contato.
 
-O `useEffect` sera reescrito para:
+## Fluxo Resumido
 
 ```text
-useEffect:
-  1. Configurar onAuthStateChange PRIMEIRO
-     - Se evento = PASSWORD_RECOVERY -> setIsValidSession(true), setChecking(false)
-     - Se evento = SIGNED_IN (e ha hash na URL) -> setIsValidSession(true), setChecking(false)
-  2. Verificar se ha hash fragment na URL
-     - Se SIM: aguardar o evento do listener (com timeout de 5s como fallback)
-     - Se NAO: chamar getSession() normalmente e definir checking = false
+Contrato Cancelado
+       |
+       v
+Ficha do Cliente ou Lead Detail
+       |
+  [+ Novo Servico]
+       |
+       v
+Novo Lead (status: NOVO)
+       |
+       v
+Fluxo normal: Confirmar Interesse -> Oportunidade -> Contrato
 ```
 
-Isso garante que o token do hash seja processado pelo Supabase antes de decidir se a sessao e valida ou nao.
-
-## Resultado Esperado
-
-1. Usuario clica no link do e-mail
-2. Pagina mostra loading (spinner) por 1-2 segundos enquanto o token e processado
-3. Formulario de nova senha aparece corretamente
-4. Usuario define a nova senha com sucesso
+O historico completo (lead antigo, oportunidade, contrato cancelado, pagamentos) permanece intacto e visivel na ficha do cliente.
