@@ -360,6 +360,74 @@ export function useContracts() {
     },
   });
 
+  const approveContract = useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from('contracts')
+        .update({
+          status: 'APROVADO' as any,
+          updated_by_user_id: user?.id,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contracts'] });
+      toast({ title: 'Contrato aprovado com sucesso' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao aprovar contrato', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const rejectContract = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      // 1. Update contract status to REPROVADO then back to EM_REVISAO
+      const { data: contract, error } = await supabase
+        .from('contracts')
+        .update({
+          status: 'EM_REVISAO' as any,
+          updated_by_user_id: user?.id,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+
+      // 2. Notify the creator/responsible
+      const notifyUserId = contract.assigned_to_user_id || contract.created_by_user_id;
+      if (notifyUserId) {
+        await supabase.from('notifications').insert({
+          user_id: notifyUserId,
+          title: 'Contrato Reprovado',
+          message: `O contrato foi reprovado e devolvido para revisão. Motivo: ${reason}`,
+          type: 'contract_rejected',
+        });
+      }
+
+      // 3. Update opportunity status back
+      await supabase
+        .from('opportunities')
+        .update({ status: 'CONTRATO_EM_ELABORACAO' })
+        .eq('id', contract.opportunity_id);
+
+      return contract;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contracts'] });
+      queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+      toast({ title: 'Contrato reprovado e devolvido para revisão' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao reprovar contrato', description: error.message, variant: 'destructive' });
+    },
+  });
+
   return {
     contracts: contractsQuery.data ?? [],
     isLoading: contractsQuery.isLoading,
@@ -371,6 +439,8 @@ export function useContracts() {
     cancelContract,
     suspendContract,
     reactivateContract,
+    approveContract,
+    rejectContract,
   };
 }
 
