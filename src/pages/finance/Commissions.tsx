@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DataTable, Column } from '@/components/ui/data-table';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -28,18 +29,21 @@ import {
   TrendingDown, 
   CheckCircle,
   Clock,
-  Receipt,
-  Users
+  Users,
+  ShieldCheck,
+  XCircle,
 } from 'lucide-react';
-import { useCommissions, CommissionWithContract, CommissionInsert } from '@/hooks/useCommissions';
+import { useCommissions, CommissionWithContract, CommissionInsert, COMMISSION_STATUS_LABELS, CommissionStatus } from '@/hooks/useCommissions';
 import { useContracts } from '@/hooks/useContracts';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-const STATUS_BADGES = {
-  PENDENTE: { label: 'Pendente', variant: 'outline' as const },
-  PAGA: { label: 'Paga', variant: 'default' as const },
-  CANCELADA: { label: 'Cancelada', variant: 'destructive' as const },
+const STATUS_VARIANTS: Record<CommissionStatus, 'outline' | 'default' | 'destructive' | 'secondary'> = {
+  PENDENTE_APROVACAO: 'outline',
+  APROVADA: 'secondary',
+  PAGA: 'default',
+  REJEITADA: 'destructive',
+  CANCELADA: 'destructive',
 };
 
 export default function Commissions() {
@@ -47,7 +51,11 @@ export default function Commissions() {
     commissions, 
     isLoading, 
     createCommission, 
+    approveCommission,
+    rejectCommission,
     markAsPaid,
+    pendingApproval,
+    approved,
     pendingToPay,
     pendingToReceive,
     totalPendingToPay,
@@ -57,14 +65,17 @@ export default function Commissions() {
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [payDialogOpen, setPayDialogOpen] = useState(false);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [selectedCommission, setSelectedCommission] = useState<CommissionWithContract | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('');
+  const [rejectionReason, setRejectionReason] = useState('');
   const [formData, setFormData] = useState<CommissionInsert>({
     contract_id: '',
     collaborator_name: '',
     collaborator_type: 'CAPTADOR',
     base_amount: 0,
     has_invoice: false,
+    reference_period: '',
   });
 
   const handleSubmit = () => {
@@ -77,9 +88,29 @@ export default function Commissions() {
           collaborator_type: 'CAPTADOR',
           base_amount: 0,
           has_invoice: false,
+          reference_period: '',
         });
       },
     });
+  };
+
+  const handleApprove = (commission: CommissionWithContract) => {
+    approveCommission.mutate(commission.id);
+  };
+
+  const handleReject = () => {
+    if (selectedCommission && rejectionReason) {
+      rejectCommission.mutate(
+        { id: selectedCommission.id, reason: rejectionReason },
+        {
+          onSuccess: () => {
+            setRejectDialogOpen(false);
+            setSelectedCommission(null);
+            setRejectionReason('');
+          },
+        }
+      );
+    }
   };
 
   const handleMarkAsPaid = () => {
@@ -116,19 +147,9 @@ export default function Commissions() {
       cell: (item) => item.contracts?.opportunities?.leads?.contacts?.full_name || '-',
     },
     {
-      key: 'base_amount',
-      header: 'Base',
-      cell: (item) => `€${item.base_amount.toFixed(2)}`,
-    },
-    {
-      key: 'rate',
-      header: 'Taxa',
-      cell: (item) => (
-        <div className="flex items-center gap-1">
-          <span>{(item.commission_rate * 100).toFixed(0)}%</span>
-          {item.has_invoice && <Receipt className="h-3 w-3 text-muted-foreground" />}
-        </div>
-      ),
+      key: 'reference_period',
+      header: 'Período',
+      cell: (item) => item.reference_period || '-',
     },
     {
       key: 'commission_amount',
@@ -141,8 +162,22 @@ export default function Commissions() {
       key: 'status',
       header: 'Status',
       cell: (item) => {
-        const badge = STATUS_BADGES[item.status];
-        return <Badge variant={badge.variant}>{badge.label}</Badge>;
+        const status = item.status as CommissionStatus;
+        return (
+          <div>
+            <Badge variant={STATUS_VARIANTS[status] || 'outline'}>
+              {COMMISSION_STATUS_LABELS[status] || status}
+            </Badge>
+            {item.approved_by_profile && item.approved_at && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {status === 'REJEITADA' ? 'Rejeitada' : 'Aprovada'} por {item.approved_by_profile.full_name}
+              </p>
+            )}
+            {item.rejection_reason && (
+              <p className="text-xs text-destructive mt-0.5">Motivo: {item.rejection_reason}</p>
+            )}
+          </div>
+        );
       },
     },
     {
@@ -155,20 +190,52 @@ export default function Commissions() {
     {
       key: 'actions',
       header: '',
-      cell: (item) => item.status === 'PENDENTE' && (
-        <Button 
-          size="sm" 
-          variant="outline"
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedCommission(item);
-            setPayDialogOpen(true);
-          }}
-        >
-          <CheckCircle className="h-4 w-4 mr-1" />
-          Pagar
-        </Button>
-      ),
+      cell: (item) => {
+        const status = item.status as CommissionStatus;
+        return (
+          <div className="flex gap-1">
+            {status === 'PENDENTE_APROVACAO' && (
+              <>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={(e) => { e.stopPropagation(); handleApprove(item); }}
+                  disabled={approveCommission.isPending}
+                >
+                  <ShieldCheck className="h-4 w-4 mr-1" />
+                  Aprovar
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="ghost"
+                  className="text-destructive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedCommission(item);
+                    setRejectDialogOpen(true);
+                  }}
+                >
+                  <XCircle className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+            {status === 'APROVADA' && (
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedCommission(item);
+                  setPayDialogOpen(true);
+                }}
+              >
+                <CheckCircle className="h-4 w-4 mr-1" />
+                Pagar
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -260,6 +327,15 @@ export default function Commissions() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label>Período de Referência</Label>
+                <Input
+                  value={formData.reference_period || ''}
+                  onChange={(e) => setFormData({ ...formData, reference_period: e.target.value })}
+                  placeholder="Ex: Janeiro 2026, Q1 2026"
+                />
+              </div>
+
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -291,12 +367,23 @@ export default function Commissions() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Aguardando Aprovação</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{pendingApproval.length}</div>
+            <p className="text-xs text-muted-foreground">comissões para aprovar</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">A Pagar</CardTitle>
             <TrendingDown className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-destructive">€{totalPendingToPay.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">{pendingToPay.length} comissões pendentes</p>
+            <p className="text-xs text-muted-foreground">{pendingToPay.length} aprovadas</p>
           </CardContent>
         </Card>
 
@@ -307,18 +394,7 @@ export default function Commissions() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">€{totalPendingToReceive.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">{pendingToReceive.length} comissões pendentes</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Pendentes</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{pendingToPay.length + pendingToReceive.length}</div>
-            <p className="text-xs text-muted-foreground">Total de comissões</p>
+            <p className="text-xs text-muted-foreground">{pendingToReceive.length} aprovadas</p>
           </CardContent>
         </Card>
 
@@ -340,12 +416,22 @@ export default function Commissions() {
       <Tabs defaultValue="all">
         <TabsList>
           <TabsTrigger value="all">Todas ({commissions.length})</TabsTrigger>
+          <TabsTrigger value="pending-approval">Aprovação ({pendingApproval.length})</TabsTrigger>
+          <TabsTrigger value="approved">Aprovadas ({approved.length})</TabsTrigger>
           <TabsTrigger value="to-pay">A Pagar ({pendingToPay.length})</TabsTrigger>
           <TabsTrigger value="to-receive">A Receber ({pendingToReceive.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="mt-4">
           <DataTable columns={columns} data={commissions} emptyMessage="Nenhuma comissão registrada" />
+        </TabsContent>
+
+        <TabsContent value="pending-approval" className="mt-4">
+          <DataTable columns={columns} data={pendingApproval} emptyMessage="Nenhuma comissão pendente de aprovação" />
+        </TabsContent>
+
+        <TabsContent value="approved" className="mt-4">
+          <DataTable columns={columns} data={approved} emptyMessage="Nenhuma comissão aprovada aguardando pagamento" />
         </TabsContent>
 
         <TabsContent value="to-pay" className="mt-4">
@@ -393,6 +479,44 @@ export default function Commissions() {
                   disabled={!paymentMethod || markAsPaid.isPending}
                 >
                   {markAsPaid.isPending ? 'Processando...' : 'Confirmar Pagamento'}
+                </Button>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Dialog */}
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rejeitar Comissão</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            {selectedCommission && (
+              <>
+                <div className="bg-muted p-4 rounded-md space-y-2">
+                  <p><strong>Colaborador:</strong> {selectedCommission.collaborator_name}</p>
+                  <p><strong>Valor:</strong> €{selectedCommission.commission_amount?.toFixed(2)}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Motivo da Rejeição *</Label>
+                  <Textarea
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    placeholder="Informe o motivo da rejeição"
+                    rows={3}
+                  />
+                </div>
+
+                <Button 
+                  onClick={handleReject} 
+                  className="w-full"
+                  variant="destructive"
+                  disabled={!rejectionReason || rejectCommission.isPending}
+                >
+                  {rejectCommission.isPending ? 'Processando...' : 'Confirmar Rejeição'}
                 </Button>
               </>
             )}
