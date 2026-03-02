@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -444,6 +445,17 @@ export default function LeadDetail() {
                   {profiles?.find(p => p.id === lead.assigned_to_user_id)?.full_name || 'Não atribuído'}
                 </p>
               )}
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <Checkbox
+                id="special-case"
+                checked={lead.is_special_case || false}
+                onCheckedChange={async (checked) => {
+                  await updateLead.mutateAsync({ id: lead.id, is_special_case: !!checked });
+                }}
+              />
+              <Label htmlFor="special-case" className="cursor-pointer">Caso especial</Label>
             </div>
 
             {lead.interest_confirmed && (
