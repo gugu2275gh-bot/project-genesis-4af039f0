@@ -163,6 +163,8 @@ export type Database = {
       }
       commissions: {
         Row: {
+          approved_at: string | null
+          approved_by_user_id: string | null
           base_amount: number
           collaborator_name: string
           collaborator_type: string
@@ -176,10 +178,14 @@ export type Database = {
           notes: string | null
           paid_at: string | null
           payment_method: string | null
+          reference_period: string | null
+          rejection_reason: string | null
           status: string | null
           updated_at: string | null
         }
         Insert: {
+          approved_at?: string | null
+          approved_by_user_id?: string | null
           base_amount: number
           collaborator_name: string
           collaborator_type: string
@@ -193,10 +199,14 @@ export type Database = {
           notes?: string | null
           paid_at?: string | null
           payment_method?: string | null
+          reference_period?: string | null
+          rejection_reason?: string | null
           status?: string | null
           updated_at?: string | null
         }
         Update: {
+          approved_at?: string | null
+          approved_by_user_id?: string | null
           base_amount?: number
           collaborator_name?: string
           collaborator_type?: string
@@ -210,10 +220,19 @@ export type Database = {
           notes?: string | null
           paid_at?: string | null
           payment_method?: string | null
+          reference_period?: string | null
+          rejection_reason?: string | null
           status?: string | null
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "commissions_approved_by_user_id_fkey"
+            columns: ["approved_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "commissions_contract_id_fkey"
             columns: ["contract_id"]
