@@ -29,6 +29,7 @@ export default function Leads() {
     email: '',
     phone: '',
     service_interest: 'VISTO_ESTUDANTE' as any,
+    service_interest_other: '',
     origin_channel: 'WHATSAPP' as OriginChannel,
     referral_name: '',
   });
@@ -63,6 +64,9 @@ export default function Leads() {
       contact_id: contact.id,
       service_interest: newLead.service_interest,
       status: 'NOVO',
+      notes: newLead.service_interest === 'OUTRO' && newLead.service_interest_other
+        ? `Serviço: ${newLead.service_interest_other}`
+        : undefined,
     });
 
     setIsDialogOpen(false);
@@ -71,6 +75,7 @@ export default function Leads() {
       email: '',
       phone: '',
       service_interest: 'VISTO_ESTUDANTE',
+      service_interest_other: '',
       origin_channel: 'WHATSAPP',
       referral_name: '',
     });
@@ -194,6 +199,16 @@ export default function Leads() {
                     </SelectContent>
                   </Select>
                 </div>
+                {newLead.service_interest === 'OUTRO' && (
+                  <div>
+                    <Label>Especifique o serviço</Label>
+                    <Input
+                      value={newLead.service_interest_other}
+                      onChange={(e) => setNewLead({ ...newLead, service_interest_other: e.target.value })}
+                      placeholder="Descreva o serviço de interesse"
+                    />
+                  </div>
+                )}
                 <div>
                   <Label>Canal de Origem</Label>
                   <Select
