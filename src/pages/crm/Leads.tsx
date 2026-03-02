@@ -250,9 +250,11 @@ export default function Leads() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
-            {Object.entries(LEAD_STATUS_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>{label}</SelectItem>
-            ))}
+            {Object.entries(LEAD_STATUS_LABELS)
+              .filter(([value]) => !['DADOS_INCOMPLETOS', 'INTERESSE_PENDENTE'].includes(value))
+              .map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
           </SelectContent>
         </Select>
       </div>
