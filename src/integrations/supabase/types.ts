@@ -1159,6 +1159,7 @@ export type Database = {
           follow_up_date: string | null
           id: string
           interest_confirmed: boolean | null
+          is_special_case: boolean | null
           notes: string | null
           service_interest:
             | Database["public"]["Enums"]["service_interest"]
@@ -1175,6 +1176,7 @@ export type Database = {
           follow_up_date?: string | null
           id?: string
           interest_confirmed?: boolean | null
+          is_special_case?: boolean | null
           notes?: string | null
           service_interest?:
             | Database["public"]["Enums"]["service_interest"]
@@ -1191,6 +1193,7 @@ export type Database = {
           follow_up_date?: string | null
           id?: string
           interest_confirmed?: boolean | null
+          is_special_case?: boolean | null
           notes?: string | null
           service_interest?:
             | Database["public"]["Enums"]["service_interest"]

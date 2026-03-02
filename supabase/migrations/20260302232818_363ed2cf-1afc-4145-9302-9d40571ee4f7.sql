@@ -1,0 +1,1 @@
+ALTER TABLE public.leads ADD COLUMN is_special_case boolean DEFAULT false;
