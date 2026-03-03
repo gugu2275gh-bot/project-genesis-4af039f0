@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Search, Eye, FileText, AlertTriangle, Clock, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, CONTRACT_TEMPLATE_LABELS } from '@/types/database';
-import { generateContractDocument } from '@/lib/generate-contract';
+
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -49,22 +49,7 @@ export default function ContractsList() {
       contract_template: selectedTemplate,
     } as any);
     
-    // Auto-generate the Word document
-    const clientName = opp?.leads?.contacts?.full_name || 'CLIENTE';
-    const documentNumber = (opp?.leads?.contacts as any)?.document_number || '';
-    const contractNumber = (result as any)?.contract_number || '';
-    
-    try {
-      await generateContractDocument({
-        template: selectedTemplate,
-        clientName,
-        documentNumber,
-        contractNumber,
-      });
-    } catch (e) {
-      console.error('Error generating contract document:', e);
-    }
-    
+
     setIsDialogOpen(false);
     setSelectedOpportunity('');
     setSelectedTemplate('NACIONALIDADE');
