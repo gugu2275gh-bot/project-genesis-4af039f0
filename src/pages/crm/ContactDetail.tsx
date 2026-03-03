@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
@@ -92,17 +92,12 @@ export default function ContactDetail() {
 
   const contactLeads = leads.filter(l => l.contact_id === id);
 
-  // Initialize paymentNotes from contact
-  useState(() => {
-    if (contact) setPaymentNotes((contact as any).payment_notes || '');
-  });
-  
-  // Keep paymentNotes in sync when contact loads
-  const prevContactRef = useState<string | null>(null);
-  if (contact && prevContactRef[0] !== contact.id) {
-    prevContactRef[0] = contact.id;
-    setPaymentNotes((contact as any).payment_notes || '');
-  }
+  // Sync paymentNotes when contact loads
+  useEffect(() => {
+    if (contact) {
+      setPaymentNotes((contact as any).payment_notes || '');
+    }
+  }, [contact?.id]);
 
   const handleSavePaymentNotes = async () => {
     if (!id) return;
