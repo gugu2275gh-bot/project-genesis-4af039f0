@@ -95,7 +95,7 @@ export default function Opportunities() {
         data={filteredOpportunities}
         loading={isLoading}
         emptyMessage="Nenhuma oportunidade encontrada"
-        onRowClick={(opp) => navigate(`/crm/opportunities/${opp.id}`)}
+        onRowClick={(opp) => navigate(`/crm/contacts/${opp.leads?.contact_id || opp.leads?.contacts?.id}`)}
       />
     </div>
   );
