@@ -1238,7 +1238,7 @@ export default function ContactDetail() {
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Briefcase className="h-5 w-5" />
-                  Serviços ({confirmedLeads.length})
+                  Serviços Contratados ({confirmedLeads.length})
                 </CardTitle>
                 <CardDescription>Atendimentos com pagamento confirmado</CardDescription>
               </div>
