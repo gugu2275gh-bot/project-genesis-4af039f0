@@ -221,6 +221,7 @@ export default function ContactDetail() {
         empadronamiento_city: (contact as any).empadronamiento_city,
         empadronamiento_address: contact.empadronamiento_address,
         has_job_offer: (contact as any).has_job_offer,
+        payment_notes: c.payment_notes,
       });
       setPhoneInput(contact.phone?.toString() || '');
       setIsEditing(true);
@@ -784,6 +785,21 @@ export default function ContactDetail() {
         </>
       )}
       
+      <Separator className="my-4" />
+      <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
+        <DollarSign className="h-4 w-4" />
+        Acordo de Pagamento
+      </h4>
+      <div>
+        <Label>Notas de Pagamento (Atenção ao Cliente)</Label>
+        <Textarea
+          value={(editedContact as any).payment_notes || ''}
+          onChange={(e) => setEditedContact({ ...editedContact, payment_notes: e.target.value } as any)}
+          placeholder="Descreva o que foi combinado com o cliente sobre pagamento..."
+          rows={4}
+        />
+      </div>
+
       <div className="flex justify-end gap-2 pt-4">
         <Button variant="outline" onClick={() => setIsEditing(false)}>
           Cancelar
@@ -1089,6 +1105,20 @@ export default function ContactDetail() {
           </p>
         </div>
       </div>
+
+      {/* Acordo de Pagamento */}
+      {c.payment_notes && (
+        <>
+          <Separator className="sm:col-span-2" />
+          <div className="flex items-start gap-3 sm:col-span-2">
+            <DollarSign className="h-5 w-5 text-muted-foreground mt-0.5" />
+            <div>
+              <p className="text-sm text-muted-foreground">Acordo de Pagamento</p>
+              <p className="font-medium whitespace-pre-wrap">{c.payment_notes}</p>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Representante Legal */}
       {isMinor && c.legal_guardian_name && (
