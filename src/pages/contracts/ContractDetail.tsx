@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useContract, useContracts } from '@/hooks/useContracts';
+import { useQuery } from '@tanstack/react-query';
 import { useProfiles } from '@/hooks/useProfiles';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,9 @@ import { Badge } from '@/components/ui/badge';
 import { ContractCostsSection } from '@/components/contracts/ContractCostsSection';
 import { ContractNotesSection } from '@/components/contracts/ContractNotesSection';
 import { supabase } from '@/integrations/supabase/client';
+import { useBeneficiaries } from '@/hooks/useBeneficiaries';
+import { BeneficiaryData, BankAccountData } from '@/lib/generate-contract';
+import { SERVICE_INTEREST_LABELS as SIL } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
 import { ContractPreview } from '@/components/contracts/ContractPreview';
@@ -31,6 +35,45 @@ export default function ContractDetail() {
   const { data: contract, isLoading } = useContract(id);
   const { updateContract, sendForApproval, markAsSigned, cancelContract, suspendContract, reactivateContract, approveContract, rejectContract } = useContracts();
   const { data: profiles = [] } = useProfiles();
+  const { beneficiaries } = useBeneficiaries(id);
+
+  // Fetch payment accounts and payments for contract preview
+  const { data: paymentAccounts } = useQuery({
+    queryKey: ['payment-accounts-for-contract', id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('payment_accounts').select('*').eq('is_active', true);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: contractPayments } = useQuery({
+    queryKey: ['contract-payments', id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data, error } = await supabase
+        .from('payments')
+        .select('*, contract_beneficiaries:beneficiary_contact_id(full_name)')
+        .eq('contract_id', id);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
+  });
+
+  // Fetch service cases for beneficiaries
+  const { data: serviceCases } = useQuery({
+    queryKey: ['beneficiary-service-cases', id],
+    queryFn: async () => {
+      const benWithCases = beneficiaries?.filter(b => b.service_case_id) || [];
+      if (benWithCases.length === 0) return [];
+      const ids = benWithCases.map(b => b.service_case_id!);
+      const { data, error } = await supabase.from('service_cases').select('id, service_type').in('id', ids);
+      if (error) throw error;
+      return data;
+    },
+    enabled: (beneficiaries?.length ?? 0) > 0,
+  });
   
   const [formData, setFormData] = useState({
     scope_summary: '',
@@ -737,9 +780,42 @@ export default function ContractDetail() {
             <ContractPreview
               template={(contract as any).contract_template || 'DOCUMENTOS'}
               clientName={contract.opportunities?.leads?.contacts?.full_name || ''}
+              documentType={(contract.opportunities?.leads?.contacts as any)?.document_type || ''}
               documentNumber={(contract.opportunities?.leads?.contacts as any)?.document_number || ''}
               contractNumber={(contract as any).contract_number || ''}
               canDownload={canDownloadContract}
+              date={contract.created_at ? new Date(contract.created_at) : undefined}
+              serviceDescription={contract.scope_summary || undefined}
+              feeAmount={contract.total_fee || undefined}
+              vatRate={0.21}
+              totalAmount={contract.total_fee ? contract.total_fee * 1.21 : undefined}
+              paymentConditions={contract.installment_conditions || undefined}
+              paymentMethod={(contract as any).payment_method || undefined}
+              currency={contract.currency || 'EUR'}
+              phone={contract.opportunities?.leads?.contacts?.phone?.toString() || undefined}
+              email={(contract.opportunities?.leads?.contacts as any)?.email || undefined}
+              address={(contract.opportunities?.leads?.contacts as any)?.address || undefined}
+              bankAccount={(() => {
+                const pm = (contract as any).payment_method;
+                const pa = (contract as any).payment_account;
+                if (pm !== 'TRANSFERENCIA' || !pa || !paymentAccounts) return undefined;
+                const account = paymentAccounts.find((a: any) => a.country === pa || a.id === pa);
+                if (!account) return undefined;
+                return { bankName: account.bank_name, accountName: account.account_name, accountDetails: account.account_details } as BankAccountData;
+              })()}
+              beneficiaries={beneficiaries?.filter(b => !b.is_primary).map(b => {
+                const sc = serviceCases?.find((s: any) => s.id === b.service_case_id);
+                const benContactId = (b as any).contact_id;
+                const benPayments = contractPayments?.filter((p: any) => benContactId && p.beneficiary_contact_id === benContactId) || [];
+                const totalBenAmount = benPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+                return {
+                  fullName: b.full_name,
+                  documentType: b.document_type || undefined,
+                  documentNumber: b.document_number || undefined,
+                  serviceName: sc ? (SIL as any)[sc.service_type] || sc.service_type : undefined,
+                  amount: totalBenAmount > 0 ? totalBenAmount : undefined,
+                } as BeneficiaryData;
+              }) || []}
             />
           </CardContent>
         </Card>
