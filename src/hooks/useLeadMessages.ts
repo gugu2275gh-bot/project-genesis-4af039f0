@@ -66,7 +66,7 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
   const sendMessage = useMutation({
     mutationFn: async ({ leadId, message }: { leadId: string; message: string }) => {
       // Build prefixed message for WhatsApp delivery
-      const prefix = userInfo ? `[${userInfo.name} - ${userInfo.role}]` : '';
+      const prefix = userInfo ? `*${userInfo.name} - ${userInfo.role}*` : '';
       const prefixedMessage = prefix ? `${prefix}\n${message}` : message;
 
       // First, call the webhook via Edge Function if we have a phone number
@@ -117,7 +117,7 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
         id: Date.now(), // Temporary ID
         created_at: new Date().toISOString(),
         id_lead: leadId,
-        mensagem_IA: userInfo ? `[${userInfo.name} - ${userInfo.role}]\n${message}` : message,
+        mensagem_IA: userInfo ? `*${userInfo.name} - ${userInfo.role}*\n${message}` : message,
         mensagem_cliente: null,
         origem: 'SISTEMA',
         phone_id: null,
