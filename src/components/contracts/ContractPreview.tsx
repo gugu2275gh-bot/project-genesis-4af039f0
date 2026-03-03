@@ -3,17 +3,37 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Edit, X } from 'lucide-react';
-import { getContractSections, generateContractDocument, type ContractData, type ContractSection } from '@/lib/generate-contract';
+import { getContractSections, generateContractDocument, type ContractData, type ContractSection, type BeneficiaryData, type BankAccountData } from '@/lib/generate-contract';
 
 interface ContractPreviewProps {
   template: string;
   clientName: string;
+  documentType?: string;
   documentNumber: string;
   contractNumber: string;
   canDownload?: boolean;
+  // Financial fields
+  serviceDescription?: string;
+  feeAmount?: number;
+  vatRate?: number;
+  totalAmount?: number;
+  paymentConditions?: string;
+  paymentMethod?: string;
+  bankAccount?: BankAccountData;
+  beneficiaries?: BeneficiaryData[];
+  // Contact fields
+  phone?: string;
+  email?: string;
+  address?: string;
+  currency?: string;
+  date?: Date;
 }
 
-export function ContractPreview({ template, clientName, documentNumber, contractNumber, canDownload = false }: ContractPreviewProps) {
+export function ContractPreview({ 
+  template, clientName, documentType, documentNumber, contractNumber, canDownload = false,
+  serviceDescription, feeAmount, vatRate, totalAmount, paymentConditions, paymentMethod,
+  bankAccount, beneficiaries, phone, email, address, currency, date,
+}: ContractPreviewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(clientName);
   const [editedDocument, setEditedDocument] = useState(documentNumber);
@@ -22,8 +42,22 @@ export function ContractPreview({ template, clientName, documentNumber, contract
   const currentData: ContractData = {
     template,
     clientName: isEditing ? editedName : clientName,
+    documentType,
     documentNumber: isEditing ? editedDocument : documentNumber,
     contractNumber: isEditing ? editedContractNumber : contractNumber,
+    date,
+    serviceDescription,
+    feeAmount,
+    vatRate,
+    totalAmount,
+    paymentConditions,
+    paymentMethod,
+    bankAccount,
+    beneficiaries,
+    phone,
+    email,
+    address,
+    currency,
   };
 
   const sections = getContractSections(currentData);

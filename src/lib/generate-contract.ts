@@ -14,12 +14,43 @@ import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 import logoImage from '@/assets/logo-cb-asesoria.png';
 
+export interface BeneficiaryData {
+  fullName: string;
+  documentType?: string;
+  documentNumber?: string;
+  serviceName?: string;
+  amount?: number;
+}
+
+export interface BankAccountData {
+  bankName?: string;
+  accountName?: string;
+  accountDetails?: string; // IBAN etc.
+}
+
 export interface ContractData {
   template: string;
   clientName: string;
+  documentType?: string;
   documentNumber: string;
   contractNumber: string;
   date?: Date;
+  // Financial fields
+  serviceDescription?: string;
+  feeAmount?: number;
+  vatRate?: number;
+  totalAmount?: number;
+  paymentConditions?: string;
+  paymentMethod?: string;
+  // Bank details (only for TRANSFERENCIA)
+  bankAccount?: BankAccountData;
+  // Beneficiaries
+  beneficiaries?: BeneficiaryData[];
+  // Contact fields
+  phone?: string;
+  email?: string;
+  address?: string;
+  currency?: string;
 }
 
 const MONTHS_ES = [
@@ -32,6 +63,10 @@ function formatDateSpanish(date: Date): string {
   const month = MONTHS_ES[date.getMonth()];
   const year = date.getFullYear();
   return `${day} de ${month} de ${year}`;
+}
+
+function formatCurrency(amount: number, currency: string = 'EUR'): string {
+  return new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format(amount);
 }
 
 function heading(text: string): Paragraph {
@@ -94,7 +129,8 @@ function contractHeader(contractNumber: string, dateStr: string): Paragraph[] {
   ];
 }
 
-function contractParties(clientName: string, documentNumber: string): Paragraph[] {
+function contractParties(clientName: string, documentType: string, documentNumber: string): Paragraph[] {
+  const docLabel = documentType ? documentType.toUpperCase() : 'PASAPORTE / NIE / DNI / NIF';
   return [
     heading('CONTRATO DE PRESTACIÓN DE SERVICIOS JURÍDICOS ENTRE:'),
     heading('PRESTADOR DEL SERVICIO'),
@@ -106,11 +142,71 @@ function contractParties(clientName: string, documentNumber: string): Paragraph[
     heading('Y:'),
     heading('CLIENTE:'),
     para(clientName.toUpperCase(), { bold: true }),
-    para(`DOCUMENTO (PASAPORTE / NIE / DNI / NIF): ${documentNumber}`),
+    para(`DOCUMENTO (${docLabel}): ${documentNumber}`),
     para('(en adelante, "EL CLIENTE")'),
     emptyLine(),
     heading('CLÁUSULAS'),
   ];
+}
+
+function buildHonorariosSection(data: ContractData): Paragraph[] {
+  const currency = data.currency || 'EUR';
+  const sections: Paragraph[] = [];
+  
+  sections.push(heading('SEGUNDA. Honorarios y Forma de Pago'));
+  sections.push(para('Honorarios profesionales:', { bold: true }));
+  
+  if (data.feeAmount && data.vatRate !== undefined) {
+    const vatPercent = Math.round(data.vatRate * 100);
+    sections.push(para(`${formatCurrency(data.feeAmount, currency)} + IVA (${vatPercent}%)`));
+  } else if (data.totalAmount) {
+    sections.push(para(`${formatCurrency(data.totalAmount, currency)} (IVA incluido)`));
+  } else {
+    sections.push(para('[Detallar honorarios y forma de pago]'));
+  }
+
+  if (data.totalAmount) {
+    sections.push(para(`Valor total: ${formatCurrency(data.totalAmount, currency)} (IVA incluido)`, { bold: true }));
+  }
+
+  if (data.paymentConditions) {
+    sections.push(emptyLine());
+    sections.push(para('Condiciones de pago:', { bold: true }));
+    sections.push(para(data.paymentConditions));
+  }
+
+  // Beneficiaries section (above bank details)
+  if (data.beneficiaries && data.beneficiaries.length > 0) {
+    sections.push(emptyLine());
+    sections.push(para('Beneficiarios incluidos en el presente contrato:', { bold: true }));
+    for (const ben of data.beneficiaries) {
+      const docInfo = ben.documentType && ben.documentNumber 
+        ? ` | ${ben.documentType}: ${ben.documentNumber}` 
+        : '';
+      const serviceInfo = ben.serviceName ? ` | Trámite: ${ben.serviceName}` : '';
+      const valueInfo = ben.amount ? ` | Valor: ${formatCurrency(ben.amount, currency)}` : '';
+      sections.push(bullet(`${ben.fullName}${docInfo}${serviceInfo}${valueInfo}`));
+    }
+  }
+
+  // Bank details (only for TRANSFERENCIA)
+  if (data.paymentMethod === 'TRANSFERENCIA' && data.bankAccount) {
+    sections.push(emptyLine());
+    sections.push(para('Datos bancarios para transferencia:', { bold: true }));
+    if (data.bankAccount.bankName) {
+      sections.push(para(`Banco: ${data.bankAccount.bankName}`));
+    }
+    if (data.bankAccount.accountName) {
+      sections.push(para(`Titular: ${data.bankAccount.accountName}`));
+    }
+    if (data.bankAccount.accountDetails) {
+      sections.push(para(`IBAN / Datos: ${data.bankAccount.accountDetails}`));
+    }
+  }
+
+  sections.push(emptyLine());
+  
+  return sections;
 }
 
 function commonClause_Tercera(): Paragraph[] {
@@ -235,13 +331,13 @@ function commonClause_Legislacion(): Paragraph[] {
   ];
 }
 
-function commonClause_Contacto(): Paragraph[] {
+function commonClause_Contacto(data: ContractData): Paragraph[] {
   return [
     para('En cumplimiento de la Ley del Consumidor, queda designado por el cliente que sus medios de contacto usuales y por los cuales puede y debe ser encontrados son:'),
     emptyLine(),
-    para('Teléfono: _______________________________________________'),
-    para('E-mail: _______________________________________________'),
-    para('Dirección: _______________________________________________'),
+    para(`Teléfono: ${data.phone || '_______________________________________________'}`),
+    para(`E-mail: ${data.email || '_______________________________________________'}`),
+    para(`Dirección: ${data.address || '_______________________________________________'}`),
     emptyLine(),
     para('EL CLIENTE se compromete a mantener actualizados estos datos para fines de comunicación contractual.'),
   ];
@@ -267,17 +363,14 @@ function signatureBlock(clientName: string): Paragraph[] {
 function buildRegularizacionExtraordinaria(data: ContractData, dateStr: string): Paragraph[] {
   return [
     ...contractHeader(data.contractNumber, dateStr),
-    ...contractParties(data.clientName, data.documentNumber),
+    ...contractParties(data.clientName, data.documentType || '', data.documentNumber),
 
     heading('PRIMERA. Objeto del Contrato'),
     para('El presente documento tiene por objeto reservar y anticipar la prestación de servicios profesionales relacionados con el futuro trámite de Regularización Excepcional Única, actualmente pendiente de aprobación legislativa y, por tanto, no disponible ni garantizado en la normativa vigente.'),
-    para('TRAMITACIÓN DE LA SOLICITUD DE REGULARIZACIÓN EXCEPCIONAL ÚNICA.', { bold: true }),
+    para(data.serviceDescription || 'TRAMITACIÓN DE LA SOLICITUD DE REGULARIZACIÓN EXCEPCIONAL ÚNICA.', { bold: true }),
     para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.'),
 
-    heading('SEGUNDA. Honorarios y Forma de Pago'),
-    para('Honorarios profesionales:', { bold: true }),
-    para('[Detallar honorarios y forma de pago]'),
-    emptyLine(),
+    ...buildHonorariosSection(data),
     para('2.1. Los honorarios no incluyen:', { bold: true }),
     bullet('Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.'),
     bullet('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
@@ -311,7 +404,7 @@ function buildRegularizacionExtraordinaria(data: ContractData, dateStr: string):
     ...commonClause_Legislacion(),
 
     heading('DECIMOCUARTA. Información de Contacto y Notificaciones'),
-    ...commonClause_Contacto(),
+    ...commonClause_Contacto(data),
 
     ...signatureBlock(data.clientName),
   ];
@@ -323,17 +416,14 @@ function buildRegularizacionExtraordinaria(data: ContractData, dateStr: string):
 function buildNacionalidad(data: ContractData, dateStr: string): Paragraph[] {
   return [
     ...contractHeader(data.contractNumber, dateStr),
-    ...contractParties(data.clientName, data.documentNumber),
+    ...contractParties(data.clientName, data.documentType || '', data.documentNumber),
 
     heading('PRIMERA. Objeto del Contrato'),
     para('El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA, consistentes en:'),
-    para('TRAMITACIÓN TELEMÁTICA DE LA SOLICITUD DE LA NACIONALIDAD ESPAÑOLA POR RESIDENCIA.', { bold: true }),
+    para(data.serviceDescription || 'TRAMITACIÓN TELEMÁTICA DE LA SOLICITUD DE LA NACIONALIDAD ESPAÑOLA POR RESIDENCIA.', { bold: true }),
     para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.'),
 
-    heading('SEGUNDA. Honorarios y Forma de Pago'),
-    para('Honorarios profesionales:', { bold: true }),
-    para('[Detallar honorarios y forma de pago]'),
-    emptyLine(),
+    ...buildHonorariosSection(data),
     para('2.1. Los honorarios no incluyen:', { bold: true }),
     bullet('Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.'),
     bullet('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
@@ -361,7 +451,7 @@ function buildNacionalidad(data: ContractData, dateStr: string): Paragraph[] {
     ...commonClause_Legislacion(),
 
     heading('DUODÉCIMA. Información de Contacto y Notificaciones'),
-    ...commonClause_Contacto(),
+    ...commonClause_Contacto(data),
 
     ...signatureBlock(data.clientName),
   ];
@@ -373,17 +463,14 @@ function buildNacionalidad(data: ContractData, dateStr: string): Paragraph[] {
 function buildDocumentos(data: ContractData, dateStr: string): Paragraph[] {
   return [
     ...contractHeader(data.contractNumber, dateStr),
-    ...contractParties(data.clientName, data.documentNumber),
+    ...contractParties(data.clientName, data.documentType || '', data.documentNumber),
 
     heading('PRIMERA. Objeto del Contrato'),
     para('El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA, consistentes en:'),
-    para('TRAMITACIÓN DE LA SOLICITUD DEL CERTIFICADO / DOCUMENTO SOLICITADO.', { bold: true }),
+    para(data.serviceDescription || 'TRAMITACIÓN DE LA SOLICITUD DEL CERTIFICADO / DOCUMENTO SOLICITADO.', { bold: true }),
     para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.'),
 
-    heading('SEGUNDA. Honorarios y Forma de Pago'),
-    para('Honorarios profesionales:', { bold: true }),
-    para('[Detallar honorarios y forma de pago]'),
-    emptyLine(),
+    ...buildHonorariosSection(data),
     para('2.1. Los honorarios no incluyen:', { bold: true }),
     bullet('Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.'),
     bullet('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
@@ -410,7 +497,7 @@ function buildDocumentos(data: ContractData, dateStr: string): Paragraph[] {
     ...commonClause_Legislacion(),
 
     heading('DUODÉCIMA. Información de Contacto y Notificaciones'),
-    ...commonClause_Contacto(),
+    ...commonClause_Contacto(data),
 
     ...signatureBlock(data.clientName),
   ];
@@ -433,7 +520,8 @@ function sectionsFromHeader(contractNumber: string, dateStr: string): ContractSe
   ];
 }
 
-function sectionsFromParties(clientName: string, documentNumber: string): ContractSection[] {
+function sectionsFromParties(clientName: string, documentType: string, documentNumber: string): ContractSection[] {
+  const docLabel = documentType ? documentType.toUpperCase() : 'PASAPORTE / NIE / DNI / NIF';
   return [
     { type: 'heading', text: 'CONTRATO DE PRESTACIÓN DE SERVICIOS JURÍDICOS ENTRE:' },
     { type: 'heading', text: 'PRESTADOR DEL SERVICIO' },
@@ -445,11 +533,70 @@ function sectionsFromParties(clientName: string, documentNumber: string): Contra
     { type: 'heading', text: 'Y:' },
     { type: 'heading', text: 'CLIENTE:' },
     { type: 'paragraph', text: clientName.toUpperCase(), bold: true },
-    { type: 'paragraph', text: `DOCUMENTO (PASAPORTE / NIE / DNI / NIF): ${documentNumber}` },
+    { type: 'paragraph', text: `DOCUMENTO (${docLabel}): ${documentNumber}` },
     { type: 'paragraph', text: '(en adelante, "EL CLIENTE")' },
     { type: 'empty', text: '' },
     { type: 'heading', text: 'CLÁUSULAS' },
   ];
+}
+
+function sectionsHonorarios(data: ContractData): ContractSection[] {
+  const currency = data.currency || 'EUR';
+  const sections: ContractSection[] = [];
+
+  sections.push({ type: 'heading', text: 'SEGUNDA. Honorarios y Forma de Pago' });
+  sections.push({ type: 'paragraph', text: 'Honorarios profesionales:', bold: true });
+
+  if (data.feeAmount && data.vatRate !== undefined) {
+    const vatPercent = Math.round(data.vatRate * 100);
+    sections.push({ type: 'paragraph', text: `${formatCurrency(data.feeAmount, currency)} + IVA (${vatPercent}%)` });
+  } else if (data.totalAmount) {
+    sections.push({ type: 'paragraph', text: `${formatCurrency(data.totalAmount, currency)} (IVA incluido)` });
+  } else {
+    sections.push({ type: 'paragraph', text: '[Detallar honorarios y forma de pago]' });
+  }
+
+  if (data.totalAmount) {
+    sections.push({ type: 'paragraph', text: `Valor total: ${formatCurrency(data.totalAmount, currency)} (IVA incluido)`, bold: true });
+  }
+
+  if (data.paymentConditions) {
+    sections.push({ type: 'empty', text: '' });
+    sections.push({ type: 'paragraph', text: 'Condiciones de pago:', bold: true });
+    sections.push({ type: 'paragraph', text: data.paymentConditions });
+  }
+
+  // Beneficiaries
+  if (data.beneficiaries && data.beneficiaries.length > 0) {
+    sections.push({ type: 'empty', text: '' });
+    sections.push({ type: 'paragraph', text: 'Beneficiarios incluidos en el presente contrato:', bold: true });
+    for (const ben of data.beneficiaries) {
+      const docInfo = ben.documentType && ben.documentNumber 
+        ? ` | ${ben.documentType}: ${ben.documentNumber}` 
+        : '';
+      const serviceInfo = ben.serviceName ? ` | Trámite: ${ben.serviceName}` : '';
+      const valueInfo = ben.amount ? ` | Valor: ${formatCurrency(ben.amount, currency)}` : '';
+      sections.push({ type: 'bullet', text: `${ben.fullName}${docInfo}${serviceInfo}${valueInfo}` });
+    }
+  }
+
+  // Bank details (only for TRANSFERENCIA)
+  if (data.paymentMethod === 'TRANSFERENCIA' && data.bankAccount) {
+    sections.push({ type: 'empty', text: '' });
+    sections.push({ type: 'paragraph', text: 'Datos bancarios para transferencia:', bold: true });
+    if (data.bankAccount.bankName) {
+      sections.push({ type: 'paragraph', text: `Banco: ${data.bankAccount.bankName}` });
+    }
+    if (data.bankAccount.accountName) {
+      sections.push({ type: 'paragraph', text: `Titular: ${data.bankAccount.accountName}` });
+    }
+    if (data.bankAccount.accountDetails) {
+      sections.push({ type: 'paragraph', text: `IBAN / Datos: ${data.bankAccount.accountDetails}` });
+    }
+  }
+
+  sections.push({ type: 'empty', text: '' });
+  return sections;
 }
 
 function sectionsTercera(): ContractSection[] {
@@ -574,13 +721,13 @@ function sectionsLegislacion(): ContractSection[] {
   ];
 }
 
-function sectionsContacto(): ContractSection[] {
+function sectionsContacto(data: ContractData): ContractSection[] {
   return [
     { type: 'paragraph', text: 'En cumplimiento de la Ley del Consumidor, queda designado por el cliente que sus medios de contacto usuales y por los cuales puede y debe ser encontrados son:' },
     { type: 'empty', text: '' },
-    { type: 'paragraph', text: 'Teléfono: _______________________________________________' },
-    { type: 'paragraph', text: 'E-mail: _______________________________________________' },
-    { type: 'paragraph', text: 'Dirección: _______________________________________________' },
+    { type: 'paragraph', text: `Teléfono: ${data.phone || '_______________________________________________'}` },
+    { type: 'paragraph', text: `E-mail: ${data.email || '_______________________________________________'}` },
+    { type: 'paragraph', text: `Dirección: ${data.address || '_______________________________________________'}` },
     { type: 'empty', text: '' },
     { type: 'paragraph', text: 'EL CLIENTE se compromete a mantener actualizados estos datos para fines de comunicación contractual.' },
   ];
@@ -605,7 +752,8 @@ export function getContractSections(data: ContractData): ContractSection[] {
   const dateStr = formatDateSpanish(date);
 
   const header = sectionsFromHeader(data.contractNumber, dateStr);
-  const parties = sectionsFromParties(data.clientName, data.documentNumber);
+  const parties = sectionsFromParties(data.clientName, data.documentType || '', data.documentNumber);
+  const honorarios = sectionsHonorarios(data);
   const common = [
     ...sectionsTercera(),
     ...sectionsCuarta(),
@@ -622,12 +770,9 @@ export function getContractSections(data: ContractData): ContractSection[] {
         ...header, ...parties,
         { type: 'heading', text: 'PRIMERA. Objeto del Contrato' },
         { type: 'paragraph', text: 'El presente documento tiene por objeto reservar y anticipar la prestación de servicios profesionales relacionados con el futuro trámite de Regularización Excepcional Única, actualmente pendiente de aprobación legislativa y, por tanto, no disponible ni garantizado en la normativa vigente.' },
-        { type: 'paragraph', text: 'TRAMITACIÓN DE LA SOLICITUD DE REGULARIZACIÓN EXCEPCIONAL ÚNICA.', bold: true },
+        { type: 'paragraph', text: data.serviceDescription || 'TRAMITACIÓN DE LA SOLICITUD DE REGULARIZACIÓN EXCEPCIONAL ÚNICA.', bold: true },
         { type: 'paragraph', text: 'Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.' },
-        { type: 'heading', text: 'SEGUNDA. Honorarios y Forma de Pago' },
-        { type: 'paragraph', text: 'Honorarios profesionales:', bold: true },
-        { type: 'paragraph', text: '[Detallar honorarios y forma de pago]' },
-        { type: 'empty', text: '' },
+        ...honorarios,
         { type: 'paragraph', text: '2.1. Los honorarios no incluyen:', bold: true },
         { type: 'bullet', text: 'Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.' },
         { type: 'bullet', text: 'Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).' },
@@ -649,7 +794,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         { type: 'heading', text: 'DECIMOTERCERA. Legislación Aplicable y Jurisdicción' },
         ...sectionsLegislacion(),
         { type: 'heading', text: 'DECIMOCUARTA. Información de Contacto y Notificaciones' },
-        ...sectionsContacto(),
+        ...sectionsContacto(data),
         ...sectionsSignature(data.clientName),
       ];
 
@@ -658,12 +803,9 @@ export function getContractSections(data: ContractData): ContractSection[] {
         ...header, ...parties,
         { type: 'heading', text: 'PRIMERA. Objeto del Contrato' },
         { type: 'paragraph', text: 'El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA, consistentes en:' },
-        { type: 'paragraph', text: 'TRAMITACIÓN TELEMÁTICA DE LA SOLICITUD DE LA NACIONALIDAD ESPAÑOLA POR RESIDENCIA.', bold: true },
+        { type: 'paragraph', text: data.serviceDescription || 'TRAMITACIÓN TELEMÁTICA DE LA SOLICITUD DE LA NACIONALIDAD ESPAÑOLA POR RESIDENCIA.', bold: true },
         { type: 'paragraph', text: 'Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.' },
-        { type: 'heading', text: 'SEGUNDA. Honorarios y Forma de Pago' },
-        { type: 'paragraph', text: 'Honorarios profesionales:', bold: true },
-        { type: 'paragraph', text: '[Detallar honorarios y forma de pago]' },
-        { type: 'empty', text: '' },
+        ...honorarios,
         { type: 'paragraph', text: '2.1. Los honorarios no incluyen:', bold: true },
         { type: 'bullet', text: 'Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.' },
         { type: 'bullet', text: 'Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).' },
@@ -681,7 +823,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         { type: 'heading', text: 'UNDÉCIMA. Legislación Aplicable y Jurisdicción' },
         ...sectionsLegislacion(),
         { type: 'heading', text: 'DUODÉCIMA. Información de Contacto y Notificaciones' },
-        ...sectionsContacto(),
+        ...sectionsContacto(data),
         ...sectionsSignature(data.clientName),
       ];
 
@@ -691,12 +833,9 @@ export function getContractSections(data: ContractData): ContractSection[] {
         ...header, ...parties,
         { type: 'heading', text: 'PRIMERA. Objeto del Contrato' },
         { type: 'paragraph', text: 'El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA, consistentes en:' },
-        { type: 'paragraph', text: 'TRAMITACIÓN DE LA SOLICITUD DEL CERTIFICADO / DOCUMENTO SOLICITADO.', bold: true },
+        { type: 'paragraph', text: data.serviceDescription || 'TRAMITACIÓN DE LA SOLICITUD DEL CERTIFICADO / DOCUMENTO SOLICITADO.', bold: true },
         { type: 'paragraph', text: 'Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.' },
-        { type: 'heading', text: 'SEGUNDA. Honorarios y Forma de Pago' },
-        { type: 'paragraph', text: 'Honorarios profesionales:', bold: true },
-        { type: 'paragraph', text: '[Detallar honorarios y forma de pago]' },
-        { type: 'empty', text: '' },
+        ...honorarios,
         { type: 'paragraph', text: '2.1. Los honorarios no incluyen:', bold: true },
         { type: 'bullet', text: 'Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.' },
         { type: 'bullet', text: 'Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).' },
@@ -713,7 +852,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         { type: 'heading', text: 'UNDÉCIMA. Legislación Aplicable y Jurisdicción' },
         ...sectionsLegislacion(),
         { type: 'heading', text: 'DUODÉCIMA. Información de Contacto y Notificaciones' },
-        ...sectionsContacto(),
+        ...sectionsContacto(data),
         ...sectionsSignature(data.clientName),
       ];
   }
