@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2, Pencil, ShieldAlert, X, Pause, CalendarClock, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2, Pencil, ShieldAlert, X, Pause, CalendarClock, RefreshCw, MapPin, FileText, Briefcase, GraduationCap, Heart, Flag } from 'lucide-react';
 import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, INTERACTION_CHANNEL_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -81,6 +81,16 @@ export default function LeadDetail() {
     full_name: '',
     phone: '',
     email: '',
+    nationality: '',
+    country_of_origin: '',
+    birth_date: '',
+    document_type: '',
+    document_number: '',
+    cpf: '',
+    address: '',
+    civil_status: '',
+    profession: '',
+    education_level: '',
   });
 
   // Sync edit form with lead data
@@ -90,6 +100,16 @@ export default function LeadDetail() {
         full_name: lead.contacts.full_name || '',
         phone: lead.contacts.phone?.toString() || '',
         email: lead.contacts.email || '',
+        nationality: (lead.contacts as any).nationality || '',
+        country_of_origin: (lead.contacts as any).country_of_origin || '',
+        birth_date: (lead.contacts as any).birth_date || '',
+        document_type: (lead.contacts as any).document_type || '',
+        document_number: (lead.contacts as any).document_number || '',
+        cpf: (lead.contacts as any).cpf || '',
+        address: (lead.contacts as any).address || '',
+        civil_status: (lead.contacts as any).civil_status || '',
+        profession: (lead.contacts as any).profession || '',
+        education_level: (lead.contacts as any).education_level || '',
       });
     }
   }, [lead?.contacts]);
@@ -102,6 +122,16 @@ export default function LeadDetail() {
       full_name: editForm.full_name.trim(),
       phone: editForm.phone ? parseInt(editForm.phone.replace(/\D/g, '')) : null,
       email: editForm.email.trim() || null,
+      nationality: editForm.nationality.trim() || null,
+      country_of_origin: editForm.country_of_origin.trim() || null,
+      birth_date: editForm.birth_date || null,
+      document_type: editForm.document_type.trim() || null,
+      document_number: editForm.document_number.trim() || null,
+      cpf: editForm.cpf.trim() || null,
+      address: editForm.address.trim() || null,
+      civil_status: editForm.civil_status.trim() || null,
+      profession: editForm.profession.trim() || null,
+      education_level: editForm.education_level.trim() || null,
     });
     
     // Invalidate lead query to refresh data
@@ -258,7 +288,7 @@ export default function LeadDetail() {
                 <DialogHeader>
                   <DialogTitle>Editar Dados do Cliente</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4 pt-4">
+                <div className="space-y-4 pt-4 max-h-[70vh] overflow-y-auto pr-2">
                   <div>
                     <Label htmlFor="edit-name">Nome *</Label>
                     <Input
@@ -268,25 +298,136 @@ export default function LeadDetail() {
                       placeholder="Nome completo"
                     />
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="edit-phone">Telefone</Label>
+                      <Input
+                        id="edit-phone"
+                        value={editForm.phone}
+                        onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                        placeholder="Ex: 5511999999999"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-email">E-mail</Label>
+                      <Input
+                        id="edit-email"
+                        type="email"
+                        value={editForm.email}
+                        onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                        placeholder="email@exemplo.com"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="border-t pt-4 mt-2">
+                    <p className="text-sm font-medium text-muted-foreground mb-3">Dados Adicionais</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="edit-nationality">Nacionalidade</Label>
+                      <Input
+                        id="edit-nationality"
+                        value={editForm.nationality}
+                        onChange={(e) => setEditForm({ ...editForm, nationality: e.target.value })}
+                        placeholder="Ex: Brasileira"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-country">País de Origem</Label>
+                      <Input
+                        id="edit-country"
+                        value={editForm.country_of_origin}
+                        onChange={(e) => setEditForm({ ...editForm, country_of_origin: e.target.value })}
+                        placeholder="Ex: Brasil"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="edit-birth-date">Data de Nascimento</Label>
+                      <Input
+                        id="edit-birth-date"
+                        type="date"
+                        value={editForm.birth_date}
+                        onChange={(e) => setEditForm({ ...editForm, birth_date: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-cpf">CPF</Label>
+                      <Input
+                        id="edit-cpf"
+                        value={editForm.cpf}
+                        onChange={(e) => setEditForm({ ...editForm, cpf: e.target.value })}
+                        placeholder="000.000.000-00"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="edit-doc-type">Tipo de Documento</Label>
+                      <Input
+                        id="edit-doc-type"
+                        value={editForm.document_type}
+                        onChange={(e) => setEditForm({ ...editForm, document_type: e.target.value })}
+                        placeholder="Ex: Passaporte"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-doc-number">Nº Documento</Label>
+                      <Input
+                        id="edit-doc-number"
+                        value={editForm.document_number}
+                        onChange={(e) => setEditForm({ ...editForm, document_number: e.target.value })}
+                        placeholder="Número do documento"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <Label htmlFor="edit-phone">Telefone</Label>
+                    <Label htmlFor="edit-address">Endereço</Label>
                     <Input
-                      id="edit-phone"
-                      value={editForm.phone}
-                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                      placeholder="Ex: 5511999999999"
+                      id="edit-address"
+                      value={editForm.address}
+                      onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                      placeholder="Endereço completo"
                     />
                   </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="edit-civil-status">Estado Civil</Label>
+                      <Input
+                        id="edit-civil-status"
+                        value={editForm.civil_status}
+                        onChange={(e) => setEditForm({ ...editForm, civil_status: e.target.value })}
+                        placeholder="Ex: Solteiro(a)"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-profession">Profissão</Label>
+                      <Input
+                        id="edit-profession"
+                        value={editForm.profession}
+                        onChange={(e) => setEditForm({ ...editForm, profession: e.target.value })}
+                        placeholder="Profissão"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <Label htmlFor="edit-email">E-mail</Label>
+                    <Label htmlFor="edit-education">Escolaridade</Label>
                     <Input
-                      id="edit-email"
-                      type="email"
-                      value={editForm.email}
-                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                      placeholder="email@exemplo.com"
+                      id="edit-education"
+                      value={editForm.education_level}
+                      onChange={(e) => setEditForm({ ...editForm, education_level: e.target.value })}
+                      placeholder="Ex: Ensino Superior"
                     />
                   </div>
+
                   <div className="flex justify-end gap-2 pt-4">
                     <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                       Cancelar
@@ -343,6 +484,97 @@ export default function LeadDetail() {
                 <div>
                   <p className="text-sm text-muted-foreground">Nome do Colaborador</p>
                   <p className="font-medium">{lead.contacts?.referral_name || 'Não informado'}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Additional contact fields - shown when filled */}
+            {(lead.contacts as any)?.nationality && (
+              <div className="flex items-center gap-3">
+                <Flag className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Nacionalidade</p>
+                  <p className="font-medium">{(lead.contacts as any).nationality}</p>
+                </div>
+              </div>
+            )}
+
+            {(lead.contacts as any)?.country_of_origin && (
+              <div className="flex items-center gap-3">
+                <Globe className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">País de Origem</p>
+                  <p className="font-medium">{(lead.contacts as any).country_of_origin}</p>
+                </div>
+              </div>
+            )}
+
+            {(lead.contacts as any)?.birth_date && (
+              <div className="flex items-center gap-3">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Data de Nascimento</p>
+                  <p className="font-medium">{format(new Date((lead.contacts as any).birth_date + 'T00:00:00'), 'dd/MM/yyyy')}</p>
+                </div>
+              </div>
+            )}
+
+            {(lead.contacts as any)?.cpf && (
+              <div className="flex items-center gap-3">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">CPF</p>
+                  <p className="font-medium">{(lead.contacts as any).cpf}</p>
+                </div>
+              </div>
+            )}
+
+            {(lead.contacts as any)?.document_type && (
+              <div className="flex items-center gap-3">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">{(lead.contacts as any).document_type}</p>
+                  <p className="font-medium">{(lead.contacts as any).document_number || '-'}</p>
+                </div>
+              </div>
+            )}
+
+            {(lead.contacts as any)?.address && (
+              <div className="flex items-center gap-3">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Endereço</p>
+                  <p className="font-medium">{(lead.contacts as any).address}</p>
+                </div>
+              </div>
+            )}
+
+            {(lead.contacts as any)?.civil_status && (
+              <div className="flex items-center gap-3">
+                <Heart className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Estado Civil</p>
+                  <p className="font-medium">{(lead.contacts as any).civil_status}</p>
+                </div>
+              </div>
+            )}
+
+            {(lead.contacts as any)?.profession && (
+              <div className="flex items-center gap-3">
+                <Briefcase className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Profissão</p>
+                  <p className="font-medium">{(lead.contacts as any).profession}</p>
+                </div>
+              </div>
+            )}
+
+            {(lead.contacts as any)?.education_level && (
+              <div className="flex items-center gap-3">
+                <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Escolaridade</p>
+                  <p className="font-medium">{(lead.contacts as any).education_level}</p>
                 </div>
               </div>
             )}
