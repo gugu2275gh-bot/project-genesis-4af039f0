@@ -87,8 +87,35 @@ export default function ContactDetail() {
   const [showNewServiceDialog, setShowNewServiceDialog] = useState(false);
   const [newServiceInterest, setNewServiceInterest] = useState<string>('OUTRO');
   const [newServiceNotes, setNewServiceNotes] = useState('');
+  const [paymentNotes, setPaymentNotes] = useState<string | null>(null);
+  const [isSavingPaymentNotes, setIsSavingPaymentNotes] = useState(false);
 
   const contactLeads = leads.filter(l => l.contact_id === id);
+
+  // Initialize paymentNotes from contact
+  useState(() => {
+    if (contact) setPaymentNotes((contact as any).payment_notes || '');
+  });
+  
+  // Keep paymentNotes in sync when contact loads
+  const prevContactRef = useState<string | null>(null);
+  if (contact && prevContactRef[0] !== contact.id) {
+    prevContactRef[0] = contact.id;
+    setPaymentNotes((contact as any).payment_notes || '');
+  }
+
+  const handleSavePaymentNotes = async () => {
+    if (!id) return;
+    setIsSavingPaymentNotes(true);
+    try {
+      await updateContact.mutateAsync({ id, payment_notes: paymentNotes } as any);
+      toast({ title: 'Acordo de pagamento salvo' });
+    } catch (error: any) {
+      toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSavingPaymentNotes(false);
+    }
+  };
 
   // Leads que têm pelo menos um pagamento confirmado = serviços
   const { data: confirmedLeadIds = [] } = useQuery({
@@ -785,21 +812,6 @@ export default function ContactDetail() {
         </>
       )}
       
-      <Separator className="my-4" />
-      <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
-        <DollarSign className="h-4 w-4" />
-        Acordo de Pagamento
-      </h4>
-      <div>
-        <Label>Notas de Pagamento (Atenção ao Cliente)</Label>
-        <Textarea
-          value={(editedContact as any).payment_notes || ''}
-          onChange={(e) => setEditedContact({ ...editedContact, payment_notes: e.target.value } as any)}
-          placeholder="Descreva o que foi combinado com o cliente sobre pagamento..."
-          rows={4}
-        />
-      </div>
-
       <div className="flex justify-end gap-2 pt-4">
         <Button variant="outline" onClick={() => setIsEditing(false)}>
           Cancelar
@@ -1106,20 +1118,6 @@ export default function ContactDetail() {
         </div>
       </div>
 
-      {/* Acordo de Pagamento */}
-      {c.payment_notes && (
-        <>
-          <Separator className="sm:col-span-2" />
-          <div className="flex items-start gap-3 sm:col-span-2">
-            <DollarSign className="h-5 w-5 text-muted-foreground mt-0.5" />
-            <div>
-              <p className="text-sm text-muted-foreground">Acordo de Pagamento</p>
-              <p className="font-medium whitespace-pre-wrap">{c.payment_notes}</p>
-            </div>
-          </div>
-        </>
-      )}
-
       {/* Representante Legal */}
       {isMinor && c.legal_guardian_name && (
         <>
@@ -1202,6 +1200,39 @@ export default function ContactDetail() {
             </CardHeader>
             <CardContent>
               {isEditing ? renderEditForm() : renderViewFields()}
+            </CardContent>
+          </Card>
+
+          {/* Acordo de Pagamento - sempre visível e editável */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Acordo de Pagamento
+              </CardTitle>
+              <CardDescription>O que foi combinado com o cliente sobre pagamento</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Textarea
+                value={paymentNotes || ''}
+                onChange={(e) => setPaymentNotes(e.target.value)}
+                placeholder="Descreva o que foi combinado com o cliente sobre pagamento..."
+                rows={4}
+              />
+              <div className="flex justify-end">
+                <Button 
+                  size="sm" 
+                  onClick={handleSavePaymentNotes} 
+                  disabled={isSavingPaymentNotes || paymentNotes === ((contact as any)?.payment_notes || '')}
+                >
+                  {isSavingPaymentNotes ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-2" />
+                  )}
+                  Salvar
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
