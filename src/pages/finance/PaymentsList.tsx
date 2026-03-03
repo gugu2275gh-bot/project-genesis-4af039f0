@@ -84,7 +84,7 @@ export default function PaymentsList() {
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
 
   const availableOpportunities = opportunities.filter(o => 
-    o.status === 'CONTRATO_ASSINADO' || o.status === 'PAGAMENTO_PENDENTE'
+    o.status === 'CONTRATO_ASSINADO' || o.status === 'PAGAMENTO_PENDENTE' || o.status === 'FECHADA_GANHA'
   );
 
   const filteredPayments = payments.filter(p => {
