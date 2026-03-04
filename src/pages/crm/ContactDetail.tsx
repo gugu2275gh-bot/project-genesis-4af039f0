@@ -8,7 +8,7 @@ import { useContactDocuments } from '@/hooks/useContactDocuments';
 import { useContactBeneficiaries } from '@/hooks/useContactBeneficiaries';
 import { useInteractions } from '@/hooks/useInteractions';
 import { supabase } from '@/integrations/supabase/client';
-import { SERVICE_INTEREST_LABELS as SVC_LABELS_DOC, DOCUMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, INTERACTION_CHANNEL_LABELS } from '@/types/database';
+import { SERVICE_INTEREST_LABELS as SVC_LABELS_DOC, DOCUMENT_STATUS_LABELS, PAYMENT_STATUS_LABELS, INTERACTION_CHANNEL_LABELS, CONTRACT_STATUS_LABELS } from '@/types/database';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -184,7 +184,26 @@ export default function ContactDetail() {
     enabled: !!id,
   });
 
-  // Fetch service cases linked to this beneficiary via contract_beneficiaries
+  // Fetch contracts related to this contact (via leads → opportunities → contracts)
+  const { data: contactContracts = [], isLoading: contractsLoading } = useQuery({
+    queryKey: ['contact-contracts', id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data: cLeads } = await supabase.from('leads').select('id').eq('contact_id', id);
+      if (!cLeads?.length) return [];
+      const { data: opps } = await supabase.from('opportunities').select('id').in('lead_id', cLeads.map(l => l.id));
+      if (!opps?.length) return [];
+      const { data: contracts, error } = await supabase
+        .from('contracts')
+        .select('id, contract_number, service_type, status, total_fee, created_at, signed_at')
+        .in('opportunity_id', opps.map(o => o.id))
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return contracts || [];
+    },
+    enabled: !!id,
+  });
+
   const { data: beneficiaryServiceCases = [], isLoading: benefCasesLoading } = useQuery({
     queryKey: ['beneficiary-service-cases', id, contact?.is_beneficiary],
     queryFn: async () => {
@@ -1418,6 +1437,61 @@ export default function ContactDetail() {
                       <StatusBadge
                         status={payment.status || 'PENDENTE'}
                         label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Contracts */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Contratos ({contactContracts.length})
+              </CardTitle>
+              <CardDescription>Contratos vinculados a este cliente</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {contractsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2].map(i => <Skeleton key={i} className="h-16" />)}
+                </div>
+              ) : contactContracts.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">
+                  Nenhum contrato vinculado a este cliente.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {contactContracts.map((contract: any) => (
+                    <div
+                      key={contract.id}
+                      className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => navigate(`/contracts/${contract.id}`)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium">
+                            {contract.contract_number ? `Contrato #${contract.contract_number}` : 'Sem número'}
+                          </p>
+                          {contract.total_fee && (
+                            <Badge variant="outline" className="text-xs">
+                              € {Number(contract.total_fee).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+                          <span>{SVC_LABELS_DOC[contract.service_type as keyof typeof SVC_LABELS_DOC] || contract.service_type}</span>
+                          {contract.created_at && (
+                            <span>{format(new Date(contract.created_at), "dd/MM/yyyy", { locale: ptBR })}</span>
+                          )}
+                        </div>
+                      </div>
+                      <StatusBadge
+                        status={contract.status || 'EM_ELABORACAO'}
+                        label={CONTRACT_STATUS_LABELS[contract.status as keyof typeof CONTRACT_STATUS_LABELS] || contract.status}
                       />
                     </div>
                   ))}
