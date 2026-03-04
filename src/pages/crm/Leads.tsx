@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLeads } from '@/hooks/useLeads';
 import { useContacts } from '@/hooks/useContacts';
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Eye } from 'lucide-react';
+import { Plus, Search, Eye, UserPlus, Users } from 'lucide-react';
 import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format } from 'date-fns';
@@ -19,11 +19,14 @@ import { ptBR } from 'date-fns/locale';
 export default function Leads() {
   const navigate = useNavigate();
   const { leads, isLoading, createLead } = useLeads();
-  const { createContact } = useContacts();
-  useLeadSLAAlerts(); // Monitor leads waiting > 2h
+  const { contacts, createContact } = useContacts();
+  useLeadSLAAlerts();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [leadMode, setLeadMode] = useState<'new' | 'existing'>('new');
+  const [selectedContactId, setSelectedContactId] = useState<string>('');
+  const [contactSearch, setContactSearch] = useState('');
   const [newLead, setNewLead] = useState({
     full_name: '',
     email: '',
@@ -33,6 +36,16 @@ export default function Leads() {
     origin_channel: 'WHATSAPP' as OriginChannel,
     referral_name: '',
   });
+
+  const filteredContacts = useMemo(() => {
+    if (!contactSearch) return contacts?.slice(0, 20) || [];
+    const lower = contactSearch.toLowerCase();
+    return (contacts || []).filter(c =>
+      c.full_name.toLowerCase().includes(lower) ||
+      c.email?.toLowerCase().includes(lower) ||
+      c.phone?.toString().includes(contactSearch)
+    ).slice(0, 20);
+  }, [contacts, contactSearch]);
 
   const filteredLeads = leads.filter(l => {
     const matchesSearch = 
@@ -44,32 +57,41 @@ export default function Leads() {
   });
 
   const handleCreate = async () => {
-    if (!newLead.full_name) return;
-    
-    // Convert phone string to number
-    const phoneNumber = newLead.phone ? parseInt(newLead.phone.replace(/\D/g, ''), 10) : undefined;
-    
-    // First create contact
-    const contact = await createContact.mutateAsync({
-      full_name: newLead.full_name,
-      email: newLead.email || undefined,
-      phone: phoneNumber,
-      origin_channel: newLead.origin_channel,
-      referral_name: newLead.origin_channel === 'COLABORADOR' ? newLead.referral_name : undefined,
-      preferred_language: 'pt',
-    });
-
-    // Then create lead
-    await createLead.mutateAsync({
-      contact_id: contact.id,
-      service_interest: newLead.service_interest,
-      status: 'NOVO',
-      notes: newLead.service_interest === 'OUTRO' && newLead.service_interest_other
-        ? `Serviço: ${newLead.service_interest_other}`
-        : undefined,
-    });
+    if (leadMode === 'existing') {
+      if (!selectedContactId) return;
+      await createLead.mutateAsync({
+        contact_id: selectedContactId,
+        service_interest: newLead.service_interest,
+        status: 'NOVO',
+        notes: newLead.service_interest === 'OUTRO' && newLead.service_interest_other
+          ? `Serviço: ${newLead.service_interest_other}`
+          : undefined,
+      });
+    } else {
+      if (!newLead.full_name) return;
+      const phoneNumber = newLead.phone ? parseInt(newLead.phone.replace(/\D/g, ''), 10) : undefined;
+      const contact = await createContact.mutateAsync({
+        full_name: newLead.full_name,
+        email: newLead.email || undefined,
+        phone: phoneNumber,
+        origin_channel: newLead.origin_channel,
+        referral_name: newLead.origin_channel === 'COLABORADOR' ? newLead.referral_name : undefined,
+        preferred_language: 'pt',
+      });
+      await createLead.mutateAsync({
+        contact_id: contact.id,
+        service_interest: newLead.service_interest,
+        status: 'NOVO',
+        notes: newLead.service_interest === 'OUTRO' && newLead.service_interest_other
+          ? `Serviço: ${newLead.service_interest_other}`
+          : undefined,
+      });
+    }
 
     setIsDialogOpen(false);
+    setLeadMode('new');
+    setSelectedContactId('');
+    setContactSearch('');
     setNewLead({
       full_name: '',
       email: '',
@@ -157,32 +179,117 @@ export default function Leads() {
                 <DialogTitle>Novo Lead</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                <div>
-                  <Label>Nome Completo *</Label>
-                  <Input
-                    value={newLead.full_name}
-                    onChange={(e) => setNewLead({ ...newLead, full_name: e.target.value })}
-                    placeholder="Nome do cliente"
-                  />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={leadMode === 'new' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setLeadMode('new')}
+                  >
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Novo Contato
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={leadMode === 'existing' ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => setLeadMode('existing')}
+                  >
+                    <Users className="h-4 w-4 mr-2" />
+                    Contato Existente
+                  </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Telefone</Label>
-                    <Input
-                      value={newLead.phone}
-                      onChange={(e) => setNewLead({ ...newLead, phone: e.target.value })}
-                      placeholder="+55 11 99999-9999"
-                    />
+
+                {leadMode === 'existing' ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Ideal para clientes com contrato cancelado que desejam iniciar um novo serviço.
+                    </p>
+                    <div>
+                      <Label>Buscar Contato</Label>
+                      <Input
+                        value={contactSearch}
+                        onChange={(e) => setContactSearch(e.target.value)}
+                        placeholder="Nome, e-mail ou telefone..."
+                      />
+                    </div>
+                    <div className="max-h-48 overflow-y-auto border rounded-md">
+                      {filteredContacts.length === 0 ? (
+                        <p className="text-sm text-muted-foreground p-3 text-center">Nenhum contato encontrado</p>
+                      ) : (
+                        filteredContacts.map(contact => (
+                          <div
+                            key={contact.id}
+                            className={`p-3 cursor-pointer border-b last:border-b-0 hover:bg-accent transition-colors ${selectedContactId === contact.id ? 'bg-accent' : ''}`}
+                            onClick={() => setSelectedContactId(contact.id)}
+                          >
+                            <div className="font-medium text-sm">{contact.full_name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {contact.email && <span>{contact.email}</span>}
+                              {contact.phone && <span> · {contact.phone}</span>}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <Label>E-mail</Label>
-                    <Input
-                      value={newLead.email}
-                      onChange={(e) => setNewLead({ ...newLead, email: e.target.value })}
-                      placeholder="email@exemplo.com"
-                    />
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div>
+                      <Label>Nome Completo *</Label>
+                      <Input
+                        value={newLead.full_name}
+                        onChange={(e) => setNewLead({ ...newLead, full_name: e.target.value })}
+                        placeholder="Nome do cliente"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Telefone</Label>
+                        <Input
+                          value={newLead.phone}
+                          onChange={(e) => setNewLead({ ...newLead, phone: e.target.value })}
+                          placeholder="+55 11 99999-9999"
+                        />
+                      </div>
+                      <div>
+                        <Label>E-mail</Label>
+                        <Input
+                          value={newLead.email}
+                          onChange={(e) => setNewLead({ ...newLead, email: e.target.value })}
+                          placeholder="email@exemplo.com"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Canal de Origem</Label>
+                      <Select
+                        value={newLead.origin_channel}
+                        onValueChange={(v: OriginChannel) => setNewLead({ ...newLead, origin_channel: v, referral_name: '' })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(ORIGIN_CHANNEL_LABELS).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {newLead.origin_channel === 'COLABORADOR' && (
+                      <div>
+                        <Label>Nome do Colaborador</Label>
+                        <Input
+                          value={newLead.referral_name}
+                          onChange={(e) => setNewLead({ ...newLead, referral_name: e.target.value })}
+                          placeholder="Nome do colaborador que indicou"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+
                 <div>
                   <Label>Serviço de Interesse</Label>
                   <Select
@@ -209,37 +316,14 @@ export default function Leads() {
                     />
                   </div>
                 )}
-                <div>
-                  <Label>Canal de Origem</Label>
-                  <Select
-                    value={newLead.origin_channel}
-                    onValueChange={(v: OriginChannel) => setNewLead({ ...newLead, origin_channel: v, referral_name: '' })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(ORIGIN_CHANNEL_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {newLead.origin_channel === 'COLABORADOR' && (
-                  <div>
-                    <Label>Nome do Colaborador</Label>
-                    <Input
-                      value={newLead.referral_name}
-                      onChange={(e) => setNewLead({ ...newLead, referral_name: e.target.value })}
-                      placeholder="Nome do colaborador que indicou"
-                    />
-                  </div>
-                )}
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancelar
                   </Button>
-                  <Button onClick={handleCreate} disabled={createLead.isPending}>
+                  <Button 
+                    onClick={handleCreate} 
+                    disabled={createLead.isPending || (leadMode === 'new' && !newLead.full_name) || (leadMode === 'existing' && !selectedContactId)}
+                  >
                     {createLead.isPending ? 'Criando...' : 'Criar Lead'}
                   </Button>
                 </div>
