@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLeads } from '@/hooks/useLeads';
 import { useContacts } from '@/hooks/useContacts';
 import { useLeadSLAAlerts } from '@/hooks/useLeadSLAAlerts';
+import { useServiceTypes } from '@/hooks/useServiceTypes';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Search, Eye, UserPlus, Users } from 'lucide-react';
-import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
+import { LEAD_STATUS_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -20,7 +21,14 @@ export default function Leads() {
   const navigate = useNavigate();
   const { leads, isLoading, createLead } = useLeads();
   const { contacts, createContact } = useContacts();
+  const { data: serviceTypes } = useServiceTypes();
   useLeadSLAAlerts();
+
+  const serviceTypeMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    serviceTypes?.forEach(st => { map[st.code] = st.name; });
+    return map;
+  }, [serviceTypes]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -117,7 +125,7 @@ export default function Leads() {
     {
       key: 'service_interest',
       header: 'Serviço',
-      cell: (lead) => SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO'],
+      cell: (lead) => serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro',
     },
     {
       key: 'status',
@@ -297,11 +305,11 @@ export default function Leads() {
                     onValueChange={(v: any) => setNewLead({ ...newLead, service_interest: v })}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Selecione o serviço" />
                     </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(SERVICE_INTEREST_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                    <SelectContent className="max-h-[300px]">
+                      {serviceTypes?.map((st) => (
+                        <SelectItem key={st.code} value={st.code}>{st.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

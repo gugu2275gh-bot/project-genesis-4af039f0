@@ -17,11 +17,12 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2, Pencil, ShieldAlert, X, Pause, CalendarClock, RefreshCw, MapPin, FileText, Briefcase, GraduationCap, Heart, Flag, DollarSign } from 'lucide-react';
-import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, INTERACTION_CHANNEL_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
+import { LEAD_STATUS_LABELS, INTERACTION_CHANNEL_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
+import { useServiceTypes } from '@/hooks/useServiceTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LeadChat } from '@/components/crm/LeadChat';
 import { PaymentAgreementDialog } from '@/components/crm/PaymentAgreementDialog';
@@ -68,8 +69,15 @@ export default function LeadDetail() {
   const { updateContact } = useContacts();
   const { interactions, createInteraction, updateInteraction, deleteInteraction, isEditable } = useInteractions(lead?.contact_id, id);
   const { data: profiles } = useProfiles();
+  const { data: serviceTypes } = useServiceTypes();
   const { hasAnyRole, user } = useAuth();
   const canReassign = hasAnyRole(['ADMIN', 'MANAGER', 'SUPERVISOR']);
+
+  const serviceTypeMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    serviceTypes?.forEach(st => { map[st.code] = st.name; });
+    return map;
+  }, [serviceTypes]);
   
   const [newNote, setNewNote] = useState('');
   const [interactionChannel, setInteractionChannel] = useState<string>('WHATSAPP');
@@ -447,9 +455,9 @@ export default function LeadDetail() {
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione o serviço" />
                       </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(SERVICE_INTEREST_LABELS).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                      <SelectContent className="max-h-[300px]">
+                        {serviceTypes?.map((st) => (
+                          <SelectItem key={st.code} value={st.code}>{st.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -610,7 +618,7 @@ export default function LeadDetail() {
               <p className="text-sm text-muted-foreground mb-2">Serviço de Interesse</p>
               <StatusBadge 
                 status={lead.service_interest || 'OUTRO'} 
-                label={SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO']} 
+                label={serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro'} 
               />
             </div>
 
