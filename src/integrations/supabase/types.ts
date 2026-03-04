@@ -1167,6 +1167,7 @@ export type Database = {
           service_interest:
             | Database["public"]["Enums"]["service_interest"]
             | null
+          service_type_id: string | null
           status: Database["public"]["Enums"]["lead_status"] | null
           updated_at: string | null
           updated_by_user_id: string | null
@@ -1184,6 +1185,7 @@ export type Database = {
           service_interest?:
             | Database["public"]["Enums"]["service_interest"]
             | null
+          service_type_id?: string | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           updated_at?: string | null
           updated_by_user_id?: string | null
@@ -1201,6 +1203,7 @@ export type Database = {
           service_interest?:
             | Database["public"]["Enums"]["service_interest"]
             | null
+          service_type_id?: string | null
           status?: Database["public"]["Enums"]["lead_status"] | null
           updated_at?: string | null
           updated_by_user_id?: string | null
@@ -1211,6 +1214,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_service_type_id_fkey"
+            columns: ["service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
             referencedColumns: ["id"]
           },
         ]
