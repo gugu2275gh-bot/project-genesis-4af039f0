@@ -92,6 +92,7 @@ export default function LeadDetail() {
     civil_status: '',
     profession: '',
     education_level: '',
+    service_interest: '',
   });
 
   // Sync edit form with lead data
@@ -111,6 +112,7 @@ export default function LeadDetail() {
         civil_status: (lead.contacts as any).civil_status || '',
         profession: (lead.contacts as any).profession || '',
         education_level: (lead.contacts as any).education_level || '',
+        service_interest: lead.service_interest || '',
       });
     }
   }, [lead?.contacts]);
@@ -134,6 +136,11 @@ export default function LeadDetail() {
       profession: editForm.profession.trim() || null,
       education_level: editForm.education_level.trim() || null,
     });
+
+    // Update service_interest on the lead if changed
+    if (editForm.service_interest && editForm.service_interest !== lead.service_interest) {
+      await updateLead.mutateAsync({ id: lead.id, service_interest: editForm.service_interest as any });
+    }
     
     // Invalidate lead query to refresh data
     queryClient.invalidateQueries({ queryKey: ['leads', id] });
@@ -427,6 +434,23 @@ export default function LeadDetail() {
                       onChange={(e) => setEditForm({ ...editForm, education_level: e.target.value })}
                       placeholder="Ex: Ensino Superior"
                     />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="edit-service-interest">Serviço de Interesse</Label>
+                    <Select 
+                      value={editForm.service_interest} 
+                      onValueChange={(value) => setEditForm({ ...editForm, service_interest: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o serviço" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(SERVICE_INTEREST_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="flex justify-end gap-2 pt-4">
