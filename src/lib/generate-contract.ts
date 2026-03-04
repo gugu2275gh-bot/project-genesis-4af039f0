@@ -325,6 +325,39 @@ function commonClause_Devolucion(): Paragraph[] {
   ];
 }
 
+function commonClause_DevolucionDocumentos(): Paragraph[] {
+  return [
+    para('10.1. Iniciación del Servicio:', { bold: true }),
+    para('Se entenderá como iniciado el servicio una vez que el asesor responsable por el trámite haya establecido contacto directo con EL CLIENTE a través de medios electrónicos, telefónicos o presenciales. A partir de ese momento, no será posible la devolución total o parcial del importe abonado. Si el procedimiento aún no se ha completado o si se paraliza por causas externas, el cliente tendrá 12 meses para hacer uso del servicio contratado.'),
+    emptyLine(),
+    para('10.2. Ausencia de Devoluciones por Servicios de Terceros:', { bold: true }),
+    para('No se aceptarán devoluciones por conceptos ya ejecutados o pagados a terceros, entre ellos:'),
+    bullet('Tasas de órganos públicos.'),
+    bullet('Traducciones juradas, apostillas, legalizaciones, o cualquier otro servicio de gestoría, notaría o certificación externa.'),
+    bullet('Matrículas o inscripciones en cursos o exámenes.'),
+    bullet('Honorarios de terceros profesionales (procuradores, traductores, peritos, etc.).'),
+    emptyLine(),
+    para('10.3. Exclusiones de la Prestación del Servicio:', { bold: true }),
+    para('El servicio contratado no incluye:'),
+    bullet('La interposición de recursos administrativos o contencioso, salvo pacto expreso por escrito y pago adicional.'),
+    bullet('La búsqueda, solicitud o tramitación de documentos personales en nombre del CLIENTE (por ejemplo: certificados de nacimiento, antecedentes penales, certificado de seguridad social, empadronamientos, etc.).'),
+    bullet('Es responsabilidad exclusiva del CLIENTE proporcionar la documentación necesaria en los plazos indicados.'),
+    emptyLine(),
+    para('10.4. Motivos Justificables de Devolución:', { bold: true }),
+    para('Únicamente se aceptarán devoluciones si concurre alguna de las siguientes circunstancias:'),
+    bullet('a) Cambio de legislación que genere imposibilidad legal sobrevenida no imputable al CLIENTE.'),
+    bullet('b) Incumplimiento grave, acreditado y documentado, por parte de CB ASESORÍA.'),
+    para('Aún que concurra alguna de las circunstancias supra mencionadas solo se aceptará y procederá con una solicitud de cancelación una vez agotadas todas las instancias y recursos judiciales o administrativos que pudieran corresponder al CLIENTE en relación con el servicio prestado. Es decir, la devolución procederá únicamente cuando se haya hecho uso de todos los medios legales disponibles.'),
+    emptyLine(),
+    para('10.5. Procedimiento de Solicitud de Reembolso:', { bold: true }),
+    para('Toda solicitud de reembolso deberá realizarse por escrito, de forma motivada, acompañada de documentación justificativa, y remitida por correo electrónico o entregada físicamente en el domicilio de CB ASESORÍA.'),
+    para('El plazo máximo para la resolución de la solicitud será de 15 días hábiles a partir de su recepción. En caso de resolución favorable, el reembolso se realizará por transferencia bancaria o en efectivo.'),
+    emptyLine(),
+    para('10.6. Renuncia del Cliente:', { bold: true }),
+    para('Con la firma del presente contrato, EL CLIENTE renuncia expresamente a reclamar la devolución del importe abonado una vez iniciado el servicio o una vez ejecutado algún pago a terceros por parte del PRESTADOR en nombre del CLIENTE.'),
+  ];
+}
+
 function commonClause_Legislacion(): Paragraph[] {
   return [
     para('Este contrato se rige por la legislación española. Ambas partes se someten expresamente a los Juzgados y Tribunales de Barcelona, con renuncia a cualquier otro fuero que pudiera corresponderles.'),
@@ -461,6 +494,14 @@ function buildNacionalidad(data: ContractData, dateStr: string): Paragraph[] {
 // TEMPLATE: DOCUMENTOS
 // =====================================================
 function buildDocumentos(data: ContractData, dateStr: string): Paragraph[] {
+  const bankSection: Paragraph[] = [];
+  if (data.bankAccount) {
+    bankSection.push(heading('DATOS PARA PAGO:'));
+    if (data.bankAccount.bankName) bankSection.push(para(`Banco ${data.bankAccount.bankName}`));
+    if (data.bankAccount.accountName) bankSection.push(para(data.bankAccount.accountName));
+    if (data.bankAccount.accountDetails) bankSection.push(para(`IBAN: ${data.bankAccount.accountDetails}`));
+  }
+
   return [
     ...contractHeader(data.contractNumber, dateStr),
     ...contractParties(data.clientName, data.documentType || '', data.documentNumber),
@@ -471,27 +512,48 @@ function buildDocumentos(data: ContractData, dateStr: string): Paragraph[] {
     para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.'),
 
     ...buildHonorariosSection(data),
-    para('2.1. Los honorarios no incluyen:', { bold: true }),
-    bullet('Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.'),
-    bullet('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
-    bullet('Costes relacionados con procedimientos contenciosos o incidentales posteriores.'),
+    ...bankSection,
+    heading('2.1. Los honorarios no incluyen:'),
+    numbered('1', 'Tasas administrativas, notariales, judiciales, traducciones juradas (traducción al inglés), ni otros gastos derivados de gestiones ante terceros.'),
+    para('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
+    para('Costes relacionados con procedimientos contenciosos o incidentales posteriores.'),
     emptyLine(),
-    para('2.2. Retraso en el pago de los honorarios:', { bold: true }),
+    heading('2. Retraso en el pago de los honorarios'),
     para('En caso de retraso en el pago de los honorarios, el CLIENTE incurrirá en las siguientes consecuencias:'),
-    numbered('1', 'Se aplicará un interés moratorio equivalente al 1,5% mensual sobre el importe adeudado, acumulable por cada mes natural completo de retraso, sin perjuicio de los intereses legales que puedan corresponder conforme a la normativa vigente.'),
-    numbered('2', 'Además, el CLIENTE deberá abonar una multa contractual equivalente al 5% del importe total adeudado en concepto de penalización por mora, sin necesidad de requerimiento previo.'),
+    bullet('a) Se aplicará un interés moratorio equivalente al 1,5% mensual sobre el importe adeudado, acumulable por cada mes natural completo de retraso, sin perjuicio de los intereses legales que puedan corresponder conforme a la normativa vigente.'),
+    bullet('b) Además, el CLIENTE deberá abonar una multa contractual equivalente al 5% del importe total adeudado en concepto de penalización por mora, sin necesidad de requerimiento previo.'),
     para('CB ASESORÍA podrá suspender temporalmente la prestación de los servicios contratados hasta que se regularice el pago, sin que ello genere derecho a indemnización o reclamación alguna por parte del CLIENTE.'),
 
-    ...commonClause_Tercera(),
-    ...commonClause_Cuarta(),
-    ...commonClause_Quinta(),
+    // Clauses 3-5 with numeric headings
+    heading('3. Obligaciones del Cliente'),
+    para('El CLIENTE se compromete a:'),
+    numbered('1', 'Proporcionar a CB ASESORÍA información veraz, completa y actualizada.'),
+    numbered('2', 'Entregar en plazo la documentación exigida para el trámite, para que el trámite sea protocolado en la plataforma correspondiente.'),
+    numbered('3', 'Abonar los honorarios conforme a lo estipulado, para que el trámite sea protocolado en la plataforma correspondiente.'),
+    numbered('4', 'Comparecer a las citas necesarias para la tramitación del servicio contratado, previamente programadas por CB ASESORÍA ante organismos oficiales (administración pública, notaría, registros civiles, etc.).'),
+    para('La incomparecencia injustificada podrá dar lugar al cobro de honorarios adicionales por reprogramación o nueva gestión.'),
+
+    heading('4. Obligaciones de CB ASESORÍA (EL PRESTADOR)'),
+    para('CB ASESORÍA se compromete a:'),
+    numbered('1', 'Prestar los servicios contratados con la debida diligencia profesional y conforme a la legislación vigente.'),
+    numbered('2', 'Ejecutar los servicios a través de su equipo técnico y jurídico, no vinculado a una persona específica.'),
+    numbered('3', 'Informar oportunamente al CLIENTE sobre el estado del expediente y cualquier incidencia relevante.'),
+    numbered('4', 'Guardar confidencialidad sobre toda la información recibida, incluso tras la finalización de la relación contractual.'),
+    numbered('5', 'Utilizar los datos personales únicamente para los fines descritos en este contrato.'),
+    numbered('6', 'Facilitar al CLIENTE, si lo solicita, copia de los documentos generados.'),
+
+    heading('5. Inicio del Procedimiento'),
+    para('CB ASESORÍA dispondrá de un plazo máximo de 48 horas hábiles tras la confirmación del pago para contactar con EL CLIENTE e iniciar la gestión.'),
+    para('El cómputo excluye fines de semana y días festivos. En caso de no contacto en plazo, el CLIENTE podrá comunicarse mediante los canales oficiales para información.'),
+    para('Condición para protocolar el trámite: solo se presentará en la plataforma correspondiente, cuando se haya recibido el pago completo de los honorarios y toda la documentación requerida.'),
+
     ...commonClause_Sexta(),
     ...commonClause_Septima(),
     ...commonClause_Octava(),
     ...commonClause_Novena(),
 
     heading('DÉCIMA. Política de Devolución de Honorarios'),
-    ...commonClause_Devolucion(),
+    ...commonClause_DevolucionDocumentos(),
 
     heading('UNDÉCIMA. Legislación Aplicable y Jurisdicción'),
     ...commonClause_Legislacion(),
@@ -715,6 +777,39 @@ function sectionsDevolucion(): ContractSection[] {
   ];
 }
 
+function sectionsDevolucionDocumentos(): ContractSection[] {
+  return [
+    { type: 'paragraph', text: '10.1. Iniciación del Servicio:', bold: true },
+    { type: 'paragraph', text: 'Se entenderá como iniciado el servicio una vez que el asesor responsable por el trámite haya establecido contacto directo con EL CLIENTE a través de medios electrónicos, telefónicos o presenciales. A partir de ese momento, no será posible la devolución total o parcial del importe abonado. Si el procedimiento aún no se ha completado o si se paraliza por causas externas, el cliente tendrá 12 meses para hacer uso del servicio contratado.' },
+    { type: 'empty', text: '' },
+    { type: 'paragraph', text: '10.2. Ausencia de Devoluciones por Servicios de Terceros:', bold: true },
+    { type: 'paragraph', text: 'No se aceptarán devoluciones por conceptos ya ejecutados o pagados a terceros, entre ellos:' },
+    { type: 'bullet', text: 'Tasas de órganos públicos.' },
+    { type: 'bullet', text: 'Traducciones juradas, apostillas, legalizaciones, o cualquier otro servicio de gestoría, notaría o certificación externa.' },
+    { type: 'bullet', text: 'Matrículas o inscripciones en cursos o exámenes.' },
+    { type: 'bullet', text: 'Honorarios de terceros profesionales (procuradores, traductores, peritos, etc.).' },
+    { type: 'empty', text: '' },
+    { type: 'paragraph', text: '10.3. Exclusiones de la Prestación del Servicio:', bold: true },
+    { type: 'paragraph', text: 'El servicio contratado no incluye:' },
+    { type: 'bullet', text: 'La interposición de recursos administrativos o contencioso, salvo pacto expreso por escrito y pago adicional.' },
+    { type: 'bullet', text: 'La búsqueda, solicitud o tramitación de documentos personales en nombre del CLIENTE (por ejemplo: certificados de nacimiento, antecedentes penales, certificado de seguridad social, empadronamientos, etc.).' },
+    { type: 'bullet', text: 'Es responsabilidad exclusiva del CLIENTE proporcionar la documentación necesaria en los plazos indicados.' },
+    { type: 'empty', text: '' },
+    { type: 'paragraph', text: '10.4. Motivos Justificables de Devolución:', bold: true },
+    { type: 'paragraph', text: 'Únicamente se aceptarán devoluciones si concurre alguna de las siguientes circunstancias:' },
+    { type: 'bullet', text: 'a) Cambio de legislación que genere imposibilidad legal sobrevenida no imputable al CLIENTE.' },
+    { type: 'bullet', text: 'b) Incumplimiento grave, acreditado y documentado, por parte de CB ASESORÍA.' },
+    { type: 'paragraph', text: 'Aún que concurra alguna de las circunstancias supra mencionadas solo se aceptará y procederá con una solicitud de cancelación una vez agotadas todas las instancias y recursos judiciales o administrativos que pudieran corresponder al CLIENTE en relación con el servicio prestado. Es decir, la devolución procederá únicamente cuando se haya hecho uso de todos los medios legales disponibles.' },
+    { type: 'empty', text: '' },
+    { type: 'paragraph', text: '10.5. Procedimiento de Solicitud de Reembolso:', bold: true },
+    { type: 'paragraph', text: 'Toda solicitud de reembolso deberá realizarse por escrito, de forma motivada, acompañada de documentación justificativa, y remitida por correo electrónico o entregada físicamente en el domicilio de CB ASESORÍA.' },
+    { type: 'paragraph', text: 'El plazo máximo para la resolución de la solicitud será de 15 días hábiles a partir de su recepción. En caso de resolución favorable, el reembolso se realizará por transferencia bancaria o en efectivo.' },
+    { type: 'empty', text: '' },
+    { type: 'paragraph', text: '10.6. Renuncia del Cliente:', bold: true },
+    { type: 'paragraph', text: 'Con la firma del presente contrato, EL CLIENTE renuncia expresamente a reclamar la devolución del importe abonado una vez iniciado el servicio o una vez ejecutado algún pago a terceros por parte del PRESTADOR en nombre del CLIENTE.' },
+  ];
+}
+
 function sectionsLegislacion(): ContractSection[] {
   return [
     { type: 'paragraph', text: 'Este contrato se rige por la legislación española. Ambas partes se someten expresamente a los Juzgados y Tribunales de Barcelona, con renuncia a cualquier otro fuero que pudiera corresponderles.' },
@@ -836,19 +931,49 @@ export function getContractSections(data: ContractData): ContractSection[] {
         { type: 'paragraph', text: data.serviceDescription || 'TRAMITACIÓN DE LA SOLICITUD DEL CERTIFICADO / DOCUMENTO SOLICITADO.', bold: true },
         { type: 'paragraph', text: 'Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.' },
         ...honorarios,
-        { type: 'paragraph', text: '2.1. Los honorarios no incluyen:', bold: true },
-        { type: 'bullet', text: 'Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.' },
-        { type: 'bullet', text: 'Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).' },
-        { type: 'bullet', text: 'Costes relacionados con procedimientos contenciosos o incidentales posteriores.' },
+        // Bank details with "DATOS PARA PAGO:" heading
+        ...(data.bankAccount ? [
+          { type: 'heading' as const, text: 'DATOS PARA PAGO:' },
+          ...(data.bankAccount.bankName ? [{ type: 'paragraph' as const, text: `Banco ${data.bankAccount.bankName}` }] : []),
+          ...(data.bankAccount.accountName ? [{ type: 'paragraph' as const, text: data.bankAccount.accountName }] : []),
+          ...(data.bankAccount.accountDetails ? [{ type: 'paragraph' as const, text: `IBAN: ${data.bankAccount.accountDetails}` }] : []),
+        ] : []),
+        { type: 'heading', text: '2.1. Los honorarios no incluyen:' },
+        { type: 'numbered', text: '1. Tasas administrativas, notariales, judiciales, traducciones juradas (traducción al inglés), ni otros gastos derivados de gestiones ante terceros.' },
+        { type: 'paragraph', text: 'Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).' },
+        { type: 'paragraph', text: 'Costes relacionados con procedimientos contenciosos o incidentales posteriores.' },
         { type: 'empty', text: '' },
-        { type: 'paragraph', text: '2.2. Retraso en el pago de los honorarios:', bold: true },
+        { type: 'heading', text: '2. Retraso en el pago de los honorarios' },
         { type: 'paragraph', text: 'En caso de retraso en el pago de los honorarios, el CLIENTE incurrirá en las siguientes consecuencias:' },
-        { type: 'numbered', text: '1. Se aplicará un interés moratorio equivalente al 1,5% mensual sobre el importe adeudado, acumulable por cada mes natural completo de retraso, sin perjuicio de los intereses legales que puedan corresponder conforme a la normativa vigente.' },
-        { type: 'numbered', text: '2. Además, el CLIENTE deberá abonar una multa contractual equivalente al 5% del importe total adeudado en concepto de penalización por mora, sin necesidad de requerimiento previo.' },
+        { type: 'bullet', text: 'a) Se aplicará un interés moratorio equivalente al 1,5% mensual sobre el importe adeudado, acumulable por cada mes natural completo de retraso, sin perjuicio de los intereses legales que puedan corresponder conforme a la normativa vigente.' },
+        { type: 'bullet', text: 'b) Además, el CLIENTE deberá abonar una multa contractual equivalente al 5% del importe total adeudado en concepto de penalización por mora, sin necesidad de requerimiento previo.' },
         { type: 'paragraph', text: 'CB ASESORÍA podrá suspender temporalmente la prestación de los servicios contratados hasta que se regularice el pago, sin que ello genere derecho a indemnización o reclamación alguna por parte del CLIENTE.' },
-        ...common,
+        // Clauses 3-5 with numeric headings
+        { type: 'heading', text: '3. Obligaciones del Cliente' },
+        { type: 'paragraph', text: 'El CLIENTE se compromete a:' },
+        { type: 'numbered', text: '1. Proporcionar a CB ASESORÍA información veraz, completa y actualizada.' },
+        { type: 'numbered', text: '2. Entregar en plazo la documentación exigida para el trámite, para que el trámite sea protocolado en la plataforma correspondiente.' },
+        { type: 'numbered', text: '3. Abonar los honorarios conforme a lo estipulado, para que el trámite sea protocolado en la plataforma correspondiente.' },
+        { type: 'numbered', text: '4. Comparecer a las citas necesarias para la tramitación del servicio contratado, previamente programadas por CB ASESORÍA ante organismos oficiales (administración pública, notaría, registros civiles, etc.).' },
+        { type: 'paragraph', text: 'La incomparecencia injustificada podrá dar lugar al cobro de honorarios adicionales por reprogramación o nueva gestión.' },
+        { type: 'heading', text: '4. Obligaciones de CB ASESORÍA (EL PRESTADOR)' },
+        { type: 'paragraph', text: 'CB ASESORÍA se compromete a:' },
+        { type: 'numbered', text: '1. Prestar los servicios contratados con la debida diligencia profesional y conforme a la legislación vigente.' },
+        { type: 'numbered', text: '2. Ejecutar los servicios a través de su equipo técnico y jurídico, no vinculado a una persona específica.' },
+        { type: 'numbered', text: '3. Informar oportunamente al CLIENTE sobre el estado del expediente y cualquier incidencia relevante.' },
+        { type: 'numbered', text: '4. Guardar confidencialidad sobre toda la información recibida, incluso tras la finalización de la relación contractual.' },
+        { type: 'numbered', text: '5. Utilizar los datos personales únicamente para los fines descritos en este contrato.' },
+        { type: 'numbered', text: '6. Facilitar al CLIENTE, si lo solicita, copia de los documentos generados.' },
+        { type: 'heading', text: '5. Inicio del Procedimiento' },
+        { type: 'paragraph', text: 'CB ASESORÍA dispondrá de un plazo máximo de 48 horas hábiles tras la confirmación del pago para contactar con EL CLIENTE e iniciar la gestión.' },
+        { type: 'paragraph', text: 'El cómputo excluye fines de semana y días festivos. En caso de no contacto en plazo, el CLIENTE podrá comunicarse mediante los canales oficiales para información.' },
+        { type: 'paragraph', text: 'Condición para protocolar el trámite: solo se presentará en la plataforma correspondiente, cuando se haya recibido el pago completo de los honorarios y toda la documentación requerida.' },
+        ...sectionsSexta(),
+        ...sectionsSeptima(),
+        ...sectionsOctava(),
+        ...sectionsNovena(),
         { type: 'heading', text: 'DÉCIMA. Política de Devolución de Honorarios' },
-        ...sectionsDevolucion(),
+        ...sectionsDevolucionDocumentos(),
         { type: 'heading', text: 'UNDÉCIMA. Legislación Aplicable y Jurisdicción' },
         ...sectionsLegislacion(),
         { type: 'heading', text: 'DUODÉCIMA. Información de Contacto y Notificaciones' },
