@@ -58,10 +58,12 @@ export function useInteractions(contactId?: string, leadId?: string) {
   });
 
   const updateInteraction = useMutation({
-    mutationFn: async ({ id, content }: { id: string; content: string }) => {
+    mutationFn: async ({ id, content, channel }: { id: string; content: string; channel?: string }) => {
+      const updates: Record<string, string> = { content };
+      if (channel) updates.channel = channel;
       const { data, error } = await supabase
         .from('interactions')
-        .update({ content })
+        .update(updates)
         .eq('id', id)
         .select()
         .single();
