@@ -75,6 +75,7 @@ export default function LeadDetail() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingInteractionId, setEditingInteractionId] = useState<string | null>(null);
   const [editingInteractionContent, setEditingInteractionContent] = useState('');
+  const [editingInteractionChannel, setEditingInteractionChannel] = useState<string>('WHATSAPP');
   const [followUpDate, setFollowUpDate] = useState('');
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -778,6 +779,7 @@ export default function LeadDetail() {
                                       onClick={() => {
                                         setEditingInteractionId(interaction.id);
                                         setEditingInteractionContent(interaction.content || '');
+                                        setEditingInteractionChannel(interaction.channel || 'WHATSAPP');
                                       }}
                                     >
                                       <Pencil className="h-3 w-3" />
@@ -811,36 +813,49 @@ export default function LeadDetail() {
                               </div>
                             </div>
                             {editingInteractionId === interaction.id ? (
-                              <div className="flex gap-2">
-                                <Textarea
-                                  value={editingInteractionContent}
-                                  onChange={(e) => setEditingInteractionContent(e.target.value)}
-                                  rows={2}
-                                  className="flex-1"
-                                />
-                                <div className="flex flex-col gap-1">
-                                  <Button
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={async () => {
-                                      await updateInteraction.mutateAsync({
-                                        id: interaction.id,
-                                        content: editingInteractionContent,
-                                      });
-                                      setEditingInteractionId(null);
-                                    }}
-                                    disabled={updateInteraction.isPending}
-                                  >
-                                    <Check className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => setEditingInteractionId(null)}
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </Button>
+                              <div className="space-y-2">
+                                <div className="flex gap-2">
+                                  <Select value={editingInteractionChannel} onValueChange={setEditingInteractionChannel}>
+                                    <SelectTrigger className="w-[140px]">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {Object.entries(INTERACTION_CHANNEL_LABELS).map(([value, label]) => (
+                                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Textarea
+                                    value={editingInteractionContent}
+                                    onChange={(e) => setEditingInteractionContent(e.target.value)}
+                                    rows={2}
+                                    className="flex-1"
+                                  />
+                                  <div className="flex flex-col gap-1">
+                                    <Button
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={async () => {
+                                        await updateInteraction.mutateAsync({
+                                          id: interaction.id,
+                                          content: editingInteractionContent,
+                                          channel: editingInteractionChannel,
+                                        });
+                                        setEditingInteractionId(null);
+                                      }}
+                                      disabled={updateInteraction.isPending}
+                                    >
+                                      <Check className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => setEditingInteractionId(null)}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                             ) : (
