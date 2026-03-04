@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { PaymentAgreementDialog } from '@/components/crm/PaymentAgreementDialog';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
@@ -89,6 +90,7 @@ export default function ContactDetail() {
   const [newServiceNotes, setNewServiceNotes] = useState('');
   const [paymentNotes, setPaymentNotes] = useState<string | null>(null);
   const [isSavingPaymentNotes, setIsSavingPaymentNotes] = useState(false);
+  const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
 
   const contactLeads = leads.filter(l => l.contact_id === id);
 
@@ -1219,12 +1221,20 @@ export default function ContactDetail() {
 
           {/* Acordo de Pagamento - sempre visível e editável */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Acordo de Pagamento
-              </CardTitle>
-              <CardDescription>O que foi combinado com o cliente sobre pagamento</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  Acordo de Pagamento
+                </CardTitle>
+                <CardDescription>O que foi combinado com o cliente sobre pagamento</CardDescription>
+              </div>
+              {contact.is_beneficiary && (
+                <Button size="sm" variant="outline" onClick={() => setShowPaymentAgreement(true)}>
+                  <DollarSign className="h-4 w-4 mr-1" />
+                  Forma de Pagamento
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="space-y-3">
               <Textarea
@@ -1686,6 +1696,16 @@ export default function ContactDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Payment Agreement Dialog for beneficiaries */}
+      {contact.is_beneficiary && id && (
+        <PaymentAgreementDialog
+          open={showPaymentAgreement}
+          onOpenChange={setShowPaymentAgreement}
+          contactId={id}
+          contactName={contact.full_name}
+        />
+      )}
     </>
   );
 }
