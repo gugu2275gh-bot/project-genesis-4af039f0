@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2, Pencil, ShieldAlert, X, Pause, CalendarClock, RefreshCw, MapPin, FileText, Briefcase, GraduationCap, Heart, Flag } from 'lucide-react';
+import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, UserPlus, Globe, Trash2, Pencil, ShieldAlert, X, Pause, CalendarClock, RefreshCw, MapPin, FileText, Briefcase, GraduationCap, Heart, Flag, DollarSign } from 'lucide-react';
 import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, INTERACTION_CHANNEL_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -24,6 +24,7 @@ import { ptBR } from 'date-fns/locale';
 import { useState, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { LeadChat } from '@/components/crm/LeadChat';
+import { PaymentAgreementDialog } from '@/components/crm/PaymentAgreementDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -78,6 +79,7 @@ export default function LeadDetail() {
   const [editingInteractionChannel, setEditingInteractionChannel] = useState<string>('WHATSAPP');
   const [followUpDate, setFollowUpDate] = useState('');
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
+  const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
   const [editForm, setEditForm] = useState({
     full_name: '',
     phone: '',
@@ -713,6 +715,26 @@ export default function LeadDetail() {
                 }}
               />
               <Label htmlFor="special-case" className="cursor-pointer">Caso especial</Label>
+            </div>
+
+            {/* Payment Agreement Button */}
+            <div className="pt-2">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowPaymentAgreement(true)}
+              >
+                <DollarSign className="h-4 w-4 mr-2" />
+                Forma de Pagamento
+              </Button>
+              {lead.contact_id && (
+                <PaymentAgreementDialog
+                  open={showPaymentAgreement}
+                  onOpenChange={setShowPaymentAgreement}
+                  contactId={lead.contact_id}
+                  contactName={lead.contacts?.full_name || ''}
+                />
+              )}
             </div>
 
             {lead.interest_confirmed && (
