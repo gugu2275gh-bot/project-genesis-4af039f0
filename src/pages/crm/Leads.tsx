@@ -4,6 +4,7 @@ import { useLeads } from '@/hooks/useLeads';
 import { useContacts } from '@/hooks/useContacts';
 import { useLeadSLAAlerts } from '@/hooks/useLeadSLAAlerts';
 import { useServiceTypes } from '@/hooks/useServiceTypes';
+import { ServiceTypeCombobox } from '@/components/ui/service-type-combobox';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -300,19 +301,11 @@ export default function Leads() {
 
                 <div>
                   <Label>Serviço de Interesse</Label>
-                  <Select
+                  <ServiceTypeCombobox
                     value={newLead.service_interest}
-                    onValueChange={(v: any) => setNewLead({ ...newLead, service_interest: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o serviço" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[300px]">
-                      {serviceTypes?.map((st) => (
-                        <SelectItem key={st.code} value={st.code}>{st.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onValueChange={(v) => setNewLead({ ...newLead, service_interest: v })}
+                    serviceTypes={serviceTypes}
+                  />
                 </div>
                 {newLead.service_interest === 'OUTRO' && (
                   <div>
