@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { ServiceTypeCombobox } from '@/components/ui/service-type-combobox';
 import { useLead, useLeads } from '@/hooks/useLeads';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -448,19 +449,11 @@ export default function LeadDetail() {
 
                   <div>
                     <Label htmlFor="edit-service-interest">Serviço de Interesse</Label>
-                    <Select 
-                      value={editForm.service_interest} 
+                    <ServiceTypeCombobox
+                      value={editForm.service_interest}
                       onValueChange={(value) => setEditForm({ ...editForm, service_interest: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o serviço" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[300px]">
-                        {serviceTypes?.map((st) => (
-                          <SelectItem key={st.code} value={st.code}>{st.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      serviceTypes={serviceTypes}
+                    />
                   </div>
 
                   <div className="flex justify-end gap-2 pt-4">
