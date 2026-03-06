@@ -37,6 +37,8 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     discount_value: '',
     apply_vat: false,
     notes: '',
+    installment_count: 2,
+    installments: [] as { amount: string; due_date: string }[],
   });
 
   const { data: paymentAccounts = [] } = useQuery({
@@ -103,6 +105,13 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     summary += `Total Final: € ${finalAmount.toFixed(2)}\n`;
     summary += `Método: ${methodLabel}\n`;
     summary += `Forma: ${formLabel}\n`;
+    if (form.payment_form === 'PARCELADO' && form.installments.length > 0) {
+      summary += `Parcelas: ${form.installments.length}x\n`;
+      form.installments.forEach((inst, idx) => {
+        const dateStr = inst.due_date ? new Date(inst.due_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'A definir';
+        summary += `  ${idx + 1}ª: € ${parseFloat(inst.amount || '0').toFixed(2)} — Venc: ${dateStr}\n`;
+      });
+    }
     if (form.transfer_origin) {
       summary += `Origem: ${form.transfer_origin}\n`;
       const selectedAcc = paymentAccounts.find(a => a.id === form.payment_account_id);
@@ -128,6 +137,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       amount: '', payment_method: 'PIX', payment_form: 'UNICO',
       custom_payment_method: '', transfer_origin: '', payment_account_id: '',
       discount_type: '', discount_value: '', apply_vat: false, notes: '',
+      installment_count: 2, installments: [],
     });
   };
 
@@ -161,7 +171,12 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             </div>
             <div>
               <Label>Forma de Pagamento</Label>
-              <Select value={form.payment_form} onValueChange={(v) => setForm({ ...form, payment_form: v })}>
+              <Select value={form.payment_form} onValueChange={(v) => {
+                const newInstallments = v === 'PARCELADO'
+                  ? Array.from({ length: form.installment_count }, () => ({ amount: '', due_date: '' }))
+                  : [];
+                setForm({ ...form, payment_form: v, installments: newInstallments });
+              }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(PAYMENT_FORM_LABELS).map(([value, label]) => (
@@ -171,6 +186,67 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               </Select>
             </div>
           </div>
+
+          {/* Installments when PARCELADO */}
+          {form.payment_form === 'PARCELADO' && (
+            <div className="space-y-3 rounded-lg border p-3">
+              <div>
+                <Label>Quantidade de Parcelas</Label>
+                <Select
+                  value={String(form.installment_count)}
+                  onValueChange={(v) => {
+                    const count = parseInt(v);
+                    const newInstallments = Array.from({ length: count }, (_, i) => ({
+                      amount: form.installments[i]?.amount || '',
+                      due_date: form.installments[i]?.due_date || '',
+                    }));
+                    setForm({ ...form, installment_count: count, installments: newInstallments });
+                  }}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 11 }, (_, i) => i + 2).map((n) => (
+                      <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.installments.length > 0 && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-[auto_1fr_1fr] gap-2 text-xs font-medium text-muted-foreground">
+                    <span className="w-8">#</span>
+                    <span>Valor (€)</span>
+                    <span>Vencimento</span>
+                  </div>
+                  {form.installments.map((inst, idx) => (
+                    <div key={idx} className="grid grid-cols-[auto_1fr_1fr] gap-2 items-center">
+                      <span className="w-8 text-sm text-muted-foreground font-medium">{idx + 1}</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={inst.amount}
+                        onChange={(e) => {
+                          const updated = [...form.installments];
+                          updated[idx] = { ...updated[idx], amount: e.target.value };
+                          setForm({ ...form, installments: updated });
+                        }}
+                      />
+                      <Input
+                        type="date"
+                        value={inst.due_date}
+                        onChange={(e) => {
+                          const updated = [...form.installments];
+                          updated[idx] = { ...updated[idx], due_date: e.target.value };
+                          setForm({ ...form, installments: updated });
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {form.payment_method === 'OUTRO' && (
             <div>
