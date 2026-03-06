@@ -49,7 +49,9 @@ import {
   Baby,
   MessageSquare,
   DollarSign,
-  Plus
+  Plus,
+  Upload,
+  Trash2
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -91,6 +93,8 @@ export default function ContactDetail() {
   const [paymentNotes, setPaymentNotes] = useState<string | null>(null);
   const [isSavingPaymentNotes, setIsSavingPaymentNotes] = useState(false);
   const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const queryClient = useQueryClient();
 
   const contactLeads = leads.filter(l => l.contact_id === id);
 
@@ -1321,13 +1325,64 @@ export default function ContactDetail() {
           )}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Documentos ({contactDocuments.length})
-              </CardTitle>
-              <CardDescription>
-                Documentos anexados e enviados relacionados a este contato
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Documentos ({contactDocuments.length})
+                  </CardTitle>
+                  <CardDescription>
+                    Documentos anexados e enviados relacionados a este contato
+                  </CardDescription>
+                </div>
+                <div className="relative">
+                  <Input
+                    type="file"
+                    className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    disabled={isUploadingDoc}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || !id) return;
+                      setIsUploadingDoc(true);
+                      try {
+                        const ext = file.name.split('.').pop();
+                        const filePath = `contacts/${id}/${Date.now()}_${file.name}`;
+                        const { error: uploadError } = await supabase.storage
+                          .from('client-documents')
+                          .upload(filePath, file);
+                        if (uploadError) throw uploadError;
+                        const { data: urlData } = supabase.storage
+                          .from('client-documents')
+                          .getPublicUrl(filePath);
+                        // Store as interaction with document link
+                        await supabase.from('interactions').insert({
+                          contact_id: id,
+                          channel: 'OUTRO',
+                          direction: 'INBOUND',
+                          content: `📎 Documento anexado: ${file.name}\n${urlData.publicUrl}`,
+                        });
+                        queryClient.invalidateQueries({ queryKey: ['contact-documents', id] });
+                        queryClient.invalidateQueries({ queryKey: ['interactions'] });
+                        toast({ title: 'Documento anexado com sucesso' });
+                      } catch (err: any) {
+                        toast({ title: 'Erro ao anexar documento', description: err.message, variant: 'destructive' });
+                      } finally {
+                        setIsUploadingDoc(false);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                  <Button variant="outline" size="sm" disabled={isUploadingDoc}>
+                    {isUploadingDoc ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4 mr-1" />
+                    )}
+                    Anexar
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {docsLoading ? (
