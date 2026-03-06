@@ -171,7 +171,12 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             </div>
             <div>
               <Label>Forma de Pagamento</Label>
-              <Select value={form.payment_form} onValueChange={(v) => setForm({ ...form, payment_form: v })}>
+              <Select value={form.payment_form} onValueChange={(v) => {
+                const newInstallments = v === 'PARCELADO'
+                  ? Array.from({ length: form.installment_count }, () => ({ amount: '', due_date: '' }))
+                  : [];
+                setForm({ ...form, payment_form: v, installments: newInstallments });
+              }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(PAYMENT_FORM_LABELS).map(([value, label]) => (
