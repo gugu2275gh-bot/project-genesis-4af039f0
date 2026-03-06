@@ -1108,7 +1108,7 @@ export async function generateContractDocument(data: ContractData): Promise<void
     ? 'Regularizacion_Extraordinaria'
     : data.template === 'NACIONALIDADE'
     ? 'Nacionalidad'
-    : 'Documentos';
+    : 'Geral_Tramites';
 
   const fileName = `Contrato_${templateName}_${data.clientName.replace(/\s+/g, '_')}_${data.contractNumber || 'SN'}.pdf`;
   doc.save(fileName);
@@ -1164,7 +1164,7 @@ export async function generateContractWord(data: ContractData): Promise<void> {
     ? 'Regularizacion_Extraordinaria'
     : data.template === 'NACIONALIDADE'
     ? 'Nacionalidad'
-    : 'Documentos';
+    : 'Geral_Tramites';
 
   const fileName = `Contrato_${templateName}_${data.clientName.replace(/\s+/g, '_')}_${data.contractNumber || 'SN'}.docx`;
   saveAs(blob, fileName);
