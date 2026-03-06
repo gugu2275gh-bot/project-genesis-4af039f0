@@ -1086,3 +1086,59 @@ export async function generateContractDocument(data: ContractData): Promise<void
   const fileName = `Contrato_${templateName}_${data.clientName.replace(/\s+/g, '_')}_${data.contractNumber || 'SN'}.pdf`;
   doc.save(fileName);
 }
+
+export async function generateContractWord(data: ContractData): Promise<void> {
+  const sections = getContractSections(data);
+
+  const paragraphs: Paragraph[] = [];
+
+  for (const section of sections) {
+    switch (section.type) {
+      case 'heading':
+        paragraphs.push(heading(section.text));
+        break;
+      case 'paragraph':
+        paragraphs.push(para(section.text, { bold: section.bold, italic: section.italic }));
+        break;
+      case 'bullet':
+        paragraphs.push(bullet(section.text));
+        break;
+      case 'numbered':
+        paragraphs.push(new Paragraph({
+          children: [new TextRun({ text: section.text, size: 22, font: 'Calibri' })],
+          spacing: { after: 60 },
+          alignment: AlignmentType.JUSTIFIED,
+        }));
+        break;
+      case 'empty':
+        paragraphs.push(emptyLine());
+        break;
+      case 'signature':
+        paragraphs.push(new Paragraph({
+          children: [new TextRun({ text: section.text, bold: true, size: 22, font: 'Calibri' })],
+          spacing: { before: 200, after: 100 },
+        }));
+        break;
+    }
+  }
+
+  const doc = new Document({
+    sections: [{
+      properties: {},
+      headers: { default: new Header({ children: [] }) },
+      footers: { default: footerParagraph() },
+      children: paragraphs,
+    }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+
+  const templateName = data.template === 'REGULARIZACION_EXTRAORDINARIA'
+    ? 'Regularizacion_Extraordinaria'
+    : data.template === 'NACIONALIDADE'
+    ? 'Nacionalidad'
+    : 'Documentos';
+
+  const fileName = `Contrato_${templateName}_${data.clientName.replace(/\s+/g, '_')}_${data.contractNumber || 'SN'}.docx`;
+  saveAs(blob, fileName);
+}

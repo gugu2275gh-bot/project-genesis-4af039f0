@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Download, Edit, X } from 'lucide-react';
-import { getContractSections, generateContractDocument, type ContractData, type ContractSection, type BeneficiaryData, type BankAccountData } from '@/lib/generate-contract';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Download, Edit, X, FileText, ChevronDown } from 'lucide-react';
+import { getContractSections, generateContractDocument, generateContractWord, type ContractData, type ContractSection, type BeneficiaryData, type BankAccountData } from '@/lib/generate-contract';
 
 interface ContractPreviewProps {
   template: string;
@@ -62,8 +63,12 @@ export function ContractPreview({
 
   const sections = getContractSections(currentData);
 
-  const handleDownload = async () => {
+  const handleDownloadPDF = async () => {
     await generateContractDocument(currentData);
+  };
+
+  const handleDownloadWord = async () => {
+    await generateContractWord(currentData);
   };
 
   const handleStartEditing = () => {
@@ -132,10 +137,25 @@ export function ContractPreview({
             </Button>
           )}
           {canDownload && (
-            <Button size="sm" onClick={handleDownload}>
-              <Download className="h-4 w-4 mr-1" />
-              Baixar Contrato PDF
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm">
+                  <Download className="h-4 w-4 mr-1" />
+                  Baixar Contrato
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={handleDownloadPDF}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadWord}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Word (.docx)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </CardHeader>
