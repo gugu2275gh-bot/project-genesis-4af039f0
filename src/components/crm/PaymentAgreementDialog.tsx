@@ -234,7 +234,8 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                 </div>
               )}
             </div>
-          )
+          )}
+
           {form.payment_method === 'OUTRO' && (
             <div>
               <Label>Detalhe do método de pagamento *</Label>
