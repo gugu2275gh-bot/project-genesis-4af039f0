@@ -230,7 +230,7 @@ export default function ContractsList() {
                       Não há oportunidades disponíveis para criar contrato.
                     </p>
                   ) : (
-                    <Select value={selectedOpportunity} onValueChange={setSelectedOpportunity}>
+                    <Select value={selectedOpportunity} onValueChange={handleOpportunityChange}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione uma oportunidade" />
                       </SelectTrigger>
@@ -254,22 +254,22 @@ export default function ContractsList() {
                       <SelectValue placeholder="Selecione o modelo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="REGULARIZACION_EXTRAORDINARIA">
+                      <SelectItem value="DOCUMENTOS">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4" />
-                          Regularización Extraordinaria
+                          Geral Trámites
                         </div>
                       </SelectItem>
                       <SelectItem value="NACIONALIDADE">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4" />
-                          Nacionalidad
+                          Nacionalidad Española por Residencia
                         </div>
                       </SelectItem>
-                      <SelectItem value="DOCUMENTOS">
+                      <SelectItem value="REGULARIZACION_EXTRAORDINARIA">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4" />
-                          Documentos / Certificados
+                          Regularización Extraordinaria
                         </div>
                       </SelectItem>
                     </SelectContent>
