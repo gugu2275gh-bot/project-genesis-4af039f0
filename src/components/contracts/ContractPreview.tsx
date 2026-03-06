@@ -137,10 +137,25 @@ export function ContractPreview({
             </Button>
           )}
           {canDownload && (
-            <Button size="sm" onClick={handleDownload}>
-              <Download className="h-4 w-4 mr-1" />
-              Baixar Contrato PDF
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm">
+                  <Download className="h-4 w-4 mr-1" />
+                  Baixar Contrato
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={handleDownloadPDF}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadWord}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Word (.docx)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </CardHeader>
