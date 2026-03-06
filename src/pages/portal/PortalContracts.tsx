@@ -286,13 +286,25 @@ export default function PortalContracts() {
                       </Button>
                     )}
                     {(status === 'ASSINADO' || status === 'APROVADO') && (
-                      <Button 
-                        variant="outline"
-                        onClick={() => handleDownloadContract(contract)}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Baixar Contrato
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline">
+                            <Download className="h-4 w-4 mr-2" />
+                            Baixar Contrato
+                            <ChevronDown className="h-3 w-3 ml-1" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuItem onClick={() => handleDownloadPDF(contract)}>
+                            <FileText className="h-4 w-4 mr-2" />
+                            PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDownloadWord(contract)}>
+                            <FileText className="h-4 w-4 mr-2" />
+                            Word (.docx)
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                   </div>
                 </CardContent>
