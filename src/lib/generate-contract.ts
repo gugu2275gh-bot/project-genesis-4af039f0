@@ -325,6 +325,19 @@ function commonClause_Devolucion(): Paragraph[] {
   ];
 }
 
+function commonClause_DevolucionRegularizacion(): Paragraph[] {
+  return [
+    para('12.1. Iniciación del Servicio:', { bold: true }),
+    para('Se entenderá como iniciado el servicio una vez que el asesor responsable por el trámite haya establecido contacto directo con EL CLIENTE a través de medios electrónicos, telefónicos o presenciales. A partir de ese momento, no será posible la devolución total o parcial del importe abonado. Si el procedimiento aún no se ha completado o si se paraliza por causas externas, el cliente tendrá 12 meses para hacer uso del servicio contratado.'),
+    emptyLine(),
+    para('12.2. Ausencia de Devoluciones por Servicios de Terceros:', { bold: true }),
+    para('En caso de que la Ley no sea aprobada, o quede sin efecto, el importe abonado de los honorarios quedará registrado como crédito a favor del CLIENTE, pudiendo utilizarse íntegramente para cualquier otro trámite o servicio ofrecido por EL PRESTADOR.'),
+    emptyLine(),
+    para('12.3. Renuncia del Cliente:', { bold: true }),
+    para('Con la firma del presente contrato, EL CLIENTE renuncia expresamente a reclamar la devolución del importe abonado una vez iniciado el servicio o una vez ejecutado algún pago a terceros por parte del PRESTADOR en nombre del CLIENTE.'),
+  ];
+}
+
 function commonClause_DevolucionDocumentos(): Paragraph[] {
   return [
     para('10.1. Iniciación del Servicio:', { bold: true }),
@@ -431,7 +444,7 @@ function buildRegularizacionExtraordinaria(data: ContractData, dateStr: string):
     para('En caso de que la Ley no sea aprobada, o quede sin efecto, el importe abonado quedará registrado como crédito a favor del CLIENTE, pudiendo utilizarse íntegramente para cualquier otro trámite o servicio ofrecido por EL PRESTADOR, sin fecha de caducidad. En ningún caso se perderá el importe abonado.'),
 
     heading('DUODÉCIMA. Política de Devolución de Honorarios'),
-    ...commonClause_Devolucion(),
+    ...commonClause_DevolucionRegularizacion(),
 
     heading('DECIMOTERCERA. Legislación Aplicable y Jurisdicción'),
     ...commonClause_Legislacion(),
@@ -810,6 +823,20 @@ function sectionsDevolucionDocumentos(): ContractSection[] {
   ];
 }
 
+function sectionsDevolucionRegularizacion(): ContractSection[] {
+  return [
+    { type: 'paragraph', text: '12.1. Iniciación del Servicio:', bold: true },
+    { type: 'paragraph', text: 'Se entenderá como iniciado el servicio una vez que el asesor responsable por el trámite haya establecido contacto directo con EL CLIENTE a través de medios electrónicos, telefónicos o presenciales. A partir de ese momento, no será posible la devolución total o parcial del importe abonado. Si el procedimiento aún no se ha completado o si se paraliza por causas externas, el cliente tendrá 12 meses para hacer uso del servicio contratado.' },
+    { type: 'empty', text: '' },
+    { type: 'paragraph', text: '12.2. Ausencia de Devoluciones por Servicios de Terceros:', bold: true },
+    { type: 'paragraph', text: 'En caso de que la Ley no sea aprobada, o quede sin efecto, el importe abonado de los honorarios quedará registrado como crédito a favor del CLIENTE, pudiendo utilizarse íntegramente para cualquier otro trámite o servicio ofrecido por EL PRESTADOR.' },
+    { type: 'empty', text: '' },
+    { type: 'paragraph', text: '12.3. Renuncia del Cliente:', bold: true },
+    { type: 'paragraph', text: 'Con la firma del presente contrato, EL CLIENTE renuncia expresamente a reclamar la devolución del importe abonado una vez iniciado el servicio o una vez ejecutado algún pago a terceros por parte del PRESTADOR en nombre del CLIENTE.' },
+  ];
+}
+
+
 function sectionsLegislacion(): ContractSection[] {
   return [
     { type: 'paragraph', text: 'Este contrato se rige por la legislación española. Ambas partes se someten expresamente a los Juzgados y Tribunales de Barcelona, con renuncia a cualquier otro fuero que pudiera corresponderles.' },
@@ -885,7 +912,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         { type: 'heading', text: 'UNDÉCIMA - Destino del importe en caso de no aprobarse la Ley' },
         { type: 'paragraph', text: 'En caso de que la Ley no sea aprobada, o quede sin efecto, el importe abonado quedará registrado como crédito a favor del CLIENTE, pudiendo utilizarse íntegramente para cualquier otro trámite o servicio ofrecido por EL PRESTADOR, sin fecha de caducidad. En ningún caso se perderá el importe abonado.' },
         { type: 'heading', text: 'DUODÉCIMA. Política de Devolución de Honorarios' },
-        ...sectionsDevolucion(),
+        ...sectionsDevolucionRegularizacion(),
         { type: 'heading', text: 'DECIMOTERCERA. Legislación Aplicable y Jurisdicción' },
         ...sectionsLegislacion(),
         { type: 'heading', text: 'DECIMOCUARTA. Información de Contacto y Notificaciones' },
@@ -1081,7 +1108,7 @@ export async function generateContractDocument(data: ContractData): Promise<void
     ? 'Regularizacion_Extraordinaria'
     : data.template === 'NACIONALIDADE'
     ? 'Nacionalidad'
-    : 'Documentos';
+    : 'Geral_Tramites';
 
   const fileName = `Contrato_${templateName}_${data.clientName.replace(/\s+/g, '_')}_${data.contractNumber || 'SN'}.pdf`;
   doc.save(fileName);
@@ -1137,7 +1164,7 @@ export async function generateContractWord(data: ContractData): Promise<void> {
     ? 'Regularizacion_Extraordinaria'
     : data.template === 'NACIONALIDADE'
     ? 'Nacionalidad'
-    : 'Documentos';
+    : 'Geral_Tramites';
 
   const fileName = `Contrato_${templateName}_${data.clientName.replace(/\s+/g, '_')}_${data.contractNumber || 'SN'}.docx`;
   saveAs(blob, fileName);

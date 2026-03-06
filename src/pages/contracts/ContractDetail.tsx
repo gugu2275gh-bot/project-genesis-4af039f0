@@ -637,7 +637,14 @@ export default function ContractDetail() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Modelo do Contrato</p>
-                <p className="font-medium">{CONTRACT_TEMPLATE_LABELS[((contract as any).contract_template || 'GENERICO') as ContractTemplate]}</p>
+                <p className="font-medium">{
+                  {
+                    NACIONALIDADE: 'Nacionalidad Española por Residencia',
+                    REGULARIZACION_EXTRAORDINARIA: 'Regularización Extraordinaria',
+                    DOCUMENTOS: 'Geral Trámites',
+                    GENERICO: 'Geral Trámites',
+                  }[((contract as any).contract_template || 'DOCUMENTOS') as string] || 'Geral Trámites'
+                }</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Status</p>

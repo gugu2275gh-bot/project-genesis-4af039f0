@@ -25,7 +25,14 @@ export default function ContractsList() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedOpportunity, setSelectedOpportunity] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('NACIONALIDADE');
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('DOCUMENTOS');
+
+  // Helper to determine the correct template based on service interest
+  const getTemplateForService = (serviceInterest: string): string => {
+    if (serviceInterest === 'NACIONALIDADE_RESIDENCIA') return 'NACIONALIDADE';
+    // Check if it's regularización extraordinaria by service_type_id name or fallback
+    return 'DOCUMENTOS'; // GERAL for all other services
+  };
 
   const availableOpportunities = opportunities.filter(o => 
     (o.status === 'ABERTA' || o.status === 'CONTRATO_EM_ELABORACAO') &&
@@ -42,17 +49,28 @@ export default function ContractsList() {
   const handleCreate = async () => {
     if (!selectedOpportunity) return;
     const opp = opportunities.find(o => o.id === selectedOpportunity);
+    const serviceInterest = opp?.leads?.service_interest || 'OUTRO';
+    const template = getTemplateForService(serviceInterest);
     const result = await createContract.mutateAsync({
       opportunity_id: selectedOpportunity,
-      service_type: opp?.leads?.service_interest || 'OUTRO',
+      service_type: serviceInterest,
       status: 'EM_ELABORACAO',
-      contract_template: selectedTemplate,
+      contract_template: selectedTemplate || template,
     } as any);
-    
 
     setIsDialogOpen(false);
     setSelectedOpportunity('');
-    setSelectedTemplate('NACIONALIDADE');
+    setSelectedTemplate('DOCUMENTOS');
+  };
+
+  // Auto-select template when opportunity changes
+  const handleOpportunityChange = (oppId: string) => {
+    setSelectedOpportunity(oppId);
+    const opp = opportunities.find(o => o.id === oppId);
+    if (opp) {
+      const serviceInterest = opp.leads?.service_interest || 'OUTRO';
+      setSelectedTemplate(getTemplateForService(serviceInterest));
+    }
   };
 
   const calculatePaymentStatus = (contract: typeof contracts[0]) => {
@@ -212,7 +230,7 @@ export default function ContractsList() {
                       Não há oportunidades disponíveis para criar contrato.
                     </p>
                   ) : (
-                    <Select value={selectedOpportunity} onValueChange={setSelectedOpportunity}>
+                    <Select value={selectedOpportunity} onValueChange={handleOpportunityChange}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione uma oportunidade" />
                       </SelectTrigger>
@@ -236,22 +254,22 @@ export default function ContractsList() {
                       <SelectValue placeholder="Selecione o modelo" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="REGULARIZACION_EXTRAORDINARIA">
+                      <SelectItem value="DOCUMENTOS">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4" />
-                          Regularización Extraordinaria
+                          Geral Trámites
                         </div>
                       </SelectItem>
                       <SelectItem value="NACIONALIDADE">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4" />
-                          Nacionalidad
+                          Nacionalidad Española por Residencia
                         </div>
                       </SelectItem>
-                      <SelectItem value="DOCUMENTOS">
+                      <SelectItem value="REGULARIZACION_EXTRAORDINARIA">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4" />
-                          Documentos / Certificados
+                          Regularización Extraordinaria
                         </div>
                       </SelectItem>
                     </SelectContent>
