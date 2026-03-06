@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { 
   FileText, 
   Download, 
@@ -13,7 +14,8 @@ import {
   Clock,
   PenTool,
   ExternalLink,
-  Loader2
+  Loader2,
+  ChevronDown
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -23,6 +25,8 @@ import {
   LANGUAGE_LABELS 
 } from '@/types/database';
 import jsPDF from 'jspdf';
+import { Document, Packer, Paragraph, TextRun, AlignmentType } from 'docx';
+import { saveAs } from 'file-saver';
 
 const statusConfig: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
   EM_ELABORACAO: { icon: Clock, color: 'text-muted-foreground', bg: 'bg-muted' },
