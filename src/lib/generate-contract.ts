@@ -898,7 +898,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         { type: 'heading', text: 'UNDÉCIMA - Destino del importe en caso de no aprobarse la Ley' },
         { type: 'paragraph', text: 'En caso de que la Ley no sea aprobada, o quede sin efecto, el importe abonado quedará registrado como crédito a favor del CLIENTE, pudiendo utilizarse íntegramente para cualquier otro trámite o servicio ofrecido por EL PRESTADOR, sin fecha de caducidad. En ningún caso se perderá el importe abonado.' },
         { type: 'heading', text: 'DUODÉCIMA. Política de Devolución de Honorarios' },
-        ...sectionsDevolucion(),
+        ...sectionsDevolucionRegularizacion(),
         { type: 'heading', text: 'DECIMOTERCERA. Legislación Aplicable y Jurisdicción' },
         ...sectionsLegislacion(),
         { type: 'heading', text: 'DECIMOCUARTA. Información de Contacto y Notificaciones' },
