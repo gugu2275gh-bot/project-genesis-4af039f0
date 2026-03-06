@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Download, Edit, X } from 'lucide-react';
-import { getContractSections, generateContractDocument, type ContractData, type ContractSection, type BeneficiaryData, type BankAccountData } from '@/lib/generate-contract';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Download, Edit, X, FileText, ChevronDown } from 'lucide-react';
+import { getContractSections, generateContractDocument, generateContractWord, type ContractData, type ContractSection, type BeneficiaryData, type BankAccountData } from '@/lib/generate-contract';
 
 interface ContractPreviewProps {
   template: string;
@@ -62,8 +63,12 @@ export function ContractPreview({
 
   const sections = getContractSections(currentData);
 
-  const handleDownload = async () => {
+  const handleDownloadPDF = async () => {
     await generateContractDocument(currentData);
+  };
+
+  const handleDownloadWord = async () => {
+    await generateContractWord(currentData);
   };
 
   const handleStartEditing = () => {
