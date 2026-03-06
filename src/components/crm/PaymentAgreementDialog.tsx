@@ -130,6 +130,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       amount: '', payment_method: 'PIX', payment_form: 'UNICO',
       custom_payment_method: '', transfer_origin: '', payment_account_id: '',
       discount_type: '', discount_value: '', apply_vat: false, notes: '',
+      installment_count: 2, installments: [],
     });
   };
 
