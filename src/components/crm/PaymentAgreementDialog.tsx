@@ -105,6 +105,13 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     summary += `Total Final: € ${finalAmount.toFixed(2)}\n`;
     summary += `Método: ${methodLabel}\n`;
     summary += `Forma: ${formLabel}\n`;
+    if (form.payment_form === 'PARCELADO' && form.installments.length > 0) {
+      summary += `Parcelas: ${form.installments.length}x\n`;
+      form.installments.forEach((inst, idx) => {
+        const dateStr = inst.due_date ? new Date(inst.due_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'A definir';
+        summary += `  ${idx + 1}ª: € ${parseFloat(inst.amount || '0').toFixed(2)} — Venc: ${dateStr}\n`;
+      });
+    }
     if (form.transfer_origin) {
       summary += `Origem: ${form.transfer_origin}\n`;
       const selectedAcc = paymentAccounts.find(a => a.id === form.payment_account_id);
