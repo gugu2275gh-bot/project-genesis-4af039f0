@@ -836,38 +836,6 @@ function sectionsDevolucionRegularizacion(): ContractSection[] {
   ];
 }
 
-function sectionsDevolucionDocumentos(): ContractSection[] {
-  return [
-    { type: 'paragraph', text: '10.1. Iniciación del Servicio:', bold: true },
-    { type: 'paragraph', text: 'Se entenderá como iniciado el servicio una vez que el asesor responsable por el trámite haya establecido contacto directo con EL CLIENTE a través de medios electrónicos, telefónicos o presenciales. A partir de ese momento, no será posible la devolución total o parcial del importe abonado. Si el procedimiento aún no se ha completado o si se paraliza por causas externas, el cliente tendrá 12 meses para hacer uso del servicio contratado.' },
-    { type: 'empty', text: '' },
-    { type: 'paragraph', text: '10.2. Ausencia de Devoluciones por Servicios de Terceros:', bold: true },
-    { type: 'paragraph', text: 'No se aceptarán devoluciones por conceptos ya ejecutados o pagados a terceros, entre ellos:' },
-    { type: 'bullet', text: 'Tasas de órganos públicos.' },
-    { type: 'bullet', text: 'Traducciones juradas, apostillas, legalizaciones, o cualquier otro servicio de gestoría, notaría o certificación externa.' },
-    { type: 'bullet', text: 'Matrículas o inscripciones en cursos o exámenes.' },
-    { type: 'bullet', text: 'Honorarios de terceros profesionales (procuradores, traductores, peritos, etc.).' },
-    { type: 'empty', text: '' },
-    { type: 'paragraph', text: '10.3. Exclusiones de la Prestación del Servicio:', bold: true },
-    { type: 'paragraph', text: 'El servicio contratado no incluye:' },
-    { type: 'bullet', text: 'La interposición de recursos administrativos o contencioso, salvo pacto expreso por escrito y pago adicional.' },
-    { type: 'bullet', text: 'La búsqueda, solicitud o tramitación de documentos personales en nombre del CLIENTE (por ejemplo: certificados de nacimiento, antecedentes penales, certificado de seguridad social, empadronamientos, etc.).' },
-    { type: 'bullet', text: 'Es responsabilidad exclusiva del CLIENTE proporcionar la documentación necesaria en los plazos indicados.' },
-    { type: 'empty', text: '' },
-    { type: 'paragraph', text: '10.4. Motivos Justificables de Devolución:', bold: true },
-    { type: 'paragraph', text: 'Únicamente se aceptarán devoluciones si concurre alguna de las siguientes circunstancias:' },
-    { type: 'bullet', text: 'a) Cambio de legislación que genere imposibilidad legal sobrevenida no imputable al CLIENTE.' },
-    { type: 'bullet', text: 'b) Incumplimiento grave, acreditado y documentado, por parte de CB ASESORÍA.' },
-    { type: 'paragraph', text: 'Aún que concurra alguna de las circunstancias supra mencionadas solo se aceptará y procederá con una solicitud de cancelación una vez agotadas todas las instancias y recursos judiciales o administrativos que pudieran corresponder al CLIENTE en relación con el servicio prestado. Es decir, la devolución procederá únicamente cuando se haya hecho uso de todos los medios legales disponibles.' },
-    { type: 'empty', text: '' },
-    { type: 'paragraph', text: '10.5. Procedimiento de Solicitud de Reembolso:', bold: true },
-    { type: 'paragraph', text: 'Toda solicitud de reembolso deberá realizarse por escrito, de forma motivada, acompañada de documentación justificativa, y remitida por correo electrónico o entregada físicamente en el domicilio de CB ASESORÍA.' },
-    { type: 'paragraph', text: 'El plazo máximo para la resolución de la solicitud será de 15 días hábiles a partir de su recepción. En caso de resolución favorable, el reembolso se realizará por transferencia bancaria o en efectivo.' },
-    { type: 'empty', text: '' },
-    { type: 'paragraph', text: '10.6. Renuncia del Cliente:', bold: true },
-    { type: 'paragraph', text: 'Con la firma del presente contrato, EL CLIENTE renuncia expresamente a reclamar la devolución del importe abonado una vez iniciado el servicio o una vez ejecutado algún pago a terceros por parte del PRESTADOR en nombre del CLIENTE.' },
-  ];
-}
 
 function sectionsLegislacion(): ContractSection[] {
   return [
