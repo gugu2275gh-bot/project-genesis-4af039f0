@@ -58,98 +58,109 @@ export default function PortalContracts() {
     }
   };
 
-  const handleDownloadContract = (contract: typeof contracts[0]) => {
+  const buildContractContent = (contract: typeof contracts[0]) => {
+    const lines: { text: string; bold?: boolean; heading?: boolean }[] = [];
+    
+    lines.push({ text: 'CB ASESORIA', heading: true });
+    lines.push({ text: 'CONTRATO DE PRESTAÇÃO DE SERVIÇOS', heading: true });
+    lines.push({ text: '' });
+    lines.push({ text: `Serviço: ${SERVICE_INTEREST_LABELS[contract.service_type]}` });
+    lines.push({ text: `Data: ${format(new Date(contract.created_at!), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}` });
+    
+    if (contract.total_fee) {
+      lines.push({ text: `Valor Total: ${contract.currency || 'EUR'} ${contract.total_fee.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` });
+    }
+    if (contract.installment_conditions) {
+      lines.push({ text: `Condições: ${contract.installment_conditions}` });
+    }
+    if (contract.language) {
+      lines.push({ text: `Idioma: ${LANGUAGE_LABELS[contract.language]}` });
+    }
+    if (contract.scope_summary) {
+      lines.push({ text: '' });
+      lines.push({ text: 'Escopo do Serviço:', bold: true });
+      lines.push({ text: contract.scope_summary });
+    }
+    if (contract.refund_policy_text) {
+      lines.push({ text: '' });
+      lines.push({ text: 'Política de Reembolso:', bold: true });
+      lines.push({ text: contract.refund_policy_text });
+    }
+    if (contract.signed_at) {
+      lines.push({ text: '' });
+      lines.push({ text: 'ASSINADO DIGITALMENTE', bold: true });
+      lines.push({ text: `Data da assinatura: ${format(new Date(contract.signed_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}` });
+    }
+    
+    return lines;
+  };
+
+  const handleDownloadPDF = (contract: typeof contracts[0]) => {
     try {
       const doc = new jsPDF();
+      const lines = buildContractContent(contract);
+      let y = 20;
       
-      // Header
-      doc.setFontSize(20);
-      doc.setFont('helvetica', 'bold');
-      doc.text('CB ASESORIA', 105, 20, { align: 'center' });
-      
-      doc.setFontSize(16);
-      doc.text('CONTRATO DE PRESTAÇÃO DE SERVIÇOS', 105, 35, { align: 'center' });
-      
-      // Contract info
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      
-      let y = 55;
-      
-      doc.text(`Serviço: ${SERVICE_INTEREST_LABELS[contract.service_type]}`, 20, y);
-      y += 10;
-      
-      doc.text(`Data: ${format(new Date(contract.created_at!), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`, 20, y);
-      y += 10;
-      
-      if (contract.total_fee) {
-        doc.text(`Valor Total: ${contract.currency || 'EUR'} ${contract.total_fee.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 20, y);
-        y += 10;
+      for (const line of lines) {
+        if (line.heading) {
+          doc.setFontSize(line.text === 'CB ASESORIA' ? 20 : 16);
+          doc.setFont('helvetica', 'bold');
+          doc.text(line.text, 105, y, { align: 'center' });
+          y += 12;
+        } else if (line.text === '') {
+          y += 6;
+        } else {
+          doc.setFontSize(12);
+          doc.setFont('helvetica', line.bold ? 'bold' : 'normal');
+          const splitLines = doc.splitTextToSize(line.text, 170);
+          doc.text(splitLines, 20, y);
+          y += splitLines.length * 7 + 3;
+        }
       }
       
-      if (contract.installment_conditions) {
-        doc.text(`Condições: ${contract.installment_conditions}`, 20, y);
-        y += 10;
-      }
-      
-      if (contract.language) {
-        doc.text(`Idioma: ${LANGUAGE_LABELS[contract.language]}`, 20, y);
-        y += 10;
-      }
-      
-      // Scope
-      if (contract.scope_summary) {
-        y += 10;
-        doc.setFont('helvetica', 'bold');
-        doc.text('Escopo do Serviço:', 20, y);
-        y += 8;
-        doc.setFont('helvetica', 'normal');
-        
-        const scopeLines = doc.splitTextToSize(contract.scope_summary, 170);
-        doc.text(scopeLines, 20, y);
-        y += scopeLines.length * 7;
-      }
-      
-      // Refund policy
-      if (contract.refund_policy_text) {
-        y += 10;
-        doc.setFont('helvetica', 'bold');
-        doc.text('Política de Reembolso:', 20, y);
-        y += 8;
-        doc.setFont('helvetica', 'normal');
-        
-        const refundLines = doc.splitTextToSize(contract.refund_policy_text, 170);
-        doc.text(refundLines, 20, y);
-        y += refundLines.length * 7;
-      }
-      
-      // Signature
-      if (contract.signed_at) {
-        y += 20;
-        doc.setFont('helvetica', 'bold');
-        doc.text('ASSINADO DIGITALMENTE', 105, y, { align: 'center' });
-        y += 10;
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Data da assinatura: ${format(new Date(contract.signed_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, 105, y, { align: 'center' });
-      }
-      
-      // Footer
       doc.setFontSize(10);
       doc.text('CB Asesoria - Serviços de Imigração', 105, 280, { align: 'center' });
-      
-      // Save
       doc.save(`contrato-${contract.id.slice(0, 8)}.pdf`);
       
-      toast({
-        title: 'Download iniciado',
-        description: 'Seu contrato está sendo baixado.',
+      toast({ title: 'Download iniciado', description: 'Contrato PDF baixado com sucesso.' });
+    } catch {
+      toast({ title: 'Erro ao baixar', description: 'Não foi possível gerar o PDF.', variant: 'destructive' });
+    }
+  };
+
+  const handleDownloadWord = async (contract: typeof contracts[0]) => {
+    try {
+      const lines = buildContractContent(contract);
+      const paragraphs: Paragraph[] = [];
+      
+      for (const line of lines) {
+        if (line.heading) {
+          paragraphs.push(new Paragraph({
+            children: [new TextRun({ text: line.text, bold: true, size: line.text === 'CB ASESORIA' ? 32 : 28, font: 'Calibri' })],
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 200 },
+          }));
+        } else if (line.text === '') {
+          paragraphs.push(new Paragraph({ children: [new TextRun({ text: '', size: 22 })], spacing: { after: 100 } }));
+        } else {
+          paragraphs.push(new Paragraph({
+            children: [new TextRun({ text: line.text, bold: line.bold, size: 22, font: 'Calibri' })],
+            spacing: { after: 100 },
+            alignment: AlignmentType.JUSTIFIED,
+          }));
+        }
+      }
+
+      const doc = new Document({
+        sections: [{ properties: {}, children: paragraphs }],
       });
-    } catch (error) {
-      toast({
-        title: 'Erro ao baixar',
-        description: 'Não foi possível gerar o PDF. Tente novamente.',
-        variant: 'destructive',
-      });
+
+      const blob = await Packer.toBlob(doc);
+      saveAs(blob, `contrato-${contract.id.slice(0, 8)}.docx`);
+      
+      toast({ title: 'Download iniciado', description: 'Contrato Word baixado com sucesso.' });
+    } catch {
+      toast({ title: 'Erro ao baixar', description: 'Não foi possível gerar o Word.', variant: 'destructive' });
     }
   };
 
