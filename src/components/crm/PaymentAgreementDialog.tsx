@@ -37,6 +37,8 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     discount_value: '',
     apply_vat: false,
     notes: '',
+    installment_count: 2,
+    installments: [] as { amount: string; due_date: string }[],
   });
 
   const { data: paymentAccounts = [] } = useQuery({
