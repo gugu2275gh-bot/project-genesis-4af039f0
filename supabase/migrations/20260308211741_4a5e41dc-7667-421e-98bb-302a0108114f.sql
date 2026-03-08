@@ -1,0 +1,29 @@
+
+-- Limpar dados de clientes (ordem corrigida)
+DELETE FROM portal_messages;
+DELETE FROM document_reminders;
+DELETE FROM huellas_reminders;
+DELETE FROM initial_contact_reminders;
+DELETE FROM contract_reminders;
+DELETE FROM payment_reminders;
+DELETE FROM nps_surveys;
+DELETE FROM generated_documents;
+DELETE FROM case_notes;
+DELETE FROM invoices;
+DELETE FROM cash_flow;
+DELETE FROM commissions;
+DELETE FROM contract_costs;
+DELETE FROM contract_notes;
+DELETE FROM contract_beneficiaries;
+DELETE FROM payments;
+DELETE FROM contracts;
+DELETE FROM service_cases;
+DELETE FROM tasks;
+DELETE FROM interactions;
+DELETE FROM mensagens_cliente;
+DELETE FROM opportunities;
+DELETE FROM leads;
+DELETE FROM lead_intake;
+DELETE FROM contacts;
+DELETE FROM audit_logs;
+DELETE FROM log_webhooks_falhados;
