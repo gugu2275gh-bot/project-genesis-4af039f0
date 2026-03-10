@@ -568,6 +568,16 @@ export default function PaymentsList() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <Label>Aplicar IVA ({defaultVatRate || 21}%)</Label>
+                      <p className="text-xs text-muted-foreground">Imposto sobre Valor Acrescentado</p>
+                    </div>
+                    <Switch
+                      checked={newPayment.apply_vat}
+                      onCheckedChange={(checked) => setNewPayment({ ...newPayment, apply_vat: checked })}
+                    />
+                  </div>
                 </div>
 
                 {newPayment.payment_method === 'OUTRO' && (
@@ -678,17 +688,6 @@ export default function PaymentsList() {
                   )}
                 </div>
 
-                {/* IVA */}
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div>
-                    <Label>Aplicar IVA ({defaultVatRate || 21}%)</Label>
-                    <p className="text-xs text-muted-foreground">Imposto sobre Valor Acrescentado</p>
-                  </div>
-                  <Switch
-                    checked={newPayment.apply_vat}
-                    onCheckedChange={(checked) => setNewPayment({ ...newPayment, apply_vat: checked })}
-                  />
-                </div>
 
                 {/* Calculation Summary */}
                 {(newPayment.amount && (newPayment.discount_type || newPayment.apply_vat)) && (
