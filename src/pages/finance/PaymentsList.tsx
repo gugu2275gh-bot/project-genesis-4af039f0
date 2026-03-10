@@ -116,17 +116,17 @@ export default function PaymentsList() {
   // Calculate amounts based on discount and VAT
   const calculatedAmounts = useMemo(() => {
     const gross = parseFloat(newPayment.amount) || 0;
+    const vatRate = newPayment.apply_vat ? (defaultVatRate || 21) / 100 : 0;
+    const vatAmount = gross * vatRate;
+    const totalBeforeDiscount = gross + vatAmount;
     let discountAmount = 0;
     if (newPayment.discount_type === 'PERCENTUAL') {
-      discountAmount = gross * ((parseFloat(newPayment.discount_value) || 0) / 100);
+      discountAmount = totalBeforeDiscount * ((parseFloat(newPayment.discount_value) || 0) / 100);
     } else if (newPayment.discount_type === 'VALOR') {
       discountAmount = parseFloat(newPayment.discount_value) || 0;
     }
-    const afterDiscount = Math.max(0, gross - discountAmount);
-    const vatRate = newPayment.apply_vat ? (defaultVatRate || 21) / 100 : 0;
-    const vatAmount = afterDiscount * vatRate;
-    const finalAmount = afterDiscount + vatAmount;
-    return { gross, discountAmount, afterDiscount, vatAmount, finalAmount, vatRate };
+    const finalAmount = Math.max(0, totalBeforeDiscount - discountAmount);
+    return { gross, discountAmount, totalBeforeDiscount, vatAmount, finalAmount, vatRate };
   }, [newPayment.amount, newPayment.discount_type, newPayment.discount_value, newPayment.apply_vat, defaultVatRate]);
 
   const handleCreate = async () => {
