@@ -380,17 +380,6 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             )}
           </div>
 
-          {/* IVA */}
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div>
-              <Label>Aplicar IVA ({defaultVatRate || 21}%)</Label>
-              <p className="text-xs text-muted-foreground">Imposto sobre Valor Acrescentado</p>
-            </div>
-            <Switch
-              checked={form.apply_vat}
-              onCheckedChange={(checked) => setForm({ ...form, apply_vat: checked })}
-            />
-          </div>
 
           {/* Calculation Summary */}
           {(form.amount && (form.discount_type || form.apply_vat)) && (
