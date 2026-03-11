@@ -25,24 +25,42 @@ export interface LeadMessage {
   mensagem_IA: string | null;
 }
 
-export function useLeadMessages(leadId: string | undefined, contactPhone: string | number | null = null) {
+export function useLeadMessages(leadId: string | undefined, contactPhone: string | number | null = null, contactId?: string) {
   const queryClient = useQueryClient();
 
-  const { data: messages = [], isLoading } = useQuery({
-    queryKey: ['lead-messages', leadId],
+  // Fetch all lead IDs for the same contact (for unified chat)
+  const { data: contactLeadIds } = useQuery({
+    queryKey: ['contact-lead-ids', contactId],
     queryFn: async () => {
-      if (!leadId) return [];
+      if (!contactId) return [];
+      const { data, error } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('contact_id', contactId);
+      if (error) throw error;
+      return data.map(l => l.id);
+    },
+    enabled: !!contactId,
+  });
+
+  const effectiveLeadIds = contactId && contactLeadIds?.length ? contactLeadIds : leadId ? [leadId] : [];
+  const cacheKey = contactId ? ['lead-messages-contact', contactId] : ['lead-messages', leadId];
+
+  const { data: messages = [], isLoading } = useQuery({
+    queryKey: cacheKey,
+    queryFn: async () => {
+      if (effectiveLeadIds.length === 0) return [];
       
       const { data, error } = await supabase
         .from('mensagens_cliente')
         .select('*')
-        .eq('id_lead', leadId)
+        .in('id_lead', effectiveLeadIds)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
       return data as LeadMessage[];
     },
-    enabled: !!leadId,
+    enabled: effectiveLeadIds.length > 0,
   });
 
   const { user } = useAuth();
@@ -106,15 +124,12 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
       return { data, leadId }; // Return leadId for consistent invalidation
     },
     onMutate: async ({ leadId, message }) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['lead-messages', leadId] });
+      await queryClient.cancelQueries({ queryKey: cacheKey });
       
-      // Snapshot the previous value
-      const previousMessages = queryClient.getQueryData<LeadMessage[]>(['lead-messages', leadId]);
+      const previousMessages = queryClient.getQueryData<LeadMessage[]>(cacheKey);
       
-      // Optimistically add the new message
       const optimisticMessage: LeadMessage = {
-        id: Date.now(), // Temporary ID
+        id: Date.now(),
         created_at: new Date().toISOString(),
         id_lead: leadId,
         mensagem_IA: userInfo ? `*${userInfo.name} - ${userInfo.role}*\n${message}` : message,
@@ -123,54 +138,54 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
         phone_id: null,
       };
       
-      queryClient.setQueryData<LeadMessage[]>(['lead-messages', leadId], (old = []) => [
+      queryClient.setQueryData<LeadMessage[]>(cacheKey, (old = []) => [
         ...old,
         optimisticMessage,
       ]);
       
-      return { previousMessages, leadId };
+      return { previousMessages };
     },
     onError: (err: Error, variables, context) => {
-      // Revert to previous state on error
       if (context?.previousMessages) {
-        queryClient.setQueryData(['lead-messages', context.leadId], context.previousMessages);
+        queryClient.setQueryData(cacheKey, context.previousMessages);
       }
       console.error('Erro ao enviar mensagem:', err);
       toast.error('Erro ao enviar mensagem: ' + err.message);
     },
-    onSuccess: (result) => {
+    onSuccess: () => {
       toast.success('Mensagem enviada');
     },
-    onSettled: (data, error, variables) => {
-      // Always revalidate after mutation settles
-      queryClient.invalidateQueries({ queryKey: ['lead-messages', variables.leadId] });
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: cacheKey });
     },
   });
 
-  // Realtime subscription for new messages
+  // Realtime subscription for new messages (subscribe to all leads of contact)
   useEffect(() => {
-    if (!leadId) return;
+    if (effectiveLeadIds.length === 0) return;
 
-    const channel = supabase
-      .channel(`lead-messages-${leadId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'mensagens_cliente',
-          filter: `id_lead=eq.${leadId}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['lead-messages', leadId] });
-        }
-      )
-      .subscribe();
+    const channels = effectiveLeadIds.map(lid =>
+      supabase
+        .channel(`lead-messages-${lid}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'mensagens_cliente',
+            filter: `id_lead=eq.${lid}`,
+          },
+          () => {
+            queryClient.invalidateQueries({ queryKey: cacheKey });
+          }
+        )
+        .subscribe()
+    );
 
     return () => {
-      supabase.removeChannel(channel);
+      channels.forEach(ch => supabase.removeChannel(ch));
     };
-  }, [leadId, queryClient]);
+  }, [effectiveLeadIds.join(','), queryClient]);
 
   return {
     messages,
