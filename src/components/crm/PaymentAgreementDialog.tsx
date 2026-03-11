@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
 import { useContacts } from '@/hooks/useContacts';
@@ -29,6 +29,7 @@ interface PaymentAgreementDialogProps {
 export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange }: PaymentAgreementDialogProps) {
   const { updateContact } = useContacts();
   const { data: serviceTypes } = useServiceTypes();
+  const queryClient = useQueryClient();
   const [selectedServiceTypeId, setSelectedServiceTypeId] = useState(serviceTypeId || '');
 
   const serviceTypeOptions = useMemo(() => 
@@ -149,6 +150,29 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       id: contactId,
       payment_notes: summary,
     });
+
+    // Create or update a lead for this contact with the selected service_type_id
+    if (selectedServiceTypeId) {
+      // Check if there's already a lead with this service_type_id
+      const { data: existingLeads } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('contact_id', contactId)
+        .eq('service_type_id', selectedServiceTypeId)
+        .limit(1);
+
+      if (!existingLeads?.length) {
+        await supabase.from('leads').insert({
+          contact_id: contactId,
+          service_type_id: selectedServiceTypeId,
+          service_interest: 'OUTRO' as any,
+          status: 'NOVO',
+        });
+        queryClient.invalidateQueries({ queryKey: ['leads'] });
+        queryClient.invalidateQueries({ queryKey: ['beneficiary-pending-leads', contactId] });
+        queryClient.invalidateQueries({ queryKey: ['confirmed-lead-ids', contactId] });
+      }
+    }
 
     toast({ title: 'Acordo de pagamento salvo na ficha do cliente' });
     onOpenChange(false);
