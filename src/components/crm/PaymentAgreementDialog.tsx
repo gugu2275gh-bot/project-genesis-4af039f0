@@ -14,16 +14,27 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { PAYMENT_METHOD_LABELS, PAYMENT_FORM_LABELS } from '@/types/database';
 import { DollarSign } from 'lucide-react';
+import { ServiceTypeCombobox } from '@/components/ui/service-type-combobox';
+import { useServiceTypes } from '@/hooks/useServiceTypes';
 
 interface PaymentAgreementDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contactId: string;
   contactName: string;
+  serviceTypeId?: string | null;
+  onServiceTypeChange?: (serviceTypeId: string) => void;
 }
 
-export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName }: PaymentAgreementDialogProps) {
+export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange }: PaymentAgreementDialogProps) {
   const { updateContact } = useContacts();
+  const { data: serviceTypes } = useServiceTypes();
+  const [selectedServiceTypeId, setSelectedServiceTypeId] = useState(serviceTypeId || '');
+
+  const serviceTypeOptions = useMemo(() => 
+    serviceTypes?.map(st => ({ code: st.id, name: `${st.code} - ${st.name}` })) || [],
+    [serviceTypes]
+  );
   const { toast } = useToast();
 
   const [form, setForm] = useState({
@@ -92,7 +103,11 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     const methodLabel = PAYMENT_METHOD_LABELS[form.payment_method as keyof typeof PAYMENT_METHOD_LABELS] || form.payment_method;
     const formLabel = PAYMENT_FORM_LABELS[form.payment_form as keyof typeof PAYMENT_FORM_LABELS] || form.payment_form;
 
+    const selectedServiceName = serviceTypeOptions.find(st => st.code === selectedServiceTypeId)?.name;
     let summary = `Acordo de Pagamento — ${new Date().toLocaleDateString('pt-BR')}\n`;
+    if (selectedServiceName) {
+      summary += `Serviço: ${selectedServiceName}\n`;
+    }
     summary += `Valor Bruto: € ${gross.toFixed(2)}\n`;
     if (form.apply_vat) {
       summary += `IVA (${defaultVatRate || 21}%): + € ${vatAmount.toFixed(2)}\n`;
@@ -152,6 +167,19 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
           <DialogTitle>Forma de Pagamento — {contactName}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Service Type Selection */}
+          <div>
+            <Label>Serviço de Interesse</Label>
+            <ServiceTypeCombobox
+              value={selectedServiceTypeId}
+              onValueChange={(val) => {
+                setSelectedServiceTypeId(val);
+                onServiceTypeChange?.(val);
+              }}
+              serviceTypes={serviceTypeOptions}
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Valor Bruto (€)</Label>
