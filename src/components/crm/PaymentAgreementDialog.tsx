@@ -25,8 +25,9 @@ interface PaymentAgreementDialogProps {
   onServiceTypeChange?: (serviceTypeId: string) => void;
 }
 
-export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName }: PaymentAgreementDialogProps) {
+export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange }: PaymentAgreementDialogProps) {
   const { updateContact } = useContacts();
+  const [selectedServiceTypeId, setSelectedServiceTypeId] = useState(serviceTypeId || '');
   const { toast } = useToast();
 
   const [form, setForm] = useState({
