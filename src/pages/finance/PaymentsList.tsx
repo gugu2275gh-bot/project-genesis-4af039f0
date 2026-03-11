@@ -116,17 +116,17 @@ export default function PaymentsList() {
   // Calculate amounts based on discount and VAT
   const calculatedAmounts = useMemo(() => {
     const gross = parseFloat(newPayment.amount) || 0;
+    const vatRate = newPayment.apply_vat ? (defaultVatRate || 21) / 100 : 0;
+    const vatAmount = gross * vatRate;
+    const totalBeforeDiscount = gross + vatAmount;
     let discountAmount = 0;
     if (newPayment.discount_type === 'PERCENTUAL') {
-      discountAmount = gross * ((parseFloat(newPayment.discount_value) || 0) / 100);
+      discountAmount = totalBeforeDiscount * ((parseFloat(newPayment.discount_value) || 0) / 100);
     } else if (newPayment.discount_type === 'VALOR') {
       discountAmount = parseFloat(newPayment.discount_value) || 0;
     }
-    const afterDiscount = Math.max(0, gross - discountAmount);
-    const vatRate = newPayment.apply_vat ? (defaultVatRate || 21) / 100 : 0;
-    const vatAmount = afterDiscount * vatRate;
-    const finalAmount = afterDiscount + vatAmount;
-    return { gross, discountAmount, afterDiscount, vatAmount, finalAmount, vatRate };
+    const finalAmount = Math.max(0, totalBeforeDiscount - discountAmount);
+    return { gross, discountAmount, totalBeforeDiscount, vatAmount, finalAmount, vatRate };
   }, [newPayment.amount, newPayment.discount_type, newPayment.discount_value, newPayment.apply_vat, defaultVatRate]);
 
   const handleCreate = async () => {
@@ -696,16 +696,22 @@ export default function PaymentsList() {
                       <span className="text-muted-foreground">Valor Bruto</span>
                       <span>€ {calculatedAmounts.gross.toFixed(2)}</span>
                     </div>
-                    {calculatedAmounts.discountAmount > 0 && (
-                      <div className="flex justify-between text-destructive">
-                        <span>Desconto</span>
-                        <span>- € {calculatedAmounts.discountAmount.toFixed(2)}</span>
-                      </div>
-                    )}
                     {newPayment.apply_vat && (
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">IVA ({defaultVatRate || 21}%)</span>
                         <span>+ € {calculatedAmounts.vatAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {(newPayment.apply_vat || calculatedAmounts.discountAmount > 0) && (
+                      <div className="flex justify-between font-medium border-t pt-1">
+                        <span>Total</span>
+                        <span>€ {calculatedAmounts.totalBeforeDiscount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {calculatedAmounts.discountAmount > 0 && (
+                      <div className="flex justify-between text-destructive">
+                        <span>Desconto</span>
+                        <span>- € {calculatedAmounts.discountAmount.toFixed(2)}</span>
                       </div>
                     )}
                     <div className="flex justify-between font-semibold border-t pt-1">
