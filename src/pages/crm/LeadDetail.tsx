@@ -734,6 +734,10 @@ export default function LeadDetail() {
                   onOpenChange={setShowPaymentAgreement}
                   contactId={lead.contact_id}
                   contactName={lead.contacts?.full_name || ''}
+                  serviceTypeId={lead.service_type_id}
+                  onServiceTypeChange={async (serviceTypeId) => {
+                    await updateLead.mutateAsync({ id: lead.id, service_type_id: serviceTypeId });
+                  }}
                 />
               )}
             </div>
