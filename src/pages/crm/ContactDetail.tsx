@@ -1253,12 +1253,10 @@ export default function ContactDetail() {
                 </CardTitle>
                 <CardDescription>O que foi combinado com o cliente sobre pagamento</CardDescription>
               </div>
-              {contact.is_beneficiary && (
-                <Button size="sm" variant="outline" onClick={() => setShowPaymentAgreement(true)}>
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  Forma de Pagamento
-                </Button>
-              )}
+              <Button size="sm" variant="outline" onClick={() => setShowPaymentAgreement(true)}>
+                <DollarSign className="h-4 w-4 mr-1" />
+                Forma de Pagamento
+              </Button>
             </CardHeader>
             <CardContent className="space-y-4">
               <Textarea
