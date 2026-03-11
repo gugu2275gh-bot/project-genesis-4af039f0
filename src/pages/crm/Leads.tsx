@@ -6,17 +6,18 @@ import { useLeadSLAAlerts } from '@/hooks/useLeadSLAAlerts';
 import { useServiceTypes } from '@/hooks/useServiceTypes';
 import { ServiceTypeCombobox } from '@/components/ui/service-type-combobox';
 import { PageHeader } from '@/components/ui/page-header';
-import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Eye, UserPlus, Users } from 'lucide-react';
+import { Plus, Search, Eye, UserPlus, Users, ChevronRight, ChevronDown, User } from 'lucide-react';
 import { LEAD_STATUS_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Leads() {
   const navigate = useNavigate();
@@ -30,8 +31,10 @@ export default function Leads() {
     serviceTypes?.forEach(st => { map[st.code] = st.name; });
     return map;
   }, [serviceTypes]);
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [leadMode, setLeadMode] = useState<'new' | 'existing'>('new');
   const [selectedContactId, setSelectedContactId] = useState<string>('');
@@ -57,13 +60,53 @@ export default function Leads() {
   }, [contacts, contactSearch]);
 
   const filteredLeads = leads.filter(l => {
-    const matchesSearch = 
+    const matchesSearch =
       l.contacts?.full_name.toLowerCase().includes(search.toLowerCase()) ||
       l.contacts?.email?.toLowerCase().includes(search.toLowerCase()) ||
       l.contacts?.phone?.toString().includes(search);
     const matchesStatus = statusFilter === 'all' || l.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // Group leads by contact
+  const groupedClients = useMemo(() => {
+    const map = new Map<string, {
+      contactId: string;
+      contactName: string;
+      contactEmail: string | null;
+      contactPhone: number | null;
+      leads: typeof filteredLeads;
+    }>();
+
+    for (const lead of filteredLeads) {
+      const cid = lead.contact_id;
+      if (!map.has(cid)) {
+        map.set(cid, {
+          contactId: cid,
+          contactName: lead.contacts?.full_name || 'Sem nome',
+          contactEmail: lead.contacts?.email || null,
+          contactPhone: lead.contacts?.phone || null,
+          leads: [],
+        });
+      }
+      map.get(cid)!.leads.push(lead);
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      const aDate = new Date(a.leads[0]?.created_at || 0).getTime();
+      const bDate = new Date(b.leads[0]?.created_at || 0).getTime();
+      return bDate - aDate;
+    });
+  }, [filteredLeads]);
+
+  const toggleClient = (contactId: string) => {
+    setExpandedClients(prev => {
+      const next = new Set(prev);
+      if (next.has(contactId)) next.delete(contactId);
+      else next.add(contactId);
+      return next;
+    });
+  };
 
   const handleCreate = async () => {
     if (leadMode === 'existing') {
@@ -111,82 +154,6 @@ export default function Leads() {
       referral_name: '',
     });
   };
-
-  // Count leads per contact for duplicate badge
-  const contactLeadCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    leads.forEach(l => {
-      if (l.contact_id && l.status !== 'MESCLADO') {
-        counts[l.contact_id] = (counts[l.contact_id] || 0) + 1;
-      }
-    });
-    return counts;
-  }, [leads]);
-
-  const columns: Column<typeof leads[0]>[] = [
-    {
-      key: 'contacts',
-      header: 'Cliente',
-      cell: (lead) => (
-        <div className="flex items-center gap-2">
-          <div>
-            <div className="font-medium">{lead.contacts?.full_name}</div>
-            <div className="text-sm text-muted-foreground">{lead.contacts?.email}</div>
-          </div>
-          {contactLeadCounts[lead.contact_id] > 1 && (
-            <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-              {contactLeadCounts[lead.contact_id]}
-            </span>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'service_interest',
-      header: 'Serviço',
-      cell: (lead) => serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro',
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      cell: (lead) => (
-        <StatusBadge 
-          status={lead.status || 'NOVO'} 
-          label={LEAD_STATUS_LABELS[lead.status || 'NOVO']} 
-        />
-      ),
-    },
-    {
-      key: 'interest_confirmed',
-      header: 'Interesse',
-      cell: (lead) => (
-        <span className={lead.interest_confirmed ? 'text-green-600' : 'text-muted-foreground'}>
-          {lead.interest_confirmed ? 'Confirmado' : 'Pendente'}
-        </span>
-      ),
-    },
-    {
-      key: 'created_at',
-      header: 'Data',
-      cell: (lead) => format(new Date(lead.created_at!), 'dd/MM/yyyy HH:mm', { locale: ptBR }),
-    },
-    {
-      key: 'actions',
-      header: '',
-      cell: (lead) => (
-        <Button 
-          variant="ghost" 
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/crm/leads/${lead.id}`);
-          }}
-        >
-          <Eye className="h-4 w-4" />
-        </Button>
-      ),
-    },
-  ];
 
   return (
     <div className="space-y-6">
@@ -339,8 +306,8 @@ export default function Leads() {
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancelar
                   </Button>
-                  <Button 
-                    onClick={handleCreate} 
+                  <Button
+                    onClick={handleCreate}
                     disabled={createLead.isPending || (leadMode === 'new' && !newLead.full_name) || (leadMode === 'existing' && !selectedContactId)}
                   >
                     {createLead.isPending ? 'Criando...' : 'Criar Lead'}
@@ -356,7 +323,7 @@ export default function Leads() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar leads..."
+            placeholder="Buscar por cliente..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -377,13 +344,86 @@ export default function Leads() {
         </Select>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filteredLeads}
-        loading={isLoading}
-        emptyMessage="Nenhum lead encontrado"
-        onRowClick={(lead) => navigate(`/crm/leads/${lead.id}`)}
-      />
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map(i => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : groupedClients.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          Nenhum lead encontrado
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {groupedClients.map(client => {
+            const isExpanded = expandedClients.has(client.contactId);
+            return (
+              <div key={client.contactId} className="border rounded-lg overflow-hidden bg-card">
+                {/* Client row */}
+                <button
+                  onClick={() => toggleClient(client.contactId)}
+                  className="w-full flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors text-left"
+                >
+                  {isExpanded ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <div className="flex items-center justify-center h-9 w-9 rounded-full bg-primary/10 shrink-0">
+                    <User className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{client.contactName}</div>
+                    <div className="text-sm text-muted-foreground truncate">
+                      {client.contactEmail}
+                      {client.contactEmail && client.contactPhone && ' · '}
+                      {client.contactPhone}
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="shrink-0">
+                    {client.leads.length} {client.leads.length === 1 ? 'lead' : 'leads'}
+                  </Badge>
+                </button>
+
+                {/* Expanded leads */}
+                {isExpanded && (
+                  <div className="border-t bg-muted/30">
+                    {client.leads.map(lead => (
+                      <div
+                        key={lead.id}
+                        onClick={() => navigate(`/crm/leads/${lead.id}`)}
+                        className="flex items-center gap-3 px-4 py-3 pl-16 hover:bg-muted/50 cursor-pointer transition-colors border-t first:border-t-0"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium">
+                              {serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro'}
+                            </span>
+                            <StatusBadge
+                              status={lead.status || 'NOVO'}
+                              label={LEAD_STATUS_LABELS[lead.status || 'NOVO']}
+                            />
+                            {lead.interest_confirmed && (
+                              <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 dark:bg-green-900/20 text-xs">
+                                Interesse Confirmado
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Criado em {format(new Date(lead.created_at!), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          </div>
+                        </div>
+                        <Eye className="h-4 w-4 text-muted-foreground shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
