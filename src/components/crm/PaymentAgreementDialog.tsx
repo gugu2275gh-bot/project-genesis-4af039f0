@@ -152,8 +152,8 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     });
 
     // Create or update a lead for this contact with the selected service_type_id
+    let leadId: string | null = null;
     if (selectedServiceTypeId) {
-      // Check if there's already a lead with this service_type_id
       const { data: existingLeads } = await supabase
         .from('leads')
         .select('id')
@@ -161,22 +161,105 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
         .eq('service_type_id', selectedServiceTypeId)
         .limit(1);
 
-      if (!existingLeads?.length) {
-        const { error: leadError } = await supabase.from('leads').insert({
+      if (existingLeads?.length) {
+        leadId = existingLeads[0].id;
+      } else {
+        const { data: newLead, error: leadError } = await supabase.from('leads').insert({
           contact_id: contactId,
           service_type_id: selectedServiceTypeId,
           service_interest: 'OUTRO' as any,
           status: 'NOVO',
-        });
+        }).select('id').single();
         if (leadError) {
           console.error('Error creating lead for service:', leadError);
         } else {
-          queryClient.invalidateQueries({ queryKey: ['leads'] });
-          queryClient.invalidateQueries({ queryKey: ['beneficiary-pending-leads', contactId] });
-          queryClient.invalidateQueries({ queryKey: ['confirmed-lead-ids', contactId] });
+          leadId = newLead.id;
         }
       }
     }
+
+    // Create opportunity and payments if we have a lead and amount
+    if (leadId && form.amount) {
+      const { data: existingOpp } = await supabase
+        .from('opportunities')
+        .select('id')
+        .eq('lead_id', leadId)
+        .limit(1);
+
+      let opportunityId: string | null = null;
+
+      if (existingOpp?.length) {
+        opportunityId = existingOpp[0].id;
+        await supabase.from('opportunities').update({
+          total_amount: finalAmount,
+          status: 'PAGAMENTO_PENDENTE',
+        }).eq('id', opportunityId);
+      } else {
+        const { data: newOpp, error: oppError } = await supabase.from('opportunities').insert({
+          lead_id: leadId,
+          total_amount: finalAmount,
+          status: 'PAGAMENTO_PENDENTE',
+        }).select('id').single();
+        if (oppError) {
+          console.error('Error creating opportunity:', oppError);
+        } else {
+          opportunityId = newOpp.id;
+        }
+      }
+
+      if (opportunityId) {
+        const { data: existingPayments } = await supabase
+          .from('payments')
+          .select('id')
+          .eq('opportunity_id', opportunityId);
+
+        if (!existingPayments?.length) {
+          const paymentMethod = form.payment_method as any;
+
+          if (form.payment_form === 'PARCELADO' && form.installments.length > 0) {
+            const paymentInserts = form.installments.map((inst, idx) => ({
+              opportunity_id: opportunityId!,
+              amount: parseFloat(inst.amount) || 0,
+              due_date: inst.due_date || null,
+              installment_number: idx + 1,
+              payment_method: paymentMethod,
+              payment_form: 'PARCELADO' as any,
+              status: 'PENDENTE' as any,
+              gross_amount: gross,
+              apply_vat: form.apply_vat,
+              vat_rate: form.apply_vat ? (defaultVatRate || 21) / 100 : 0,
+              discount_type: form.discount_type || null,
+              discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
+              beneficiary_contact_id: contactId,
+            }));
+            const { error: payError } = await supabase.from('payments').insert(paymentInserts);
+            if (payError) console.error('Error creating installment payments:', payError);
+          } else {
+            const { error: payError } = await supabase.from('payments').insert({
+              opportunity_id: opportunityId,
+              amount: finalAmount,
+              payment_method: paymentMethod,
+              payment_form: 'UNICO' as any,
+              status: 'PENDENTE' as any,
+              gross_amount: gross,
+              apply_vat: form.apply_vat,
+              vat_rate: form.apply_vat ? (defaultVatRate || 21) / 100 : 0,
+              vat_amount: vatAmount,
+              discount_type: form.discount_type || null,
+              discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
+              beneficiary_contact_id: contactId,
+            });
+            if (payError) console.error('Error creating payment:', payError);
+          }
+        }
+      }
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['leads'] });
+    queryClient.invalidateQueries({ queryKey: ['beneficiary-pending-leads', contactId] });
+    queryClient.invalidateQueries({ queryKey: ['confirmed-lead-ids', contactId] });
+    queryClient.invalidateQueries({ queryKey: ['payments'] });
+    queryClient.invalidateQueries({ queryKey: ['opportunities'] });
 
     toast({ title: 'Acordo de pagamento salvo na ficha do cliente' });
     onOpenChange(false);
