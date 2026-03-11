@@ -1260,7 +1260,7 @@ export default function ContactDetail() {
                 </Button>
               )}
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <Textarea
                 value={paymentNotes || ''}
                 onChange={(e) => setPaymentNotes(e.target.value)}
@@ -1281,6 +1281,58 @@ export default function ContactDetail() {
                   Salvar
                 </Button>
               </div>
+
+              {/* Payments grouped by service */}
+              {paymentsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2].map(i => <Skeleton key={i} className="h-16" />)}
+                </div>
+              ) : paymentsByService.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    {paymentsByService.map((group, gIdx) => (
+                      <div key={gIdx} className="space-y-2">
+                        <h4 className="text-sm font-semibold flex items-center gap-2">
+                          <CreditCard className="h-4 w-4 text-muted-foreground" />
+                          {group.serviceName}
+                          <Badge variant="outline" className="text-xs">{group.payments.length} pagamento{group.payments.length > 1 ? 's' : ''}</Badge>
+                        </h4>
+                        <div className="space-y-2 pl-6">
+                          {group.payments.map((payment: any) => (
+                            <div key={payment.id} className="flex items-center justify-between p-2.5 rounded-lg border">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="font-medium text-sm">
+                                    € {Number(payment.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  </p>
+                                  {payment.installment_number && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Parcela {payment.installment_number}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                                  {payment.due_date && (
+                                    <span>Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
+                                  )}
+                                  {payment.contracts?.contract_number && (
+                                    <span>{payment.contracts.contract_number}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <StatusBadge
+                                status={payment.status || 'PENDENTE'}
+                                label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
