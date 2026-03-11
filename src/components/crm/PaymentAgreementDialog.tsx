@@ -72,17 +72,17 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
   const calculatedAmounts = useMemo(() => {
     const gross = parseFloat(form.amount) || 0;
+    const vatRate = form.apply_vat ? (defaultVatRate || 21) / 100 : 0;
+    const vatAmount = gross * vatRate;
+    const totalBeforeDiscount = gross + vatAmount;
     let discountAmount = 0;
     if (form.discount_type === 'PERCENTUAL') {
-      discountAmount = gross * ((parseFloat(form.discount_value) || 0) / 100);
+      discountAmount = totalBeforeDiscount * ((parseFloat(form.discount_value) || 0) / 100);
     } else if (form.discount_type === 'VALOR') {
       discountAmount = parseFloat(form.discount_value) || 0;
     }
-    const afterDiscount = Math.max(0, gross - discountAmount);
-    const vatRate = form.apply_vat ? (defaultVatRate || 21) / 100 : 0;
-    const vatAmount = afterDiscount * vatRate;
-    const finalAmount = afterDiscount + vatAmount;
-    return { gross, discountAmount, afterDiscount, vatAmount, finalAmount, vatRate };
+    const finalAmount = Math.max(0, totalBeforeDiscount - discountAmount);
+    return { gross, discountAmount, totalBeforeDiscount, vatAmount, finalAmount, vatRate };
   }, [form.amount, form.discount_type, form.discount_value, form.apply_vat, defaultVatRate]);
 
   const handleSave = async () => {
