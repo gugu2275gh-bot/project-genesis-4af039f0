@@ -25,24 +25,42 @@ export interface LeadMessage {
   mensagem_IA: string | null;
 }
 
-export function useLeadMessages(leadId: string | undefined, contactPhone: string | number | null = null) {
+export function useLeadMessages(leadId: string | undefined, contactPhone: string | number | null = null, contactId?: string) {
   const queryClient = useQueryClient();
 
-  const { data: messages = [], isLoading } = useQuery({
-    queryKey: ['lead-messages', leadId],
+  // Fetch all lead IDs for the same contact (for unified chat)
+  const { data: contactLeadIds } = useQuery({
+    queryKey: ['contact-lead-ids', contactId],
     queryFn: async () => {
-      if (!leadId) return [];
+      if (!contactId) return [];
+      const { data, error } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('contact_id', contactId);
+      if (error) throw error;
+      return data.map(l => l.id);
+    },
+    enabled: !!contactId,
+  });
+
+  const effectiveLeadIds = contactId && contactLeadIds?.length ? contactLeadIds : leadId ? [leadId] : [];
+  const cacheKey = contactId ? ['lead-messages-contact', contactId] : ['lead-messages', leadId];
+
+  const { data: messages = [], isLoading } = useQuery({
+    queryKey: cacheKey,
+    queryFn: async () => {
+      if (effectiveLeadIds.length === 0) return [];
       
       const { data, error } = await supabase
         .from('mensagens_cliente')
         .select('*')
-        .eq('id_lead', leadId)
+        .in('id_lead', effectiveLeadIds)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
       return data as LeadMessage[];
     },
-    enabled: !!leadId,
+    enabled: effectiveLeadIds.length > 0,
   });
 
   const { user } = useAuth();
