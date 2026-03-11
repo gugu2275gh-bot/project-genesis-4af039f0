@@ -1904,7 +1904,7 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                Trâmites como Beneficiário ({beneficiaryServiceCases.length})
+                Trâmites como Beneficiário ({allItems.length})
               </CardTitle>
               <CardDescription>Casos técnicos vinculados a este beneficiário</CardDescription>
             </div>
@@ -1919,32 +1919,60 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
             <div className="space-y-3">
               {[1, 2].map(i => <Skeleton key={i} className="h-16" />)}
             </div>
-          ) : beneficiaryServiceCases.length === 0 ? (
+          ) : allItems.length === 0 ? (
             <p className="text-muted-foreground text-center py-4">
               Nenhum trâmite vinculado a este beneficiário.
             </p>
           ) : (
             <div className="space-y-3">
-              {beneficiaryServiceCases.map((sc: any) => (
-                <div
-                  key={sc.id}
-                  className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => navigate(`/cases/${sc.id}`)}
-                >
-                  <div>
-                    <p className="font-medium">
-                      {SERVICE_INTEREST_LABELS[sc.service_type as keyof typeof SERVICE_INTEREST_LABELS] || sc.service_type}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Setor: {SECTOR_LABELS_MAP[sc.sector as keyof typeof SECTOR_LABELS_MAP] || sc.sector} • Criado em {format(new Date(sc.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                    </p>
-                  </div>
-                  <StatusBadge
-                    status={sc.technical_status || 'CONTATO_INICIAL'}
-                    label={TECHNICAL_STATUS_LABELS[sc.technical_status as keyof typeof TECHNICAL_STATUS_LABELS] || sc.technical_status}
-                  />
-                </div>
-              ))}
+              {allItems.map((item) => {
+                if (item.type === 'case') {
+                  const sc = item.data;
+                  return (
+                    <div
+                      key={sc.id}
+                      className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => navigate(`/cases/${sc.id}`)}
+                    >
+                      <div>
+                        <p className="font-medium">
+                          {SERVICE_INTEREST_LABELS[sc.service_type as keyof typeof SERVICE_INTEREST_LABELS] || sc.service_type}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Setor: {SECTOR_LABELS_MAP[sc.sector as keyof typeof SECTOR_LABELS_MAP] || sc.sector} • Criado em {format(new Date(sc.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                        </p>
+                      </div>
+                      <StatusBadge
+                        status={sc.technical_status || 'CONTATO_INICIAL'}
+                        label={TECHNICAL_STATUS_LABELS[sc.technical_status as keyof typeof TECHNICAL_STATUS_LABELS] || sc.technical_status}
+                      />
+                    </div>
+                  );
+                } else {
+                  const lead = item.data;
+                  const stName = lead.service_type_id
+                    ? pendingServiceTypes?.find(st => st.id === lead.service_type_id)?.name
+                    : null;
+                  const displayName = stName || SERVICE_INTEREST_LABELS[lead.service_interest as keyof typeof SERVICE_INTEREST_LABELS] || lead.service_interest;
+                  return (
+                    <div
+                      key={lead.id}
+                      className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => navigate(`/crm/leads/${lead.id}`)}
+                    >
+                      <div>
+                        <p className="font-medium">{displayName}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Criado em {format(new Date(lead.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
+                        Aguardando Pagamento
+                      </Badge>
+                    </div>
+                  );
+                }
+              })}
             </div>
           )}
         </CardContent>
