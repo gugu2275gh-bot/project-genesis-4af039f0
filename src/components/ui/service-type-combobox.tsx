@@ -25,7 +25,13 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
     );
   }, [serviceTypes, search]);
 
+  const stripPrefix = (name: string) => {
+    const dashIndex = name.indexOf(' - ');
+    return dashIndex !== -1 ? name.substring(dashIndex + 3) : name;
+  };
+
   const selectedLabel = serviceTypes?.find(st => st.code === value)?.name;
+  const displaySelectedLabel = selectedLabel ? stripPrefix(selectedLabel) : undefined;
 
   return (
     <Popover open={open} onOpenChange={setOpen} modal={false}>
@@ -37,7 +43,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
           className="w-full justify-between font-normal"
         >
           <span className="truncate">
-            {selectedLabel || placeholder}
+            {displaySelectedLabel || placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -77,7 +83,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
                       value === st.code ? 'opacity-100' : 'opacity-0'
                     )}
                   />
-                  {st.name}
+                  {stripPrefix(st.name)}
                 </button>
               ))}
             </div>
