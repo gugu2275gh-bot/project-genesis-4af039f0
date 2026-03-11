@@ -146,9 +146,19 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       summary += `Observações: ${form.notes}\n`;
     }
 
+    // Append new agreement to existing payment_notes (don't overwrite)
+    const { data: currentContact } = await supabase
+      .from('contacts')
+      .select('payment_notes')
+      .eq('id', contactId)
+      .single();
+
+    const existingNotes = currentContact?.payment_notes || '';
+    const separator = existingNotes ? '\n---\n\n' : '';
+
     await updateContact.mutateAsync({
       id: contactId,
-      payment_notes: summary,
+      payment_notes: existingNotes + separator + summary,
     });
 
     // Create or update a lead for this contact with the selected service_type_id
