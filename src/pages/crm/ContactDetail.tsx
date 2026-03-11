@@ -154,7 +154,7 @@ export default function ContactDetail() {
       // 1. Payments as beneficiary (beneficiary_contact_id = this contact)
       const { data: benefPayments } = await supabase
         .from('payments')
-        .select('*, contracts(contract_number, service_type)')
+        .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest))')
         .eq('beneficiary_contact_id', id)
         .order('due_date', { ascending: true });
 
@@ -175,7 +175,7 @@ export default function ContactDetail() {
           const oppIds = opps.map(o => o.id);
           const { data: payments, error } = await supabase
             .from('payments')
-            .select('*, contracts(contract_number, service_type)')
+            .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest))')
             .in('opportunity_id', oppIds)
             .order('due_date', { ascending: true });
           if (!error) titularPayments = payments || [];
