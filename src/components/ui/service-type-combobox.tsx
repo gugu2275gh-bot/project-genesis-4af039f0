@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ServiceTypeComboboxProps {
   value: string;
@@ -53,7 +52,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
             className="h-8 border-0 p-0 shadow-none focus-visible:ring-0"
           />
         </div>
-        <ScrollArea className="h-[250px]">
+        <div className="max-h-[250px] overflow-y-auto">
           {filtered.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">Nenhum serviço encontrado</p>
           ) : (
@@ -83,7 +82,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   );
