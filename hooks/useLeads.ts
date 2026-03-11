@@ -143,6 +143,42 @@ export function useLeads() {
     },
   });
 
+  const mergeLeads = useMutation({
+    mutationFn: async (leadIds: string[]) => {
+      if (leadIds.length < 2) throw new Error('Selecione pelo menos 2 leads para mesclar.');
+      const { data: leadsToMerge, error: fetchError } = await supabase
+        .from('leads')
+        .select('*, contacts(*)')
+        .in('id', leadIds)
+        .order('created_at', { ascending: false });
+      if (fetchError) throw fetchError;
+      if (!leadsToMerge || leadsToMerge.length < 2) throw new Error('Leads não encontrados.');
+      const contactIds = new Set(leadsToMerge.map(l => l.contact_id));
+      if (contactIds.size > 1) throw new Error('Todos os leads devem pertencer ao mesmo cliente.');
+      const primaryLead = leadsToMerge[0];
+      const secondaryIds = leadsToMerge.slice(1).map(l => l.id);
+      await supabase.from('interactions').update({ lead_id: primaryLead.id }).in('lead_id', secondaryIds);
+      await supabase.from('tasks').update({ related_lead_id: primaryLead.id }).in('related_lead_id', secondaryIds);
+      await supabase.from('mensagens_cliente').update({ id_lead: primaryLead.id }).in('id_lead', secondaryIds);
+      const secondaryNotes = leadsToMerge.slice(1).filter(l => l.notes).map(l => `[Mesclado de lead ${l.id?.slice(0, 8)}]: ${l.notes}`).join('\n');
+      const mergedNotes = [primaryLead.notes, secondaryNotes].filter(Boolean).join('\n');
+      await supabase.from('leads').update({ notes: mergedNotes || null, updated_by_user_id: user?.id }).eq('id', primaryLead.id);
+      for (const id of secondaryIds) {
+        await supabase.from('leads').update({ status: 'MESCLADO' as any, notes: `Mesclado ao lead ${primaryLead.id.slice(0, 8)}`, updated_by_user_id: user?.id }).eq('id', id);
+      }
+      return primaryLead;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['interactions'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast({ title: 'Leads mesclados com sucesso!' });
+    },
+    onError: (error) => {
+      toast({ title: 'Erro ao mesclar leads', description: error.message, variant: 'destructive' });
+    },
+  });
+
   return {
     leads: leadsQuery.data ?? [],
     isLoading: leadsQuery.isLoading,
@@ -150,6 +186,7 @@ export function useLeads() {
     createLead,
     updateLead,
     confirmInterest,
+    mergeLeads,
   };
 }
 
