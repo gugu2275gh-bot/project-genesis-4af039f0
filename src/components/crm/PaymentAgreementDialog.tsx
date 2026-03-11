@@ -29,6 +29,7 @@ interface PaymentAgreementDialogProps {
 export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange }: PaymentAgreementDialogProps) {
   const { updateContact } = useContacts();
   const { data: serviceTypes } = useServiceTypes();
+  const queryClient = useQueryClient();
   const [selectedServiceTypeId, setSelectedServiceTypeId] = useState(serviceTypeId || '');
 
   const serviceTypeOptions = useMemo(() => 
