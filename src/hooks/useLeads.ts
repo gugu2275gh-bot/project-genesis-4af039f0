@@ -300,6 +300,24 @@ export function useLeads() {
   };
 }
 
+export function useContactLeads(contactId: string | undefined) {
+  return useQuery({
+    queryKey: ['leads', 'contact', contactId],
+    queryFn: async () => {
+      if (!contactId) return [];
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*, contacts(*)')
+        .eq('contact_id', contactId)
+        .neq('status', 'MESCLADO')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data as LeadWithContact[];
+    },
+    enabled: !!contactId,
+  });
+}
+
 export function useLead(id: string | undefined) {
   return useQuery({
     queryKey: ['leads', id],
