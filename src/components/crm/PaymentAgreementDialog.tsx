@@ -103,7 +103,11 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     const methodLabel = PAYMENT_METHOD_LABELS[form.payment_method as keyof typeof PAYMENT_METHOD_LABELS] || form.payment_method;
     const formLabel = PAYMENT_FORM_LABELS[form.payment_form as keyof typeof PAYMENT_FORM_LABELS] || form.payment_form;
 
+    const selectedServiceName = serviceTypeOptions.find(st => st.code === selectedServiceTypeId)?.name;
     let summary = `Acordo de Pagamento — ${new Date().toLocaleDateString('pt-BR')}\n`;
+    if (selectedServiceName) {
+      summary += `Serviço: ${selectedServiceName}\n`;
+    }
     summary += `Valor Bruto: € ${gross.toFixed(2)}\n`;
     if (form.apply_vat) {
       summary += `IVA (${defaultVatRate || 21}%): + € ${vatAmount.toFixed(2)}\n`;
