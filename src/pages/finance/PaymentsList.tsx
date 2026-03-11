@@ -702,7 +702,7 @@ export default function PaymentsList() {
                         <span>+ € {calculatedAmounts.vatAmount.toFixed(2)}</span>
                       </div>
                     )}
-                    {(newPayment.apply_vat || calculatedAmounts.discountAmount > 0) && (
+                    {(newPayment.apply_vat && calculatedAmounts.discountAmount > 0) && (
                       <div className="flex justify-between font-medium border-t pt-1">
                         <span>Total</span>
                         <span>€ {calculatedAmounts.totalBeforeDiscount.toFixed(2)}</span>
