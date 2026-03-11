@@ -1268,16 +1268,16 @@ export default function ContactDetail() {
             </CardContent>
           </Card>
 
-          {/* Serviços (leads com pagamento confirmado) - esconder para beneficiários */}
+          {/* Serviços (leads com pagamento confirmado ou aguardando) - esconder para beneficiários */}
           {!contact.is_beneficiary && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Briefcase className="h-5 w-5" />
-                  Serviços Contratados ({confirmedLeads.length})
+                  Serviços ({allServiceLeads.length})
                 </CardTitle>
-                <CardDescription>Atendimentos com pagamento confirmado</CardDescription>
+                <CardDescription>Serviços contratados e em andamento</CardDescription>
               </div>
               <Button size="sm" onClick={() => setShowNewServiceDialog(true)}>
                 <Plus className="h-4 w-4 mr-1" />
@@ -1285,32 +1285,43 @@ export default function ContactDetail() {
               </Button>
             </CardHeader>
             <CardContent>
-              {confirmedLeads.length === 0 ? (
+              {allServiceLeads.length === 0 ? (
                 <p className="text-muted-foreground text-center py-4">
                   Nenhum serviço ativo para este cliente.
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {confirmedLeads.map(lead => (
-                    <div 
-                      key={lead.id} 
-                      className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => navigate(`/crm/leads/${lead.id}`)}
-                    >
-                      <div>
-                        <p className="font-medium">
-                          {SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO']}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Criado em {format(new Date(lead.created_at!), "dd/MM/yyyy", { locale: ptBR })}
-                        </p>
+                  {allServiceLeads.map(lead => {
+                    const isConfirmed = confirmedLeadIds.includes(lead.id);
+                    const serviceTypeName = lead.service_type_id
+                      ? serviceTypes?.find(st => st.id === lead.service_type_id)?.name
+                      : null;
+                    const displayName = serviceTypeName || SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO'];
+                    return (
+                      <div 
+                        key={lead.id} 
+                        className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => navigate(`/crm/leads/${lead.id}`)}
+                      >
+                        <div>
+                          <p className="font-medium">{displayName}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Criado em {format(new Date(lead.created_at!), "dd/MM/yyyy", { locale: ptBR })}
+                          </p>
+                        </div>
+                        {isConfirmed ? (
+                          <StatusBadge 
+                            status={lead.status || 'NOVO'} 
+                            label={LEAD_STATUS_LABELS[lead.status || 'NOVO']} 
+                          />
+                        ) : (
+                          <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
+                            Aguardando Pagamento
+                          </Badge>
+                        )}
                       </div>
-                      <StatusBadge 
-                        status={lead.status || 'NOVO'} 
-                        label={LEAD_STATUS_LABELS[lead.status || 'NOVO']} 
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
