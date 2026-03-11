@@ -168,10 +168,11 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             <Label>Serviço de Interesse</Label>
             <ServiceTypeCombobox
               value={selectedServiceTypeId}
-              onChange={(val) => {
+              onValueChange={(val) => {
                 setSelectedServiceTypeId(val);
                 onServiceTypeChange?.(val);
               }}
+              serviceTypes={serviceTypeOptions}
             />
           </div>
 
