@@ -1796,6 +1796,32 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
   const [serviceType, setServiceType] = useState('');
   const [sector, setSector] = useState('');
 
+  // Fetch leads for this beneficiary that have service_type_id but no service_case yet
+  const { data: pendingBeneficiaryLeads = [] } = useQuery({
+    queryKey: ['beneficiary-pending-leads', contactId],
+    queryFn: async () => {
+      const { data: bLeads } = await supabase
+        .from('leads')
+        .select('id, service_type_id, service_interest, created_at, status')
+        .eq('contact_id', contactId)
+        .not('service_type_id', 'is', null)
+        .order('created_at', { ascending: false });
+      return bLeads || [];
+    },
+    enabled: !!contactId,
+  });
+
+  const { data: pendingServiceTypes } = useServiceTypes();
+
+  // Filter out leads that already have a linked service_case
+  const existingServiceTypeIds = new Set(beneficiaryServiceCases.map((sc: any) => sc.service_type));
+  const trulyPendingLeads = pendingBeneficiaryLeads.filter(l => !existingServiceTypeIds.has(l.service_interest));
+
+  const allItems = [
+    ...beneficiaryServiceCases.map((sc: any) => ({ type: 'case' as const, data: sc })),
+    ...trulyPendingLeads.map(l => ({ type: 'pending' as const, data: l })),
+  ];
+
   // Fetch titular's opportunities
   const { data: titularOpportunities = [], isLoading: oppsLoading } = useQuery({
     queryKey: ['titular-opportunities', contact.linked_principal_contact_id],
