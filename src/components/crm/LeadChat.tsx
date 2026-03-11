@@ -13,6 +13,7 @@ import { useQueryClient } from '@tanstack/react-query';
 interface LeadChatProps {
   leadId: string;
   contactPhone: string | number | null;
+  contactId?: string;
 }
 
 // Parse WhatsApp interactive messages (multiple formats)
