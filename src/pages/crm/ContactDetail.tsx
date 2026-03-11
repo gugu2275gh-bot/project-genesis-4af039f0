@@ -194,7 +194,23 @@ export default function ContactDetail() {
     enabled: !!id,
   });
 
-  // Fetch contracts related to this contact (via leads → opportunities → contracts)
+  // Group payments by service (via lead's service_type_id)
+  const paymentsByService = useMemo(() => {
+    const groups: Record<string, { serviceName: string; payments: any[] }> = {};
+    contactPayments.forEach((p: any) => {
+      const lead = p.opportunities?.leads;
+      const serviceTypeId = lead?.service_type_id || 'unknown';
+      const serviceTypeName = serviceTypeId !== 'unknown' && serviceTypes
+        ? serviceTypes.find((st: any) => st.id === serviceTypeId)?.name || SERVICE_INTEREST_LABELS[lead?.service_interest || 'OUTRO']
+        : SERVICE_INTEREST_LABELS[lead?.service_interest || 'OUTRO'] || 'Serviço';
+      if (!groups[serviceTypeId]) {
+        groups[serviceTypeId] = { serviceName: serviceTypeName, payments: [] };
+      }
+      groups[serviceTypeId].payments.push(p);
+    });
+    return Object.values(groups);
+  }, [contactPayments, serviceTypes]);
+
   const { data: contactContracts = [], isLoading: contractsLoading } = useQuery({
     queryKey: ['contact-contracts', id],
     queryFn: async () => {
