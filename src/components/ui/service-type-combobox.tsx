@@ -28,7 +28,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
   const selectedLabel = serviceTypes?.find(st => st.code === value)?.name;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
