@@ -53,7 +53,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
             className="h-8 border-0 p-0 shadow-none focus-visible:ring-0"
           />
         </div>
-        <ScrollArea className="max-h-[250px]">
+        <ScrollArea className="h-[250px]">
           {filtered.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">Nenhum serviço encontrado</p>
           ) : (
