@@ -94,13 +94,17 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
     let summary = `Acordo de Pagamento — ${new Date().toLocaleDateString('pt-BR')}\n`;
     summary += `Valor Bruto: € ${gross.toFixed(2)}\n`;
+    if (form.apply_vat) {
+      summary += `IVA (${defaultVatRate || 21}%): + € ${vatAmount.toFixed(2)}\n`;
+    }
+    const totalBeforeDiscount = calculatedAmounts.totalBeforeDiscount;
+    if (form.apply_vat || discountAmount > 0) {
+      summary += `Total: € ${totalBeforeDiscount.toFixed(2)}\n`;
+    }
     if (discountAmount > 0) {
       summary += `Desconto: - € ${discountAmount.toFixed(2)}`;
       if (form.discount_type === 'PERCENTUAL') summary += ` (${form.discount_value}%)`;
       summary += '\n';
-    }
-    if (form.apply_vat) {
-      summary += `IVA (${defaultVatRate || 21}%): + € ${vatAmount.toFixed(2)}\n`;
     }
     summary += `Total Final: € ${finalAmount.toFixed(2)}\n`;
     summary += `Método: ${methodLabel}\n`;
