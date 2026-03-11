@@ -156,6 +156,18 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
           <DialogTitle>Forma de Pagamento — {contactName}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Service Type Selection */}
+          <div>
+            <Label>Serviço de Interesse</Label>
+            <ServiceTypeCombobox
+              value={selectedServiceTypeId}
+              onChange={(val) => {
+                setSelectedServiceTypeId(val);
+                onServiceTypeChange?.(val);
+              }}
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Valor Bruto (€)</Label>
