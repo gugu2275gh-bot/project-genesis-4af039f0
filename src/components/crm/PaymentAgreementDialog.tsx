@@ -151,6 +151,31 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       payment_notes: summary,
     });
 
+    // Create or update a lead for this contact with the selected service_type_id
+    if (selectedServiceTypeId) {
+      // Check if there's already a lead with this service_type_id
+      const { data: existingLeads } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('contact_id', contactId)
+        .eq('service_type_id', selectedServiceTypeId)
+        .limit(1);
+
+      if (!existingLeads?.length) {
+        // Find the service type to get the code for service_interest
+        const selectedSt = serviceTypes?.find(st => st.id === selectedServiceTypeId);
+        await supabase.from('leads').insert({
+          contact_id: contactId,
+          service_type_id: selectedServiceTypeId,
+          service_interest: (selectedSt?.code as any) || 'OUTRO',
+          status: 'NOVO',
+        });
+        queryClient.invalidateQueries({ queryKey: ['leads'] });
+        queryClient.invalidateQueries({ queryKey: ['beneficiary-pending-leads', contactId] });
+        queryClient.invalidateQueries({ queryKey: ['confirmed-lead-ids', contactId] });
+      }
+    }
+
     toast({ title: 'Acordo de pagamento salvo na ficha do cliente' });
     onOpenChange(false);
     setForm({
