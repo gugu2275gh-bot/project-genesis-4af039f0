@@ -398,7 +398,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                   <span>+ € {calculatedAmounts.vatAmount.toFixed(2)}</span>
                 </div>
               )}
-              {(form.apply_vat || calculatedAmounts.discountAmount > 0) && (
+              {(form.apply_vat && calculatedAmounts.discountAmount > 0) && (
                 <div className="flex justify-between font-medium border-t pt-1">
                   <span>Total</span>
                   <span>€ {calculatedAmounts.totalBeforeDiscount.toFixed(2)}</span>
