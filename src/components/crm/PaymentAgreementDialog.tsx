@@ -28,7 +28,13 @@ interface PaymentAgreementDialogProps {
 
 export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange }: PaymentAgreementDialogProps) {
   const { updateContact } = useContacts();
+  const { serviceTypes } = useServiceTypes();
   const [selectedServiceTypeId, setSelectedServiceTypeId] = useState(serviceTypeId || '');
+
+  const serviceTypeOptions = useMemo(() => 
+    serviceTypes?.map(st => ({ code: st.id, name: `${st.code} - ${st.name}` })) || [],
+    [serviceTypes]
+  );
   const { toast } = useToast();
 
   const [form, setForm] = useState({
