@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Eye, UserPlus, Users } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Plus, Search, Eye, UserPlus, Users, Merge } from 'lucide-react';
 import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format } from 'date-fns';
@@ -17,7 +18,7 @@ import { ptBR } from 'date-fns/locale';
 
 export default function Leads() {
   const navigate = useNavigate();
-  const { leads, isLoading, createLead } = useLeads();
+  const { leads, isLoading, createLead, mergeLeads } = useLeads();
   const { contacts, createContact } = useContacts();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -25,6 +26,8 @@ export default function Leads() {
   const [leadMode, setLeadMode] = useState<'new' | 'existing'>('new');
   const [selectedContactId, setSelectedContactId] = useState<string>('');
   const [contactSearch, setContactSearch] = useState('');
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [isMergeMode, setIsMergeMode] = useState(false);
   const [newLead, setNewLead] = useState({
     full_name: '',
     email: '',
@@ -50,6 +53,39 @@ export default function Leads() {
     const matchesStatus = statusFilter === 'all' || l.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // Check if selected leads can be merged (same contact)
+  const canMerge = useMemo(() => {
+    if (selectedLeadIds.size < 2) return false;
+    const selectedLeads = leads.filter(l => selectedLeadIds.has(l.id));
+    const contactIds = new Set(selectedLeads.map(l => l.contact_id));
+    return contactIds.size === 1;
+  }, [selectedLeadIds, leads]);
+
+  const selectedContactName = useMemo(() => {
+    if (selectedLeadIds.size === 0) return '';
+    const firstSelected = leads.find(l => selectedLeadIds.has(l.id));
+    return firstSelected?.contacts?.full_name || '';
+  }, [selectedLeadIds, leads]);
+
+  const toggleLeadSelection = (leadId: string) => {
+    setSelectedLeadIds(prev => {
+      const next = new Set(prev);
+      if (next.has(leadId)) {
+        next.delete(leadId);
+      } else {
+        next.add(leadId);
+      }
+      return next;
+    });
+  };
+
+  const handleMerge = async () => {
+    if (!canMerge) return;
+    await mergeLeads.mutateAsync(Array.from(selectedLeadIds));
+    setSelectedLeadIds(new Set());
+    setIsMergeMode(false);
+  };
 
   const handleCreate = async () => {
     if (leadMode === 'existing') {
@@ -88,6 +124,17 @@ export default function Leads() {
   };
 
   const columns: Column<typeof leads[0]>[] = [
+    ...(isMergeMode ? [{
+      key: 'select' as any,
+      header: '',
+      cell: (lead: typeof leads[0]) => (
+        <Checkbox
+          checked={selectedLeadIds.has(lead.id)}
+          onCheckedChange={() => toggleLeadSelection(lead.id)}
+          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+        />
+      ),
+    }] : []),
     {
       key: 'contacts',
       header: 'Cliente',
@@ -151,135 +198,181 @@ export default function Leads() {
         title="Leads"
         description="Caixa de entrada de leads e oportunidades"
         actions={
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Novo Lead
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Novo Lead</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant={leadMode === 'new' ? 'default' : 'outline'}
-                    className="flex-1"
-                    onClick={() => setLeadMode('new')}
-                  >
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Novo Contato
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={leadMode === 'existing' ? 'default' : 'outline'}
-                    className="flex-1"
-                    onClick={() => setLeadMode('existing')}
-                  >
-                    <Users className="h-4 w-4 mr-2" />
-                    Contato Existente
-                  </Button>
-                </div>
+          <div className="flex gap-2">
+            {isMergeMode ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsMergeMode(false);
+                    setSelectedLeadIds(new Set());
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleMerge}
+                  disabled={!canMerge || mergeLeads.isPending}
+                >
+                  <Merge className="h-4 w-4 mr-2" />
+                  {mergeLeads.isPending
+                    ? 'Mesclando...'
+                    : `Mesclar ${selectedLeadIds.size} leads`}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => setIsMergeMode(true)}>
+                  <Merge className="h-4 w-4 mr-2" />
+                  Mesclar Leads
+                </Button>
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Novo Lead
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Novo Lead</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={leadMode === 'new' ? 'default' : 'outline'}
+                          className="flex-1"
+                          onClick={() => setLeadMode('new')}
+                        >
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Novo Contato
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={leadMode === 'existing' ? 'default' : 'outline'}
+                          className="flex-1"
+                          onClick={() => setLeadMode('existing')}
+                        >
+                          <Users className="h-4 w-4 mr-2" />
+                          Contato Existente
+                        </Button>
+                      </div>
 
-                {leadMode === 'existing' ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      Ideal para clientes com contrato cancelado que desejam iniciar um novo serviço.
-                    </p>
-                    <div>
-                      <Label>Buscar Contato</Label>
-                      <Input
-                        value={contactSearch}
-                        onChange={(e) => setContactSearch(e.target.value)}
-                        placeholder="Nome, e-mail ou telefone..."
-                      />
-                    </div>
-                    <div className="max-h-48 overflow-y-auto border rounded-md">
-                      {filteredContacts.length === 0 ? (
-                        <p className="text-sm text-muted-foreground p-3 text-center">Nenhum contato encontrado</p>
+                      {leadMode === 'existing' ? (
+                        <div className="space-y-3">
+                          <p className="text-sm text-muted-foreground">
+                            Ideal para clientes com contrato cancelado que desejam iniciar um novo serviço.
+                          </p>
+                          <div>
+                            <Label>Buscar Contato</Label>
+                            <Input
+                              value={contactSearch}
+                              onChange={(e) => setContactSearch(e.target.value)}
+                              placeholder="Nome, e-mail ou telefone..."
+                            />
+                          </div>
+                          <div className="max-h-48 overflow-y-auto border rounded-md">
+                            {filteredContacts.length === 0 ? (
+                              <p className="text-sm text-muted-foreground p-3 text-center">Nenhum contato encontrado</p>
+                            ) : (
+                              filteredContacts.map(contact => (
+                                <div
+                                  key={contact.id}
+                                  className={`p-3 cursor-pointer border-b last:border-b-0 hover:bg-accent transition-colors ${selectedContactId === contact.id ? 'bg-accent' : ''}`}
+                                  onClick={() => setSelectedContactId(contact.id)}
+                                >
+                                  <div className="font-medium text-sm">{contact.full_name}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {contact.email && <span>{contact.email}</span>}
+                                    {contact.phone && <span> · {contact.phone}</span>}
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
                       ) : (
-                        filteredContacts.map(contact => (
-                          <div
-                            key={contact.id}
-                            className={`p-3 cursor-pointer border-b last:border-b-0 hover:bg-accent transition-colors ${selectedContactId === contact.id ? 'bg-accent' : ''}`}
-                            onClick={() => setSelectedContactId(contact.id)}
-                          >
-                            <div className="font-medium text-sm">{contact.full_name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {contact.email && <span>{contact.email}</span>}
-                              {contact.phone && <span> · {contact.phone}</span>}
+                        <>
+                          <div>
+                            <Label>Nome Completo *</Label>
+                            <Input
+                              value={newLead.full_name}
+                              onChange={(e) => setNewLead({ ...newLead, full_name: e.target.value })}
+                              placeholder="Nome do cliente"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label>Telefone</Label>
+                              <Input
+                                value={newLead.phone}
+                                onChange={(e) => setNewLead({ ...newLead, phone: e.target.value })}
+                                placeholder="+55 11 99999-9999"
+                              />
+                            </div>
+                            <div>
+                              <Label>E-mail</Label>
+                              <Input
+                                value={newLead.email}
+                                onChange={(e) => setNewLead({ ...newLead, email: e.target.value })}
+                                placeholder="email@exemplo.com"
+                              />
                             </div>
                           </div>
-                        ))
+                        </>
                       )}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div>
-                      <Label>Nome Completo *</Label>
-                      <Input
-                        value={newLead.full_name}
-                        onChange={(e) => setNewLead({ ...newLead, full_name: e.target.value })}
-                        placeholder="Nome do cliente"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label>Telefone</Label>
-                        <Input
-                          value={newLead.phone}
-                          onChange={(e) => setNewLead({ ...newLead, phone: e.target.value })}
-                          placeholder="+55 11 99999-9999"
-                        />
-                      </div>
-                      <div>
-                        <Label>E-mail</Label>
-                        <Input
-                          value={newLead.email}
-                          onChange={(e) => setNewLead({ ...newLead, email: e.target.value })}
-                          placeholder="email@exemplo.com"
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
 
-                <div>
-                  <Label>Serviço de Interesse</Label>
-                  <Select
-                    value={newLead.service_interest}
-                    onValueChange={(v: any) => setNewLead({ ...newLead, service_interest: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(SERVICE_INTEREST_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancelar
-                  </Button>
-                  <Button 
-                    onClick={handleCreate} 
-                    disabled={createLead.isPending || (leadMode === 'new' && !newLead.full_name) || (leadMode === 'existing' && !selectedContactId)}
-                  >
-                    {createLead.isPending ? 'Criando...' : 'Criar Lead'}
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+                      <div>
+                        <Label>Serviço de Interesse</Label>
+                        <Select
+                          value={newLead.service_interest}
+                          onValueChange={(v: any) => setNewLead({ ...newLead, service_interest: v })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(SERVICE_INTEREST_LABELS).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>{label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                          Cancelar
+                        </Button>
+                        <Button 
+                          onClick={handleCreate} 
+                          disabled={createLead.isPending || (leadMode === 'new' && !newLead.full_name) || (leadMode === 'existing' && !selectedContactId)}
+                        >
+                          {createLead.isPending ? 'Criando...' : 'Criar Lead'}
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </>
+            )}
+          </div>
         }
       />
+
+      {isMergeMode && (
+        <div className="bg-muted/50 border rounded-lg p-3 flex items-center gap-3">
+          <Merge className="h-4 w-4 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            Selecione 2 ou mais leads <strong>do mesmo cliente</strong> para mesclar. O lead mais recente será mantido como principal.
+            {selectedLeadIds.size > 0 && !canMerge && selectedLeadIds.size >= 2 && (
+              <span className="text-destructive ml-2">⚠ Os leads selecionados pertencem a clientes diferentes.</span>
+            )}
+            {canMerge && (
+              <span className="text-green-600 ml-2">✓ {selectedLeadIds.size} leads de "{selectedContactName}" prontos para mesclar.</span>
+            )}
+          </p>
+        </div>
+      )}
 
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-sm">
@@ -309,7 +402,7 @@ export default function Leads() {
         data={filteredLeads}
         loading={isLoading}
         emptyMessage="Nenhum lead encontrado"
-        onRowClick={(lead) => navigate(`/crm/leads/${lead.id}`)}
+        onRowClick={(lead) => !isMergeMode && navigate(`/crm/leads/${lead.id}`)}
       />
     </div>
   );
