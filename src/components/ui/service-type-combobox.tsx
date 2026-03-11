@@ -83,7 +83,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
                       value === st.code ? 'opacity-100' : 'opacity-0'
                     )}
                   />
-                  {st.name}
+                  {stripPrefix(st.name)}
                 </button>
               ))}
             </div>
