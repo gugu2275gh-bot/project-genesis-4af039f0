@@ -43,7 +43,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
           className="w-full justify-between font-normal"
         >
           <span className="truncate">
-            {selectedLabel || placeholder}
+            {displaySelectedLabel || placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
