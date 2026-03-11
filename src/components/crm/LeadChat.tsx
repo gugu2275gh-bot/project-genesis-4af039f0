@@ -144,8 +144,8 @@ function parseWhatsAppFlowMessage(content: string) {
   return null;
 }
 
-export function LeadChat({ leadId, contactPhone }: LeadChatProps) {
-  const { messages, isLoading, sendMessage } = useLeadMessages(leadId, contactPhone);
+export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
+  const { messages, isLoading, sendMessage } = useLeadMessages(leadId, contactPhone, contactId);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
@@ -158,15 +158,16 @@ export function LeadChat({ leadId, contactPhone }: LeadChatProps) {
   }, [messages]);
 
   // Auto-refresh messages every 60 seconds when user is not typing
+  const cacheKey = contactId ? ['lead-messages-contact', contactId] : ['lead-messages', leadId];
   useEffect(() => {
     const intervalId = setInterval(() => {
       if (!newMessage.trim()) {
-        queryClient.invalidateQueries({ queryKey: ['lead-messages', leadId] });
+        queryClient.invalidateQueries({ queryKey: cacheKey });
       }
     }, 60000);
 
     return () => clearInterval(intervalId);
-  }, [newMessage, leadId, queryClient]);
+  }, [newMessage, cacheKey, queryClient]);
 
   const handleSend = async () => {
     if (!newMessage.trim()) return;
