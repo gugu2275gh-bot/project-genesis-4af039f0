@@ -208,49 +208,49 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       }
 
       if (opportunityId) {
-        const { data: existingPayments } = await supabase
+        // Delete existing PENDENTE payments to recreate with updated terms
+        await supabase
           .from('payments')
-          .select('id')
-          .eq('opportunity_id', opportunityId);
+          .delete()
+          .eq('opportunity_id', opportunityId)
+          .eq('status', 'PENDENTE');
 
-        if (!existingPayments?.length) {
-          const paymentMethod = form.payment_method as any;
+        const paymentMethod = form.payment_method as any;
 
-          if (form.payment_form === 'PARCELADO' && form.installments.length > 0) {
-            const paymentInserts = form.installments.map((inst, idx) => ({
-              opportunity_id: opportunityId!,
-              amount: parseFloat(inst.amount) || 0,
-              due_date: inst.due_date || null,
-              installment_number: idx + 1,
-              payment_method: paymentMethod,
-              payment_form: 'PARCELADO' as any,
-              status: 'PENDENTE' as any,
-              gross_amount: gross,
-              apply_vat: form.apply_vat,
-              vat_rate: form.apply_vat ? (defaultVatRate || 21) / 100 : 0,
-              discount_type: form.discount_type || null,
-              discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
-              beneficiary_contact_id: contactId,
-            }));
-            const { error: payError } = await supabase.from('payments').insert(paymentInserts);
-            if (payError) console.error('Error creating installment payments:', payError);
-          } else {
-            const { error: payError } = await supabase.from('payments').insert({
-              opportunity_id: opportunityId,
-              amount: finalAmount,
-              payment_method: paymentMethod,
-              payment_form: 'UNICO' as any,
-              status: 'PENDENTE' as any,
-              gross_amount: gross,
-              apply_vat: form.apply_vat,
-              vat_rate: form.apply_vat ? (defaultVatRate || 21) / 100 : 0,
-              vat_amount: vatAmount,
-              discount_type: form.discount_type || null,
-              discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
-              beneficiary_contact_id: contactId,
-            });
-            if (payError) console.error('Error creating payment:', payError);
-          }
+        if (form.payment_form === 'PARCELADO' && form.installments.length > 0) {
+          const paymentInserts = form.installments.map((inst, idx) => ({
+            opportunity_id: opportunityId!,
+            amount: parseFloat(inst.amount) || 0,
+            due_date: inst.due_date || null,
+            installment_number: idx + 1,
+            payment_method: paymentMethod,
+            payment_form: 'PARCELADO' as any,
+            status: 'PENDENTE' as any,
+            gross_amount: gross,
+            apply_vat: form.apply_vat,
+            vat_rate: form.apply_vat ? (defaultVatRate || 21) / 100 : 0,
+            discount_type: form.discount_type || null,
+            discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
+            beneficiary_contact_id: contactId,
+          }));
+          const { error: payError } = await supabase.from('payments').insert(paymentInserts);
+          if (payError) console.error('Error creating installment payments:', payError);
+        } else {
+          const { error: payError } = await supabase.from('payments').insert({
+            opportunity_id: opportunityId,
+            amount: finalAmount,
+            payment_method: paymentMethod,
+            payment_form: 'UNICO' as any,
+            status: 'PENDENTE' as any,
+            gross_amount: gross,
+            apply_vat: form.apply_vat,
+            vat_rate: form.apply_vat ? (defaultVatRate || 21) / 100 : 0,
+            vat_amount: vatAmount,
+            discount_type: form.discount_type || null,
+            discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
+            beneficiary_contact_id: contactId,
+          });
+          if (payError) console.error('Error creating payment:', payError);
         }
       }
     }
