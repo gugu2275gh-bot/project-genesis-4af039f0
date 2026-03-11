@@ -112,14 +112,32 @@ export default function Leads() {
     });
   };
 
+  // Count leads per contact for duplicate badge
+  const contactLeadCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    leads.forEach(l => {
+      if (l.contact_id && l.status !== 'MESCLADO') {
+        counts[l.contact_id] = (counts[l.contact_id] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [leads]);
+
   const columns: Column<typeof leads[0]>[] = [
     {
       key: 'contacts',
       header: 'Cliente',
       cell: (lead) => (
-        <div>
-          <div className="font-medium">{lead.contacts?.full_name}</div>
-          <div className="text-sm text-muted-foreground">{lead.contacts?.email}</div>
+        <div className="flex items-center gap-2">
+          <div>
+            <div className="font-medium">{lead.contacts?.full_name}</div>
+            <div className="text-sm text-muted-foreground">{lead.contacts?.email}</div>
+          </div>
+          {contactLeadCounts[lead.contact_id] > 1 && (
+            <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+              {contactLeadCounts[lead.contact_id]}
+            </span>
+          )}
         </div>
       ),
     },

@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useLead, useLeads } from '@/hooks/useLeads';
+import { useLead, useLeads, useContactLeads } from '@/hooks/useLeads';
 import { useInteractions } from '@/hooks/useInteractions';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -7,22 +7,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ArrowLeft, Check, Phone, Mail, MessageSquare, Calendar, User, GitMerge } from 'lucide-react';
 import { LEAD_STATUS_LABELS, SERVICE_INTEREST_LABELS, INTERACTION_CHANNEL_LABELS } from '@/types/database';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { MergeLeadsDialog } from '@/components/cases/MergeLeadsDialog';
 
 export default function LeadDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: lead, isLoading } = useLead(id);
-  const { updateLead, confirmInterest } = useLeads();
+  const { updateLead, confirmInterest, mergeLeads } = useLeads();
   const { interactions, createInteraction } = useInteractions(lead?.contact_id, id);
+  const { data: contactLeads } = useContactLeads(lead?.contact_id);
   
   const [newNote, setNewNote] = useState('');
   const [interactionChannel, setInteractionChannel] = useState<string>('WHATSAPP');
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+
+  const hasDuplicates = (contactLeads?.length ?? 0) > 1;
 
   if (isLoading) {
     return (
@@ -68,6 +74,11 @@ export default function LeadDetail() {
     await updateLead.mutateAsync({ id: lead.id, status: status as any });
   };
 
+  const handleMerge = async (leadIds: string[]) => {
+    await mergeLeads.mutateAsync(leadIds);
+    navigate('/crm/leads');
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -90,8 +101,21 @@ export default function LeadDetail() {
         }
       />
 
+      {hasDuplicates && (
+        <Alert className="border-primary/30 bg-primary/5">
+          <GitMerge className="h-4 w-4 text-primary" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>
+              Este cliente tem <strong>{contactLeads!.length} leads</strong> ativos. Deseja consolidar?
+            </span>
+            <Button size="sm" variant="outline" onClick={() => setMergeDialogOpen(true)}>
+              Mesclar Leads
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Lead Info */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Informações do Lead</CardTitle>
@@ -104,7 +128,6 @@ export default function LeadDetail() {
                 <p className="font-medium">{lead.contacts?.full_name}</p>
               </div>
             </div>
-            
             <div className="flex items-center gap-3">
               <Phone className="h-4 w-4 text-muted-foreground" />
               <div>
@@ -112,7 +135,6 @@ export default function LeadDetail() {
                 <p className="font-medium">{lead.contacts?.phone || 'Não informado'}</p>
               </div>
             </div>
-            
             <div className="flex items-center gap-3">
               <Mail className="h-4 w-4 text-muted-foreground" />
               <div>
@@ -120,7 +142,6 @@ export default function LeadDetail() {
                 <p className="font-medium">{lead.contacts?.email || 'Não informado'}</p>
               </div>
             </div>
-
             <div className="pt-4 border-t">
               <p className="text-sm text-muted-foreground mb-2">Serviço de Interesse</p>
               <StatusBadge 
@@ -128,7 +149,6 @@ export default function LeadDetail() {
                 label={SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO']} 
               />
             </div>
-
             <div>
               <p className="text-sm text-muted-foreground mb-2">Status</p>
               <Select value={lead.status || 'NOVO'} onValueChange={handleStatusChange}>
@@ -142,15 +162,11 @@ export default function LeadDetail() {
                 </SelectContent>
               </Select>
             </div>
-
             {lead.interest_confirmed && (
-              <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
-                <p className="text-sm text-green-600 dark:text-green-400 font-medium">
-                  ✓ Interesse Confirmado
-                </p>
+              <div className="bg-primary/10 p-3 rounded-lg">
+                <p className="text-sm text-primary font-medium">✓ Interesse Confirmado</p>
               </div>
             )}
-
             {lead.notes && (
               <div className="pt-4 border-t">
                 <p className="text-sm text-muted-foreground mb-2">Notas</p>
@@ -160,7 +176,6 @@ export default function LeadDetail() {
           </CardContent>
         </Card>
 
-        {/* Interactions */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg">Histórico de Interações</CardTitle>
@@ -190,18 +205,12 @@ export default function LeadDetail() {
                   <MessageSquare className="h-4 w-4" />
                 </Button>
               </div>
-
               <div className="space-y-3 max-h-[400px] overflow-y-auto">
                 {interactions.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">
-                    Nenhuma interação registrada
-                  </p>
+                  <p className="text-center text-muted-foreground py-8">Nenhuma interação registrada</p>
                 ) : (
                   interactions.map((interaction) => (
-                    <div 
-                      key={interaction.id}
-                      className="p-4 rounded-lg bg-muted/50 space-y-2"
-                    >
+                    <div key={interaction.id} className="p-4 rounded-lg bg-muted/50 space-y-2">
                       <div className="flex items-center justify-between">
                         <StatusBadge 
                           status={interaction.channel || 'OUTRO'} 
@@ -221,6 +230,17 @@ export default function LeadDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {hasDuplicates && contactLeads && (
+        <MergeLeadsDialog
+          open={mergeDialogOpen}
+          onOpenChange={setMergeDialogOpen}
+          currentLeadId={lead.id}
+          contactLeads={contactLeads}
+          onMerge={handleMerge}
+          isPending={mergeLeads.isPending}
+        />
+      )}
     </div>
   );
 }

@@ -1,46 +1,50 @@
 
+# Plano: Novo Contrato/Serviço a partir de Lead com Contrato Cancelado
 
-## Mesclar Leads - Abordagem Limpa
+## Recomendacao de UX
 
-### Problema
-O hook `mergeLeads` existe e funciona, mas a UI na página de Leads (`src/pages/crm/Leads.tsx`) nunca foi conectada a ele. A funcionalidade de mesclagem precisa ser exposta sem poluir a listagem principal.
+A melhor abordagem e colocar o botao **na Ficha do Cliente (ContactDetail)**, na seccao de Servicos/Leads. Motivos:
 
-### Abordagem Proposta: Mesclar a partir da Ficha do Cliente (LeadDetail)
+1. **Ficha do Cliente** e o ponto central onde se ve todo o historico - leads, contratos, pagamentos. Faz sentido iniciar um novo ciclo a partir dali.
+2. Na ficha ja existem os leads listados. Adicionar um botao "Novo Lead / Novo Servico" ali permite criar um novo lead para o mesmo contato, reiniciando o fluxo completo (Lead -> Oportunidade -> Contrato).
+3. Manter tambem um botao contextual no **LeadDetail** quando o lead tem um contrato cancelado, permitindo "Reabrir como Novo Lead" diretamente.
 
-Em vez de adicionar checkboxes na tabela principal (que polui a lista), a mesclagem será feita de forma contextual:
+O historico fica preservado porque o lead antigo e sua oportunidade/contrato cancelado permanecem intactos. O novo lead gera uma nova oportunidade e novo contrato.
 
-1. **Na página de detalhe do Lead (`LeadDetail`)**, quando o cliente tem mais de 1 lead ativo, exibir um alerta discreto com um botão "Mesclar Leads".
-2. Ao clicar, abre um **Dialog** listando os outros leads do mesmo contato, com checkboxes para selecionar quais mesclar.
-3. O lead atual é automaticamente incluido. O mais recente será o principal.
-4. Confirmar e executar a mesclagem.
+## Alteracoes Tecnicas
 
-### Mudanças Técnicas
+### 1. Ficha do Cliente (ContactDetail.tsx) - Botao "Novo Servico"
+- Na seccao onde os leads do cliente sao listados, adicionar um botao "+ Novo Servico"
+- Ao clicar, abre um Dialog para selecionar o tipo de servico (service_interest) e notas iniciais
+- Cria um novo Lead vinculado ao mesmo contact_id com status "NOVO"
+- Navega para o detalhe do novo lead criado
 
-**1. `src/hooks/useLeads.ts`** - Adicionar query para buscar leads do mesmo contato:
-- Criar hook `useContactLeads(contactId)` que retorna todos os leads ativos de um contato específico.
+### 2. Lead Detail (LeadDetail.tsx) - Botao "Novo Servico" contextual
+- Quando o lead tem status INTERESSE_CONFIRMADO e sua oportunidade possui um contrato CANCELADO, exibir um botao "Iniciar Novo Servico"
+- Esse botao cria um novo lead para o mesmo contato com status NOVO e navega para ele
 
-**2. `src/pages/crm/LeadDetail.tsx`** - Adicionar seção de mesclagem:
-- Buscar leads do mesmo `contact_id` (excluindo status `MESCLADO`).
-- Se houver 2+, mostrar um alerta/card com: "Este cliente tem X leads. Deseja mesclar?"
-- Botão abre Dialog com lista de leads selecionáveis.
-- Ao confirmar, chama `mergeLeads` do hook existente.
+### 3. Hook useLeads.ts - Nova mutacao createLeadForContact
+- Adicionar uma mutacao `createLeadForContact` que recebe `contact_id`, `service_interest` e `notes`
+- Cria o lead com status NOVO e retorna os dados para navegacao
 
-**3. `src/pages/crm/Leads.tsx`** - Indicador visual (opcional):
-- Na coluna "Cliente", se o contato tiver 2+ leads, mostrar um badge discreto (ex: "2 leads") para que o usuário saiba que pode mesclar ao entrar no detalhe.
+### 4. Sem alteracoes no banco de dados
+- Nenhuma migracao necessaria. O modelo atual ja suporta multiplos leads por contato.
 
-### Fluxo do Usuário
+## Fluxo Resumido
 
 ```text
-Lista de Leads
-  └─ Vê badge "2 leads" ao lado do nome
-  └─ Clica no lead → LeadDetail
-      └─ Alerta: "Este cliente tem 2 leads duplicados"
-      └─ Botão "Mesclar" → Dialog com checkboxes
-      └─ Confirma → Leads mesclados, página atualiza
+Contrato Cancelado
+       |
+       v
+Ficha do Cliente ou Lead Detail
+       |
+  [+ Novo Servico]
+       |
+       v
+Novo Lead (status: NOVO)
+       |
+       v
+Fluxo normal: Confirmar Interesse -> Oportunidade -> Contrato
 ```
 
-### Vantagens
-- Lista de leads permanece limpa, sem checkboxes ou modo de seleção.
-- A ação de mesclar acontece no contexto certo (quando se está olhando um lead específico).
-- O usuário é notificado proativamente sobre duplicatas.
-
+O historico completo (lead antigo, oportunidade, contrato cancelado, pagamentos) permanece intacto e visivel na ficha do cliente.
