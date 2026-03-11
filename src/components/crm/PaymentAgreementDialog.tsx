@@ -162,12 +162,10 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
         .limit(1);
 
       if (!existingLeads?.length) {
-        // Find the service type to get the code for service_interest
-        const selectedSt = serviceTypes?.find(st => st.id === selectedServiceTypeId);
         await supabase.from('leads').insert({
           contact_id: contactId,
           service_type_id: selectedServiceTypeId,
-          service_interest: (selectedSt?.code as any) || 'OUTRO',
+          service_interest: 'OUTRO' as any,
           status: 'NOVO',
         });
         queryClient.invalidateQueries({ queryKey: ['leads'] });
