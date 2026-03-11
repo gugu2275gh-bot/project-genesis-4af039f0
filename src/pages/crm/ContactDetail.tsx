@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useContact, useContacts, ContactUpdate } from '@/hooks/useContacts';
 import { useLeads } from '@/hooks/useLeads';
 import { useContactDocuments } from '@/hooks/useContactDocuments';
+import { useServiceTypes } from '@/hooks/useServiceTypes';
 import { useContactBeneficiaries } from '@/hooks/useContactBeneficiaries';
 import { useInteractions } from '@/hooks/useInteractions';
 import { supabase } from '@/integrations/supabase/client';
