@@ -124,15 +124,12 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
       return { data, leadId }; // Return leadId for consistent invalidation
     },
     onMutate: async ({ leadId, message }) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['lead-messages', leadId] });
+      await queryClient.cancelQueries({ queryKey: cacheKey });
       
-      // Snapshot the previous value
-      const previousMessages = queryClient.getQueryData<LeadMessage[]>(['lead-messages', leadId]);
+      const previousMessages = queryClient.getQueryData<LeadMessage[]>(cacheKey);
       
-      // Optimistically add the new message
       const optimisticMessage: LeadMessage = {
-        id: Date.now(), // Temporary ID
+        id: Date.now(),
         created_at: new Date().toISOString(),
         id_lead: leadId,
         mensagem_IA: userInfo ? `*${userInfo.name} - ${userInfo.role}*\n${message}` : message,
@@ -141,54 +138,54 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
         phone_id: null,
       };
       
-      queryClient.setQueryData<LeadMessage[]>(['lead-messages', leadId], (old = []) => [
+      queryClient.setQueryData<LeadMessage[]>(cacheKey, (old = []) => [
         ...old,
         optimisticMessage,
       ]);
       
-      return { previousMessages, leadId };
+      return { previousMessages };
     },
     onError: (err: Error, variables, context) => {
-      // Revert to previous state on error
       if (context?.previousMessages) {
-        queryClient.setQueryData(['lead-messages', context.leadId], context.previousMessages);
+        queryClient.setQueryData(cacheKey, context.previousMessages);
       }
       console.error('Erro ao enviar mensagem:', err);
       toast.error('Erro ao enviar mensagem: ' + err.message);
     },
-    onSuccess: (result) => {
+    onSuccess: () => {
       toast.success('Mensagem enviada');
     },
-    onSettled: (data, error, variables) => {
-      // Always revalidate after mutation settles
-      queryClient.invalidateQueries({ queryKey: ['lead-messages', variables.leadId] });
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: cacheKey });
     },
   });
 
-  // Realtime subscription for new messages
+  // Realtime subscription for new messages (subscribe to all leads of contact)
   useEffect(() => {
-    if (!leadId) return;
+    if (effectiveLeadIds.length === 0) return;
 
-    const channel = supabase
-      .channel(`lead-messages-${leadId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'mensagens_cliente',
-          filter: `id_lead=eq.${leadId}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['lead-messages', leadId] });
-        }
-      )
-      .subscribe();
+    const channels = effectiveLeadIds.map(lid =>
+      supabase
+        .channel(`lead-messages-${lid}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'mensagens_cliente',
+            filter: `id_lead=eq.${lid}`,
+          },
+          () => {
+            queryClient.invalidateQueries({ queryKey: cacheKey });
+          }
+        )
+        .subscribe()
+    );
 
     return () => {
-      supabase.removeChannel(channel);
+      channels.forEach(ch => supabase.removeChannel(ch));
     };
-  }, [leadId, queryClient]);
+  }, [effectiveLeadIds.join(','), queryClient]);
 
   return {
     messages,
