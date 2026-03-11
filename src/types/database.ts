@@ -39,7 +39,8 @@ export type LeadStatus =
   | 'INTERESSE_CONFIRMADO'
   | 'STANDBY'
   | 'FOLLOW_UP'
-  | 'ARQUIVADO_SEM_RETORNO';
+  | 'ARQUIVADO_SEM_RETORNO'
+  | 'MESCLADO';
 
 export type OpportunityStatus = 
   | 'ABERTA'
@@ -383,6 +384,7 @@ export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
   STANDBY: 'Standby',
   FOLLOW_UP: 'Follow-up',
   ARQUIVADO_SEM_RETORNO: 'Arquivado',
+  MESCLADO: 'Mesclado',
 };
 
 export const OPPORTUNITY_STATUS_LABELS: Record<OpportunityStatus, string> = {

@@ -2558,6 +2558,7 @@ export type Database = {
         | "ARQUIVADO_SEM_RETORNO"
         | "STANDBY"
         | "FOLLOW_UP"
+        | "MESCLADO"
       opportunity_status:
         | "ABERTA"
         | "CONTRATO_EM_ELABORACAO"
@@ -2810,6 +2811,7 @@ export const Constants = {
         "ARQUIVADO_SEM_RETORNO",
         "STANDBY",
         "FOLLOW_UP",
+        "MESCLADO",
       ],
       opportunity_status: [
         "ABERTA",
