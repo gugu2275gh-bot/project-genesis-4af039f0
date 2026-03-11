@@ -154,7 +154,7 @@ export default function ContactDetail() {
       // 1. Payments as beneficiary (beneficiary_contact_id = this contact)
       const { data: benefPayments } = await supabase
         .from('payments')
-        .select('*, contracts(contract_number, service_type)')
+        .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest))')
         .eq('beneficiary_contact_id', id)
         .order('due_date', { ascending: true });
 
@@ -175,7 +175,7 @@ export default function ContactDetail() {
           const oppIds = opps.map(o => o.id);
           const { data: payments, error } = await supabase
             .from('payments')
-            .select('*, contracts(contract_number, service_type)')
+            .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest))')
             .in('opportunity_id', oppIds)
             .order('due_date', { ascending: true });
           if (!error) titularPayments = payments || [];
@@ -194,7 +194,23 @@ export default function ContactDetail() {
     enabled: !!id,
   });
 
-  // Fetch contracts related to this contact (via leads → opportunities → contracts)
+  // Group payments by service (via lead's service_type_id)
+  const paymentsByService = useMemo(() => {
+    const groups: Record<string, { serviceName: string; payments: any[] }> = {};
+    contactPayments.forEach((p: any) => {
+      const lead = p.opportunities?.leads;
+      const serviceTypeId = lead?.service_type_id || 'unknown';
+      const serviceTypeName = serviceTypeId !== 'unknown' && serviceTypes
+        ? serviceTypes.find((st: any) => st.id === serviceTypeId)?.name || SERVICE_INTEREST_LABELS[lead?.service_interest || 'OUTRO']
+        : SERVICE_INTEREST_LABELS[lead?.service_interest || 'OUTRO'] || 'Serviço';
+      if (!groups[serviceTypeId]) {
+        groups[serviceTypeId] = { serviceName: serviceTypeName, payments: [] };
+      }
+      groups[serviceTypeId].payments.push(p);
+    });
+    return Object.values(groups);
+  }, [contactPayments, serviceTypes]);
+
   const { data: contactContracts = [], isLoading: contractsLoading } = useQuery({
     queryKey: ['contact-contracts', id],
     queryFn: async () => {
@@ -1244,7 +1260,7 @@ export default function ContactDetail() {
                 </Button>
               )}
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               <Textarea
                 value={paymentNotes || ''}
                 onChange={(e) => setPaymentNotes(e.target.value)}
@@ -1265,6 +1281,58 @@ export default function ContactDetail() {
                   Salvar
                 </Button>
               </div>
+
+              {/* Payments grouped by service */}
+              {paymentsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2].map(i => <Skeleton key={i} className="h-16" />)}
+                </div>
+              ) : paymentsByService.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-4">
+                    {paymentsByService.map((group, gIdx) => (
+                      <div key={gIdx} className="space-y-2">
+                        <h4 className="text-sm font-semibold flex items-center gap-2">
+                          <CreditCard className="h-4 w-4 text-muted-foreground" />
+                          {group.serviceName}
+                          <Badge variant="outline" className="text-xs">{group.payments.length} pagamento{group.payments.length > 1 ? 's' : ''}</Badge>
+                        </h4>
+                        <div className="space-y-2 pl-6">
+                          {group.payments.map((payment: any) => (
+                            <div key={payment.id} className="flex items-center justify-between p-2.5 rounded-lg border">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="font-medium text-sm">
+                                    € {Number(payment.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  </p>
+                                  {payment.installment_number && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Parcela {payment.installment_number}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                                  {payment.due_date && (
+                                    <span>Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
+                                  )}
+                                  {payment.contracts?.contract_number && (
+                                    <span>{payment.contracts.contract_number}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <StatusBadge
+                                status={payment.status || 'PENDENTE'}
+                                label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -1466,64 +1534,7 @@ export default function ContactDetail() {
             </CardContent>
           </Card>
 
-          {/* Payments */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Pagamentos ({contactPayments.length})
-              </CardTitle>
-              <CardDescription>Pagamentos vinculados a este cliente</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {paymentsLoading ? (
-                <div className="space-y-3">
-                  {[1, 2].map(i => <Skeleton key={i} className="h-16" />)}
-                </div>
-              ) : contactPayments.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">
-                  Nenhum pagamento vinculado a este cliente.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {contactPayments.map((payment: any) => (
-                    <div key={payment.id} className="flex items-center justify-between p-3 rounded-lg border">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium">
-                            € {Number(payment.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </p>
-                          {payment.installment_number && (
-                            <Badge variant="outline" className="text-xs">
-                              Parcela {payment.installment_number}
-                            </Badge>
-                          )}
-                          {payment.beneficiary_contact_id === id && (
-                            <Badge variant="outline" className="text-xs gap-1 border-primary/30 text-primary">
-                              <Users className="h-3 w-3" />
-                              Beneficiário
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-                          {payment.due_date && (
-                            <span>Vencimento: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
-                          )}
-                          {payment.contracts?.contract_number && (
-                            <span>{payment.contracts.contract_number}</span>
-                          )}
-                        </div>
-                      </div>
-                      <StatusBadge
-                        status={payment.status || 'PENDENTE'}
-                        label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+
 
           {/* Contracts */}
           <Card>
