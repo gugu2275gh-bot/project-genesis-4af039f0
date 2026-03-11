@@ -68,7 +68,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
                   key={st.code}
                   type="button"
                   className={cn(
-                    'relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground',
+                    'relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm text-left outline-none hover:bg-accent hover:text-accent-foreground',
                     value === st.code && 'bg-accent'
                   )}
                   onClick={() => {
