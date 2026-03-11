@@ -25,7 +25,13 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
     );
   }, [serviceTypes, search]);
 
+  const stripPrefix = (name: string) => {
+    const dashIndex = name.indexOf(' - ');
+    return dashIndex !== -1 ? name.substring(dashIndex + 3) : name;
+  };
+
   const selectedLabel = serviceTypes?.find(st => st.code === value)?.name;
+  const displaySelectedLabel = selectedLabel ? stripPrefix(selectedLabel) : undefined;
 
   return (
     <Popover open={open} onOpenChange={setOpen} modal={false}>
