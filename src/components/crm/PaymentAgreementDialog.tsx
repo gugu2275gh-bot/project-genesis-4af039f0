@@ -162,15 +162,19 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
         .limit(1);
 
       if (!existingLeads?.length) {
-        await supabase.from('leads').insert({
+        const { error: leadError } = await supabase.from('leads').insert({
           contact_id: contactId,
           service_type_id: selectedServiceTypeId,
           service_interest: 'OUTRO' as any,
           status: 'NOVO',
         });
-        queryClient.invalidateQueries({ queryKey: ['leads'] });
-        queryClient.invalidateQueries({ queryKey: ['beneficiary-pending-leads', contactId] });
-        queryClient.invalidateQueries({ queryKey: ['confirmed-lead-ids', contactId] });
+        if (leadError) {
+          console.error('Error creating lead for service:', leadError);
+        } else {
+          queryClient.invalidateQueries({ queryKey: ['leads'] });
+          queryClient.invalidateQueries({ queryKey: ['beneficiary-pending-leads', contactId] });
+          queryClient.invalidateQueries({ queryKey: ['confirmed-lead-ids', contactId] });
+        }
       }
     }
 
