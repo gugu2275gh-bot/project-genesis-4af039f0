@@ -1265,10 +1265,6 @@ export default function ContactDetail() {
                   <DollarSign className="h-4 w-4 mr-1" />
                   Forma de Pagamento
                 </Button>
-                <Button size="sm" onClick={() => setShowNewServiceDialog(true)}>
-                  <Plus className="h-4 w-4 mr-1" />
-                  Novo Serviço
-                </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -2058,10 +2054,6 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
             <Button size="sm" variant="outline" onClick={() => { setEditPaymentData(null); setShowPaymentAgreement(true); }}>
               <DollarSign className="h-4 w-4 mr-1" />
               Forma de Pagamento
-            </Button>
-            <Button size="sm" onClick={() => setShowNewDialog(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Novo Serviço
             </Button>
           </div>
         </CardHeader>
