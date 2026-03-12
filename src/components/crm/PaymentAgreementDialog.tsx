@@ -276,7 +276,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
           .eq('opportunity_id', opportunityId)
           .limit(1);
 
-        // Only create payments if none exist yet for this opportunity
+        // Only create payments if none exist yet; otherwise update existing pending ones
         if (!existingPayments?.length) {
           const paymentMethod = form.payment_method as any;
 
@@ -314,6 +314,30 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               beneficiary_contact_id: contactId,
             });
             if (payError) console.error('Error creating payment:', payError);
+          }
+        } else {
+          // Update existing pending payments with new values
+          const paymentMethod = form.payment_method as any;
+          const { data: pendingPayments } = await supabase
+            .from('payments')
+            .select('id')
+            .eq('opportunity_id', opportunityId)
+            .eq('status', 'PENDENTE');
+
+          if (pendingPayments?.length) {
+            for (const pp of pendingPayments) {
+              await supabase.from('payments').update({
+                amount: finalAmount,
+                gross_amount: gross,
+                payment_method: paymentMethod,
+                payment_form: form.payment_form as any,
+                apply_vat: form.apply_vat,
+                vat_rate: form.apply_vat ? (defaultVatRate || 21) / 100 : 0,
+                vat_amount: vatAmount,
+                discount_type: form.discount_type || null,
+                discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
+              }).eq('id', pp.id);
+            }
           }
         }
       }
