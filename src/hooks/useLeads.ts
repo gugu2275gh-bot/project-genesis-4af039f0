@@ -134,12 +134,12 @@ export function useLeads() {
 
         const { error: caseError } = await supabase
           .from('service_cases')
-          .insert({
+          .insert([{
             opportunity_id: opportunity.id,
-            service_type: serviceInterest,
-            sector: sectorMap[serviceInterest] || 'ESTUDANTE',
-            technical_status: 'CONTATO_INICIAL',
-          });
+            service_type: serviceInterest as any,
+            sector: (sectorMap[serviceInterest] || 'ESTUDANTE') as any,
+            technical_status: 'CONTATO_INICIAL' as any,
+          }]);
 
         if (caseError) throw caseError;
 
