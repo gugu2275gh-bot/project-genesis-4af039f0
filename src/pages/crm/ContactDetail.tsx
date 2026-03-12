@@ -1245,20 +1245,27 @@ export default function ContactDetail() {
             </CardContent>
           </Card>
 
-          {/* Acordo de Pagamento - sempre visível e editável */}
+          {/* Serviços & Pagamentos - seção unificada */}
+          {!contact.is_beneficiary && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5" />
-                  Acordo de Pagamento
+                  <Briefcase className="h-5 w-5" />
+                  Serviços & Pagamentos ({allServiceLeads.length})
                 </CardTitle>
-                <CardDescription>O que foi combinado com o cliente sobre pagamento</CardDescription>
+                <CardDescription>Serviços contratados, pagamentos e acordo financeiro</CardDescription>
               </div>
-              <Button size="sm" variant="outline" onClick={() => { setEditPaymentData(null); setShowPaymentAgreement(true); }}>
-                <DollarSign className="h-4 w-4 mr-1" />
-                Forma de Pagamento
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => { setEditPaymentData(null); setShowPaymentAgreement(true); }}>
+                  <DollarSign className="h-4 w-4 mr-1" />
+                  Forma de Pagamento
+                </Button>
+                <Button size="sm" onClick={() => setShowNewServiceDialog(true)}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Novo Serviço
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Show only the last payment agreement note */}
@@ -1270,32 +1277,150 @@ export default function ContactDetail() {
                   <div className="rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-line">
                     {lastNote}
                   </div>
-                ) : (
-                  <p className="text-muted-foreground text-center py-2 text-sm">
-                    Nenhum acordo registrado.
-                  </p>
-                );
+                ) : null;
               })()}
 
-              {/* Payments grouped by service */}
-              {paymentsLoading ? (
-                <div className="space-y-3">
-                  {[1, 2].map(i => <Skeleton key={i} className="h-16" />)}
-                </div>
-              ) : paymentsByService.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="space-y-4">
-                    {paymentsByService.map((group, gIdx) => (
-                      <div key={gIdx} className="space-y-2">
-                        <h4 className="text-sm font-semibold flex items-center gap-2">
-                          <CreditCard className="h-4 w-4 text-muted-foreground" />
-                          {group.serviceName}
-                          <Badge variant="outline" className="text-xs">{group.payments.length} pagamento{group.payments.length > 1 ? 's' : ''}</Badge>
-                        </h4>
-                        <div className="space-y-2 pl-6">
+              {/* Services list with their payments inline */}
+              {allServiceLeads.length === 0 && paymentsByService.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">
+                  Nenhum serviço ou pagamento registrado.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {allServiceLeads.map(lead => {
+                    const isConfirmed = confirmedLeadIds.includes(lead.id);
+                    const serviceTypeName = lead.service_type_id
+                      ? serviceTypes?.find(st => st.id === lead.service_type_id)?.name
+                      : null;
+                    const displayName = serviceTypeName || SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO'];
+
+                    // Find payments for this lead's service
+                    const leadServiceGroup = paymentsByService.find(g => g.serviceName === displayName);
+                    const servicePayments = leadServiceGroup?.payments || [];
+
+                    return (
+                      <div key={lead.id} className="rounded-lg border overflow-hidden">
+                        {/* Service header */}
+                        <div
+                          className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => navigate(`/crm/leads/${lead.id}`)}
+                        >
+                          <div>
+                            <p className="font-medium">{displayName}</p>
+                            <p className="text-sm text-muted-foreground">
+                              Criado em {format(new Date(lead.created_at!), "dd/MM/yyyy", { locale: ptBR })}
+                            </p>
+                          </div>
+                          {isConfirmed ? (
+                            <StatusBadge 
+                              status={lead.status || 'NOVO'} 
+                              label={LEAD_STATUS_LABELS[lead.status || 'NOVO']} 
+                            />
+                          ) : (
+                            <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
+                              Aguardando Pagamento
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* Payments for this service */}
+                        {servicePayments.length > 0 && (
+                          <div className="border-t bg-muted/10 px-3 py-2 space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                              {servicePayments.length} pagamento{servicePayments.length > 1 ? 's' : ''}
+                            </p>
+                            {servicePayments.map((payment: any) => (
+                              <div key={payment.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-background">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-medium text-sm">
+                                      € {Number(payment.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </p>
+                                    {payment.installment_number && (
+                                      <Badge variant="outline" className="text-xs">
+                                        Parcela {payment.installment_number}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                                    {payment.due_date && (
+                                      <span>Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
+                                    )}
+                                    {payment.contracts?.contract_number && (
+                                      <span>{payment.contracts.contract_number}</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <StatusBadge
+                                    status={payment.status || 'PENDENTE'}
+                                    label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
+                                  />
+                                  {payment.status === 'PENDENTE' && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 px-2"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const leadData = payment.opportunities?.leads;
+                                        const serviceTypeId = leadData?.service_type_id || '';
+                                        const groupPayments = servicePayments.filter((p: any) => p.payment_form === 'PARCELADO');
+                                        const installments = groupPayments.length > 1
+                                          ? groupPayments.map((p: any) => ({ amount: p.amount?.toString() || '', due_date: p.due_date || '' }))
+                                          : [];
+                                        setEditPaymentData({
+                                          amount: payment.amount,
+                                          payment_method: payment.payment_method,
+                                          payment_form: payment.payment_form,
+                                          apply_vat: payment.apply_vat,
+                                          vat_rate: payment.vat_rate,
+                                          discount_type: payment.discount_type,
+                                          discount_value: payment.discount_value,
+                                          gross_amount: payment.gross_amount,
+                                          serviceTypeId,
+                                          installments,
+                                        });
+                                        setShowPaymentAgreement(true);
+                                      }}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Show orphan payment groups (payments without a matching lead/service) */}
+                  {paymentsByService
+                    .filter(group => {
+                      return !allServiceLeads.some(lead => {
+                        const sName = lead.service_type_id
+                          ? serviceTypes?.find(st => st.id === lead.service_type_id)?.name
+                          : null;
+                        const dName = sName || SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO'];
+                        return group.serviceName === dName;
+                      });
+                    })
+                    .map((group, gIdx) => (
+                      <div key={`orphan-${gIdx}`} className="rounded-lg border overflow-hidden">
+                        <div className="p-3">
+                          <p className="font-medium flex items-center gap-2">
+                            <CreditCard className="h-4 w-4 text-muted-foreground" />
+                            {group.serviceName}
+                          </p>
+                        </div>
+                        <div className="border-t bg-muted/10 px-3 py-2 space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            {group.payments.length} pagamento{group.payments.length > 1 ? 's' : ''}
+                          </p>
                           {group.payments.map((payment: any) => (
-                            <div key={payment.id} className="flex items-center justify-between p-2.5 rounded-lg border">
+                            <div key={payment.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-background">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <p className="font-medium text-sm">
@@ -1311,9 +1436,6 @@ export default function ContactDetail() {
                                   {payment.due_date && (
                                     <span>Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
                                   )}
-                                  {payment.contracts?.contract_number && (
-                                    <span>{payment.contracts.contract_number}</span>
-                                  )}
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
@@ -1321,103 +1443,13 @@ export default function ContactDetail() {
                                   status={payment.status || 'PENDENTE'}
                                   label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
                                 />
-                                {payment.status === 'PENDENTE' && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 px-2"
-                                    onClick={() => {
-                                      const lead = payment.opportunities?.leads;
-                                      const serviceTypeId = lead?.service_type_id || '';
-                                      // Collect all payments in this group for installments
-                                      const groupPayments = group.payments.filter((p: any) => p.payment_form === 'PARCELADO');
-                                      const installments = groupPayments.length > 1
-                                        ? groupPayments.map((p: any) => ({ amount: p.amount?.toString() || '', due_date: p.due_date || '' }))
-                                        : [];
-                                      setEditPaymentData({
-                                        amount: payment.amount,
-                                        payment_method: payment.payment_method,
-                                        payment_form: payment.payment_form,
-                                        apply_vat: payment.apply_vat,
-                                        vat_rate: payment.vat_rate,
-                                        discount_type: payment.discount_type,
-                                        discount_value: payment.discount_value,
-                                        gross_amount: payment.gross_amount,
-                                        serviceTypeId,
-                                        installments,
-                                      });
-                                      setShowPaymentAgreement(true);
-                                    }}
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Serviços (leads com pagamento confirmado ou aguardando) - esconder para beneficiários */}
-          {!contact.is_beneficiary && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Briefcase className="h-5 w-5" />
-                  Serviços ({allServiceLeads.length})
-                </CardTitle>
-                <CardDescription>Serviços contratados e em andamento</CardDescription>
-              </div>
-              <Button size="sm" onClick={() => setShowNewServiceDialog(true)}>
-                <Plus className="h-4 w-4 mr-1" />
-                Novo Serviço
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {allServiceLeads.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">
-                  Nenhum serviço ativo para este cliente.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {allServiceLeads.map(lead => {
-                    const isConfirmed = confirmedLeadIds.includes(lead.id);
-                    const serviceTypeName = lead.service_type_id
-                      ? serviceTypes?.find(st => st.id === lead.service_type_id)?.name
-                      : null;
-                    const displayName = serviceTypeName || SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO'];
-                    return (
-                      <div 
-                        key={lead.id} 
-                        className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => navigate(`/crm/leads/${lead.id}`)}
-                      >
-                        <div>
-                          <p className="font-medium">{displayName}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Criado em {format(new Date(lead.created_at!), "dd/MM/yyyy", { locale: ptBR })}
-                          </p>
-                        </div>
-                        {isConfirmed ? (
-                          <StatusBadge 
-                            status={lead.status || 'NOVO'} 
-                            label={LEAD_STATUS_LABELS[lead.status || 'NOVO']} 
-                          />
-                        ) : (
-                          <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
-                            Aguardando Pagamento
-                          </Badge>
-                        )}
-                      </div>
-                    );
-                  })}
+                    ))
+                  }
                 </div>
               )}
             </CardContent>
