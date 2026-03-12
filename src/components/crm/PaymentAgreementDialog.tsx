@@ -122,11 +122,15 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     !form.transfer_origin || a.country === form.transfer_origin
   );
 
+  const totalFees = useMemo(() => {
+    return form.fees.reduce((sum, fee) => sum + (parseFloat(fee.amount) || 0), 0);
+  }, [form.fees]);
+
   const calculatedAmounts = useMemo(() => {
     const gross = parseFloat(form.amount) || 0;
     const vatRate = form.apply_vat ? (defaultVatRate || 21) / 100 : 0;
     const vatAmount = gross * vatRate;
-    const totalBeforeDiscount = gross + vatAmount;
+    const totalBeforeDiscount = gross + vatAmount + totalFees;
     let discountAmount = 0;
     if (form.discount_type === 'PERCENTUAL') {
       discountAmount = totalBeforeDiscount * ((parseFloat(form.discount_value) || 0) / 100);
@@ -135,7 +139,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     }
     const finalAmount = Math.max(0, totalBeforeDiscount - discountAmount);
     return { gross, discountAmount, totalBeforeDiscount, vatAmount, finalAmount, vatRate };
-  }, [form.amount, form.discount_type, form.discount_value, form.apply_vat, defaultVatRate]);
+  }, [form.amount, form.discount_type, form.discount_value, form.apply_vat, defaultVatRate, totalFees]);
 
   const handleSave = async () => {
     if (!form.amount) return;
