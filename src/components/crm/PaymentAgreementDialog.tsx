@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { PAYMENT_METHOD_LABELS, PAYMENT_FORM_LABELS } from '@/types/database';
-import { DollarSign } from 'lucide-react';
+import { DollarSign, Plus, Trash2 } from 'lucide-react';
 import { ServiceTypeCombobox } from '@/components/ui/service-type-combobox';
 import { useServiceTypes } from '@/hooks/useServiceTypes';
 
@@ -65,6 +65,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     notes: '',
     installment_count: 2,
     installments: [] as { amount: string; due_date: string }[],
+    fees: [] as { description: string; amount: string }[],
   };
 
   const [form, setForm] = useState(defaultForm);
@@ -121,11 +122,15 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     !form.transfer_origin || a.country === form.transfer_origin
   );
 
+  const totalFees = useMemo(() => {
+    return form.fees.reduce((sum, fee) => sum + (parseFloat(fee.amount) || 0), 0);
+  }, [form.fees]);
+
   const calculatedAmounts = useMemo(() => {
     const gross = parseFloat(form.amount) || 0;
     const vatRate = form.apply_vat ? (defaultVatRate || 21) / 100 : 0;
     const vatAmount = gross * vatRate;
-    const totalBeforeDiscount = gross + vatAmount;
+    const totalBeforeDiscount = gross + vatAmount + totalFees;
     let discountAmount = 0;
     if (form.discount_type === 'PERCENTUAL') {
       discountAmount = totalBeforeDiscount * ((parseFloat(form.discount_value) || 0) / 100);
@@ -134,7 +139,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     }
     const finalAmount = Math.max(0, totalBeforeDiscount - discountAmount);
     return { gross, discountAmount, totalBeforeDiscount, vatAmount, finalAmount, vatRate };
-  }, [form.amount, form.discount_type, form.discount_value, form.apply_vat, defaultVatRate]);
+  }, [form.amount, form.discount_type, form.discount_value, form.apply_vat, defaultVatRate, totalFees]);
 
   const handleSave = async () => {
     if (!form.amount) return;
@@ -151,6 +156,13 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     summary += `Valor Bruto: € ${gross.toFixed(2)}\n`;
     if (form.apply_vat) {
       summary += `IVA (${defaultVatRate || 21}%): + € ${vatAmount.toFixed(2)}\n`;
+    }
+    if (form.fees.length > 0) {
+      form.fees.forEach(fee => {
+        if (parseFloat(fee.amount) > 0) {
+          summary += `Taxa (${fee.description || 'Sem descrição'}): + € ${parseFloat(fee.amount).toFixed(2)}\n`;
+        }
+      });
     }
     const totalBeforeDiscount = calculatedAmounts.totalBeforeDiscount;
     if (form.apply_vat || discountAmount > 0) {
@@ -319,7 +331,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       amount: '', payment_method: 'PIX', payment_form: 'UNICO',
       custom_payment_method: '', transfer_origin: '', payment_account_id: '',
       discount_type: '', discount_value: '', apply_vat: false, notes: '',
-      installment_count: 2, installments: [],
+      installment_count: 2, installments: [], fees: [],
     });
   };
 
@@ -576,8 +588,65 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
           </div>
 
 
-          {/* Calculation Summary */}
-          {(form.amount && (form.discount_type || form.apply_vat)) && (
+          {/* Taxas / Fees */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-semibold">Taxas</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setForm({ ...form, fees: [...form.fees, { description: '', amount: '' }] })}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar taxa
+              </Button>
+            </div>
+            {form.fees.map((fee, idx) => (
+              <div key={idx} className="grid grid-cols-[1fr_auto_auto] gap-2 items-end">
+                <div>
+                  <Label className="text-xs">Descrição *</Label>
+                  <Input
+                    value={fee.description}
+                    onChange={(e) => {
+                      const updated = [...form.fees];
+                      updated[idx] = { ...updated[idx], description: e.target.value };
+                      setForm({ ...form, fees: updated });
+                    }}
+                    placeholder="Taxa de tradução juramentada, Taxa 790, etc."
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Valor (EUR) *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    className="w-28"
+                    value={fee.amount}
+                    onChange={(e) => {
+                      const updated = [...form.fees];
+                      updated[idx] = { ...updated[idx], amount: e.target.value };
+                      setForm({ ...form, fees: updated });
+                    }}
+                    placeholder="150.00"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 text-destructive"
+                  onClick={() => {
+                    const updated = form.fees.filter((_, i) => i !== idx);
+                    setForm({ ...form, fees: updated });
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          {(form.amount && (form.discount_type || form.apply_vat || totalFees > 0)) && (
             <div className="rounded-lg border bg-muted/50 p-3 space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Valor Bruto</span>
@@ -589,6 +658,12 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                   <span>+ € {calculatedAmounts.vatAmount.toFixed(2)}</span>
                 </div>
               )}
+              {form.fees.filter(f => parseFloat(f.amount) > 0).map((fee, idx) => (
+                <div key={idx} className="flex justify-between">
+                  <span className="text-muted-foreground">{fee.description || 'Taxa'}</span>
+                  <span>+ € {parseFloat(fee.amount).toFixed(2)}</span>
+                </div>
+              ))}
               {(form.apply_vat && calculatedAmounts.discountAmount > 0) && (
                 <div className="flex justify-between font-medium border-t pt-1">
                   <span>Total</span>
