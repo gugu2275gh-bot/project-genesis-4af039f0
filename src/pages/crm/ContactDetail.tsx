@@ -52,7 +52,8 @@ import {
   DollarSign,
   Plus,
   Upload,
-  Trash2
+  Trash2,
+  Pencil
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -1348,7 +1349,7 @@ export default function ContactDetail() {
                                       setShowPaymentAgreement(true);
                                     }}
                                   >
-                                    <FileText className="h-3.5 w-3.5" />
+                                    <Pencil className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
                               </div>
