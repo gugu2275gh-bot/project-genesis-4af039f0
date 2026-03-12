@@ -48,13 +48,21 @@ export default function ContractDetail() {
   });
 
   const { data: contractPayments } = useQuery({
-    queryKey: ['contract-payments', id],
+    queryKey: ['contract-payments', id, contract?.opportunity_id],
     queryFn: async () => {
       if (!id) return [];
-      const { data, error } = await supabase
+      let query = supabase
         .from('payments')
-        .select('*, contract_beneficiaries:beneficiary_contact_id(full_name)')
-        .eq('contract_id', id);
+        .select('*, contract_beneficiaries:beneficiary_contact_id(full_name)');
+      
+      // Filter by contract_id OR opportunity_id to catch payments not yet linked to contract
+      if (contract?.opportunity_id) {
+        query = query.or(`contract_id.eq.${id},opportunity_id.eq.${contract.opportunity_id}`);
+      } else {
+        query = query.eq('contract_id', id);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },

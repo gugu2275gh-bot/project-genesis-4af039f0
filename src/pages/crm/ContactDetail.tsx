@@ -214,6 +214,29 @@ export default function ContactDetail() {
     return Object.values(groups);
   }, [contactPayments, serviceTypes]);
 
+  // Fetch service cases for this contact's leads to determine completed services
+  const { data: contactServiceCases = [] } = useQuery({
+    queryKey: ['contact-service-cases', id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data: cLeads } = await supabase.from('leads').select('id').eq('contact_id', id);
+      if (!cLeads?.length) return [];
+      const { data: opps } = await supabase.from('opportunities').select('id, lead_id').in('lead_id', cLeads.map(l => l.id));
+      if (!opps?.length) return [];
+      const { data: cases } = await supabase
+        .from('service_cases')
+        .select('id, opportunity_id, technical_status')
+        .in('opportunity_id', opps.map(o => o.id));
+      if (!cases) return [];
+      // Map lead_id to technical_status via opportunity
+      return cases.map(c => {
+        const opp = opps.find(o => o.id === c.opportunity_id);
+        return { ...c, lead_id: opp?.lead_id };
+      });
+    },
+    enabled: !!id,
+  });
+
   const { data: contactContracts = [], isLoading: contractsLoading } = useQuery({
     queryKey: ['contact-contracts', id],
     queryFn: async () => {
