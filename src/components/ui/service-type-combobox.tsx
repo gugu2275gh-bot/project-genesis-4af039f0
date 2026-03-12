@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
@@ -48,7 +49,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[9999]" align="start" side="bottom" sideOffset={4}>
         <div className="flex items-center gap-2 border-b px-3 py-2">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           <Input
@@ -58,7 +59,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
             className="h-8 border-0 p-0 shadow-none focus-visible:ring-0"
           />
         </div>
-        <div className="max-h-[250px] overflow-y-auto">
+        <ScrollArea className="h-[250px]">
           {filtered.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground">Nenhum serviço encontrado</p>
           ) : (
@@ -88,7 +89,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
               ))}
             </div>
           )}
-        </div>
+        </ScrollArea>
       </PopoverContent>
     </Popover>
   );
