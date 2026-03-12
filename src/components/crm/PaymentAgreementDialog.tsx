@@ -241,20 +241,29 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
     // Create opportunity and payments if we have a lead and amount
     if (leadId && form.amount) {
-      const { data: existingOpp } = await supabase
+      const { data: existingOpp, error: oppQueryError } = await supabase
         .from('opportunities')
         .select('id')
         .eq('lead_id', leadId)
         .limit(1);
 
+      if (oppQueryError) {
+        console.error('Error querying opportunities:', oppQueryError);
+        toast({ title: 'Erro ao buscar oportunidade', description: oppQueryError.message, variant: 'destructive' });
+      }
+
       let opportunityId: string | null = null;
 
       if (existingOpp?.length) {
         opportunityId = existingOpp[0].id;
-        await supabase.from('opportunities').update({
+        const { error: oppUpdateError } = await supabase.from('opportunities').update({
           total_amount: finalAmount,
           status: 'PAGAMENTO_PENDENTE',
         }).eq('id', opportunityId);
+        if (oppUpdateError) {
+          console.error('Error updating opportunity:', oppUpdateError);
+          toast({ title: 'Erro ao atualizar oportunidade', description: oppUpdateError.message, variant: 'destructive' });
+        }
       } else {
         const { data: newOpp, error: oppError } = await supabase.from('opportunities').insert({
           lead_id: leadId,
@@ -263,6 +272,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
         }).select('id').single();
         if (oppError) {
           console.error('Error creating opportunity:', oppError);
+          toast({ title: 'Erro ao criar oportunidade', description: oppError.message, variant: 'destructive' });
         } else {
           opportunityId = newOpp.id;
         }
@@ -272,9 +282,8 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
         // Check if payments already exist for this opportunity
         const { data: existingPayments } = await supabase
           .from('payments')
-          .select('id')
-          .eq('opportunity_id', opportunityId)
-          .limit(1);
+          .select('id, status')
+          .eq('opportunity_id', opportunityId);
 
         // Only create payments if none exist yet; otherwise update existing pending ones
         if (!existingPayments?.length) {
@@ -297,7 +306,10 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               beneficiary_contact_id: contactId,
             }));
             const { error: payError } = await supabase.from('payments').insert(paymentInserts);
-            if (payError) console.error('Error creating installment payments:', payError);
+            if (payError) {
+              console.error('Error creating installment payments:', payError);
+              toast({ title: 'Erro ao criar parcelas', description: payError.message, variant: 'destructive' });
+            }
           } else {
             const { error: payError } = await supabase.from('payments').insert({
               opportunity_id: opportunityId,
@@ -313,20 +325,19 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
               beneficiary_contact_id: contactId,
             });
-            if (payError) console.error('Error creating payment:', payError);
+            if (payError) {
+              console.error('Error creating payment:', payError);
+              toast({ title: 'Erro ao criar pagamento', description: payError.message, variant: 'destructive' });
+            }
           }
         } else {
           // Update existing pending payments with new values
           const paymentMethod = form.payment_method as any;
-          const { data: pendingPayments } = await supabase
-            .from('payments')
-            .select('id')
-            .eq('opportunity_id', opportunityId)
-            .eq('status', 'PENDENTE');
+          const pendingPayments = existingPayments.filter(p => p.status === 'PENDENTE');
 
-          if (pendingPayments?.length) {
+          if (pendingPayments.length) {
             for (const pp of pendingPayments) {
-              await supabase.from('payments').update({
+              const { error: updateError } = await supabase.from('payments').update({
                 amount: finalAmount,
                 gross_amount: gross,
                 payment_method: paymentMethod,
@@ -337,10 +348,18 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                 discount_type: form.discount_type || null,
                 discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
               }).eq('id', pp.id);
+              if (updateError) {
+                console.error('Error updating payment:', updateError);
+                toast({ title: 'Erro ao atualizar pagamento', description: updateError.message, variant: 'destructive' });
+              }
             }
           }
         }
       }
+    } else if (!leadId) {
+      console.error('Lead não criado - serviço de interesse não selecionado');
+    } else if (!form.amount) {
+      console.error('Valor bruto não preenchido');
     }
 
     queryClient.invalidateQueries({ queryKey: ['leads'] });
