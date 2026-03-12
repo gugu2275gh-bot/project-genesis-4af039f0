@@ -581,7 +581,64 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
           </div>
 
 
-          {/* Calculation Summary */}
+          {/* Taxas / Fees */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-semibold">Taxas</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setForm({ ...form, fees: [...form.fees, { description: '', amount: '' }] })}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar taxa
+              </Button>
+            </div>
+            {form.fees.map((fee, idx) => (
+              <div key={idx} className="grid grid-cols-[1fr_auto_auto] gap-2 items-end">
+                <div>
+                  <Label className="text-xs">Descrição *</Label>
+                  <Input
+                    value={fee.description}
+                    onChange={(e) => {
+                      const updated = [...form.fees];
+                      updated[idx] = { ...updated[idx], description: e.target.value };
+                      setForm({ ...form, fees: updated });
+                    }}
+                    placeholder="Taxa de tradução juramentada, Taxa 790, etc."
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Valor (EUR) *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    className="w-28"
+                    value={fee.amount}
+                    onChange={(e) => {
+                      const updated = [...form.fees];
+                      updated[idx] = { ...updated[idx], amount: e.target.value };
+                      setForm({ ...form, fees: updated });
+                    }}
+                    placeholder="150.00"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 text-destructive"
+                  onClick={() => {
+                    const updated = form.fees.filter((_, i) => i !== idx);
+                    setForm({ ...form, fees: updated });
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+
           {(form.amount && (form.discount_type || form.apply_vat)) && (
             <div className="rounded-lg border bg-muted/50 p-3 space-y-1 text-sm">
               <div className="flex justify-between">
