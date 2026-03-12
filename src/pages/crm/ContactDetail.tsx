@@ -2219,10 +2219,43 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
                                   )}
                                 </div>
                               </div>
-                              <StatusBadge
-                                status={payment.status || 'PENDENTE'}
-                                label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
-                              />
+                              <div className="flex items-center gap-2">
+                                <StatusBadge
+                                  status={payment.status || 'PENDENTE'}
+                                  label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
+                                />
+                                {payment.status === 'PENDENTE' && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const leadData = payment.opportunities?.leads;
+                                      const serviceTypeId = leadData?.service_type_id || '';
+                                      const groupPayments = leadPayments.filter((p: any) => p.payment_form === 'PARCELADO');
+                                      const installments = groupPayments.length > 1
+                                        ? groupPayments.map((p: any) => ({ amount: p.amount?.toString() || '', due_date: p.due_date || '' }))
+                                        : [];
+                                      setEditPaymentData({
+                                        amount: payment.amount,
+                                        payment_method: payment.payment_method,
+                                        payment_form: payment.payment_form,
+                                        apply_vat: payment.apply_vat,
+                                        vat_rate: payment.vat_rate,
+                                        discount_type: payment.discount_type,
+                                        discount_value: payment.discount_value,
+                                        gross_amount: payment.gross_amount,
+                                        serviceTypeId,
+                                        installments,
+                                      });
+                                      setShowPaymentAgreement(true);
+                                    }}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -2273,10 +2306,43 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
                               )}
                             </div>
                           </div>
-                          <StatusBadge
-                            status={payment.status || 'PENDENTE'}
-                            label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
-                          />
+                          <div className="flex items-center gap-2">
+                            <StatusBadge
+                              status={payment.status || 'PENDENTE'}
+                              label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
+                            />
+                            {payment.status === 'PENDENTE' && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const leadData = payment.opportunities?.leads;
+                                  const serviceTypeId = leadData?.service_type_id || '';
+                                  const groupPayments = group.payments.filter((p: any) => p.payment_form === 'PARCELADO');
+                                  const installments = groupPayments.length > 1
+                                    ? groupPayments.map((p: any) => ({ amount: p.amount?.toString() || '', due_date: p.due_date || '' }))
+                                    : [];
+                                  setEditPaymentData({
+                                    amount: payment.amount,
+                                    payment_method: payment.payment_method,
+                                    payment_form: payment.payment_form,
+                                    apply_vat: payment.apply_vat,
+                                    vat_rate: payment.vat_rate,
+                                    discount_type: payment.discount_type,
+                                    discount_value: payment.discount_value,
+                                    gross_amount: payment.gross_amount,
+                                    serviceTypeId,
+                                    installments,
+                                  });
+                                  setShowPaymentAgreement(true);
+                                }}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
