@@ -157,6 +157,13 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     if (form.apply_vat) {
       summary += `IVA (${defaultVatRate || 21}%): + € ${vatAmount.toFixed(2)}\n`;
     }
+    if (form.fees.length > 0) {
+      form.fees.forEach(fee => {
+        if (parseFloat(fee.amount) > 0) {
+          summary += `Taxa (${fee.description || 'Sem descrição'}): + € ${parseFloat(fee.amount).toFixed(2)}\n`;
+        }
+      });
+    }
     const totalBeforeDiscount = calculatedAmounts.totalBeforeDiscount;
     if (form.apply_vat || discountAmount > 0) {
       summary += `Total: € ${totalBeforeDiscount.toFixed(2)}\n`;
