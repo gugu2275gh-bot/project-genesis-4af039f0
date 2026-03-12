@@ -1321,29 +1321,44 @@ export default function ContactDetail() {
                     const leadServiceGroup = paymentsByService.find(g => g.serviceName === displayName);
                     const servicePayments = leadServiceGroup?.payments || [];
 
+                    // Check if this service is completed (has service case with ENCERRADO_*)
+                    const serviceCase = contactServiceCases.find((sc: any) => sc.lead_id === lead.id);
+                    const isServiceCompleted = serviceCase && (serviceCase.technical_status === 'ENCERRADO_APROVADO' || serviceCase.technical_status === 'ENCERRADO_NEGADO');
+                    const allPaymentsPaid = servicePayments.length > 0 && servicePayments.every((p: any) => p.status === 'CONFIRMADO');
+
                     return (
-                      <div key={lead.id} className="rounded-lg border overflow-hidden">
+                      <div key={lead.id} className={`rounded-lg border overflow-hidden ${isServiceCompleted ? 'opacity-60' : ''}`}>
                         {/* Service header */}
                         <div
                           className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors"
                           onClick={() => navigate(`/crm/leads/${lead.id}`)}
                         >
                           <div>
-                            <p className="font-medium">{displayName}</p>
+                            <p className={`font-medium ${isServiceCompleted ? 'text-muted-foreground' : ''}`}>{displayName}</p>
                             <p className="text-sm text-muted-foreground">
                               Criado em {format(new Date(lead.created_at!), "dd/MM/yyyy", { locale: ptBR })}
                             </p>
                           </div>
-                          {isConfirmed ? (
-                            <StatusBadge 
-                              status={lead.status || 'NOVO'} 
-                              label={LEAD_STATUS_LABELS[lead.status || 'NOVO']} 
-                            />
-                          ) : (
-                            <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
-                              Aguardando Pagamento
-                            </Badge>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {isServiceCompleted && (
+                              <StatusBadge variant="success" label="Concluído" />
+                            )}
+                            {allPaymentsPaid && servicePayments.length > 0 && (
+                              <StatusBadge variant="success" label="Quitado" />
+                            )}
+                            {!isServiceCompleted && (
+                              isConfirmed ? (
+                                <StatusBadge 
+                                  status={lead.status || 'NOVO'} 
+                                  label={LEAD_STATUS_LABELS[lead.status || 'NOVO']} 
+                                />
+                              ) : (
+                                <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
+                                  Aguardando Pagamento
+                                </Badge>
+                              )
+                            )}
+                          </div>
                         </div>
 
                         {/* Payments for this service */}
