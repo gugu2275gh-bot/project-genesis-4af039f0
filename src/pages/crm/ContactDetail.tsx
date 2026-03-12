@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { PaymentAgreementDialog } from '@/components/crm/PaymentAgreementDialog';
+import { PaymentAgreementDialog, PaymentAgreementInitialData } from '@/components/crm/PaymentAgreementDialog';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
