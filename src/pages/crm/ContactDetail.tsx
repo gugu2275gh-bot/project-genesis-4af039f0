@@ -1777,7 +1777,7 @@ export default function ContactDetail() {
       </Dialog>
 
       {/* Payment Agreement Dialog for beneficiaries */}
-      {contact.is_beneficiary && id && (
+      {id && (
         <PaymentAgreementDialog
           open={showPaymentAgreement}
           onOpenChange={setShowPaymentAgreement}
