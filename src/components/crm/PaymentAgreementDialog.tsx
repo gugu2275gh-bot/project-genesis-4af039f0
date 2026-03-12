@@ -47,7 +47,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   const [selectedServiceTypeId, setSelectedServiceTypeId] = useState(serviceTypeId || '');
 
   const serviceTypeOptions = useMemo(() => 
-    serviceTypes?.map(st => ({ code: st.id, name: `${st.code} - ${st.name}` })) || [],
+    serviceTypes?.map(st => ({ code: st.id, name: st.name })) || [],
     [serviceTypes]
   );
   const { toast } = useToast();
