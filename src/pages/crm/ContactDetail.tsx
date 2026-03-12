@@ -1870,6 +1870,8 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [serviceType, setServiceType] = useState('');
   const [sector, setSector] = useState('');
+  const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
+  const [editPaymentData, setEditPaymentData] = useState<PaymentAgreementInitialData | null>(null);
 
   // Fetch leads for this beneficiary that have service_type_id but no service_case yet
   const { data: pendingBeneficiaryLeads = [] } = useQuery({
@@ -1888,6 +1890,78 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
 
   const { data: pendingServiceTypes } = useServiceTypes();
 
+  // Fetch payments for this beneficiary
+  const { data: beneficiaryPayments = [] } = useQuery({
+    queryKey: ['beneficiary-payments', contactId],
+    queryFn: async () => {
+      if (!contactId) return [];
+
+      // Payments via beneficiary_contact_id
+      const { data: benefPayments } = await supabase
+        .from('payments')
+        .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest))')
+        .eq('beneficiary_contact_id', contactId)
+        .order('due_date', { ascending: true });
+
+      // Payments via leads → opportunities
+      const { data: cLeads } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('contact_id', contactId);
+
+      let titularPayments: any[] = [];
+      if (cLeads && cLeads.length > 0) {
+        const leadIds = cLeads.map(l => l.id);
+        const { data: opps } = await supabase
+          .from('opportunities')
+          .select('id')
+          .in('lead_id', leadIds);
+        if (opps && opps.length > 0) {
+          const oppIds = opps.map(o => o.id);
+          const { data: payments } = await supabase
+            .from('payments')
+            .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest))')
+            .in('opportunity_id', oppIds)
+            .order('due_date', { ascending: true });
+          if (payments) titularPayments = payments;
+        }
+      }
+
+      const allPayments = [...(benefPayments || []), ...titularPayments];
+      const seen = new Set<string>();
+      return allPayments.filter(p => {
+        if (seen.has(p.id)) return false;
+        seen.add(p.id);
+        return true;
+      });
+    },
+    enabled: !!contactId,
+  });
+
+  // Payment notes from contact
+  const paymentNotes = (contact as any).payment_notes || '';
+  const lastNote = (() => {
+    const parts = paymentNotes.split('\n---\n').filter(Boolean);
+    return parts.length > 0 ? parts[parts.length - 1].trim() : '';
+  })();
+
+  // Group payments by service
+  const paymentsByService = useMemo(() => {
+    const groups: Record<string, { serviceName: string; payments: any[] }> = {};
+    beneficiaryPayments.forEach((p: any) => {
+      const lead = p.opportunities?.leads;
+      const serviceTypeId = lead?.service_type_id || 'unknown';
+      const serviceTypeName = serviceTypeId !== 'unknown' && pendingServiceTypes
+        ? pendingServiceTypes.find((st: any) => st.id === serviceTypeId)?.name || SERVICE_INTEREST_LABELS[lead?.service_interest || 'OUTRO']
+        : SERVICE_INTEREST_LABELS[lead?.service_interest || 'OUTRO'] || 'Serviço';
+      if (!groups[serviceTypeId]) {
+        groups[serviceTypeId] = { serviceName: serviceTypeName, payments: [] };
+      }
+      groups[serviceTypeId].payments.push(p);
+    });
+    return Object.values(groups);
+  }, [beneficiaryPayments, pendingServiceTypes]);
+
   // Filter out leads that already have a linked service_case
   const existingServiceTypeIds = new Set(beneficiaryServiceCases.map((sc: any) => sc.service_type));
   const trulyPendingLeads = pendingBeneficiaryLeads.filter(l => !existingServiceTypeIds.has(l.service_interest));
@@ -1898,7 +1972,7 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
   ];
 
   // Fetch titular's opportunities
-  const { data: titularOpportunities = [], isLoading: oppsLoading } = useQuery({
+  const { data: titularOpportunities = [] } = useQuery({
     queryKey: ['titular-opportunities', contact.linked_principal_contact_id],
     queryFn: async () => {
       const titularId = contact.linked_principal_contact_id;
@@ -1933,7 +2007,6 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
 
       const opportunityId = titularOpportunities[0].id;
 
-      // Create service case
       const { data: newCase, error: caseError } = await supabase
         .from('service_cases')
         .insert([{
@@ -1947,7 +2020,6 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
 
       if (caseError) throw caseError;
 
-      // Link to beneficiary record
       if (beneficiaryRecord) {
         const { error: linkError } = await supabase
           .from('contract_beneficiaries')
@@ -1974,53 +2046,136 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
   return (
     <>
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Trâmites como Beneficiário ({allItems.length})
-              </CardTitle>
-              <CardDescription>Casos técnicos vinculados a este beneficiário</CardDescription>
-            </div>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Briefcase className="h-5 w-5" />
+              Serviços & Pagamentos ({allItems.length})
+            </CardTitle>
+            <CardDescription>Serviços contratados, pagamentos e acordo financeiro</CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => { setEditPaymentData(null); setShowPaymentAgreement(true); }}>
+              <DollarSign className="h-4 w-4 mr-1" />
+              Forma de Pagamento
+            </Button>
             <Button size="sm" onClick={() => setShowNewDialog(true)}>
               <Plus className="h-4 w-4 mr-1" />
               Novo Serviço
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Last payment agreement note */}
+          {lastNote ? (
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-line">
+              {lastNote}
+            </div>
+          ) : null}
+
           {benefCasesLoading ? (
             <div className="space-y-3">
               {[1, 2].map(i => <Skeleton key={i} className="h-16" />)}
             </div>
-          ) : allItems.length === 0 ? (
+          ) : allItems.length === 0 && paymentsByService.length === 0 ? (
             <p className="text-muted-foreground text-center py-4">
-              Nenhum trâmite vinculado a este beneficiário.
+              Nenhum serviço ou pagamento registrado.
             </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {allItems.map((item) => {
                 if (item.type === 'case') {
                   const sc = item.data;
+                  const displayName = SERVICE_INTEREST_LABELS[sc.service_type as keyof typeof SERVICE_INTEREST_LABELS] || sc.service_type;
+                  // Find payments for this service case
+                  const casePayments = paymentsByService.find(g => g.serviceName === displayName)?.payments || [];
+
                   return (
-                    <div
-                      key={sc.id}
-                      className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => navigate(`/cases/${sc.id}`)}
-                    >
-                      <div>
-                        <p className="font-medium">
-                          {SERVICE_INTEREST_LABELS[sc.service_type as keyof typeof SERVICE_INTEREST_LABELS] || sc.service_type}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Setor: {SECTOR_LABELS_MAP[sc.sector as keyof typeof SECTOR_LABELS_MAP] || sc.sector} • Criado em {format(new Date(sc.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                        </p>
+                    <div key={sc.id} className="rounded-lg border overflow-hidden">
+                      <div
+                        className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => navigate(`/cases/${sc.id}`)}
+                      >
+                        <div>
+                          <p className="font-medium">{displayName}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Setor: {SECTOR_LABELS_MAP[sc.sector as keyof typeof SECTOR_LABELS_MAP] || sc.sector} • Criado em {format(new Date(sc.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                          </p>
+                        </div>
+                        <StatusBadge
+                          status={sc.technical_status || 'CONTATO_INICIAL'}
+                          label={TECHNICAL_STATUS_LABELS[sc.technical_status as keyof typeof TECHNICAL_STATUS_LABELS] || sc.technical_status}
+                        />
                       </div>
-                      <StatusBadge
-                        status={sc.technical_status || 'CONTATO_INICIAL'}
-                        label={TECHNICAL_STATUS_LABELS[sc.technical_status as keyof typeof TECHNICAL_STATUS_LABELS] || sc.technical_status}
-                      />
+                      {/* Payments for this service */}
+                      {casePayments.length > 0 && (
+                        <div className="border-t bg-muted/10 px-3 py-2 space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            {casePayments.length} pagamento{casePayments.length > 1 ? 's' : ''}
+                          </p>
+                          {casePayments.map((payment: any) => (
+                            <div key={payment.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-background">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="font-medium text-sm">
+                                    € {Number(payment.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  </p>
+                                  {payment.installment_number && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Parcela {payment.installment_number}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                                  {payment.due_date && (
+                                    <span>Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
+                                  )}
+                                  {payment.contracts?.contract_number && (
+                                    <span>{payment.contracts.contract_number}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <StatusBadge
+                                  status={payment.status || 'PENDENTE'}
+                                  label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
+                                />
+                                {payment.status === 'PENDENTE' && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const leadData = payment.opportunities?.leads;
+                                      const serviceTypeId = leadData?.service_type_id || '';
+                                      const groupPayments = casePayments.filter((p: any) => p.payment_form === 'PARCELADO');
+                                      const installments = groupPayments.length > 1
+                                        ? groupPayments.map((p: any) => ({ amount: p.amount?.toString() || '', due_date: p.due_date || '' }))
+                                        : [];
+                                      setEditPaymentData({
+                                        amount: payment.amount,
+                                        payment_method: payment.payment_method,
+                                        payment_form: payment.payment_form,
+                                        apply_vat: payment.apply_vat,
+                                        vat_rate: payment.vat_rate,
+                                        discount_type: payment.discount_type,
+                                        discount_value: payment.discount_value,
+                                        gross_amount: payment.gross_amount,
+                                        serviceTypeId,
+                                        installments,
+                                      });
+                                      setShowPaymentAgreement(true);
+                                    }}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 } else {
@@ -2029,29 +2184,126 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
                     ? pendingServiceTypes?.find(st => st.id === lead.service_type_id)?.name
                     : null;
                   const displayName = stName || SERVICE_INTEREST_LABELS[lead.service_interest as keyof typeof SERVICE_INTEREST_LABELS] || lead.service_interest;
+                  const leadPayments = paymentsByService.find(g => g.serviceName === displayName)?.payments || [];
+
                   return (
-                    <div
-                      key={lead.id}
-                      className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => navigate(`/crm/leads/${lead.id}`)}
-                    >
-                      <div>
-                        <p className="font-medium">{displayName}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Criado em {format(new Date(lead.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                        </p>
+                    <div key={lead.id} className="rounded-lg border overflow-hidden">
+                      <div
+                        className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => navigate(`/crm/leads/${lead.id}`)}
+                      >
+                        <div>
+                          <p className="font-medium">{displayName}</p>
+                          <p className="text-sm text-muted-foreground">
+                            Criado em {format(new Date(lead.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
+                          Aguardando Pagamento
+                        </Badge>
                       </div>
-                      <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
-                        Aguardando Pagamento
-                      </Badge>
+                      {/* Payments for this pending lead */}
+                      {leadPayments.length > 0 && (
+                        <div className="border-t bg-muted/10 px-3 py-2 space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            {leadPayments.length} pagamento{leadPayments.length > 1 ? 's' : ''}
+                          </p>
+                          {leadPayments.map((payment: any) => (
+                            <div key={payment.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-background">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="font-medium text-sm">
+                                    € {Number(payment.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  </p>
+                                  {payment.installment_number && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Parcela {payment.installment_number}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                                  {payment.due_date && (
+                                    <span>Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
+                                  )}
+                                </div>
+                              </div>
+                              <StatusBadge
+                                status={payment.status || 'PENDENTE'}
+                                label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 }
               })}
+
+              {/* Orphan payment groups */}
+              {paymentsByService
+                .filter(group => {
+                  return !allItems.some(item => {
+                    const name = item.type === 'case'
+                      ? (SERVICE_INTEREST_LABELS[item.data.service_type as keyof typeof SERVICE_INTEREST_LABELS] || item.data.service_type)
+                      : (item.data.service_type_id ? pendingServiceTypes?.find(st => st.id === item.data.service_type_id)?.name : null) || SERVICE_INTEREST_LABELS[item.data.service_interest as keyof typeof SERVICE_INTEREST_LABELS] || item.data.service_interest;
+                    return group.serviceName === name;
+                  });
+                })
+                .map((group, gIdx) => (
+                  <div key={`orphan-${gIdx}`} className="rounded-lg border overflow-hidden">
+                    <div className="p-3">
+                      <p className="font-medium flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 text-muted-foreground" />
+                        {group.serviceName}
+                      </p>
+                    </div>
+                    <div className="border-t bg-muted/10 px-3 py-2 space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        {group.payments.length} pagamento{group.payments.length > 1 ? 's' : ''}
+                      </p>
+                      {group.payments.map((payment: any) => (
+                        <div key={payment.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-background">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-medium text-sm">
+                                € {Number(payment.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </p>
+                              {payment.installment_number && (
+                                <Badge variant="outline" className="text-xs">
+                                  Parcela {payment.installment_number}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                              {payment.due_date && (
+                                <span>Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
+                              )}
+                            </div>
+                          </div>
+                          <StatusBadge
+                            status={payment.status || 'PENDENTE'}
+                            label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              }
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Payment Agreement Dialog */}
+      <PaymentAgreementDialog
+        open={showPaymentAgreement}
+        onOpenChange={setShowPaymentAgreement}
+        contactId={contactId}
+        contactName={contact.full_name}
+        initialData={editPaymentData || undefined}
+      />
 
       <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
         <DialogContent>
