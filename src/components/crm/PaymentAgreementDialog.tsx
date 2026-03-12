@@ -69,28 +69,8 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
   const [form, setForm] = useState(defaultForm);
 
-  // Pre-fill form when initialData changes
-  useState(() => {
-    if (initialData && open) {
-      setForm({
-        ...defaultForm,
-        amount: initialData.gross_amount?.toString() || initialData.amount?.toString() || '',
-        payment_method: initialData.payment_method || 'PIX',
-        payment_form: initialData.payment_form || 'UNICO',
-        apply_vat: initialData.apply_vat || false,
-        discount_type: (initialData.discount_type || '') as '' | 'PERCENTUAL' | 'VALOR',
-        discount_value: initialData.discount_value?.toString() || '',
-        installment_count: initialData.installments?.length || 2,
-        installments: initialData.installments || [],
-      });
-      if (initialData.serviceTypeId) {
-        setSelectedServiceTypeId(initialData.serviceTypeId);
-      }
-    }
-  });
-
-  // Reset/pre-fill when dialog opens
-  useMemo(() => {
+  // Pre-fill form when dialog opens with initialData
+  useEffect(() => {
     if (open && initialData) {
       setForm({
         ...defaultForm,
@@ -106,6 +86,9 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       if (initialData.serviceTypeId) {
         setSelectedServiceTypeId(initialData.serviceTypeId);
       }
+    } else if (open && !initialData) {
+      setForm(defaultForm);
+      setSelectedServiceTypeId(serviceTypeId || '');
     }
   }, [open, initialData]);
 
