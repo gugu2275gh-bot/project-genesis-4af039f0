@@ -639,7 +639,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             ))}
           </div>
 
-          {(form.amount && (form.discount_type || form.apply_vat)) && (
+          {(form.amount && (form.discount_type || form.apply_vat || totalFees > 0)) && (
             <div className="rounded-lg border bg-muted/50 p-3 space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Valor Bruto</span>
