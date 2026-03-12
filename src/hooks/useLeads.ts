@@ -84,6 +84,17 @@ export function useLeads() {
 
   const confirmInterest = useMutation({
     mutationFn: async (leadId: string) => {
+      // Fetch lead to check if it's a special case
+      const { data: leadData, error: fetchError } = await supabase
+        .from('leads')
+        .select('is_special_case, service_interest, contact_id')
+        .eq('id', leadId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+
+      const isSpecialCase = leadData?.is_special_case || false;
+
       // 1. Update lead status
       const { error: leadError } = await supabase
         .from('leads')
@@ -101,44 +112,87 @@ export function useLeads() {
         .from('opportunities')
         .insert({
           lead_id: leadId,
-          status: 'ABERTA',
+          status: isSpecialCase ? 'FECHADA_GANHA' : 'ABERTA',
         })
         .select()
         .single();
       
       if (oppError) throw oppError;
 
-      // 3. Create tasks for Juridico and Financeiro
-      const tasks = [
-        {
-          title: 'Gerar Contrato',
-          description: 'Elaborar contrato para o cliente',
-          related_lead_id: leadId,
-          related_opportunity_id: opportunity.id,
-          created_by_user_id: user?.id,
-        },
-        {
-          title: 'Configurar Pagamento',
-          description: 'Preparar opções de pagamento para o cliente',
-          related_lead_id: leadId,
-          related_opportunity_id: opportunity.id,
-          created_by_user_id: user?.id,
-        },
-      ];
+      if (isSpecialCase) {
+        // Special case: skip contract/payments, create service case directly
+        const sectorMap: Record<string, string> = {
+          'VISTO_ESTUDANTE': 'ESTUDANTE',
+          'VISTO_TRABALHO': 'TRABALHO',
+          'REAGRUPAMENTO': 'REAGRUPAMENTO',
+          'RENOVACAO_RESIDENCIA': 'RENOVACAO',
+          'NACIONALIDADE_RESIDENCIA': 'NACIONALIDADE',
+          'NACIONALIDADE_CASAMENTO': 'NACIONALIDADE',
+        };
 
-      const { error: tasksError } = await supabase
-        .from('tasks')
-        .insert(tasks);
-      
-      if (tasksError) throw tasksError;
+        const serviceInterest = leadData.service_interest || 'OUTRO';
 
-      return opportunity;
+        const { error: caseError } = await supabase
+          .from('service_cases')
+          .insert({
+            opportunity_id: opportunity.id,
+            service_type: serviceInterest,
+            sector: sectorMap[serviceInterest] || 'ESTUDANTE',
+            technical_status: 'CONTATO_INICIAL',
+          });
+
+        if (caseError) throw caseError;
+
+        // Create task for technician
+        const { error: taskError } = await supabase
+          .from('tasks')
+          .insert({
+            title: 'Caso Especial - Contato Inicial',
+            description: 'Caso especial encaminhado diretamente para trâmite técnico sem contrato/pagamento.',
+            related_lead_id: leadId,
+            related_opportunity_id: opportunity.id,
+            created_by_user_id: user?.id,
+          });
+
+        if (taskError) throw taskError;
+      } else {
+        // Normal flow: create tasks for contract and payment
+        const tasks = [
+          {
+            title: 'Gerar Contrato',
+            description: 'Elaborar contrato para o cliente',
+            related_lead_id: leadId,
+            related_opportunity_id: opportunity.id,
+            created_by_user_id: user?.id,
+          },
+          {
+            title: 'Configurar Pagamento',
+            description: 'Preparar opções de pagamento para o cliente',
+            related_lead_id: leadId,
+            related_opportunity_id: opportunity.id,
+            created_by_user_id: user?.id,
+          },
+        ];
+
+        const { error: tasksError } = await supabase
+          .from('tasks')
+          .insert(tasks);
+        
+        if (tasksError) throw tasksError;
+      }
+
+      return { opportunity, isSpecialCase };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast({ title: 'Interesse confirmado! Oportunidade e tarefas criadas.' });
+      queryClient.invalidateQueries({ queryKey: ['cases'] });
+      if (result.isSpecialCase) {
+        toast({ title: 'Caso especial! Encaminhado diretamente para trâmite técnico.' });
+      } else {
+        toast({ title: 'Interesse confirmado! Oportunidade e tarefas criadas.' });
+      }
     },
     onError: (error) => {
       toast({ title: 'Erro ao confirmar interesse', description: error.message, variant: 'destructive' });
