@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { PaymentAgreementDialog } from '@/components/crm/PaymentAgreementDialog';
+import { PaymentAgreementDialog, PaymentAgreementInitialData } from '@/components/crm/PaymentAgreementDialog';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
@@ -94,6 +94,7 @@ export default function ContactDetail() {
   const [paymentNotes, setPaymentNotes] = useState<string | null>(null);
   const [isSavingPaymentNotes, setIsSavingPaymentNotes] = useState(false);
   const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
+  const [editPaymentData, setEditPaymentData] = useState<PaymentAgreementInitialData | null>(null);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const queryClient = useQueryClient();
 
@@ -1253,32 +1254,27 @@ export default function ContactDetail() {
                 </CardTitle>
                 <CardDescription>O que foi combinado com o cliente sobre pagamento</CardDescription>
               </div>
-              <Button size="sm" variant="outline" onClick={() => setShowPaymentAgreement(true)}>
+              <Button size="sm" variant="outline" onClick={() => { setEditPaymentData(null); setShowPaymentAgreement(true); }}>
                 <DollarSign className="h-4 w-4 mr-1" />
                 Forma de Pagamento
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Textarea
-                value={paymentNotes || ''}
-                onChange={(e) => setPaymentNotes(e.target.value)}
-                placeholder="Descreva o que foi combinado com o cliente sobre pagamento..."
-                rows={4}
-              />
-              <div className="flex justify-end">
-                <Button 
-                  size="sm" 
-                  onClick={handleSavePaymentNotes} 
-                  disabled={isSavingPaymentNotes || paymentNotes === ((contact as any)?.payment_notes || '')}
-                >
-                  {isSavingPaymentNotes ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
-                  Salvar
-                </Button>
-              </div>
+              {/* Show only the last payment agreement note */}
+              {(() => {
+                const notes = paymentNotes || '';
+                const parts = notes.split('\n---\n').filter(Boolean);
+                const lastNote = parts.length > 0 ? parts[parts.length - 1].trim() : '';
+                return lastNote ? (
+                  <div className="rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-line">
+                    {lastNote}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-2 text-sm">
+                    Nenhum acordo registrado.
+                  </p>
+                );
+              })()}
 
               {/* Payments grouped by service */}
               {paymentsLoading ? (
@@ -1319,10 +1315,43 @@ export default function ContactDetail() {
                                   )}
                                 </div>
                               </div>
-                              <StatusBadge
-                                status={payment.status || 'PENDENTE'}
-                                label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
-                              />
+                              <div className="flex items-center gap-2">
+                                <StatusBadge
+                                  status={payment.status || 'PENDENTE'}
+                                  label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
+                                />
+                                {payment.status === 'PENDENTE' && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2"
+                                    onClick={() => {
+                                      const lead = payment.opportunities?.leads;
+                                      const serviceTypeId = lead?.service_type_id || '';
+                                      // Collect all payments in this group for installments
+                                      const groupPayments = group.payments.filter((p: any) => p.payment_form === 'PARCELADO');
+                                      const installments = groupPayments.length > 1
+                                        ? groupPayments.map((p: any) => ({ amount: p.amount?.toString() || '', due_date: p.due_date || '' }))
+                                        : [];
+                                      setEditPaymentData({
+                                        amount: payment.amount,
+                                        payment_method: payment.payment_method,
+                                        payment_form: payment.payment_form,
+                                        apply_vat: payment.apply_vat,
+                                        vat_rate: payment.vat_rate,
+                                        discount_type: payment.discount_type,
+                                        discount_value: payment.discount_value,
+                                        gross_amount: payment.gross_amount,
+                                        serviceTypeId,
+                                        installments,
+                                      });
+                                      setShowPaymentAgreement(true);
+                                    }}
+                                  >
+                                    <FileText className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1776,13 +1805,17 @@ export default function ContactDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Payment Agreement Dialog for beneficiaries */}
+      {/* Payment Agreement Dialog */}
       {id && (
         <PaymentAgreementDialog
           open={showPaymentAgreement}
-          onOpenChange={setShowPaymentAgreement}
+          onOpenChange={(open) => {
+            setShowPaymentAgreement(open);
+            if (!open) setEditPaymentData(null);
+          }}
           contactId={id}
           contactName={contact.full_name}
+          initialData={editPaymentData}
         />
       )}
     </>
