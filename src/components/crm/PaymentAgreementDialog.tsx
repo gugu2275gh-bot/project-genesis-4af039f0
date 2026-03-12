@@ -65,6 +65,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     notes: '',
     installment_count: 2,
     installments: [] as { amount: string; due_date: string }[],
+    fees: [] as { description: string; amount: string }[],
   };
 
   const [form, setForm] = useState(defaultForm);
