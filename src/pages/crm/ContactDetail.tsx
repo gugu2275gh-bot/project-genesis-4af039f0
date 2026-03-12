@@ -94,6 +94,7 @@ export default function ContactDetail() {
   const [paymentNotes, setPaymentNotes] = useState<string | null>(null);
   const [isSavingPaymentNotes, setIsSavingPaymentNotes] = useState(false);
   const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
+  const [editPaymentData, setEditPaymentData] = useState<PaymentAgreementInitialData | null>(null);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const queryClient = useQueryClient();
 
