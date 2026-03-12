@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { PAYMENT_METHOD_LABELS, PAYMENT_FORM_LABELS } from '@/types/database';
-import { DollarSign } from 'lucide-react';
+import { DollarSign, Plus, Trash2 } from 'lucide-react';
 import { ServiceTypeCombobox } from '@/components/ui/service-type-combobox';
 import { useServiceTypes } from '@/hooks/useServiceTypes';
 
