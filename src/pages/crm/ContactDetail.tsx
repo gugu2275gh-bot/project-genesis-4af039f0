@@ -1805,13 +1805,17 @@ export default function ContactDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Payment Agreement Dialog for beneficiaries */}
+      {/* Payment Agreement Dialog */}
       {id && (
         <PaymentAgreementDialog
           open={showPaymentAgreement}
-          onOpenChange={setShowPaymentAgreement}
+          onOpenChange={(open) => {
+            setShowPaymentAgreement(open);
+            if (!open) setEditPaymentData(null);
+          }}
           contactId={id}
           contactName={contact.full_name}
+          initialData={editPaymentData}
         />
       )}
     </>
