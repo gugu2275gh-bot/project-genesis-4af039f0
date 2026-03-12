@@ -2061,16 +2061,12 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
           <div className="space-y-4 py-4">
             <div>
               <Label>Tipo de Serviço *</Label>
-              <Select value={serviceType} onValueChange={setServiceType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o serviço" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(SERVICE_INTEREST_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ServiceTypeCombobox
+                value={serviceType}
+                onValueChange={setServiceType}
+                serviceTypes={pendingServiceTypes?.map(st => ({ code: st.code, name: st.name })) || []}
+                placeholder="Selecione o serviço..."
+              />
             </div>
             <div>
               <Label>Setor *</Label>
