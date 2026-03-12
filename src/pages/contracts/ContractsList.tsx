@@ -242,9 +242,12 @@ export default function ContractsList() {
         title="Contratos"
         description="Gerenciar contratos e documentos jurídicos"
         actions={
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) setSelectedOpportunity('');
+            }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => setSelectedOpportunity('')}>
                 <Plus className="h-4 w-4 mr-2" />
                 Novo Contrato
               </Button>
