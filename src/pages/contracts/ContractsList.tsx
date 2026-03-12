@@ -42,6 +42,17 @@ export default function ContractsList() {
     !contracts.some(c => c.opportunity_id === o.id)
   );
 
+  // Clients pending contract generation: opportunities with status that should have contracts but don't
+  const pendingContractClients = opportunities.filter(o => 
+    (o.status === 'CONTRATO_EM_ELABORACAO' || o.status === 'ABERTA') &&
+    !contracts.some(c => c.opportunity_id === o.id)
+  );
+
+  const filteredPendingClients = pendingContractClients.filter(o => {
+    const name = o.leads?.contacts?.full_name || '';
+    return name.toLowerCase().includes(search.toLowerCase());
+  });
+
   const filteredContracts = contracts.filter(c => {
     const matchesSearch = 
       c.opportunities?.leads?.contacts?.full_name.toLowerCase().includes(search.toLowerCase());
