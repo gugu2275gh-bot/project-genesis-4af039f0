@@ -254,30 +254,48 @@ export default function ContractsList() {
                 <DialogTitle>Novo Contrato</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                <div>
-                  <Label>Oportunidade</Label>
-                  {availableOpportunities.length === 0 ? (
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Não há oportunidades disponíveis para criar contrato.
-                    </p>
-                  ) : (
-                    <Select value={selectedOpportunity} onValueChange={handleOpportunityChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma oportunidade" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableOpportunities.map((opp) => (
-                          <SelectItem key={opp.id} value={opp.id}>
-                            <div className="flex items-center gap-2">
-                              <FileText className="h-4 w-4" />
-                              {opp.leads?.contacts?.full_name} - {SERVICE_INTEREST_LABELS[opp.leads?.service_interest || 'OUTRO']}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
+                {selectedOpportunity ? (
+                  // Pre-selected from pending list: show client info instead of selector
+                  <div>
+                    <Label>Cliente / Serviço</Label>
+                    {(() => {
+                      const opp = opportunities.find(o => o.id === selectedOpportunity);
+                      return opp ? (
+                        <div className="mt-2 rounded-md border p-3 bg-muted/50">
+                          <p className="font-medium">{opp.leads?.contacts?.full_name || 'Sem nome'}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {SERVICE_INTEREST_LABELS[opp.leads?.service_interest || 'OUTRO']}
+                          </p>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                ) : (
+                  <div>
+                    <Label>Oportunidade</Label>
+                    {availableOpportunities.length === 0 ? (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Não há oportunidades disponíveis para criar contrato.
+                      </p>
+                    ) : (
+                      <Select value={selectedOpportunity} onValueChange={handleOpportunityChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione uma oportunidade" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableOpportunities.map((opp) => (
+                            <SelectItem key={opp.id} value={opp.id}>
+                              <div className="flex items-center gap-2">
+                                <FileText className="h-4 w-4" />
+                                {opp.leads?.contacts?.full_name} - {SERVICE_INTEREST_LABELS[opp.leads?.service_interest || 'OUTRO']}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                )}
                 <div>
                   <Label>Modelo do Contrato</Label>
                   <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
@@ -307,7 +325,10 @@ export default function ContractsList() {
                   </Select>
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  <Button variant="outline" onClick={() => {
+                    setIsDialogOpen(false);
+                    setSelectedOpportunity('');
+                  }}>
                     Cancelar
                   </Button>
                   <Button 
