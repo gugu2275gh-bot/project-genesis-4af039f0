@@ -9,8 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Eye, FileText, AlertTriangle, Clock, Download } from 'lucide-react';
+import { Plus, Search, Eye, FileText, AlertTriangle, Clock, Download, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent } from '@/components/ui/card';
 import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, CONTRACT_TEMPLATE_LABELS } from '@/types/database';
 
 import { StatusBadge } from '@/components/ui/status-badge';
