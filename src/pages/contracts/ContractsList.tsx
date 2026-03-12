@@ -9,8 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Eye, FileText, AlertTriangle, Clock, Download } from 'lucide-react';
+import { Plus, Search, Eye, FileText, AlertTriangle, Clock, Download, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent } from '@/components/ui/card';
 import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, CONTRACT_TEMPLATE_LABELS } from '@/types/database';
 
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -23,6 +25,7 @@ export default function ContractsList() {
   const { opportunities } = useOpportunities();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState('contracts');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedOpportunity, setSelectedOpportunity] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('DOCUMENTOS');
@@ -38,6 +41,17 @@ export default function ContractsList() {
     (o.status === 'ABERTA' || o.status === 'CONTRATO_EM_ELABORACAO') &&
     !contracts.some(c => c.opportunity_id === o.id)
   );
+
+  // Clients pending contract generation: opportunities with status that should have contracts but don't
+  const pendingContractClients = opportunities.filter(o => 
+    (o.status === 'CONTRATO_EM_ELABORACAO' || o.status === 'ABERTA') &&
+    !contracts.some(c => c.opportunity_id === o.id)
+  );
+
+  const filteredPendingClients = pendingContractClients.filter(o => {
+    const name = o.leads?.contacts?.full_name || '';
+    return name.toLowerCase().includes(search.toLowerCase());
+  });
 
   const filteredContracts = contracts.filter(c => {
     const matchesSearch = 
@@ -292,36 +306,110 @@ export default function ContractsList() {
         }
       />
 
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar contratos..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            {Object.entries(CONTRACT_STATUS_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="contracts">Contratos</TabsTrigger>
+          <TabsTrigger value="pending" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Pendentes de Contrato
+            {pendingContractClients.length > 0 && (
+              <Badge variant="secondary" className="ml-1">{pendingContractClients.length}</Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-      <DataTable
-        columns={columns}
-        data={filteredContracts}
-        loading={isLoading}
-        emptyMessage="Nenhum contrato encontrado"
-        onRowClick={(contract) => navigate(`/contracts/${contract.id}`)}
-      />
+        <TabsContent value="contracts" className="space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar contratos..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {Object.entries(CONTRACT_STATUS_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DataTable
+            columns={columns}
+            data={filteredContracts}
+            loading={isLoading}
+            emptyMessage="Nenhum contrato encontrado"
+            onRowClick={(contract) => navigate(`/contracts/${contract.id}`)}
+          />
+        </TabsContent>
+
+        <TabsContent value="pending" className="space-y-4">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar clientes pendentes..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          {filteredPendingClients.length === 0 ? (
+            <div className="flex h-64 flex-col items-center justify-center text-muted-foreground">
+              <p>Nenhum cliente pendente de contrato</p>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {filteredPendingClients.map((opp) => (
+                <Card key={opp.id} className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate(`/crm/leads/${opp.lead_id}`)}>
+                  <CardContent className="flex items-center justify-between p-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                        <Users className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{opp.leads?.contacts?.full_name || 'Sem nome'}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {opp.leads?.contacts?.email || opp.leads?.contacts?.phone || '-'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline">
+                        {SERVICE_INTEREST_LABELS[opp.leads?.service_interest || 'OUTRO']}
+                      </Badge>
+                      <StatusBadge
+                        status={opp.status || 'ABERTA'}
+                        label={opp.status === 'CONTRATO_EM_ELABORACAO' ? 'Contrato em Elaboração' : 'Aberta'}
+                      />
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedOpportunity(opp.id);
+                          handleOpportunityChange(opp.id);
+                          setIsDialogOpen(true);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Gerar Contrato
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
