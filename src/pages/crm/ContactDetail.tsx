@@ -2055,10 +2055,6 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
               <DollarSign className="h-4 w-4 mr-1" />
               Forma de Pagamento
             </Button>
-            <Button size="sm" onClick={() => setShowNewDialog(true)}>
-              <Plus className="h-4 w-4 mr-1" />
-              Novo Serviço
-            </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
