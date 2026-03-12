@@ -52,7 +52,8 @@ import {
   DollarSign,
   Plus,
   Upload,
-  Trash2
+  Trash2,
+  Pencil
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
