@@ -821,7 +821,7 @@ export default function ContractDetail() {
               beneficiaries={beneficiaries?.filter(b => !b.is_primary).map(b => {
                 const sc = serviceCases?.find((s: any) => s.id === b.service_case_id);
                 const benContactId = (b as any).contact_id;
-                const benPayments = contractPayments?.filter((p: any) => benContactId && p.beneficiary_contact_id === benContactId) || [];
+                const benPayments = contractPayments?.filter((p: any) => benContactId && p.beneficiary_contact_id === benContactId && p.opportunity_id === contract.opportunity_id) || [];
                 const totalBenAmount = benPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
                 return {
                   fullName: b.full_name,
