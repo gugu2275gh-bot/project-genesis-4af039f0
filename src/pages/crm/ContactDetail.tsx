@@ -1254,7 +1254,7 @@ export default function ContactDetail() {
                 </CardTitle>
                 <CardDescription>O que foi combinado com o cliente sobre pagamento</CardDescription>
               </div>
-              <Button size="sm" variant="outline" onClick={() => setShowPaymentAgreement(true)}>
+              <Button size="sm" variant="outline" onClick={() => { setEditPaymentData(null); setShowPaymentAgreement(true); }}>
                 <DollarSign className="h-4 w-4 mr-1" />
                 Forma de Pagamento
               </Button>
