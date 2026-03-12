@@ -214,6 +214,29 @@ export default function ContactDetail() {
     return Object.values(groups);
   }, [contactPayments, serviceTypes]);
 
+  // Fetch service cases for this contact's leads to determine completed services
+  const { data: contactServiceCases = [] } = useQuery({
+    queryKey: ['contact-service-cases', id],
+    queryFn: async () => {
+      if (!id) return [];
+      const { data: cLeads } = await supabase.from('leads').select('id').eq('contact_id', id);
+      if (!cLeads?.length) return [];
+      const { data: opps } = await supabase.from('opportunities').select('id, lead_id').in('lead_id', cLeads.map(l => l.id));
+      if (!opps?.length) return [];
+      const { data: cases } = await supabase
+        .from('service_cases')
+        .select('id, opportunity_id, technical_status')
+        .in('opportunity_id', opps.map(o => o.id));
+      if (!cases) return [];
+      // Map lead_id to technical_status via opportunity
+      return cases.map(c => {
+        const opp = opps.find(o => o.id === c.opportunity_id);
+        return { ...c, lead_id: opp?.lead_id };
+      });
+    },
+    enabled: !!id,
+  });
+
   const { data: contactContracts = [], isLoading: contractsLoading } = useQuery({
     queryKey: ['contact-contracts', id],
     queryFn: async () => {
@@ -1298,29 +1321,44 @@ export default function ContactDetail() {
                     const leadServiceGroup = paymentsByService.find(g => g.serviceName === displayName);
                     const servicePayments = leadServiceGroup?.payments || [];
 
+                    // Check if this service is completed (has service case with ENCERRADO_*)
+                    const serviceCase = contactServiceCases.find((sc: any) => sc.lead_id === lead.id);
+                    const isServiceCompleted = serviceCase && (serviceCase.technical_status === 'ENCERRADO_APROVADO' || serviceCase.technical_status === 'ENCERRADO_NEGADO');
+                    const allPaymentsPaid = servicePayments.length > 0 && servicePayments.every((p: any) => p.status === 'CONFIRMADO');
+
                     return (
-                      <div key={lead.id} className="rounded-lg border overflow-hidden">
+                      <div key={lead.id} className={`rounded-lg border overflow-hidden ${isServiceCompleted ? 'opacity-60' : ''}`}>
                         {/* Service header */}
                         <div
                           className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors"
                           onClick={() => navigate(`/crm/leads/${lead.id}`)}
                         >
                           <div>
-                            <p className="font-medium">{displayName}</p>
+                            <p className={`font-medium ${isServiceCompleted ? 'text-muted-foreground' : ''}`}>{displayName}</p>
                             <p className="text-sm text-muted-foreground">
                               Criado em {format(new Date(lead.created_at!), "dd/MM/yyyy", { locale: ptBR })}
                             </p>
                           </div>
-                          {isConfirmed ? (
-                            <StatusBadge 
-                              status={lead.status || 'NOVO'} 
-                              label={LEAD_STATUS_LABELS[lead.status || 'NOVO']} 
-                            />
-                          ) : (
-                            <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
-                              Aguardando Pagamento
-                            </Badge>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {isServiceCompleted && (
+                              <StatusBadge variant="success" label="Concluído" />
+                            )}
+                            {allPaymentsPaid && servicePayments.length > 0 && (
+                              <StatusBadge variant="success" label="Quitado" />
+                            )}
+                            {!isServiceCompleted && (
+                              isConfirmed ? (
+                                <StatusBadge 
+                                  status={lead.status || 'NOVO'} 
+                                  label={LEAD_STATUS_LABELS[lead.status || 'NOVO']} 
+                                />
+                              ) : (
+                                <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
+                                  Aguardando Pagamento
+                                </Badge>
+                              )
+                            )}
+                          </div>
                         </div>
 
                         {/* Payments for this service */}
@@ -2081,23 +2119,35 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
                   const displayName = SERVICE_INTEREST_LABELS[sc.service_type as keyof typeof SERVICE_INTEREST_LABELS] || sc.service_type;
                   // Find payments for this service case
                   const casePayments = paymentsByService.find(g => g.serviceName === displayName)?.payments || [];
+                  const isCaseCompleted = sc.technical_status === 'ENCERRADO_APROVADO' || sc.technical_status === 'ENCERRADO_NEGADO';
+                  const allCasePaymentsPaid = casePayments.length > 0 && casePayments.every((p: any) => p.status === 'CONFIRMADO');
 
                   return (
-                    <div key={sc.id} className="rounded-lg border overflow-hidden">
+                    <div key={sc.id} className={`rounded-lg border overflow-hidden ${isCaseCompleted ? 'opacity-60' : ''}`}>
                       <div
                         className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => navigate(`/cases/${sc.id}`)}
                       >
                         <div>
-                          <p className="font-medium">{displayName}</p>
+                          <p className={`font-medium ${isCaseCompleted ? 'text-muted-foreground' : ''}`}>{displayName}</p>
                           <p className="text-sm text-muted-foreground">
                             Setor: {SECTOR_LABELS_MAP[sc.sector as keyof typeof SECTOR_LABELS_MAP] || sc.sector} • Criado em {format(new Date(sc.created_at), "dd/MM/yyyy", { locale: ptBR })}
                           </p>
                         </div>
-                        <StatusBadge
-                          status={sc.technical_status || 'CONTATO_INICIAL'}
-                          label={TECHNICAL_STATUS_LABELS[sc.technical_status as keyof typeof TECHNICAL_STATUS_LABELS] || sc.technical_status}
-                        />
+                        <div className="flex items-center gap-2">
+                          {isCaseCompleted && (
+                            <StatusBadge variant="success" label="Concluído" />
+                          )}
+                          {allCasePaymentsPaid && casePayments.length > 0 && (
+                            <StatusBadge variant="success" label="Quitado" />
+                          )}
+                          {!isCaseCompleted && (
+                            <StatusBadge
+                              status={sc.technical_status || 'CONTATO_INICIAL'}
+                              label={TECHNICAL_STATUS_LABELS[sc.technical_status as keyof typeof TECHNICAL_STATUS_LABELS] || sc.technical_status}
+                            />
+                          )}
+                        </div>
                       </div>
                       {/* Payments for this service */}
                       {casePayments.length > 0 && (

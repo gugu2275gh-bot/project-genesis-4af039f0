@@ -48,13 +48,21 @@ export default function ContractDetail() {
   });
 
   const { data: contractPayments } = useQuery({
-    queryKey: ['contract-payments', id],
+    queryKey: ['contract-payments', id, contract?.opportunity_id],
     queryFn: async () => {
       if (!id) return [];
-      const { data, error } = await supabase
+      let query = supabase
         .from('payments')
-        .select('*, contract_beneficiaries:beneficiary_contact_id(full_name)')
-        .eq('contract_id', id);
+        .select('*, contract_beneficiaries:beneficiary_contact_id(full_name)');
+      
+      // Filter by contract_id OR opportunity_id to catch payments not yet linked to contract
+      if (contract?.opportunity_id) {
+        query = query.or(`contract_id.eq.${id},opportunity_id.eq.${contract.opportunity_id}`);
+      } else {
+        query = query.eq('contract_id', id);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
@@ -813,7 +821,7 @@ export default function ContractDetail() {
               beneficiaries={beneficiaries?.filter(b => !b.is_primary).map(b => {
                 const sc = serviceCases?.find((s: any) => s.id === b.service_case_id);
                 const benContactId = (b as any).contact_id;
-                const benPayments = contractPayments?.filter((p: any) => benContactId && p.beneficiary_contact_id === benContactId) || [];
+                const benPayments = contractPayments?.filter((p: any) => benContactId && p.beneficiary_contact_id === benContactId && p.opportunity_id === contract.opportunity_id) || [];
                 const totalBenAmount = benPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
                 return {
                   fullName: b.full_name,
