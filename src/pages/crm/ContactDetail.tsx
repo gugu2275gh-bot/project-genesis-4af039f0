@@ -7,6 +7,7 @@ import { useContact, useContacts, ContactUpdate } from '@/hooks/useContacts';
 import { useLeads } from '@/hooks/useLeads';
 import { useContactDocuments } from '@/hooks/useContactDocuments';
 import { useServiceTypes } from '@/hooks/useServiceTypes';
+import { ServiceTypeCombobox } from '@/components/ui/service-type-combobox';
 import { useContactBeneficiaries } from '@/hooks/useContactBeneficiaries';
 import { useInteractions } from '@/hooks/useInteractions';
 import { supabase } from '@/integrations/supabase/client';
