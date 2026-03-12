@@ -2119,23 +2119,35 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
                   const displayName = SERVICE_INTEREST_LABELS[sc.service_type as keyof typeof SERVICE_INTEREST_LABELS] || sc.service_type;
                   // Find payments for this service case
                   const casePayments = paymentsByService.find(g => g.serviceName === displayName)?.payments || [];
+                  const isCaseCompleted = sc.technical_status === 'ENCERRADO_APROVADO' || sc.technical_status === 'ENCERRADO_NEGADO';
+                  const allCasePaymentsPaid = casePayments.length > 0 && casePayments.every((p: any) => p.status === 'CONFIRMADO');
 
                   return (
-                    <div key={sc.id} className="rounded-lg border overflow-hidden">
+                    <div key={sc.id} className={`rounded-lg border overflow-hidden ${isCaseCompleted ? 'opacity-60' : ''}`}>
                       <div
                         className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => navigate(`/cases/${sc.id}`)}
                       >
                         <div>
-                          <p className="font-medium">{displayName}</p>
+                          <p className={`font-medium ${isCaseCompleted ? 'text-muted-foreground' : ''}`}>{displayName}</p>
                           <p className="text-sm text-muted-foreground">
                             Setor: {SECTOR_LABELS_MAP[sc.sector as keyof typeof SECTOR_LABELS_MAP] || sc.sector} • Criado em {format(new Date(sc.created_at), "dd/MM/yyyy", { locale: ptBR })}
                           </p>
                         </div>
-                        <StatusBadge
-                          status={sc.technical_status || 'CONTATO_INICIAL'}
-                          label={TECHNICAL_STATUS_LABELS[sc.technical_status as keyof typeof TECHNICAL_STATUS_LABELS] || sc.technical_status}
-                        />
+                        <div className="flex items-center gap-2">
+                          {isCaseCompleted && (
+                            <StatusBadge variant="success" label="Concluído" />
+                          )}
+                          {allCasePaymentsPaid && casePayments.length > 0 && (
+                            <StatusBadge variant="success" label="Quitado" />
+                          )}
+                          {!isCaseCompleted && (
+                            <StatusBadge
+                              status={sc.technical_status || 'CONTATO_INICIAL'}
+                              label={TECHNICAL_STATUS_LABELS[sc.technical_status as keyof typeof TECHNICAL_STATUS_LABELS] || sc.technical_status}
+                            />
+                          )}
+                        </div>
                       </div>
                       {/* Payments for this service */}
                       {casePayments.length > 0 && (
