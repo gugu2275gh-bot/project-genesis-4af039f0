@@ -261,6 +261,36 @@ export default function PaymentsList() {
       cell: (payment) => PAYMENT_FORM_LABELS[(payment as any).payment_form || 'UNICO'],
     },
     {
+      key: 'contract_status',
+      header: 'Contrato',
+      cell: (payment: any) => {
+        const contract = payment.contracts;
+        if (!contract) {
+          return <Badge variant="outline" className="text-muted-foreground">Sem contrato</Badge>;
+        }
+        if (contract.status === 'APROVADO') {
+          return (
+            <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 flex items-center gap-1 whitespace-nowrap">
+              <FileText className="h-3 w-3" />
+              A Assinar
+            </Badge>
+          );
+        }
+        if (contract.status === 'ASSINADO') {
+          return (
+            <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 flex items-center gap-1">
+              <CheckCircle className="h-3 w-3" />
+              Assinado
+            </Badge>
+          );
+        }
+        if (contract.status === 'EM_ELABORACAO') {
+          return <Badge variant="outline">Em Elaboração</Badge>;
+        }
+        return <Badge variant="outline">{contract.status}</Badge>;
+      },
+    },
+    {
       key: 'status',
       header: 'Status',
       cell: (payment) => {
