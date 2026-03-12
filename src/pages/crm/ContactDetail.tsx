@@ -1349,7 +1349,7 @@ export default function ContactDetail() {
                                       setShowPaymentAgreement(true);
                                     }}
                                   >
-                                    <FileText className="h-3.5 w-3.5" />
+                                    <Pencil className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
                               </div>
