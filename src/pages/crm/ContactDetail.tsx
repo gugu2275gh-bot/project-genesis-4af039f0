@@ -1260,26 +1260,21 @@ export default function ContactDetail() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Textarea
-                value={paymentNotes || ''}
-                onChange={(e) => setPaymentNotes(e.target.value)}
-                placeholder="Descreva o que foi combinado com o cliente sobre pagamento..."
-                rows={4}
-              />
-              <div className="flex justify-end">
-                <Button 
-                  size="sm" 
-                  onClick={handleSavePaymentNotes} 
-                  disabled={isSavingPaymentNotes || paymentNotes === ((contact as any)?.payment_notes || '')}
-                >
-                  {isSavingPaymentNotes ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
-                  Salvar
-                </Button>
-              </div>
+              {/* Show only the last payment agreement note */}
+              {(() => {
+                const notes = paymentNotes || '';
+                const parts = notes.split('\n---\n').filter(Boolean);
+                const lastNote = parts.length > 0 ? parts[parts.length - 1].trim() : '';
+                return lastNote ? (
+                  <div className="rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-line">
+                    {lastNote}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-center py-2 text-sm">
+                    Nenhum acordo registrado.
+                  </p>
+                );
+              })()}
 
               {/* Payments grouped by service */}
               {paymentsLoading ? (
