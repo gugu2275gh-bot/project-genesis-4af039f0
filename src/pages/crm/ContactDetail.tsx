@@ -7,6 +7,7 @@ import { useContact, useContacts, ContactUpdate } from '@/hooks/useContacts';
 import { useLeads } from '@/hooks/useLeads';
 import { useContactDocuments } from '@/hooks/useContactDocuments';
 import { useServiceTypes } from '@/hooks/useServiceTypes';
+import { ServiceTypeCombobox } from '@/components/ui/service-type-combobox';
 import { useContactBeneficiaries } from '@/hooks/useContactBeneficiaries';
 import { useInteractions } from '@/hooks/useInteractions';
 import { supabase } from '@/integrations/supabase/client';
@@ -324,9 +325,12 @@ export default function ContactDetail() {
   const handleCreateNewService = async () => {
     if (!id) return;
     try {
+      // Find the selected service type to get the service_interest enum
+      const selectedST = serviceTypes?.find(st => st.code === newServiceInterest);
       const newLead = await createLeadForContact.mutateAsync({
         contact_id: id,
         service_interest: newServiceInterest,
+        service_type_id: selectedST?.id,
         notes: newServiceNotes || undefined,
       });
       setShowNewServiceDialog(false);
@@ -1805,16 +1809,12 @@ export default function ContactDetail() {
           <div className="space-y-4">
             <div>
               <Label>Tipo de Serviço</Label>
-              <Select value={newServiceInterest} onValueChange={setNewServiceInterest}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(SERVICE_INTEREST_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ServiceTypeCombobox
+                value={newServiceInterest}
+                onValueChange={setNewServiceInterest}
+                serviceTypes={serviceTypes?.map(st => ({ code: st.code, name: st.name })) || []}
+                placeholder="Selecione o serviço..."
+              />
             </div>
             <div>
               <Label>Notas (opcional)</Label>

@@ -181,12 +181,13 @@ export function useLeads() {
   });
 
   const createLeadForContact = useMutation({
-    mutationFn: async ({ contact_id, service_interest, notes }: { contact_id: string; service_interest: string; notes?: string }) => {
+    mutationFn: async ({ contact_id, service_interest, service_type_id, notes }: { contact_id: string; service_interest: string; service_type_id?: string; notes?: string }) => {
       const { data, error } = await supabase
         .from('leads')
         .insert({
           contact_id,
           service_interest: service_interest as any,
+          service_type_id: service_type_id || null,
           notes: notes || null,
           status: 'NOVO' as any,
           created_by_user_id: user?.id,
