@@ -17,6 +17,19 @@ import { DollarSign } from 'lucide-react';
 import { ServiceTypeCombobox } from '@/components/ui/service-type-combobox';
 import { useServiceTypes } from '@/hooks/useServiceTypes';
 
+export interface PaymentAgreementInitialData {
+  amount?: number;
+  payment_method?: string;
+  payment_form?: string;
+  apply_vat?: boolean;
+  vat_rate?: number;
+  discount_type?: string;
+  discount_value?: number;
+  gross_amount?: number;
+  serviceTypeId?: string;
+  installments?: { amount: string; due_date: string }[];
+}
+
 interface PaymentAgreementDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -24,9 +37,10 @@ interface PaymentAgreementDialogProps {
   contactName: string;
   serviceTypeId?: string | null;
   onServiceTypeChange?: (serviceTypeId: string) => void;
+  initialData?: PaymentAgreementInitialData | null;
 }
 
-export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange }: PaymentAgreementDialogProps) {
+export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange, initialData }: PaymentAgreementDialogProps) {
   const { updateContact } = useContacts();
   const { data: serviceTypes } = useServiceTypes();
   const queryClient = useQueryClient();
@@ -38,7 +52,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   );
   const { toast } = useToast();
 
-  const [form, setForm] = useState({
+  const defaultForm = {
     amount: '',
     payment_method: 'PIX' as string,
     payment_form: 'UNICO' as string,
@@ -51,7 +65,49 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     notes: '',
     installment_count: 2,
     installments: [] as { amount: string; due_date: string }[],
+  };
+
+  const [form, setForm] = useState(defaultForm);
+
+  // Pre-fill form when initialData changes
+  useState(() => {
+    if (initialData && open) {
+      setForm({
+        ...defaultForm,
+        amount: initialData.gross_amount?.toString() || initialData.amount?.toString() || '',
+        payment_method: initialData.payment_method || 'PIX',
+        payment_form: initialData.payment_form || 'UNICO',
+        apply_vat: initialData.apply_vat || false,
+        discount_type: (initialData.discount_type || '') as '' | 'PERCENTUAL' | 'VALOR',
+        discount_value: initialData.discount_value?.toString() || '',
+        installment_count: initialData.installments?.length || 2,
+        installments: initialData.installments || [],
+      });
+      if (initialData.serviceTypeId) {
+        setSelectedServiceTypeId(initialData.serviceTypeId);
+      }
+    }
   });
+
+  // Reset/pre-fill when dialog opens
+  useMemo(() => {
+    if (open && initialData) {
+      setForm({
+        ...defaultForm,
+        amount: initialData.gross_amount?.toString() || initialData.amount?.toString() || '',
+        payment_method: initialData.payment_method || 'PIX',
+        payment_form: initialData.payment_form || 'UNICO',
+        apply_vat: initialData.apply_vat || false,
+        discount_type: (initialData.discount_type || '') as '' | 'PERCENTUAL' | 'VALOR',
+        discount_value: initialData.discount_value?.toString() || '',
+        installment_count: initialData.installments?.length || 2,
+        installments: initialData.installments || [],
+      });
+      if (initialData.serviceTypeId) {
+        setSelectedServiceTypeId(initialData.serviceTypeId);
+      }
+    }
+  }, [open, initialData]);
 
   const { data: paymentAccounts = [] } = useQuery({
     queryKey: ['payment-accounts'],
