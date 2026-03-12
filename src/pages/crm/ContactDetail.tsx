@@ -325,9 +325,12 @@ export default function ContactDetail() {
   const handleCreateNewService = async () => {
     if (!id) return;
     try {
+      // Find the selected service type to get the service_interest enum
+      const selectedST = serviceTypes?.find(st => st.code === newServiceInterest);
       const newLead = await createLeadForContact.mutateAsync({
         contact_id: id,
         service_interest: newServiceInterest,
+        service_type_id: selectedST?.id,
         notes: newServiceNotes || undefined,
       });
       setShowNewServiceDialog(false);
