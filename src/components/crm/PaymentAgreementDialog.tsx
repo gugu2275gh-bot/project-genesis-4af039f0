@@ -651,6 +651,12 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                   <span>+ € {calculatedAmounts.vatAmount.toFixed(2)}</span>
                 </div>
               )}
+              {form.fees.filter(f => parseFloat(f.amount) > 0).map((fee, idx) => (
+                <div key={idx} className="flex justify-between">
+                  <span className="text-muted-foreground">{fee.description || 'Taxa'}</span>
+                  <span>+ € {parseFloat(fee.amount).toFixed(2)}</span>
+                </div>
+              ))}
               {(form.apply_vat && calculatedAmounts.discountAmount > 0) && (
                 <div className="flex justify-between font-medium border-t pt-1">
                   <span>Total</span>
