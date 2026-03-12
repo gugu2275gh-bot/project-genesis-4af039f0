@@ -1809,16 +1809,12 @@ export default function ContactDetail() {
           <div className="space-y-4">
             <div>
               <Label>Tipo de Serviço</Label>
-              <Select value={newServiceInterest} onValueChange={setNewServiceInterest}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(SERVICE_INTEREST_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <ServiceTypeCombobox
+                value={newServiceInterest}
+                onValueChange={setNewServiceInterest}
+                serviceTypes={serviceTypes?.map(st => ({ code: st.code, name: st.name })) || []}
+                placeholder="Selecione o serviço..."
+              />
             </div>
             <div>
               <Label>Notas (opcional)</Label>
