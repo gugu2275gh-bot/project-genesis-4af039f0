@@ -1,50 +1,48 @@
 
-# Plano: Novo Contrato/Serviço a partir de Lead com Contrato Cancelado
 
-## Recomendacao de UX
+## Análise: Ciclo de vida de pagamentos e serviços repetidos
 
-A melhor abordagem e colocar o botao **na Ficha do Cliente (ContactDetail)**, na seccao de Servicos/Leads. Motivos:
+### Como funciona hoje
 
-1. **Ficha do Cliente** e o ponto central onde se ve todo o historico - leads, contratos, pagamentos. Faz sentido iniciar um novo ciclo a partir dali.
-2. Na ficha ja existem os leads listados. Adicionar um botao "Novo Lead / Novo Servico" ali permite criar um novo lead para o mesmo contato, reiniciando o fluxo completo (Lead -> Oportunidade -> Contrato).
-3. Manter tambem um botao contextual no **LeadDetail** quando o lead tem um contrato cancelado, permitindo "Reabrir como Novo Lead" diretamente.
-
-O historico fica preservado porque o lead antigo e sua oportunidade/contrato cancelado permanecem intactos. O novo lead gera uma nova oportunidade e novo contrato.
-
-## Alteracoes Tecnicas
-
-### 1. Ficha do Cliente (ContactDetail.tsx) - Botao "Novo Servico"
-- Na seccao onde os leads do cliente sao listados, adicionar um botao "+ Novo Servico"
-- Ao clicar, abre um Dialog para selecionar o tipo de servico (service_interest) e notas iniciais
-- Cria um novo Lead vinculado ao mesmo contact_id com status "NOVO"
-- Navega para o detalhe do novo lead criado
-
-### 2. Lead Detail (LeadDetail.tsx) - Botao "Novo Servico" contextual
-- Quando o lead tem status INTERESSE_CONFIRMADO e sua oportunidade possui um contrato CANCELADO, exibir um botao "Iniciar Novo Servico"
-- Esse botao cria um novo lead para o mesmo contato com status NOVO e navega para ele
-
-### 3. Hook useLeads.ts - Nova mutacao createLeadForContact
-- Adicionar uma mutacao `createLeadForContact` que recebe `contact_id`, `service_interest` e `notes`
-- Cria o lead com status NOVO e retorna os dados para navegacao
-
-### 4. Sem alteracoes no banco de dados
-- Nenhuma migracao necessaria. O modelo atual ja suporta multiplos leads por contato.
-
-## Fluxo Resumido
+O sistema já possui uma estrutura que **isola cada atendimento** por cadeia:
 
 ```text
-Contrato Cancelado
-       |
-       v
-Ficha do Cliente ou Lead Detail
-       |
-  [+ Novo Servico]
-       |
-       v
-Novo Lead (status: NOVO)
-       |
-       v
-Fluxo normal: Confirmar Interesse -> Oportunidade -> Contrato
+Contato (cliente)
+  └── Lead 1 (serviço X) ──→ Oportunidade 1 ──→ Pagamentos 1a, 1b
+  └── Lead 2 (serviço Y) ──→ Oportunidade 2 ──→ Pagamentos 2a, 2b
 ```
 
-O historico completo (lead antigo, oportunidade, contrato cancelado, pagamentos) permanece intacto e visivel na ficha do cliente.
+Cada vez que o "Forma de Pagamento" é usado para um novo serviço, ele cria um **novo Lead + nova Oportunidade + novos Pagamentos**. Então os pagamentos do serviço antigo e do novo já são separados por `opportunity_id`.
+
+### O problema: não há "encerramento" formal
+
+Atualmente, quando todos os pagamentos são confirmados, a oportunidade vai para `FECHADA_GANHA` e o caso técnico segue seu fluxo (`CONTATO_INICIAL` → ... → `ENCERRADO_APROVADO` ou `ENCERRADO_NEGADO`). **Porém**, não existe um mecanismo que "feche" explicitamente o ciclo financeiro/contratual de forma que o sistema diferencie claramente "atendimento concluído" de "atendimento ativo".
+
+Na prática, isso já funciona porque:
+- Pagamentos `CONFIRMADO` não aparecem como pendentes
+- Casos técnicos com status `ENCERRADO_*` são tratados como finalizados
+- Um novo serviço cria uma cadeia completamente nova
+
+### Onde pode haver confusão
+
+1. **No contrato**: Os pagamentos são filtrados por `contract_id`. Se o contrato não for vinculado, pode puxar dados errados. (Já discutimos a correção com filtro por `opportunity_id`.)
+
+2. **Na ficha do contato (ContactDetail)**: A seção "Serviços & Pagamentos" mostra **todos** os leads/pagamentos do contato. Não há separação visual clara entre "concluído" e "ativo".
+
+### Sugestão de melhoria
+
+Adicionar uma **indicação visual de status** na seção "Serviços & Pagamentos" da ficha do contato:
+
+1. **Serviços com caso técnico `ENCERRADO_*`**: Mostrar como "Concluído" com visual atenuado (texto cinza, badge verde)
+2. **Pagamentos todos `CONFIRMADO`**: Mostrar o grupo financeiro como "Quitado"
+3. **Serviços ativos**: Manter o destaque visual atual
+
+Isso não requer mudança no banco de dados, apenas lógica visual no frontend:
+
+**Arquivo: `src/pages/crm/ContactDetail.tsx`**
+- Para cada grupo de serviço/lead, verificar se o caso técnico associado tem status `ENCERRADO_*`
+- Se sim, renderizar com estilo atenuado e badge "Concluído"
+- Se todos os pagamentos do grupo são `CONFIRMADO`, mostrar badge "Quitado" ao lado do valor
+
+Essa abordagem mantém o histórico visível mas deixa claro o que é passado e o que é atual, sem precisar de nenhum botão manual de "dar baixa".
+
