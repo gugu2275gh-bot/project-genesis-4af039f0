@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { useContracts } from '@/hooks/useContracts';
 import { useOpportunities } from '@/hooks/useOpportunities';
 import { PageHeader } from '@/components/ui/page-header';
@@ -30,11 +32,26 @@ export default function ContractsList() {
   const [selectedOpportunity, setSelectedOpportunity] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('DOCUMENTOS');
 
+  // Fetch opportunity IDs that have at least one payment
+  const { data: opportunitiesWithPayments } = useQuery({
+    queryKey: ['opportunities-with-payments'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('opportunity_id')
+        .not('opportunity_id', 'is', null);
+      if (error) throw error;
+      // Return unique opportunity IDs
+      return [...new Set(data?.map(p => p.opportunity_id) || [])];
+    },
+  });
+
+  const oppWithPaymentsSet = new Set(opportunitiesWithPayments || []);
+
   // Helper to determine the correct template based on service interest
   const getTemplateForService = (serviceInterest: string): string => {
     if (serviceInterest === 'NACIONALIDADE_RESIDENCIA') return 'NACIONALIDADE';
-    // Check if it's regularización extraordinaria by service_type_id name or fallback
-    return 'DOCUMENTOS'; // GERAL for all other services
+    return 'DOCUMENTOS';
   };
 
   const availableOpportunities = opportunities.filter(o => 
@@ -42,10 +59,10 @@ export default function ContractsList() {
     !contracts.some(c => c.opportunity_id === o.id)
   );
 
-  // Clients pending contract generation: opportunities with status that should have contracts but don't
+  // Clients pending contract: opportunities with payments but no contract yet
   const pendingContractClients = opportunities.filter(o => 
-    (o.status === 'CONTRATO_EM_ELABORACAO' || o.status === 'ABERTA') &&
-    !contracts.some(c => c.opportunity_id === o.id)
+    !contracts.some(c => c.opportunity_id === o.id) &&
+    oppWithPaymentsSet.has(o.id)
   );
 
   const filteredPendingClients = pendingContractClients.filter(o => {
