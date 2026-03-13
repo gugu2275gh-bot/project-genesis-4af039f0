@@ -13,6 +13,7 @@ interface ContractPreviewProps {
   documentNumber: string;
   contractNumber: string;
   canDownload?: boolean;
+  contractStatus?: string;
   // Financial fields
   serviceDescription?: string;
   feeAmount?: number;
@@ -32,6 +33,7 @@ interface ContractPreviewProps {
 
 export function ContractPreview({ 
   template, clientName, documentType, documentNumber, contractNumber, canDownload = false,
+  contractStatus,
   serviceDescription, feeAmount, vatRate, totalAmount, paymentConditions, paymentMethod,
   bankAccount, beneficiaries, phone, email, address, currency, date,
 }: ContractPreviewProps) {
@@ -125,18 +127,22 @@ export function ContractPreview({
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg">Pré-visualização do Contrato</CardTitle>
         <div className="flex gap-2">
-          {isEditing ? (
-            <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
-              <X className="h-4 w-4 mr-1" />
-              Cancelar Edição
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" onClick={handleStartEditing}>
-              <Edit className="h-4 w-4 mr-1" />
-              Editar Pré-visualização
-            </Button>
+          {contractStatus !== 'ASSINADO' && (
+            <>
+              {isEditing ? (
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
+                  <X className="h-4 w-4 mr-1" />
+                  Cancelar Edição
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={handleStartEditing}>
+                  <Edit className="h-4 w-4 mr-1" />
+                  Editar Pré-visualização
+                </Button>
+              )}
+            </>
           )}
-          {canDownload && (
+          {canDownload && contractStatus === 'ASSINADO' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm">
@@ -156,6 +162,12 @@ export function ContractPreview({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+          {canDownload && contractStatus === 'APROVADO' && (
+            <Button size="sm" onClick={handleDownloadPDF}>
+              <Download className="h-4 w-4 mr-1" />
+              Baixar PDF
+            </Button>
           )}
         </div>
       </CardHeader>
