@@ -799,6 +799,7 @@ export default function ContractDetail() {
               documentNumber={(contract.opportunities?.leads?.contacts as any)?.document_number || ''}
               contractNumber={(contract as any).contract_number || ''}
               canDownload={canDownloadContract}
+              contractStatus={contract.status || 'EM_ELABORACAO'}
               date={contract.created_at ? new Date(contract.created_at) : undefined}
               serviceDescription={contract.scope_summary || undefined}
               feeAmount={contract.total_fee || undefined}
