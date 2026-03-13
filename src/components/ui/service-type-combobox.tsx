@@ -19,9 +19,10 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
 
   const filtered = useMemo(() => {
     if (!serviceTypes) return [];
-    if (!search) return serviceTypes;
+    const sorted = [...serviceTypes].sort((a, b) => stripPrefix(a.name).localeCompare(stripPrefix(b.name), 'pt'));
+    if (!search) return sorted;
     const lower = search.toLowerCase();
-    return serviceTypes.filter(st =>
+    return sorted.filter(st =>
       st.name.toLowerCase().includes(lower) || st.code.toLowerCase().includes(lower)
     );
   }, [serviceTypes, search]);
