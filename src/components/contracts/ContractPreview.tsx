@@ -33,6 +33,7 @@ interface ContractPreviewProps {
 
 export function ContractPreview({ 
   template, clientName, documentType, documentNumber, contractNumber, canDownload = false,
+  contractStatus,
   serviceDescription, feeAmount, vatRate, totalAmount, paymentConditions, paymentMethod,
   bankAccount, beneficiaries, phone, email, address, currency, date,
 }: ContractPreviewProps) {
