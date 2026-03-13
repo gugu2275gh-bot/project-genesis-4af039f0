@@ -363,7 +363,7 @@ export default function ContractsList() {
           </TabsTrigger>
           <TabsTrigger value="pending" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
-            Pendentes de Contrato
+            Contratos Pendentes
             {pendingContractClients.length > 0 && (
               <Badge variant="secondary" className="ml-1">{pendingContractClients.length}</Badge>
             )}
