@@ -13,6 +13,7 @@ interface ContractPreviewProps {
   documentNumber: string;
   contractNumber: string;
   canDownload?: boolean;
+  contractStatus?: string;
   // Financial fields
   serviceDescription?: string;
   feeAmount?: number;
