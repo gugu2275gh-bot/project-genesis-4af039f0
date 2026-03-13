@@ -1916,6 +1916,15 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
   const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
   const [editPaymentData, setEditPaymentData] = useState<PaymentAgreementInitialData | null>(null);
 
+  const extractLastNotes = (): string => {
+    const notes = contact?.payment_notes || '';
+    if (!notes) return '';
+    const blocks = notes.split('---');
+    const lastBlock = blocks[blocks.length - 1] || '';
+    const match = lastBlock.match(/Observações:\s*(.+?)(?:\n|$)/);
+    return match ? match[1].trim() : '';
+  };
+
   // Fetch leads for this beneficiary that have service_type_id but no service_case yet
   const { data: pendingBeneficiaryLeads = [] } = useQuery({
     queryKey: ['beneficiary-pending-leads', contactId],
