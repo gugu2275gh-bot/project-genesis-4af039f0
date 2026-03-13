@@ -28,6 +28,7 @@ export interface PaymentAgreementInitialData {
   gross_amount?: number;
   serviceTypeId?: string;
   installments?: { amount: string; due_date: string }[];
+  notes?: string;
 }
 
 interface PaymentAgreementDialogProps {
