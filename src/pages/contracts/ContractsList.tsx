@@ -27,7 +27,7 @@ export default function ContractsList() {
   const { opportunities } = useOpportunities();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState('contracts');
+  const [activeTab, setActiveTab] = useState('approved');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedOpportunity, setSelectedOpportunity] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('DOCUMENTOS');
