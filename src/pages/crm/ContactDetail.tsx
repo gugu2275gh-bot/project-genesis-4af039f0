@@ -1426,6 +1426,7 @@ export default function ContactDetail() {
                                           gross_amount: payment.gross_amount,
                                           serviceTypeId,
                                           installments,
+                                          notes: extractLastNotes(),
                                         });
                                         setShowPaymentAgreement(true);
                                       }}
