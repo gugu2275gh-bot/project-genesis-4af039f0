@@ -102,7 +102,15 @@ export default function ContactDetail() {
 
   const contactLeads = leads.filter(l => l.contact_id === id);
 
-  // Sync paymentNotes when contact loads
+  // Extract "Observações" from the last payment agreement block in payment_notes
+  const extractLastNotes = (): string => {
+    const notes = (contact as any)?.payment_notes || '';
+    if (!notes) return '';
+    const blocks = notes.split('---');
+    const lastBlock = blocks[blocks.length - 1] || '';
+    const match = lastBlock.match(/Observações:\s*(.+?)(?:\n|$)/);
+    return match ? match[1].trim() : '';
+  };
   useEffect(() => {
     if (contact) {
       setPaymentNotes((contact as any).payment_notes || '');
