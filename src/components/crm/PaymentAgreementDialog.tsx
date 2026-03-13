@@ -84,6 +84,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
         discount_value: initialData.discount_value?.toString() || '',
         installment_count: initialData.installments?.length || 2,
         installments: initialData.installments || [],
+        notes: initialData.notes || '',
       });
       if (initialData.serviceTypeId) {
         setSelectedServiceTypeId(initialData.serviceTypeId);
