@@ -349,7 +349,18 @@ export default function ContractsList() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="contracts">Contratos</TabsTrigger>
+          <TabsTrigger value="approved" className="flex items-center gap-2">
+            Contratos Aprovados
+            {contracts.filter(c => c.status === 'APROVADO' || c.status === 'ASSINADO').length > 0 && (
+              <Badge variant="secondary" className="ml-1">{contracts.filter(c => c.status === 'APROVADO' || c.status === 'ASSINADO').length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="cancelled" className="flex items-center gap-2">
+            Contratos Cancelados
+            {contracts.filter(c => c.status === 'CANCELADO' || c.status === 'REPROVADO').length > 0 && (
+              <Badge variant="secondary" className="ml-1">{contracts.filter(c => c.status === 'CANCELADO' || c.status === 'REPROVADO').length}</Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="pending" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Pendentes de Contrato
@@ -359,35 +370,48 @@ export default function ContractsList() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="contracts" className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar contratos..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {Object.entries(CONTRACT_STATUS_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <TabsContent value="approved" className="space-y-4">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar contratos aprovados..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
           </div>
 
           <DataTable
             columns={columns}
-            data={filteredContracts}
+            data={contracts.filter(c => 
+              (c.status === 'APROVADO' || c.status === 'ASSINADO') &&
+              (c.opportunities?.leads?.contacts?.full_name || '').toLowerCase().includes(search.toLowerCase())
+            )}
             loading={isLoading}
-            emptyMessage="Nenhum contrato encontrado"
+            emptyMessage="Nenhum contrato aprovado encontrado"
+            onRowClick={(contract) => navigate(`/contracts/${contract.id}`)}
+          />
+        </TabsContent>
+
+        <TabsContent value="cancelled" className="space-y-4">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar contratos cancelados..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          <DataTable
+            columns={columns}
+            data={contracts.filter(c => 
+              (c.status === 'CANCELADO' || c.status === 'REPROVADO') &&
+              (c.opportunities?.leads?.contacts?.full_name || '').toLowerCase().includes(search.toLowerCase())
+            )}
+            loading={isLoading}
+            emptyMessage="Nenhum contrato cancelado encontrado"
             onRowClick={(contract) => navigate(`/contracts/${contract.id}`)}
           />
         </TabsContent>
