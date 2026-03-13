@@ -2405,6 +2405,7 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
                                     gross_amount: payment.gross_amount,
                                     serviceTypeId,
                                     installments,
+                                    notes: extractLastNotes(),
                                   });
                                   setShowPaymentAgreement(true);
                                 }}
