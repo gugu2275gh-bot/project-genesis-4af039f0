@@ -17,6 +17,11 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
+  const stripPrefix = (name: string) => {
+    const dashIndex = name.indexOf(' - ');
+    return dashIndex !== -1 ? name.substring(dashIndex + 3) : name;
+  };
+
   const filtered = useMemo(() => {
     if (!serviceTypes) return [];
     const sorted = [...serviceTypes].sort((a, b) => stripPrefix(a.name).localeCompare(stripPrefix(b.name), 'pt'));
@@ -26,11 +31,6 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
       st.name.toLowerCase().includes(lower) || st.code.toLowerCase().includes(lower)
     );
   }, [serviceTypes, search]);
-
-  const stripPrefix = (name: string) => {
-    const dashIndex = name.indexOf(' - ');
-    return dashIndex !== -1 ? name.substring(dashIndex + 3) : name;
-  };
 
   const selectedLabel = serviceTypes?.find(st => st.code === value)?.name;
   const displaySelectedLabel = selectedLabel ? stripPrefix(selectedLabel) : undefined;
