@@ -143,7 +143,9 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     return { gross, discountAmount, totalBeforeDiscount, vatAmount, finalAmount, vatRate };
   }, [form.amount, form.discount_type, form.discount_value, form.apply_vat, defaultVatRate, totalFees]);
 
-  const handleSave = async () => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async (keepOpen = false) => {
     if (!form.amount) return;
 
     const { finalAmount, gross, discountAmount, vatAmount } = calculatedAmounts;
