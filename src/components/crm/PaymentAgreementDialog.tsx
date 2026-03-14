@@ -754,11 +754,19 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               Cancelar
             </Button>
             <Button
-              onClick={handleSave}
+              variant="secondary"
+              onClick={() => handleSave(true)}
+              disabled={!form.amount || updateContact.isPending}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Salvar e Adicionar Novo
+            </Button>
+            <Button
+              onClick={() => handleSave(false)}
               disabled={!form.amount || updateContact.isPending}
             >
               <DollarSign className="h-4 w-4 mr-2" />
-              {updateContact.isPending ? 'Salvando...' : 'Salvar Acordo'}
+              Salvar Acordo
             </Button>
           </div>
         </div>
