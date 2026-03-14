@@ -143,7 +143,9 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     return { gross, discountAmount, totalBeforeDiscount, vatAmount, finalAmount, vatRate };
   }, [form.amount, form.discount_type, form.discount_value, form.apply_vat, defaultVatRate, totalFees]);
 
-  const handleSave = async () => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async (keepOpen = false) => {
     if (!form.amount) return;
 
     const { finalAmount, gross, discountAmount, vatAmount } = calculatedAmounts;
@@ -371,13 +373,21 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     queryClient.invalidateQueries({ queryKey: ['opportunities'] });
 
     toast({ title: 'Acordo de pagamento salvo na ficha do cliente' });
-    onOpenChange(false);
-    setForm({
+
+    const resetForm = () => setForm({
       amount: '', payment_method: 'PIX', payment_form: 'UNICO',
       custom_payment_method: '', transfer_origin: '', payment_account_id: '',
       discount_type: '', discount_value: '', apply_vat: false, notes: '',
       installment_count: 2, installments: [], fees: [],
     });
+
+    if (keepOpen) {
+      resetForm();
+      setSelectedServiceTypeId('');
+    } else {
+      onOpenChange(false);
+      resetForm();
+    }
   };
 
   return (
@@ -744,11 +754,19 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               Cancelar
             </Button>
             <Button
-              onClick={handleSave}
+              variant="secondary"
+              onClick={() => handleSave(true)}
+              disabled={!form.amount || updateContact.isPending}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Salvar e Adicionar Novo
+            </Button>
+            <Button
+              onClick={() => handleSave(false)}
               disabled={!form.amount || updateContact.isPending}
             >
               <DollarSign className="h-4 w-4 mr-2" />
-              {updateContact.isPending ? 'Salvando...' : 'Salvar Acordo'}
+              Salvar Acordo
             </Button>
           </div>
         </div>
