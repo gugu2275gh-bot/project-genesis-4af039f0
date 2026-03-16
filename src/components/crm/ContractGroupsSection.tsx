@@ -451,11 +451,12 @@ export function ContractGroupsSection({
     </div>
   );
 
-  const renderLeadItem = (lead: any, options?: { showCheckbox?: boolean; showDelete?: boolean; contractId?: string }) => {
+  const renderLeadItem = (lead: any, options?: { showCheckbox?: boolean; showDelete?: boolean; contractId?: string; editable?: boolean }) => {
     const displayName = getLeadDisplayName(lead);
     const isConfirmed = confirmedLeadIds.includes(lead.id);
     const serviceCase = contactServiceCases.find((sc: any) => sc.lead_id === lead.id);
     const isServiceCompleted = serviceCase && (serviceCase.technical_status === 'ENCERRADO_APROVADO' || serviceCase.technical_status === 'ENCERRADO_NEGADO');
+    const editable = options?.editable !== false; // default true
 
     // Find payments for this lead
     const leadPayments = contactPayments.filter((p: any) => {
@@ -497,7 +498,7 @@ export function ContractGroupsSection({
                 </Badge>
               )
             )}
-            {options?.contractId && (
+            {editable && options?.contractId && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -511,7 +512,7 @@ export function ContractGroupsSection({
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             )}
-            {options?.showDelete && (
+            {editable && options?.showDelete && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -533,7 +534,7 @@ export function ContractGroupsSection({
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {leadPayments.length} pagamento{leadPayments.length > 1 ? 's' : ''}
             </p>
-            {leadPayments.map((p: any) => renderPaymentRow(p, leadPayments))}
+            {leadPayments.map((p: any) => renderPaymentRow(p, leadPayments, editable))}
           </div>
         )}
       </div>
