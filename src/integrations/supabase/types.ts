@@ -540,6 +540,42 @@ export type Database = {
           },
         ]
       }
+      contract_leads: {
+        Row: {
+          contract_id: string
+          created_at: string | null
+          id: string
+          lead_id: string
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string | null
+          id?: string
+          lead_id: string
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string | null
+          id?: string
+          lead_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_leads_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_leads_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_notes: {
         Row: {
           contract_id: string
