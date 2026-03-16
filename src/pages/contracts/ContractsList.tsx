@@ -416,7 +416,7 @@ export default function ContractsList() {
           </div>
 
           <DataTable
-            columns={columns}
+            columns={getColumnsForTab('drafts')}
             data={contracts.filter(c => 
               c.status === 'EM_ELABORACAO' &&
               (c.opportunities?.leads?.contacts?.full_name || '').toLowerCase().includes(search.toLowerCase())
