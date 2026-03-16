@@ -211,7 +211,7 @@ export default function ContactDetail() {
         empadronamiento_city: (contact as any).empadronamiento_city,
         empadronamiento_address: contact.empadronamiento_address,
         has_job_offer: (contact as any).has_job_offer,
-        payment_notes: c.payment_notes,
+        payment_notes: (contact as any).payment_notes,
       });
       setPhoneInput(contact.phone?.toString() || '');
       setIsEditing(true);
