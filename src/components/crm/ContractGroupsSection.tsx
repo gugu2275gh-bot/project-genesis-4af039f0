@@ -652,7 +652,8 @@ export function ContractGroupsSection({
                     {/* Services in this contract */}
                     <div className="p-3 space-y-3">
                       {group.leads.map(lead => renderLeadItem(lead, { 
-                        contractId: isDraft ? contract.id : undefined 
+                        contractId: isDraft ? contract.id : undefined,
+                        editable: isDraft,
                       }))}
                     </div>
                   </div>
