@@ -28,6 +28,20 @@ export interface BankAccountData {
   accountDetails?: string; // IBAN etc.
 }
 
+export interface PaymentData {
+  amount: number;
+  installment_number?: number | null;
+  due_date?: string | null;
+  status?: string | null;
+  payment_method?: string | null;
+  gross_amount?: number | null;
+  vat_amount?: number | null;
+  vat_rate?: number | null;
+  discount_value?: number | null;
+  discount_type?: string | null;
+  payment_form?: string | null;
+}
+
 export interface ContractData {
   template: string;
   clientName: string;
@@ -46,6 +60,8 @@ export interface ContractData {
   bankAccount?: BankAccountData;
   // Beneficiaries
   beneficiaries?: BeneficiaryData[];
+  // Payments
+  payments?: PaymentData[];
   // Contact fields
   phone?: string;
   email?: string;
