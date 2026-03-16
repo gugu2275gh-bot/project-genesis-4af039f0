@@ -653,21 +653,6 @@ export function ContractGroupsSection({
                       {group.leads.map(lead => renderLeadItem(lead, { 
                         contractId: isDraft ? contract.id : undefined 
                       }))}
-                      {isDraft && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="w-full border border-dashed"
-                          onClick={() => {
-                            setAddServiceToContractId(contract.id);
-                            setEditPaymentData(null);
-                            setShowPaymentAgreement(true);
-                          }}
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Adicionar Serviço
-                        </Button>
-                      )}
                     </div>
                   </div>
                 );
