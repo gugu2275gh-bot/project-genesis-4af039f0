@@ -504,9 +504,9 @@ export function ContractGroupsSection({
                 className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleRemoveFromContract(options.contractId!, lead.id);
+                  setDeleteServiceLead({ ...lead, _contractId: options.contractId });
                 }}
-                title="Remover do contrato"
+                title="Excluir serviço do contrato"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
