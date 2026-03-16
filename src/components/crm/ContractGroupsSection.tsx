@@ -352,6 +352,7 @@ export function ContractGroupsSection({
       } else {
         // Remove from contract_leads first
         await supabase.from('contract_leads').delete().eq('lead_id', lead.id);
+        // Delete payments, contracts, opportunities, then lead
         const { data: opps } = await supabase.from('opportunities').select('id').eq('lead_id', lead.id);
         if (opps && opps.length > 0) {
           const oppIds = opps.map(o => o.id);
