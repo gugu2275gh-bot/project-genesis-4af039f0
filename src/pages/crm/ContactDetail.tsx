@@ -98,9 +98,11 @@ export default function ContactDetail() {
   const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
   const [editPaymentData, setEditPaymentData] = useState<PaymentAgreementInitialData | null>(null);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [deleteServiceLead, setDeleteServiceLead] = useState<any>(null);
+  const [isDeletingService, setIsDeletingService] = useState(false);
   const queryClient = useQueryClient();
 
-  const contactLeads = leads.filter(l => l.contact_id === id);
+  const contactLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
 
   // Extract "Observações" from the last payment agreement block in payment_notes
   const extractLastNotes = (): string => {
