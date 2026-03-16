@@ -34,7 +34,7 @@ export default function Leads() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
+  const [expandedClients, setExpandedClients] = useState<Set<string> | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [leadMode, setLeadMode] = useState<'new' | 'existing'>('new');
   const [selectedContactId, setSelectedContactId] = useState<string>('');
@@ -99,9 +99,23 @@ export default function Leads() {
     });
   }, [filteredLeads]);
 
+  const FINAL_STATUSES = new Set(['ARQUIVADO_SEM_RETORNO', 'CANCELADO', 'PERDIDO']);
+
+  // Auto-expand clients with active leads on first load
+  const resolvedExpanded = useMemo(() => {
+    if (expandedClients !== null) return expandedClients;
+    const autoExpanded = new Set<string>();
+    groupedClients.forEach(client => {
+      const hasActive = client.leads.some(l => !FINAL_STATUSES.has(l.status || ''));
+      if (hasActive) autoExpanded.add(client.contactId);
+    });
+    return autoExpanded;
+  }, [expandedClients, groupedClients]);
+
   const toggleClient = (contactId: string) => {
     setExpandedClients(prev => {
-      const next = new Set(prev);
+      const base = prev !== null ? prev : resolvedExpanded;
+      const next = new Set(base);
       if (next.has(contactId)) next.delete(contactId);
       else next.add(contactId);
       return next;
@@ -362,9 +376,10 @@ export default function Leads() {
       ) : (
         <div className="space-y-2">
           {groupedClients.map(client => {
-            const isExpanded = expandedClients.has(client.contactId);
+            const isExpanded = resolvedExpanded.has(client.contactId);
+            const allConcluded = client.leads.every(l => FINAL_STATUSES.has(l.status || ''));
             return (
-              <div key={client.contactId} className="border rounded-lg overflow-hidden bg-card">
+              <div key={client.contactId} className={`border rounded-lg overflow-hidden bg-card ${allConcluded ? 'opacity-60' : ''}`}>
                 {/* Client row */}
                 <button
                   onClick={() => toggleClient(client.contactId)}
