@@ -686,12 +686,32 @@ export function ContractGroupsSection({
                 if (!contract) return null;
                 const statusLabel = CONTRACT_STATUS_LABELS[contract.status as keyof typeof CONTRACT_STATUS_LABELS] || contract.status;
                 const isDraft = contract.status === 'EM_ELABORACAO';
+                const isCollapsible = !isDraft;
+                const isExpanded = isDraft || expandedContracts.has(contract.id);
+
+                const toggleExpand = () => {
+                  if (!isCollapsible) return;
+                  setExpandedContracts(prev => {
+                    const next = new Set(prev);
+                    if (next.has(contract.id)) next.delete(contract.id);
+                    else next.add(contract.id);
+                    return next;
+                  });
+                };
 
                 return (
-                  <div key={contract.id} className="rounded-xl border-2 border-primary/20 overflow-hidden">
-                    <div className="flex items-center justify-between p-3 bg-primary/5">
+                  <div key={contract.id} className={`rounded-xl border-2 overflow-hidden ${isDraft ? 'border-primary/20' : 'border-muted'} ${!isDraft ? 'opacity-70' : ''}`}>
+                    <div
+                      className={`flex items-center justify-between p-3 ${isDraft ? 'bg-primary/5' : 'bg-muted/30'} ${isCollapsible ? 'cursor-pointer' : ''}`}
+                      onClick={isCollapsible ? toggleExpand : undefined}
+                    >
                       <div className="flex items-center gap-3">
-                        <Package className="h-5 w-5 text-primary" />
+                        {isCollapsible && (
+                          isExpanded
+                            ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                            : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                        )}
+                        <Package className={`h-5 w-5 ${isDraft ? 'text-primary' : 'text-muted-foreground'}`} />
                         <div>
                           <p className="font-semibold">
                             {contract.contract_number || `Contrato Rascunho #${idx + 1}`}
@@ -702,7 +722,7 @@ export function ContractGroupsSection({
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                         <StatusBadge status={contract.status || 'EM_ELABORACAO'} label={statusLabel} />
                         {isDraft && (
                           <>
@@ -745,12 +765,14 @@ export function ContractGroupsSection({
                         )}
                       </div>
                     </div>
-                    <div className="p-3 space-y-3">
-                      {group.leads.map(lead => renderLeadItem(lead, { 
-                        contractId: isDraft ? contract.id : undefined,
-                        editable: isDraft,
-                      }))}
-                    </div>
+                    {isExpanded && (
+                      <div className="p-3 space-y-3">
+                        {group.leads.map(lead => renderLeadItem(lead, { 
+                          contractId: isDraft ? contract.id : undefined,
+                          editable: isDraft,
+                        }))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
