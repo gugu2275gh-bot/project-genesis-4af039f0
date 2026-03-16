@@ -23,7 +23,7 @@ import { ContractCostsSection } from '@/components/contracts/ContractCostsSectio
 import { ContractNotesSection } from '@/components/contracts/ContractNotesSection';
 import { supabase } from '@/integrations/supabase/client';
 import { useBeneficiaries } from '@/hooks/useBeneficiaries';
-import { BeneficiaryData, BankAccountData } from '@/lib/generate-contract';
+import { BeneficiaryData, BankAccountData, PaymentData } from '@/lib/generate-contract';
 import { SERVICE_INTEREST_LABELS as SIL } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
