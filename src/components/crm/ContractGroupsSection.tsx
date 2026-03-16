@@ -627,7 +627,7 @@ export function ContractGroupsSection({
                             onClick={() => navigate(`/contracts/${contract.id}`)}
                           >
                             <FileText className="h-4 w-4 mr-1" />
-                            Ver
+                            Ver Contrato
                           </Button>
                         )}
                       </div>
@@ -638,6 +638,24 @@ export function ContractGroupsSection({
                       {group.leads.map(lead => renderLeadItem(lead, { 
                         contractId: isDraft ? contract.id : undefined 
                       }))}
+                      {isDraft && ungroupedLeads.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="w-full border border-dashed"
+                          onClick={() => {
+                            // Select all ungrouped leads by default for quick adding
+                            if (selectedLeadIds.size === 0) {
+                              toast({ title: 'Selecione os serviços abaixo e clique em "Adicionar ao Rascunho"', description: 'Marque os serviços sem contrato que deseja incluir.' });
+                            } else {
+                              handleAddToContract(contract.id);
+                            }
+                          }}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Adicionar Serviço
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
