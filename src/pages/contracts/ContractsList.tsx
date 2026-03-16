@@ -146,7 +146,10 @@ export default function ContractsList() {
     {
       key: 'service_type',
       header: 'Serviço',
-      cell: (contract) => SERVICE_INTEREST_LABELS[contract.service_type || 'OUTRO'],
+      cell: (contract) => {
+        const dynamicName = contract.opportunities?.leads?.service_types?.name;
+        return dynamicName || SERVICE_INTEREST_LABELS[contract.service_type || 'OUTRO'];
+      },
     },
     {
       key: 'status',

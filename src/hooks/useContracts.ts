@@ -13,6 +13,7 @@ export type ContractWithOpportunity = Contract & {
   opportunities: Tables<'opportunities'> & {
     leads: Tables<'leads'> & {
       contacts: Tables<'contacts'> | null;
+      service_types: { id: string; name: string } | null;
     };
   };
   payments?: Array<{
@@ -43,6 +44,9 @@ export function useContracts() {
               *,
               contacts (
                 id, full_name, email, phone, address, document_type, document_number
+              ),
+              service_types (
+                id, name
               )
             )
           ),
