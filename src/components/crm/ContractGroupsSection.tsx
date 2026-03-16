@@ -312,9 +312,25 @@ export function ContractGroupsSection({
     }
   };
 
-  // "Concluir" - mark contract as ready (navigate to contract detail)
-  const handleFinalizeContract = (contractId: string) => {
-    navigate(`/contracts/${contractId}`);
+  // "Concluir" - mark contract as APROVADO so it appears in Contracts list
+  const [isFinalizingContract, setIsFinalizingContract] = useState(false);
+  const handleFinalizeContract = async (contractId: string) => {
+    setIsFinalizingContract(true);
+    try {
+      const { error } = await supabase
+        .from('contracts')
+        .update({ status: 'APROVADO', updated_by_user_id: user?.id })
+        .eq('id', contractId);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['contract-leads', contactId] });
+      queryClient.invalidateQueries({ queryKey: ['contact-contracts', contactId] });
+      queryClient.invalidateQueries({ queryKey: ['contracts'] });
+      toast({ title: 'Contrato concluído e disponível em Contratos' });
+    } catch (error: any) {
+      toast({ title: 'Erro ao concluir contrato', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsFinalizingContract(false);
+    }
   };
 
   // Delete/archive service
@@ -593,9 +609,14 @@ export function ContractGroupsSection({
                           <Button
                             size="sm"
                             variant="default"
+                            disabled={isFinalizingContract}
                             onClick={() => handleFinalizeContract(contract.id)}
                           >
-                            <CheckCircle2 className="h-4 w-4 mr-1" />
+                            {isFinalizingContract ? (
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="h-4 w-4 mr-1" />
+                            )}
                             Concluir
                           </Button>
                         )}
