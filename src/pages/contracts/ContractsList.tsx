@@ -27,7 +27,7 @@ export default function ContractsList() {
   const { opportunities } = useOpportunities();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState('approved');
+  const [activeTab, setActiveTab] = useState('drafts');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedOpportunity, setSelectedOpportunity] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('DOCUMENTOS');
@@ -349,6 +349,12 @@ export default function ContractsList() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
+          <TabsTrigger value="drafts" className="flex items-center gap-2">
+            Em Elaboração
+            {contracts.filter(c => c.status === 'EM_ELABORACAO').length > 0 && (
+              <Badge variant="secondary" className="ml-1">{contracts.filter(c => c.status === 'EM_ELABORACAO').length}</Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="approved" className="flex items-center gap-2">
             Contratos Aprovados
             {contracts.filter(c => c.status === 'APROVADO' || c.status === 'ASSINADO').length > 0 && (
@@ -369,6 +375,29 @@ export default function ContractsList() {
             )}
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="drafts" className="space-y-4">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar contratos em elaboração..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          <DataTable
+            columns={columns}
+            data={contracts.filter(c => 
+              c.status === 'EM_ELABORACAO' &&
+              (c.opportunities?.leads?.contacts?.full_name || '').toLowerCase().includes(search.toLowerCase())
+            )}
+            loading={isLoading}
+            emptyMessage="Nenhum contrato em elaboração"
+            onRowClick={(contract) => navigate(`/contracts/${contract.id}`)}
+          />
+        </TabsContent>
 
         <TabsContent value="approved" className="space-y-4">
           <div className="relative flex-1 max-w-sm">
