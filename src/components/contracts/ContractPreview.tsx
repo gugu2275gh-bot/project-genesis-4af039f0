@@ -29,6 +29,7 @@ interface ContractPreviewProps {
   address?: string;
   currency?: string;
   date?: Date;
+  payments?: PaymentData[];
 }
 
 export function ContractPreview({ 
