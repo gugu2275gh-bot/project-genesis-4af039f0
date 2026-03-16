@@ -13,6 +13,7 @@ export type ContractWithOpportunity = Contract & {
   opportunities: Tables<'opportunities'> & {
     leads: Tables<'leads'> & {
       contacts: Tables<'contacts'> | null;
+      service_types: { id: string; name: string } | null;
     };
   };
   payments?: Array<{
