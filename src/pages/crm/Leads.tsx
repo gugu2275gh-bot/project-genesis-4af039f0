@@ -376,8 +376,8 @@ export default function Leads() {
       ) : (
         <div className="space-y-2">
           {groupedClients.map(client => {
-            const isExpanded = expandedClients.has(client.contactId);
-            return (
+            const isExpanded = resolvedExpanded.has(client.contactId);
+            const allConcluded = client.leads.every(l => FINAL_STATUSES.has(l.status || ''));
               <div key={client.contactId} className="border rounded-lg overflow-hidden bg-card">
                 {/* Client row */}
                 <button
