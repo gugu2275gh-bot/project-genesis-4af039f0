@@ -47,17 +47,58 @@ export default function ContractDetail() {
     },
   });
 
-  const { data: contractPayments } = useQuery({
-    queryKey: ['contract-payments', id, contract?.opportunity_id],
+  // Fetch all leads linked to this contract via contract_leads
+  const { data: contractLeadLinks } = useQuery({
+    queryKey: ['contract-lead-links', id],
     queryFn: async () => {
       if (!id) return [];
+      const { data, error } = await supabase
+        .from('contract_leads')
+        .select('lead_id')
+        .eq('contract_id', id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!id,
+  });
+
+  // Fetch all opportunity IDs for linked leads
+  const { data: linkedOpportunityIds } = useQuery({
+    queryKey: ['contract-linked-opportunities', id, contractLeadLinks],
+    queryFn: async () => {
+      const leadIds = contractLeadLinks?.map(cl => cl.lead_id) || [];
+      if (leadIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('opportunities')
+        .select('id')
+        .in('lead_id', leadIds);
+      if (error) throw error;
+      return data?.map(o => o.id) || [];
+    },
+    enabled: !!contractLeadLinks && contractLeadLinks.length > 0,
+  });
+
+  const { data: contractPayments } = useQuery({
+    queryKey: ['contract-payments', id, contract?.opportunity_id, linkedOpportunityIds],
+    queryFn: async () => {
+      if (!id) return [];
+      
+      // Collect all opportunity IDs: the contract's own + all linked via contract_leads
+      const allOppIds = new Set<string>();
+      if (contract?.opportunity_id) allOppIds.add(contract.opportunity_id);
+      linkedOpportunityIds?.forEach(oppId => allOppIds.add(oppId));
+      
+      const oppIdsArray = Array.from(allOppIds);
+      
       let query = supabase
         .from('payments')
         .select('*, contract_beneficiaries:beneficiary_contact_id(full_name)');
       
-      // Filter by contract_id OR opportunity_id to catch payments not yet linked to contract
-      if (contract?.opportunity_id) {
-        query = query.or(`contract_id.eq.${id},opportunity_id.eq.${contract.opportunity_id}`);
+      if (oppIdsArray.length > 0) {
+        // Fetch payments linked to this contract OR to any of the related opportunities
+        const orConditions = [`contract_id.eq.${id}`];
+        oppIdsArray.forEach(oppId => orConditions.push(`opportunity_id.eq.${oppId}`));
+        query = query.or(orConditions.join(','));
       } else {
         query = query.eq('contract_id', id);
       }
