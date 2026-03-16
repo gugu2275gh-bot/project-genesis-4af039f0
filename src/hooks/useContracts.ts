@@ -44,6 +44,9 @@ export function useContracts() {
               *,
               contacts (
                 id, full_name, email, phone, address, document_type, document_number
+              ),
+              service_types (
+                id, name
               )
             )
           ),
