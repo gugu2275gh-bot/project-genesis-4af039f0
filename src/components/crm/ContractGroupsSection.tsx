@@ -52,7 +52,7 @@ export function ContractGroupsSection({
   const [editPaymentData, setEditPaymentData] = useState<PaymentAgreementInitialData | null>(null);
   const [deleteServiceLead, setDeleteServiceLead] = useState<any>(null);
   const [isDeletingService, setIsDeletingService] = useState(false);
-  const [addingToContractId, setAddingToContractId] = useState<string | null>(null);
+  const [addServiceToContractId, setAddServiceToContractId] = useState<string | null>(null);
 
   // Fetch contract_leads for this contact's leads
   const leadIds = contactLeads.map(l => l.id);
