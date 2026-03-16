@@ -294,6 +294,13 @@ export default function ContractsList() {
               <Badge variant="secondary" className="ml-1">{contracts.filter(c => c.status === 'CANCELADO' || c.status === 'REPROVADO').length}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="pending" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Contratos Pendentes
+            {pendingContractClients.length > 0 && (
+              <Badge variant="secondary" className="ml-1">{pendingContractClients.length}</Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="approved" className="space-y-4">
