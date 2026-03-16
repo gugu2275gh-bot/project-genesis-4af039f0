@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { PaymentAgreementDialog, PaymentAgreementInitialData } from '@/components/crm/PaymentAgreementDialog';
+import { ContractGroupsSection } from '@/components/crm/ContractGroupsSection';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
@@ -95,11 +96,7 @@ export default function ContactDetail() {
   const [newServiceNotes, setNewServiceNotes] = useState('');
   const [paymentNotes, setPaymentNotes] = useState<string | null>(null);
   const [isSavingPaymentNotes, setIsSavingPaymentNotes] = useState(false);
-  const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
-  const [editPaymentData, setEditPaymentData] = useState<PaymentAgreementInitialData | null>(null);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
-  const [deleteServiceLead, setDeleteServiceLead] = useState<any>(null);
-  const [isDeletingService, setIsDeletingService] = useState(false);
   const queryClient = useQueryClient();
 
   const contactLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
@@ -155,168 +152,6 @@ export default function ContactDetail() {
   const { data: contactDocuments = [], isLoading: docsLoading } = useContactDocuments(id);
   const { beneficiaries: contactBeneficiaries, titular: contactTitular, isLoading: benefLoading } = useContactBeneficiaries(id);
   const { interactions } = useInteractions(id);
-
-  // Fetch payments related to this contact
-  // For regular contacts: via leads → opportunities → payments
-  // For beneficiary contacts: via beneficiary_contact_id
-  const { data: contactPayments = [], isLoading: paymentsLoading } = useQuery({
-    queryKey: ['contact-payments', id, contact?.is_beneficiary],
-    queryFn: async () => {
-      if (!id) return [];
-
-      // 1. Payments as beneficiary (beneficiary_contact_id = this contact)
-      const { data: benefPayments } = await supabase
-        .from('payments')
-        .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest))')
-        .eq('beneficiary_contact_id', id)
-        .order('due_date', { ascending: true });
-
-      // 2. Payments as titular (via leads → opportunities)
-      const { data: cLeads } = await supabase
-        .from('leads')
-        .select('id')
-        .eq('contact_id', id);
-      
-      let titularPayments: any[] = [];
-      if (cLeads && cLeads.length > 0) {
-        const leadIds = cLeads.map(l => l.id);
-        const { data: opps } = await supabase
-          .from('opportunities')
-          .select('id')
-          .in('lead_id', leadIds);
-        if (opps && opps.length > 0) {
-          const oppIds = opps.map(o => o.id);
-          const { data: payments, error } = await supabase
-            .from('payments')
-            .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest))')
-            .in('opportunity_id', oppIds)
-            .order('due_date', { ascending: true });
-          if (!error) titularPayments = payments || [];
-        }
-      }
-
-      // Merge and deduplicate
-      const allPayments = [...(benefPayments || []), ...titularPayments];
-      const seen = new Set<string>();
-      return allPayments.filter(p => {
-        if (seen.has(p.id)) return false;
-        seen.add(p.id);
-        return true;
-      });
-    },
-    enabled: !!id,
-  });
-
-  // Group payments by service (via lead's service_type_id)
-  const paymentsByService = useMemo(() => {
-    const groups: Record<string, { serviceName: string; payments: any[] }> = {};
-    contactPayments.forEach((p: any) => {
-      const lead = p.opportunities?.leads;
-      const serviceTypeId = lead?.service_type_id || 'unknown';
-      const serviceTypeName = serviceTypeId !== 'unknown' && serviceTypes
-        ? serviceTypes.find((st: any) => st.id === serviceTypeId)?.name || SERVICE_INTEREST_LABELS[lead?.service_interest || 'OUTRO']
-        : SERVICE_INTEREST_LABELS[lead?.service_interest || 'OUTRO'] || 'Serviço';
-      if (!groups[serviceTypeId]) {
-        groups[serviceTypeId] = { serviceName: serviceTypeName, payments: [] };
-      }
-      groups[serviceTypeId].payments.push(p);
-    });
-    return Object.values(groups);
-  }, [contactPayments, serviceTypes]);
-
-  // Fetch service cases for this contact's leads to determine completed services
-  const { data: contactServiceCases = [] } = useQuery({
-    queryKey: ['contact-service-cases', id],
-    queryFn: async () => {
-      if (!id) return [];
-      const { data: cLeads } = await supabase.from('leads').select('id').eq('contact_id', id);
-      if (!cLeads?.length) return [];
-      const { data: opps } = await supabase.from('opportunities').select('id, lead_id').in('lead_id', cLeads.map(l => l.id));
-      if (!opps?.length) return [];
-      const { data: cases } = await supabase
-        .from('service_cases')
-        .select('id, opportunity_id, technical_status')
-        .in('opportunity_id', opps.map(o => o.id));
-      if (!cases) return [];
-      // Map lead_id to technical_status via opportunity
-      return cases.map(c => {
-        const opp = opps.find(o => o.id === c.opportunity_id);
-        return { ...c, lead_id: opp?.lead_id };
-      });
-    },
-    enabled: !!id,
-  });
-
-  const { data: contactContracts = [], isLoading: contractsLoading } = useQuery({
-    queryKey: ['contact-contracts', id],
-    queryFn: async () => {
-      if (!id) return [];
-      const { data: cLeads } = await supabase.from('leads').select('id').eq('contact_id', id);
-      if (!cLeads?.length) return [];
-      const { data: opps } = await supabase.from('opportunities').select('id, lead_id').in('lead_id', cLeads.map(l => l.id));
-      if (!opps?.length) return [];
-      const { data: contracts, error } = await supabase
-        .from('contracts')
-        .select('id, contract_number, service_type, status, total_fee, created_at, signed_at, opportunity_id')
-        .in('opportunity_id', opps.map(o => o.id))
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      // Attach lead_id to each contract via opportunity
-      return (contracts || []).map(c => {
-        const opp = opps.find(o => o.id === c.opportunity_id);
-        return { ...c, lead_id: opp?.lead_id };
-      });
-    },
-    enabled: !!id,
-  });
-
-  // Check if a lead has a contract with protected status (APROVADO, ASSINADO, CANCELADO)
-  const hasProtectedContract = (leadId: string) => {
-    return contactContracts.some((c: any) => 
-      c.lead_id === leadId && ['APROVADO', 'ASSINADO', 'CANCELADO'].includes(c.status)
-    );
-  };
-
-  const handleDeleteService = async (lead: any) => {
-    if (!lead) return;
-    setIsDeletingService(true);
-    try {
-      const isProtected = hasProtectedContract(lead.id);
-      
-      if (isProtected) {
-        // Archive: set lead status to ARQUIVADO_SEM_RETORNO
-        await supabase.from('leads').update({ status: 'ARQUIVADO_SEM_RETORNO' }).eq('id', lead.id);
-        toast({ title: 'Serviço arquivado', description: 'O serviço possui contrato e foi arquivado.' });
-      } else {
-        // Hard delete: payments → opportunities → lead
-        // Get opportunities for this lead
-        const { data: opps } = await supabase.from('opportunities').select('id').eq('lead_id', lead.id);
-        if (opps && opps.length > 0) {
-          const oppIds = opps.map(o => o.id);
-          // Delete payments
-          await supabase.from('payments').delete().in('opportunity_id', oppIds);
-          // Delete contracts (drafts only at this point)
-          await supabase.from('contracts').delete().in('opportunity_id', oppIds);
-          // Delete opportunities
-          await supabase.from('opportunities').delete().in('id', oppIds);
-        }
-        // Delete the lead
-        await supabase.from('leads').delete().eq('id', lead.id);
-        toast({ title: 'Serviço excluído com sucesso' });
-      }
-      
-      queryClient.invalidateQueries({ queryKey: ['leads'] });
-      queryClient.invalidateQueries({ queryKey: ['contact-contracts', id] });
-      queryClient.invalidateQueries({ queryKey: ['contact-payments', id] });
-      queryClient.invalidateQueries({ queryKey: ['confirmed-lead-ids', id] });
-      queryClient.invalidateQueries({ queryKey: ['contact-service-cases', id] });
-    } catch (error: any) {
-      toast({ title: 'Erro ao excluir serviço', description: error.message, variant: 'destructive' });
-    } finally {
-      setIsDeletingService(false);
-      setDeleteServiceLead(null);
-    }
-  };
 
   const { data: beneficiaryServiceCases = [], isLoading: benefCasesLoading } = useQuery({
     queryKey: ['beneficiary-service-cases', id, contact?.is_beneficiary],
@@ -376,7 +211,7 @@ export default function ContactDetail() {
         empadronamiento_city: (contact as any).empadronamiento_city,
         empadronamiento_address: contact.empadronamiento_address,
         has_job_offer: (contact as any).has_job_offer,
-        payment_notes: c.payment_notes,
+        payment_notes: (contact as any).payment_notes,
       });
       setPhoneInput(contact.phone?.toString() || '');
       setIsEditing(true);
@@ -1336,236 +1171,14 @@ export default function ContactDetail() {
 
           {/* Serviços & Pagamentos - seção unificada */}
           {!contact.is_beneficiary && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Briefcase className="h-5 w-5" />
-                  Serviços & Pagamentos ({allServiceLeads.length})
-                </CardTitle>
-                <CardDescription>Serviços contratados, pagamentos e acordo financeiro</CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => { setEditPaymentData(null); setShowPaymentAgreement(true); }}>
-                  <DollarSign className="h-4 w-4 mr-1" />
-                  Forma de Pagamento
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Show only the last payment agreement note */}
-              {(() => {
-                const notes = paymentNotes || '';
-                const parts = notes.split('\n---\n').filter(Boolean);
-                const lastNote = parts.length > 0 ? parts[parts.length - 1].trim() : '';
-                return lastNote ? (
-                  <div className="rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-line">
-                    {lastNote}
-                  </div>
-                ) : null;
-              })()}
-
-              {/* Services list with their payments inline */}
-              {allServiceLeads.length === 0 && paymentsByService.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">
-                  Nenhum serviço ou pagamento registrado.
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {allServiceLeads.map(lead => {
-                    const isConfirmed = confirmedLeadIds.includes(lead.id);
-                    const serviceTypeName = lead.service_type_id
-                      ? serviceTypes?.find(st => st.id === lead.service_type_id)?.name
-                      : null;
-                    const displayName = serviceTypeName || SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO'];
-
-                    // Find payments for this lead's service
-                    const leadServiceGroup = paymentsByService.find(g => g.serviceName === displayName);
-                    const servicePayments = leadServiceGroup?.payments || [];
-
-                    // Check if this service is completed (has service case with ENCERRADO_*)
-                    const serviceCase = contactServiceCases.find((sc: any) => sc.lead_id === lead.id);
-                    const isServiceCompleted = serviceCase && (serviceCase.technical_status === 'ENCERRADO_APROVADO' || serviceCase.technical_status === 'ENCERRADO_NEGADO');
-                    const allPaymentsPaid = servicePayments.length > 0 && servicePayments.every((p: any) => p.status === 'CONFIRMADO');
-
-                    return (
-                      <div key={lead.id} className={`rounded-lg border overflow-hidden ${isServiceCompleted ? 'opacity-60' : ''}`}>
-                        {/* Service header */}
-                        <div
-                          className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors"
-                          onClick={() => navigate(`/crm/leads/${lead.id}`)}
-                        >
-                          <div>
-                            <p className={`font-medium ${isServiceCompleted ? 'text-muted-foreground' : ''}`}>{displayName}</p>
-                            <p className="text-sm text-muted-foreground">
-                              Criado em {format(new Date(lead.created_at!), "dd/MM/yyyy", { locale: ptBR })}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {isServiceCompleted && (
-                              <StatusBadge variant="success" label="Concluído" />
-                            )}
-                            {allPaymentsPaid && servicePayments.length > 0 && (
-                              <StatusBadge variant="success" label="Quitado" />
-                            )}
-                            {!isServiceCompleted && (
-                              isConfirmed ? (
-                                <StatusBadge 
-                                  status={lead.status || 'NOVO'} 
-                                  label={LEAD_STATUS_LABELS[lead.status || 'NOVO']} 
-                                />
-                              ) : (
-                                <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
-                                  Aguardando Pagamento
-                                </Badge>
-                              )
-                            )}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteServiceLead(lead);
-                              }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* Payments for this service */}
-                        {servicePayments.length > 0 && (
-                          <div className="border-t bg-muted/10 px-3 py-2 space-y-2">
-                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                              {servicePayments.length} pagamento{servicePayments.length > 1 ? 's' : ''}
-                            </p>
-                            {servicePayments.map((payment: any) => (
-                              <div key={payment.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-background">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <p className="font-medium text-sm">
-                                      € {Number(payment.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                    </p>
-                                    {payment.installment_number && (
-                                      <Badge variant="outline" className="text-xs">
-                                        Parcela {payment.installment_number}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                                    {payment.due_date && (
-                                      <span>Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
-                                    )}
-                                    {payment.contracts?.contract_number && (
-                                      <span>{payment.contracts.contract_number}</span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <StatusBadge
-                                    status={payment.status || 'PENDENTE'}
-                                    label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
-                                  />
-                                  {payment.status === 'PENDENTE' && (
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 px-2"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        const leadData = payment.opportunities?.leads;
-                                        const serviceTypeId = leadData?.service_type_id || '';
-                                        const groupPayments = servicePayments.filter((p: any) => p.payment_form === 'PARCELADO');
-                                        const installments = groupPayments.length > 1
-                                          ? groupPayments.map((p: any) => ({ amount: p.amount?.toString() || '', due_date: p.due_date || '' }))
-                                          : [];
-                                        setEditPaymentData({
-                                          amount: payment.amount,
-                                          payment_method: payment.payment_method,
-                                          payment_form: payment.payment_form,
-                                          apply_vat: payment.apply_vat,
-                                          vat_rate: payment.vat_rate,
-                                          discount_type: payment.discount_type,
-                                          discount_value: payment.discount_value,
-                                          gross_amount: payment.gross_amount,
-                                          serviceTypeId,
-                                          installments,
-                                          notes: extractLastNotes(),
-                                        });
-                                        setShowPaymentAgreement(true);
-                                      }}
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {/* Show orphan payment groups (payments without a matching lead/service) */}
-                  {paymentsByService
-                    .filter(group => {
-                      return !allServiceLeads.some(lead => {
-                        const sName = lead.service_type_id
-                          ? serviceTypes?.find(st => st.id === lead.service_type_id)?.name
-                          : null;
-                        const dName = sName || SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO'];
-                        return group.serviceName === dName;
-                      });
-                    })
-                    .map((group, gIdx) => (
-                      <div key={`orphan-${gIdx}`} className="rounded-lg border overflow-hidden">
-                        <div className="p-3">
-                          <p className="font-medium flex items-center gap-2">
-                            <CreditCard className="h-4 w-4 text-muted-foreground" />
-                            {group.serviceName}
-                          </p>
-                        </div>
-                        <div className="border-t bg-muted/10 px-3 py-2 space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                            {group.payments.length} pagamento{group.payments.length > 1 ? 's' : ''}
-                          </p>
-                          {group.payments.map((payment: any) => (
-                            <div key={payment.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-background">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="font-medium text-sm">
-                                    € {Number(payment.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                  </p>
-                                  {payment.installment_number && (
-                                    <Badge variant="outline" className="text-xs">
-                                      Parcela {payment.installment_number}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                                  {payment.due_date && (
-                                    <span>Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <StatusBadge
-                                  status={payment.status || 'PENDENTE'}
-                                  label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  }
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            <ContractGroupsSection
+              contactId={id!}
+              contactName={contact.full_name}
+              contactLeads={allServiceLeads}
+              paymentNotes={paymentNotes}
+              confirmedLeadIds={confirmedLeadIds}
+              navigate={navigate}
+            />
           )}
 
           {/* Serviços como Beneficiário */}
@@ -1706,62 +1319,6 @@ export default function ContactDetail() {
             </CardContent>
           </Card>
 
-
-
-          {/* Contracts */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Contratos ({contactContracts.length})
-              </CardTitle>
-              <CardDescription>Contratos vinculados a este cliente</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {contractsLoading ? (
-                <div className="space-y-3">
-                  {[1, 2].map(i => <Skeleton key={i} className="h-16" />)}
-                </div>
-              ) : contactContracts.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">
-                  Nenhum contrato vinculado a este cliente.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {contactContracts.map((contract: any) => (
-                    <div
-                      key={contract.id}
-                      className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => navigate(`/contracts/${contract.id}`)}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium">
-                            {contract.contract_number ? `Contrato #${contract.contract_number}` : 'Sem número'}
-                          </p>
-                          {contract.total_fee && (
-                            <Badge variant="outline" className="text-xs">
-                              € {Number(contract.total_fee).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-                          <span>{SVC_LABELS_DOC[contract.service_type as keyof typeof SVC_LABELS_DOC] || contract.service_type}</span>
-                          {contract.created_at && (
-                            <span>{format(new Date(contract.created_at), "dd/MM/yyyy", { locale: ptBR })}</span>
-                          )}
-                        </div>
-                      </div>
-                      <StatusBadge
-                        status={contract.status || 'EM_ELABORACAO'}
-                        label={CONTRACT_STATUS_LABELS[contract.status as keyof typeof CONTRACT_STATUS_LABELS] || contract.status}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
           {/* Interactions */}
           <Card>
@@ -1946,57 +1503,6 @@ export default function ContactDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Payment Agreement Dialog */}
-      {id && (
-        <PaymentAgreementDialog
-          open={showPaymentAgreement}
-          onOpenChange={(open) => {
-            setShowPaymentAgreement(open);
-            if (!open) setEditPaymentData(null);
-          }}
-          contactId={id}
-          contactName={contact.full_name}
-          initialData={editPaymentData}
-        />
-      )}
-
-      {/* Delete/Archive Service Confirmation Dialog */}
-      <Dialog open={!!deleteServiceLead} onOpenChange={(open) => !open && setDeleteServiceLead(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {deleteServiceLead && hasProtectedContract(deleteServiceLead.id)
-                ? 'Arquivar Serviço'
-                : 'Excluir Serviço'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            {deleteServiceLead && hasProtectedContract(deleteServiceLead.id) ? (
-              <p className="text-sm text-muted-foreground">
-                Este serviço possui contrato aprovado, assinado ou cancelado e não pode ser excluído.
-                Deseja arquivá-lo? O serviço será ocultado da listagem.
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Tem certeza que deseja excluir este serviço? Todos os pagamentos e oportunidades vinculados serão removidos permanentemente.
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteServiceLead(null)} disabled={isDeletingService}>
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => handleDeleteService(deleteServiceLead)}
-              disabled={isDeletingService}
-            >
-              {isDeletingService && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {deleteServiceLead && hasProtectedContract(deleteServiceLead.id) ? 'Arquivar' : 'Excluir'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
