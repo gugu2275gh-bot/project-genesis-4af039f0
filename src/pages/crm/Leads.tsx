@@ -378,7 +378,8 @@ export default function Leads() {
           {groupedClients.map(client => {
             const isExpanded = resolvedExpanded.has(client.contactId);
             const allConcluded = client.leads.every(l => FINAL_STATUSES.has(l.status || ''));
-              <div key={client.contactId} className="border rounded-lg overflow-hidden bg-card">
+            return (
+              <div key={client.contactId} className={`border rounded-lg overflow-hidden bg-card ${allConcluded ? 'opacity-60' : ''}`}>
                 {/* Client row */}
                 <button
                   onClick={() => toggleClient(client.contactId)}
