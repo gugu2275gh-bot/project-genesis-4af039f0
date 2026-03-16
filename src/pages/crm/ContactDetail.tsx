@@ -1725,57 +1725,6 @@ export default function ContactDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Payment Agreement Dialog */}
-      {id && (
-        <PaymentAgreementDialog
-          open={showPaymentAgreement}
-          onOpenChange={(open) => {
-            setShowPaymentAgreement(open);
-            if (!open) setEditPaymentData(null);
-          }}
-          contactId={id}
-          contactName={contact.full_name}
-          initialData={editPaymentData}
-        />
-      )}
-
-      {/* Delete/Archive Service Confirmation Dialog */}
-      <Dialog open={!!deleteServiceLead} onOpenChange={(open) => !open && setDeleteServiceLead(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {deleteServiceLead && hasProtectedContract(deleteServiceLead.id)
-                ? 'Arquivar Serviço'
-                : 'Excluir Serviço'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            {deleteServiceLead && hasProtectedContract(deleteServiceLead.id) ? (
-              <p className="text-sm text-muted-foreground">
-                Este serviço possui contrato aprovado, assinado ou cancelado e não pode ser excluído.
-                Deseja arquivá-lo? O serviço será ocultado da listagem.
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Tem certeza que deseja excluir este serviço? Todos os pagamentos e oportunidades vinculados serão removidos permanentemente.
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteServiceLead(null)} disabled={isDeletingService}>
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => handleDeleteService(deleteServiceLead)}
-              disabled={isDeletingService}
-            >
-              {isDeletingService && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {deleteServiceLead && hasProtectedContract(deleteServiceLead.id) ? 'Arquivar' : 'Excluir'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
