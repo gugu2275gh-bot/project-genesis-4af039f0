@@ -39,13 +39,14 @@ export default function Contacts() {
     if (!newContact.full_name) return;
     if (isBeneficiary && !principalContactId) return;
     const phoneNumber = phoneInput ? parseInt(phoneInput.replace(/\D/g, ''), 10) : null;
-    await createContact.mutateAsync({ 
+    const created = await createContact.mutateAsync({ 
       ...newContact, 
       phone: phoneNumber || undefined,
       is_beneficiary: isBeneficiary,
       linked_principal_contact_id: isBeneficiary ? principalContactId : null,
     } as ContactInsert);
     setIsDialogOpen(false);
+    navigate(`/crm/contacts/${created.id}`);
     setPhoneInput('');
     setIsBeneficiary(false);
     setPrincipalContactId('');

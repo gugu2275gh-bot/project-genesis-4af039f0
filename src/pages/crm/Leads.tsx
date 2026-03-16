@@ -133,7 +133,7 @@ export default function Leads() {
         referral_name: newLead.origin_channel === 'COLABORADOR' ? newLead.referral_name : undefined,
         preferred_language: 'pt',
       });
-      await createLead.mutateAsync({
+      const createdLead = await createLead.mutateAsync({
         contact_id: contact.id,
         service_interest: newLead.service_interest,
         status: 'NOVO',
@@ -141,9 +141,11 @@ export default function Leads() {
           ? `Serviço: ${newLead.service_interest_other}`
           : undefined,
       });
+      setIsDialogOpen(false);
+      navigate(`/crm/leads/${createdLead.id}`);
+      return;
     }
 
-    setIsDialogOpen(false);
     setLeadMode('new');
     setSelectedContactId('');
     setContactSearch('');
