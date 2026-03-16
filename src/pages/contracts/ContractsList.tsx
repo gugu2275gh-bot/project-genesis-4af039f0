@@ -276,16 +276,16 @@ export default function ContractsList() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="drafts" className="flex items-center gap-2">
-            Em Elaboração
-            {contracts.filter(c => c.status === 'EM_ELABORACAO').length > 0 && (
-              <Badge variant="secondary" className="ml-1">{contracts.filter(c => c.status === 'EM_ELABORACAO').length}</Badge>
-            )}
-          </TabsTrigger>
           <TabsTrigger value="approved" className="flex items-center gap-2">
             Contratos Aprovados
             {contracts.filter(c => c.status === 'APROVADO' || c.status === 'ASSINADO').length > 0 && (
               <Badge variant="secondary" className="ml-1">{contracts.filter(c => c.status === 'APROVADO' || c.status === 'ASSINADO').length}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="drafts" className="flex items-center gap-2">
+            Em Elaboração
+            {contracts.filter(c => c.status === 'EM_ELABORACAO').length > 0 && (
+              <Badge variant="secondary" className="ml-1">{contracts.filter(c => c.status === 'EM_ELABORACAO').length}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="cancelled" className="flex items-center gap-2">
@@ -294,37 +294,7 @@ export default function ContractsList() {
               <Badge variant="secondary" className="ml-1">{contracts.filter(c => c.status === 'CANCELADO' || c.status === 'REPROVADO').length}</Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="pending" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Contratos Pendentes
-            {pendingContractClients.length > 0 && (
-              <Badge variant="secondary" className="ml-1">{pendingContractClients.length}</Badge>
-            )}
-          </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="drafts" className="space-y-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar contratos em elaboração..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-
-          <DataTable
-            columns={getColumnsForTab('drafts')}
-            data={contracts.filter(c => 
-              c.status === 'EM_ELABORACAO' &&
-              (c.opportunities?.leads?.contacts?.full_name || '').toLowerCase().includes(search.toLowerCase())
-            )}
-            loading={isLoading}
-            emptyMessage="Nenhum contrato em elaboração"
-            onRowClick={(contract) => navigate(`/contracts/${contract.id}`)}
-          />
-        </TabsContent>
 
         <TabsContent value="approved" className="space-y-4">
           <div className="relative flex-1 max-w-sm">
@@ -345,6 +315,29 @@ export default function ContractsList() {
             )}
             loading={isLoading}
             emptyMessage="Nenhum contrato aprovado encontrado"
+            onRowClick={(contract) => navigate(`/contracts/${contract.id}`)}
+          />
+        </TabsContent>
+
+        <TabsContent value="drafts" className="space-y-4">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar contratos em elaboração..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          <DataTable
+            columns={getColumnsForTab('drafts')}
+            data={contracts.filter(c => 
+              c.status === 'EM_ELABORACAO' &&
+              (c.opportunities?.leads?.contacts?.full_name || '').toLowerCase().includes(search.toLowerCase())
+            )}
+            loading={isLoading}
+            emptyMessage="Nenhum contrato em elaboração"
             onRowClick={(contract) => navigate(`/contracts/${contract.id}`)}
           />
         </TabsContent>
@@ -370,65 +363,6 @@ export default function ContractsList() {
             emptyMessage="Nenhum contrato cancelado encontrado"
             onRowClick={(contract) => navigate(`/contracts/${contract.id}`)}
           />
-        </TabsContent>
-
-        <TabsContent value="pending" className="space-y-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar clientes pendentes..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-
-          {filteredPendingClients.length === 0 ? (
-            <div className="flex h-64 flex-col items-center justify-center text-muted-foreground">
-              <p>Nenhum cliente pendente de contrato</p>
-            </div>
-          ) : (
-            <div className="grid gap-3">
-              {filteredPendingClients.map((opp) => (
-                <Card key={opp.id} className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate(`/crm/leads/${opp.lead_id}`)}>
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                        <Users className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="font-medium">{opp.leads?.contacts?.full_name || 'Sem nome'}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {opp.leads?.contacts?.email || opp.leads?.contacts?.phone || '-'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Badge variant="outline">
-                        {SERVICE_INTEREST_LABELS[opp.leads?.service_interest || 'OUTRO']}
-                      </Badge>
-                      <StatusBadge
-                        status={opp.status || 'ABERTA'}
-                        label={opp.status === 'CONTRATO_EM_ELABORACAO' ? 'Contrato em Elaboração' : 'Aberta'}
-                      />
-                      <Button
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedOpportunity(opp.id);
-                          handleOpportunityChange(opp.id);
-                          setIsDialogOpen(true);
-                        }}
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Gerar Contrato
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
         </TabsContent>
       </Tabs>
     </div>
