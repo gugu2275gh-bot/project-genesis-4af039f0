@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Download, Edit, X, FileText, ChevronDown } from 'lucide-react';
+import { Download, Edit, X, FileText, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { getContractSections, generateContractDocument, generateContractWord, type ContractData, type ContractSection, type BeneficiaryData, type BankAccountData, type PaymentData } from '@/lib/generate-contract';
 
 interface ContractPreviewProps {
@@ -14,7 +15,6 @@ interface ContractPreviewProps {
   contractNumber: string;
   canDownload?: boolean;
   contractStatus?: string;
-  // Financial fields
   serviceDescription?: string;
   feeAmount?: number;
   vatRate?: number;
@@ -23,7 +23,6 @@ interface ContractPreviewProps {
   paymentMethod?: string;
   bankAccount?: BankAccountData;
   beneficiaries?: BeneficiaryData[];
-  // Contact fields
   phone?: string;
   email?: string;
   address?: string;
@@ -42,6 +41,9 @@ export function ContractPreview({
   const [editedName, setEditedName] = useState(clientName);
   const [editedDocument, setEditedDocument] = useState(documentNumber);
   const [editedContractNumber, setEditedContractNumber] = useState(contractNumber);
+  const [editedFeeAmount, setEditedFeeAmount] = useState(feeAmount?.toString() || '');
+  const [editedPaymentConditions, setEditedPaymentConditions] = useState(paymentConditions || '');
+  const [editedPayments, setEditedPayments] = useState<PaymentData[]>(payments || []);
 
   const currentData: ContractData = {
     template,
@@ -51,10 +53,10 @@ export function ContractPreview({
     contractNumber: isEditing ? editedContractNumber : contractNumber,
     date,
     serviceDescription,
-    feeAmount,
+    feeAmount: isEditing && editedFeeAmount ? parseFloat(editedFeeAmount) : feeAmount,
     vatRate,
-    totalAmount,
-    paymentConditions,
+    totalAmount: isEditing && editedFeeAmount ? parseFloat(editedFeeAmount) * (1 + (vatRate || 0)) : totalAmount,
+    paymentConditions: isEditing ? editedPaymentConditions : paymentConditions,
     paymentMethod,
     bankAccount,
     beneficiaries,
@@ -62,7 +64,7 @@ export function ContractPreview({
     email,
     address,
     currency,
-    payments,
+    payments: isEditing ? editedPayments : payments,
   };
 
   const sections = getContractSections(currentData);
@@ -79,7 +81,27 @@ export function ContractPreview({
     setEditedName(clientName);
     setEditedDocument(documentNumber);
     setEditedContractNumber(contractNumber);
+    setEditedFeeAmount(feeAmount?.toString() || '');
+    setEditedPaymentConditions(paymentConditions || '');
+    setEditedPayments(payments || []);
     setIsEditing(true);
+  };
+
+  const updatePayment = (index: number, field: keyof PaymentData, value: string | number) => {
+    setEditedPayments(prev => prev.map((p, i) => i === index ? { ...p, [field]: value } : p));
+  };
+
+  const addPayment = () => {
+    setEditedPayments(prev => [...prev, {
+      amount: 0,
+      installment_number: prev.length + 1,
+      due_date: null,
+      status: 'PENDENTE',
+    }]);
+  };
+
+  const removePayment = (index: number) => {
+    setEditedPayments(prev => prev.filter((_, i) => i !== index));
   };
 
   const renderSection = (section: ContractSection, index: number) => {
@@ -175,34 +197,95 @@ export function ContractPreview({
       </CardHeader>
       <CardContent>
         {isEditing && (
-          <div className="mb-6 p-4 border border-border rounded-lg bg-muted/50 space-y-3">
+          <div className="mb-6 p-4 border border-border rounded-lg bg-muted/50 space-y-4">
             <p className="text-sm font-medium text-foreground">Campos editáveis:</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground">Nome do Cliente</label>
-                <Input
-                  value={editedName}
-                  onChange={(e) => setEditedName(e.target.value)}
-                  className="mt-1"
-                />
+                <Label className="text-xs text-muted-foreground">Nome do Cliente</Label>
+                <Input value={editedName} onChange={(e) => setEditedName(e.target.value)} className="mt-1" />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Nº Documento</label>
-                <Input
-                  value={editedDocument}
-                  onChange={(e) => setEditedDocument(e.target.value)}
-                  className="mt-1"
-                />
+                <Label className="text-xs text-muted-foreground">Nº Documento</Label>
+                <Input value={editedDocument} onChange={(e) => setEditedDocument(e.target.value)} className="mt-1" />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">Nº Contrato</label>
-                <Input
-                  value={editedContractNumber}
-                  onChange={(e) => setEditedContractNumber(e.target.value)}
-                  className="mt-1"
-                />
+                <Label className="text-xs text-muted-foreground">Nº Contrato</Label>
+                <Input value={editedContractNumber} onChange={(e) => setEditedContractNumber(e.target.value)} className="mt-1" />
               </div>
             </div>
+
+            <div className="border-t border-border pt-3">
+              <p className="text-sm font-medium text-foreground mb-2">Honorários e Pagamento:</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Valor dos Honorários (€)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={editedFeeAmount}
+                    onChange={(e) => setEditedFeeAmount(e.target.value)}
+                    className="mt-1"
+                    placeholder="Ex: 1000.00"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Condições de Pagamento</Label>
+                  <Input
+                    value={editedPaymentConditions}
+                    onChange={(e) => setEditedPaymentConditions(e.target.value)}
+                    className="mt-1"
+                    placeholder="Ex: Pagamento único à vista"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {editedPayments.length > 0 && (
+              <div className="border-t border-border pt-3">
+                <p className="text-sm font-medium text-foreground mb-2">Parcelas:</p>
+                <div className="space-y-2">
+                  {editedPayments.map((p, i) => (
+                    <div key={i} className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <Label className="text-xs text-muted-foreground">Cuota {p.installment_number || i + 1} — Valor (€)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={p.amount}
+                          onChange={(e) => updatePayment(i, 'amount', parseFloat(e.target.value) || 0)}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div className="w-40">
+                        <Label className="text-xs text-muted-foreground">Vencimento</Label>
+                        <Input
+                          type="date"
+                          value={p.due_date || ''}
+                          onChange={(e) => updatePayment(i, 'due_date', e.target.value)}
+                          className="mt-1"
+                        />
+                      </div>
+                      <Button variant="ghost" size="icon" className="mb-0.5" onClick={() => removePayment(i)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <Button variant="outline" size="sm" className="mt-2" onClick={addPayment}>
+                  <Plus className="h-3 w-3 mr-1" />
+                  Adicionar Parcela
+                </Button>
+              </div>
+            )}
+
+            {editedPayments.length === 0 && !editedFeeAmount && (
+              <div className="border-t border-border pt-3">
+                <Button variant="outline" size="sm" onClick={addPayment}>
+                  <Plus className="h-3 w-3 mr-1" />
+                  Adicionar Parcela
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
