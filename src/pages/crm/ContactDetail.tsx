@@ -1320,62 +1320,6 @@ export default function ContactDetail() {
           </Card>
 
 
-
-          {/* Contracts */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Contratos ({contactContracts.length})
-              </CardTitle>
-              <CardDescription>Contratos vinculados a este cliente</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {contractsLoading ? (
-                <div className="space-y-3">
-                  {[1, 2].map(i => <Skeleton key={i} className="h-16" />)}
-                </div>
-              ) : contactContracts.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">
-                  Nenhum contrato vinculado a este cliente.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {contactContracts.map((contract: any) => (
-                    <div
-                      key={contract.id}
-                      className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => navigate(`/contracts/${contract.id}`)}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium">
-                            {contract.contract_number ? `Contrato #${contract.contract_number}` : 'Sem número'}
-                          </p>
-                          {contract.total_fee && (
-                            <Badge variant="outline" className="text-xs">
-                              € {Number(contract.total_fee).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-                          <span>{SVC_LABELS_DOC[contract.service_type as keyof typeof SVC_LABELS_DOC] || contract.service_type}</span>
-                          {contract.created_at && (
-                            <span>{format(new Date(contract.created_at), "dd/MM/yyyy", { locale: ptBR })}</span>
-                          )}
-                        </div>
-                      </div>
-                      <StatusBadge
-                        status={contract.status || 'EM_ELABORACAO'}
-                        label={CONTRACT_STATUS_LABELS[contract.status as keyof typeof CONTRACT_STATUS_LABELS] || contract.status}
-                      />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           {/* Interactions */}
           <Card>
             <CardHeader>
