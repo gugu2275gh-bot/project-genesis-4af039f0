@@ -269,7 +269,7 @@ export default function ContractsList() {
       <PageHeader
         title="Contratos"
         description="Gerenciar contratos e documentos jurídicos"
-        actions={
+      />
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
               setIsDialogOpen(open);
               if (!open) setSelectedOpportunity('');
