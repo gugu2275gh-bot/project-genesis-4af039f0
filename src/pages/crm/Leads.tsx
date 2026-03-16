@@ -99,9 +99,23 @@ export default function Leads() {
     });
   }, [filteredLeads]);
 
+  const FINAL_STATUSES = new Set(['ARQUIVADO_SEM_RETORNO', 'CANCELADO', 'PERDIDO']);
+
+  // Auto-expand clients with active leads on first load
+  const resolvedExpanded = useMemo(() => {
+    if (expandedClients !== null) return expandedClients;
+    const autoExpanded = new Set<string>();
+    groupedClients.forEach(client => {
+      const hasActive = client.leads.some(l => !FINAL_STATUSES.has(l.status || ''));
+      if (hasActive) autoExpanded.add(client.contactId);
+    });
+    return autoExpanded;
+  }, [expandedClients, groupedClients]);
+
   const toggleClient = (contactId: string) => {
     setExpandedClients(prev => {
-      const next = new Set(prev);
+      const base = prev !== null ? prev : resolvedExpanded;
+      const next = new Set(base);
       if (next.has(contactId)) next.delete(contactId);
       else next.add(contactId);
       return next;
