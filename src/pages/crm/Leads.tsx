@@ -34,7 +34,7 @@ export default function Leads() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
+  const [expandedClients, setExpandedClients] = useState<Set<string> | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [leadMode, setLeadMode] = useState<'new' | 'existing'>('new');
   const [selectedContactId, setSelectedContactId] = useState<string>('');
