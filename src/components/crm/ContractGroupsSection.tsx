@@ -54,6 +54,7 @@ export function ContractGroupsSection({
   const [isDeletingService, setIsDeletingService] = useState(false);
   const [addingToContractId, setAddingToContractId] = useState<string | null>(null);
   const [addServiceToContractId, setAddServiceToContractId] = useState<string | null>(null);
+  const [expandedContracts, setExpandedContracts] = useState<Set<string>>(new Set());
 
   // Fetch contract_leads for this contact's leads
   const leadIds = contactLeads.map(l => l.id);
