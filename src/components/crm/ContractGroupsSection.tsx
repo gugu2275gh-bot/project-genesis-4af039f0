@@ -609,9 +609,14 @@ export function ContractGroupsSection({
                           <Button
                             size="sm"
                             variant="default"
+                            disabled={isFinalizingContract}
                             onClick={() => handleFinalizeContract(contract.id)}
                           >
-                            <CheckCircle2 className="h-4 w-4 mr-1" />
+                            {isFinalizingContract ? (
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="h-4 w-4 mr-1" />
+                            )}
                             Concluir
                           </Button>
                         )}
