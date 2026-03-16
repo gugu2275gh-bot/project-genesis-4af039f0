@@ -762,20 +762,6 @@ export function ContractGroupsSection({
                 </div>
               )}
 
-              {/* Orphan payments (no lead match) */}
-              {ungroupedPayments.length > 0 && (
-                <div className="rounded-lg border overflow-hidden">
-                  <div className="p-3">
-                    <p className="font-medium flex items-center gap-2 text-muted-foreground">
-                      <CreditCard className="h-4 w-4" />
-                      Pagamentos avulsos
-                    </p>
-                  </div>
-                  <div className="border-t bg-muted/10 px-3 py-2 space-y-2">
-                    {ungroupedPayments.map((p: any) => renderPaymentRow(p, ungroupedPayments))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </CardContent>
