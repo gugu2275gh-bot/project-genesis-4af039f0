@@ -424,7 +424,7 @@ export default function Leads() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium">
-                              {serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro'}
+                              {(lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) || serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro'}
                             </span>
                             <StatusBadge
                               status={lead.status || 'NOVO'}
