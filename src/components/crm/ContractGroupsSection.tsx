@@ -352,6 +352,7 @@ export function ContractGroupsSection({
       } else {
         // Remove from contract_leads first
         await supabase.from('contract_leads').delete().eq('lead_id', lead.id);
+        // Delete payments, contracts, opportunities, then lead
         const { data: opps } = await supabase.from('opportunities').select('id').eq('lead_id', lead.id);
         if (opps && opps.length > 0) {
           const oppIds = opps.map(o => o.id);
@@ -388,7 +389,7 @@ export function ContractGroupsSection({
   // Draft contracts that can receive more services
   const draftContracts = contractGroups.filter(g => g.contract?.status === 'EM_ELABORACAO');
 
-  const renderPaymentRow = (payment: any, servicePayments: any[]) => (
+  const renderPaymentRow = (payment: any, servicePayments: any[], editable: boolean = true) => (
     <div key={payment.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-background">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -415,7 +416,7 @@ export function ContractGroupsSection({
           status={payment.status || 'PENDENTE'}
           label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
         />
-        {payment.status === 'PENDENTE' && (
+        {editable && payment.status === 'PENDENTE' && (
           <Button
             size="sm"
             variant="ghost"
@@ -451,11 +452,12 @@ export function ContractGroupsSection({
     </div>
   );
 
-  const renderLeadItem = (lead: any, options?: { showCheckbox?: boolean; showDelete?: boolean; contractId?: string }) => {
+  const renderLeadItem = (lead: any, options?: { showCheckbox?: boolean; showDelete?: boolean; contractId?: string; editable?: boolean }) => {
     const displayName = getLeadDisplayName(lead);
     const isConfirmed = confirmedLeadIds.includes(lead.id);
     const serviceCase = contactServiceCases.find((sc: any) => sc.lead_id === lead.id);
     const isServiceCompleted = serviceCase && (serviceCase.technical_status === 'ENCERRADO_APROVADO' || serviceCase.technical_status === 'ENCERRADO_NEGADO');
+    const editable = options?.editable !== false; // default true
 
     // Find payments for this lead
     const leadPayments = contactPayments.filter((p: any) => {
@@ -497,21 +499,21 @@ export function ContractGroupsSection({
                 </Badge>
               )
             )}
-            {options?.contractId && (
+            {editable && options?.contractId && (
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleRemoveFromContract(options.contractId!, lead.id);
+                  setDeleteServiceLead({ ...lead, _contractId: options.contractId });
                 }}
-                title="Remover do contrato"
+                title="Excluir serviço do contrato"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             )}
-            {options?.showDelete && (
+            {editable && options?.showDelete && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -533,7 +535,7 @@ export function ContractGroupsSection({
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {leadPayments.length} pagamento{leadPayments.length > 1 ? 's' : ''}
             </p>
-            {leadPayments.map((p: any) => renderPaymentRow(p, leadPayments))}
+            {leadPayments.map((p: any) => renderPaymentRow(p, leadPayments, editable))}
           </div>
         )}
       </div>
@@ -651,7 +653,8 @@ export function ContractGroupsSection({
                     {/* Services in this contract */}
                     <div className="p-3 space-y-3">
                       {group.leads.map(lead => renderLeadItem(lead, { 
-                        contractId: isDraft ? contract.id : undefined 
+                        contractId: isDraft ? contract.id : undefined,
+                        editable: isDraft,
                       }))}
                     </div>
                   </div>
