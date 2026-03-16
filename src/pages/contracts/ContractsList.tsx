@@ -212,13 +212,6 @@ export default function ContractsList() {
       },
     },
     {
-      key: 'signed_at',
-      header: 'Assinado em',
-      cell: (contract) => contract.signed_at 
-        ? format(new Date(contract.signed_at), 'dd/MM/yyyy', { locale: ptBR })
-        : '-',
-    },
-    {
       key: 'actions',
       header: '',
       cell: (contract) => (
@@ -235,6 +228,41 @@ export default function ContractsList() {
       ),
     },
   ];
+
+  const dateColumnDrafts: Column<typeof contracts[0]> = {
+    key: 'created_at',
+    header: 'Criado em',
+    cell: (contract) => contract.created_at
+      ? format(new Date(contract.created_at), 'dd/MM/yyyy', { locale: ptBR })
+      : '-',
+  };
+
+  const dateColumnApproved: Column<typeof contracts[0]> = {
+    key: 'signed_at',
+    header: 'Aprovado / Assinado em',
+    cell: (contract) => {
+      const date = contract.signed_at || contract.updated_at;
+      return date ? format(new Date(date), 'dd/MM/yyyy', { locale: ptBR }) : '-';
+    },
+  };
+
+  const dateColumnCancelled: Column<typeof contracts[0]> = {
+    key: 'updated_at',
+    header: 'Cancelado em',
+    cell: (contract) => contract.updated_at
+      ? format(new Date(contract.updated_at), 'dd/MM/yyyy', { locale: ptBR })
+      : '-',
+  };
+
+  const getColumnsForTab = (tab: string) => {
+    const baseColumns = columns.slice(0, -1); // all except actions
+    const actionsCol = columns[columns.length - 1];
+    let dateCol: Column<typeof contracts[0]>;
+    if (tab === 'approved') dateCol = dateColumnApproved;
+    else if (tab === 'cancelled') dateCol = dateColumnCancelled;
+    else dateCol = dateColumnDrafts;
+    return [...baseColumns, dateCol, actionsCol];
+  };
 
   return (
     <div className="space-y-6">
@@ -388,7 +416,7 @@ export default function ContractsList() {
           </div>
 
           <DataTable
-            columns={columns}
+            columns={getColumnsForTab('drafts')}
             data={contracts.filter(c => 
               c.status === 'EM_ELABORACAO' &&
               (c.opportunities?.leads?.contacts?.full_name || '').toLowerCase().includes(search.toLowerCase())
@@ -411,7 +439,7 @@ export default function ContractsList() {
           </div>
 
           <DataTable
-            columns={columns}
+            columns={getColumnsForTab('approved')}
             data={contracts.filter(c => 
               (c.status === 'APROVADO' || c.status === 'ASSINADO') &&
               (c.opportunities?.leads?.contacts?.full_name || '').toLowerCase().includes(search.toLowerCase())
@@ -434,7 +462,7 @@ export default function ContractsList() {
           </div>
 
           <DataTable
-            columns={columns}
+            columns={getColumnsForTab('cancelled')}
             data={contracts.filter(c => 
               (c.status === 'CANCELADO' || c.status === 'REPROVADO') &&
               (c.opportunities?.leads?.contacts?.full_name || '').toLowerCase().includes(search.toLowerCase())
