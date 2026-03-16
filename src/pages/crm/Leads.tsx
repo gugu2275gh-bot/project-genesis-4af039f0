@@ -32,6 +32,12 @@ export default function Leads() {
     return map;
   }, [serviceTypes]);
 
+  const serviceTypeIdMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    serviceTypes?.forEach(st => { map[st.id] = st.name; });
+    return map;
+  }, [serviceTypes]);
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedClients, setExpandedClients] = useState<Set<string> | null>(null);
