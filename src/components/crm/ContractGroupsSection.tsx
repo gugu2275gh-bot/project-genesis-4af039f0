@@ -736,9 +736,41 @@ export function ContractGroupsSection({
       {/* Payment Agreement Dialog */}
       <PaymentAgreementDialog
         open={showPaymentAgreement}
-        onOpenChange={(open) => {
+        onOpenChange={async (open) => {
+          if (!open) {
+            // If we were adding a service to a specific contract, link new leads
+            if (addServiceToContractId) {
+              // Wait a moment for queries to settle, then find newly created leads not yet linked
+              await new Promise(r => setTimeout(r, 500));
+              const { data: currentLinks } = await supabase
+                .from('contract_leads')
+                .select('lead_id')
+                .eq('contract_id', addServiceToContractId);
+              const linkedIds = new Set(currentLinks?.map(cl => cl.lead_id) || []);
+              
+              // Refresh leads for this contact
+              const { data: freshLeads } = await supabase
+                .from('leads')
+                .select('id')
+                .eq('contact_id', contactId)
+                .order('created_at', { ascending: false });
+              
+              const newLeads = (freshLeads || []).filter(l => !linkedIds.has(l.id));
+              if (newLeads.length > 0) {
+                // Link the most recently created lead (the one just added)
+                await supabase.from('contract_leads').upsert(
+                  [{ contract_id: addServiceToContractId, lead_id: newLeads[0].id }],
+                  { onConflict: 'contract_id,lead_id' }
+                );
+                queryClient.invalidateQueries({ queryKey: ['contract-leads', contactId] });
+                queryClient.invalidateQueries({ queryKey: ['contact-contracts', contactId] });
+                queryClient.invalidateQueries({ queryKey: ['contact-payments', contactId] });
+              }
+              setAddServiceToContractId(null);
+            }
+            setEditPaymentData(null);
+          }
           setShowPaymentAgreement(open);
-          if (!open) setEditPaymentData(null);
         }}
         contactId={contactId}
         contactName={contactName}
