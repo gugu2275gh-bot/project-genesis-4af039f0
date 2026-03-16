@@ -36,7 +36,7 @@ export function ContractPreview({
   template, clientName, documentType, documentNumber, contractNumber, canDownload = false,
   contractStatus,
   serviceDescription, feeAmount, vatRate, totalAmount, paymentConditions, paymentMethod,
-  bankAccount, beneficiaries, phone, email, address, currency, date,
+  bankAccount, beneficiaries, phone, email, address, currency, date, payments,
 }: ContractPreviewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(clientName);
