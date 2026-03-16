@@ -627,7 +627,7 @@ export function ContractGroupsSection({
                             onClick={() => navigate(`/contracts/${contract.id}`)}
                           >
                             <FileText className="h-4 w-4 mr-1" />
-                            Ver
+                            Ver Contrato
                           </Button>
                         )}
                       </div>
