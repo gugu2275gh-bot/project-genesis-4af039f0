@@ -62,6 +62,7 @@ export function ContractPreview({
     email,
     address,
     currency,
+    payments,
   };
 
   const sections = getContractSections(currentData);
