@@ -98,9 +98,11 @@ export default function ContactDetail() {
   const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
   const [editPaymentData, setEditPaymentData] = useState<PaymentAgreementInitialData | null>(null);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [deleteServiceLead, setDeleteServiceLead] = useState<any>(null);
+  const [isDeletingService, setIsDeletingService] = useState(false);
   const queryClient = useQueryClient();
 
-  const contactLeads = leads.filter(l => l.contact_id === id);
+  const contactLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
 
   // Extract "Observações" from the last payment agreement block in payment_notes
   const extractLastNotes = (): string => {
@@ -251,18 +253,70 @@ export default function ContactDetail() {
       if (!id) return [];
       const { data: cLeads } = await supabase.from('leads').select('id').eq('contact_id', id);
       if (!cLeads?.length) return [];
-      const { data: opps } = await supabase.from('opportunities').select('id').in('lead_id', cLeads.map(l => l.id));
+      const { data: opps } = await supabase.from('opportunities').select('id, lead_id').in('lead_id', cLeads.map(l => l.id));
       if (!opps?.length) return [];
       const { data: contracts, error } = await supabase
         .from('contracts')
-        .select('id, contract_number, service_type, status, total_fee, created_at, signed_at')
+        .select('id, contract_number, service_type, status, total_fee, created_at, signed_at, opportunity_id')
         .in('opportunity_id', opps.map(o => o.id))
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return contracts || [];
+      // Attach lead_id to each contract via opportunity
+      return (contracts || []).map(c => {
+        const opp = opps.find(o => o.id === c.opportunity_id);
+        return { ...c, lead_id: opp?.lead_id };
+      });
     },
     enabled: !!id,
   });
+
+  // Check if a lead has a contract with protected status (APROVADO, ASSINADO, CANCELADO)
+  const hasProtectedContract = (leadId: string) => {
+    return contactContracts.some((c: any) => 
+      c.lead_id === leadId && ['APROVADO', 'ASSINADO', 'CANCELADO'].includes(c.status)
+    );
+  };
+
+  const handleDeleteService = async (lead: any) => {
+    if (!lead) return;
+    setIsDeletingService(true);
+    try {
+      const isProtected = hasProtectedContract(lead.id);
+      
+      if (isProtected) {
+        // Archive: set lead status to ARQUIVADO_SEM_RETORNO
+        await supabase.from('leads').update({ status: 'ARQUIVADO_SEM_RETORNO' }).eq('id', lead.id);
+        toast({ title: 'Serviço arquivado', description: 'O serviço possui contrato e foi arquivado.' });
+      } else {
+        // Hard delete: payments → opportunities → lead
+        // Get opportunities for this lead
+        const { data: opps } = await supabase.from('opportunities').select('id').eq('lead_id', lead.id);
+        if (opps && opps.length > 0) {
+          const oppIds = opps.map(o => o.id);
+          // Delete payments
+          await supabase.from('payments').delete().in('opportunity_id', oppIds);
+          // Delete contracts (drafts only at this point)
+          await supabase.from('contracts').delete().in('opportunity_id', oppIds);
+          // Delete opportunities
+          await supabase.from('opportunities').delete().in('id', oppIds);
+        }
+        // Delete the lead
+        await supabase.from('leads').delete().eq('id', lead.id);
+        toast({ title: 'Serviço excluído com sucesso' });
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['contact-contracts', id] });
+      queryClient.invalidateQueries({ queryKey: ['contact-payments', id] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed-lead-ids', id] });
+      queryClient.invalidateQueries({ queryKey: ['contact-service-cases', id] });
+    } catch (error: any) {
+      toast({ title: 'Erro ao excluir serviço', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsDeletingService(false);
+      setDeleteServiceLead(null);
+    }
+  };
 
   const { data: beneficiaryServiceCases = [], isLoading: benefCasesLoading } = useQuery({
     queryKey: ['beneficiary-service-cases', id, contact?.is_beneficiary],
@@ -1366,6 +1420,17 @@ export default function ContactDetail() {
                                 </Badge>
                               )
                             )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteServiceLead(lead);
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
                         </div>
 
@@ -1894,6 +1959,44 @@ export default function ContactDetail() {
           initialData={editPaymentData}
         />
       )}
+
+      {/* Delete/Archive Service Confirmation Dialog */}
+      <Dialog open={!!deleteServiceLead} onOpenChange={(open) => !open && setDeleteServiceLead(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {deleteServiceLead && hasProtectedContract(deleteServiceLead.id)
+                ? 'Arquivar Serviço'
+                : 'Excluir Serviço'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {deleteServiceLead && hasProtectedContract(deleteServiceLead.id) ? (
+              <p className="text-sm text-muted-foreground">
+                Este serviço possui contrato aprovado, assinado ou cancelado e não pode ser excluído.
+                Deseja arquivá-lo? O serviço será ocultado da listagem.
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Tem certeza que deseja excluir este serviço? Todos os pagamentos e oportunidades vinculados serão removidos permanentemente.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteServiceLead(null)} disabled={isDeletingService}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => handleDeleteService(deleteServiceLead)}
+              disabled={isDeletingService}
+            >
+              {isDeletingService && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {deleteServiceLead && hasProtectedContract(deleteServiceLead.id) ? 'Arquivar' : 'Excluir'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
