@@ -111,7 +111,7 @@ export default function Leads() {
   const handleCreate = async () => {
     if (leadMode === 'existing') {
       if (!selectedContactId) return;
-      await createLead.mutateAsync({
+      const createdLead = await createLead.mutateAsync({
         contact_id: selectedContactId,
         service_interest: newLead.service_interest,
         status: 'NOVO',
@@ -119,6 +119,9 @@ export default function Leads() {
           ? `Serviço: ${newLead.service_interest_other}`
           : undefined,
       });
+      setIsDialogOpen(false);
+      navigate(`/crm/leads/${createdLead.id}`);
+      return;
     } else {
       if (!newLead.full_name) return;
       const phoneNumber = newLead.phone ? parseInt(newLead.phone.replace(/\D/g, ''), 10) : undefined;
