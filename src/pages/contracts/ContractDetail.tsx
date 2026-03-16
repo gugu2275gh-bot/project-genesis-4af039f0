@@ -23,7 +23,7 @@ import { ContractCostsSection } from '@/components/contracts/ContractCostsSectio
 import { ContractNotesSection } from '@/components/contracts/ContractNotesSection';
 import { supabase } from '@/integrations/supabase/client';
 import { useBeneficiaries } from '@/hooks/useBeneficiaries';
-import { BeneficiaryData, BankAccountData } from '@/lib/generate-contract';
+import { BeneficiaryData, BankAccountData, PaymentData } from '@/lib/generate-contract';
 import { SERVICE_INTEREST_LABELS as SIL } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
@@ -832,6 +832,19 @@ export default function ContractDetail() {
                   amount: totalBenAmount > 0 ? totalBenAmount : undefined,
                 } as BeneficiaryData;
               }) || []}
+              payments={contractPayments?.map(p => ({
+                amount: (p as any).amount,
+                installment_number: (p as any).installment_number,
+                due_date: (p as any).due_date,
+                status: (p as any).status,
+                payment_method: (p as any).payment_method,
+                gross_amount: (p as any).gross_amount,
+                vat_amount: (p as any).vat_amount,
+                vat_rate: (p as any).vat_rate,
+                discount_value: (p as any).discount_value,
+                discount_type: (p as any).discount_type,
+                payment_form: (p as any).payment_form,
+              } as PaymentData)) || []}
             />
           </CardContent>
         </Card>

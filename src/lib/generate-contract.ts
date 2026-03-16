@@ -28,6 +28,20 @@ export interface BankAccountData {
   accountDetails?: string; // IBAN etc.
 }
 
+export interface PaymentData {
+  amount: number;
+  installment_number?: number | null;
+  due_date?: string | null;
+  status?: string | null;
+  payment_method?: string | null;
+  gross_amount?: number | null;
+  vat_amount?: number | null;
+  vat_rate?: number | null;
+  discount_value?: number | null;
+  discount_type?: string | null;
+  payment_form?: string | null;
+}
+
 export interface ContractData {
   template: string;
   clientName: string;
@@ -46,6 +60,8 @@ export interface ContractData {
   bankAccount?: BankAccountData;
   // Beneficiaries
   beneficiaries?: BeneficiaryData[];
+  // Payments
+  payments?: PaymentData[];
   // Contact fields
   phone?: string;
   email?: string;
@@ -161,6 +177,16 @@ function buildHonorariosSection(data: ContractData): Paragraph[] {
     sections.push(para(`${formatCurrency(data.feeAmount, currency)} + IVA (${vatPercent}%)`));
   } else if (data.totalAmount) {
     sections.push(para(`${formatCurrency(data.totalAmount, currency)} (IVA incluido)`));
+  } else if (data.payments && data.payments.length > 0) {
+    const totalFromPayments = data.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    sections.push(para(`${formatCurrency(totalFromPayments, currency)}`));
+    if (data.payments.length > 1) {
+      sections.push(para(`Forma de pago: ${data.payments.length} cuotas`, { bold: true }));
+      for (const p of data.payments) {
+        const dueInfo = p.due_date ? ` — Vencimiento: ${p.due_date}` : '';
+        sections.push(bullet(`Cuota ${p.installment_number || '-'}: ${formatCurrency(p.amount, currency)}${dueInfo}`));
+      }
+    }
   } else {
     sections.push(para('[Detallar honorarios y forma de pago]'));
   }
@@ -627,6 +653,16 @@ function sectionsHonorarios(data: ContractData): ContractSection[] {
     sections.push({ type: 'paragraph', text: `${formatCurrency(data.feeAmount, currency)} + IVA (${vatPercent}%)` });
   } else if (data.totalAmount) {
     sections.push({ type: 'paragraph', text: `${formatCurrency(data.totalAmount, currency)} (IVA incluido)` });
+  } else if (data.payments && data.payments.length > 0) {
+    const totalFromPayments = data.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    sections.push({ type: 'paragraph', text: `${formatCurrency(totalFromPayments, currency)}` });
+    if (data.payments.length > 1) {
+      sections.push({ type: 'paragraph', text: `Forma de pago: ${data.payments.length} cuotas`, bold: true });
+      for (const p of data.payments) {
+        const dueInfo = p.due_date ? ` — Vencimiento: ${p.due_date}` : '';
+        sections.push({ type: 'bullet', text: `Cuota ${p.installment_number || '-'}: ${formatCurrency(p.amount, currency)}${dueInfo}` });
+      }
+    }
   } else {
     sections.push({ type: 'paragraph', text: '[Detallar honorarios y forma de pago]' });
   }

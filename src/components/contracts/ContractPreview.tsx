@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Download, Edit, X, FileText, ChevronDown } from 'lucide-react';
-import { getContractSections, generateContractDocument, generateContractWord, type ContractData, type ContractSection, type BeneficiaryData, type BankAccountData } from '@/lib/generate-contract';
+import { getContractSections, generateContractDocument, generateContractWord, type ContractData, type ContractSection, type BeneficiaryData, type BankAccountData, type PaymentData } from '@/lib/generate-contract';
 
 interface ContractPreviewProps {
   template: string;
@@ -29,13 +29,14 @@ interface ContractPreviewProps {
   address?: string;
   currency?: string;
   date?: Date;
+  payments?: PaymentData[];
 }
 
 export function ContractPreview({ 
   template, clientName, documentType, documentNumber, contractNumber, canDownload = false,
   contractStatus,
   serviceDescription, feeAmount, vatRate, totalAmount, paymentConditions, paymentMethod,
-  bankAccount, beneficiaries, phone, email, address, currency, date,
+  bankAccount, beneficiaries, phone, email, address, currency, date, payments,
 }: ContractPreviewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(clientName);
@@ -61,6 +62,7 @@ export function ContractPreview({
     email,
     address,
     currency,
+    payments,
   };
 
   const sections = getContractSections(currentData);
