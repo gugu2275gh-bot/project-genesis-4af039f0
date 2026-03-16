@@ -661,58 +661,104 @@ export function ContractGroupsSection({
                 );
               })}
 
-              {/* Ungrouped Services */}
+              {/* Ungrouped Services - same layout as contract groups */}
               {ungroupedLeads.length > 0 && (
-                <div className="space-y-3">
-                  {contractGroups.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <Separator className="flex-1" />
-                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-2">
-                        Serviços sem contrato
-                      </span>
-                      <Separator className="flex-1" />
+                <div className="rounded-xl border-2 border-dashed border-muted-foreground/30 overflow-hidden">
+                  {/* Header mimicking contract group */}
+                  <div className="flex items-center justify-between p-3 bg-muted/30">
+                    <div className="flex items-center gap-3">
+                      <Package className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="font-semibold text-muted-foreground">
+                          Serviços sem contrato
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {ungroupedLeads.length} serviço{ungroupedLeads.length !== 1 ? 's' : ''}
+                        </p>
+                      </div>
                     </div>
-                  )}
-
-                  {ungroupedLeads.map(lead => renderLeadItem(lead, { 
-                    showCheckbox: true, 
-                    showDelete: true 
-                  }))}
-
-                  {/* Action bar when services are selected */}
-                  {selectedLeadIds.size > 0 && (
-                    <div className="flex items-center gap-2 p-3 rounded-lg border-2 border-dashed border-primary/30 bg-primary/5">
-                      <span className="text-sm font-medium flex-1">
-                        {selectedLeadIds.size} serviço{selectedLeadIds.size > 1 ? 's' : ''} selecionado{selectedLeadIds.size > 1 ? 's' : ''}
-                      </span>
-                      
-                      {/* Add to existing draft contract */}
-                      {draftContracts.map(g => (
-                        <Button
-                          key={g.contract.id}
-                          size="sm"
-                          variant="outline"
-                          disabled={!!addingToContractId}
-                          onClick={() => handleAddToContract(g.contract.id)}
-                        >
-                          {addingToContractId === g.contract.id && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                          <Plus className="h-4 w-4 mr-1" />
-                          Adicionar ao {g.contract.contract_number || 'Rascunho'}
-                        </Button>
-                      ))}
-
-                      {/* Create new contract */}
+                    <div className="flex items-center gap-2">
                       <Button
                         size="sm"
-                        disabled={isCreatingContract}
-                        onClick={handleCreateContractGroup}
+                        variant="outline"
+                        onClick={() => {
+                          setAddServiceToContractId(null);
+                          setEditPaymentData(null);
+                          setShowPaymentAgreement(true);
+                        }}
                       >
-                        {isCreatingContract && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-                        <Package className="h-4 w-4 mr-1" />
-                        Novo Contrato
+                        <Plus className="h-4 w-4 mr-1" />
+                        Adicionar Serviço
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        disabled={isCreatingContract || ungroupedLeads.length === 0}
+                        onClick={async () => {
+                          // Select all ungrouped leads and create contract
+                          const allIds = new Set(ungroupedLeads.map(l => l.id));
+                          setSelectedLeadIds(allIds);
+                          // Create contract with all ungrouped leads
+                          setIsCreatingContract(true);
+                          try {
+                            const firstLead = ungroupedLeads[0];
+                            const { data: opps } = await supabase
+                              .from('opportunities')
+                              .select('id')
+                              .eq('lead_id', firstLead.id)
+                              .limit(1);
+                            if (!opps?.length) {
+                              toast({ title: 'Nenhuma oportunidade encontrada', variant: 'destructive' });
+                              return;
+                            }
+                            const { data: contract, error: contractError } = await supabase
+                              .from('contracts')
+                              .insert({
+                                opportunity_id: opps[0].id,
+                                service_type: firstLead?.service_interest || 'OUTRO',
+                                status: 'EM_ELABORACAO',
+                                created_by_user_id: user?.id,
+                              })
+                              .select()
+                              .single();
+                            if (contractError) throw contractError;
+                            const links = ungroupedLeads.map(l => ({
+                              contract_id: contract.id,
+                              lead_id: l.id,
+                            }));
+                            const { error: linkError } = await supabase
+                              .from('contract_leads')
+                              .insert(links);
+                            if (linkError) throw linkError;
+                            setSelectedLeadIds(new Set());
+                            queryClient.invalidateQueries({ queryKey: ['contract-leads', contactId] });
+                            queryClient.invalidateQueries({ queryKey: ['contact-contracts', contactId] });
+                            queryClient.invalidateQueries({ queryKey: ['contracts'] });
+                            toast({ title: 'Contrato criado com os serviços selecionados' });
+                          } catch (error: any) {
+                            toast({ title: 'Erro ao criar contrato', description: error.message, variant: 'destructive' });
+                          } finally {
+                            setIsCreatingContract(false);
+                          }
+                        }}
+                      >
+                        {isCreatingContract ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4 mr-1" />
+                        )}
+                        Concluir
                       </Button>
                     </div>
-                  )}
+                  </div>
+
+                  {/* Services list */}
+                  <div className="p-3 space-y-3">
+                    {ungroupedLeads.map(lead => renderLeadItem(lead, { 
+                      showDelete: true,
+                      editable: true,
+                    }))}
+                  </div>
                 </div>
               )}
 
