@@ -388,7 +388,7 @@ export function ContractGroupsSection({
   // Draft contracts that can receive more services
   const draftContracts = contractGroups.filter(g => g.contract?.status === 'EM_ELABORACAO');
 
-  const renderPaymentRow = (payment: any, servicePayments: any[]) => (
+  const renderPaymentRow = (payment: any, servicePayments: any[], editable: boolean = true) => (
     <div key={payment.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-background">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
@@ -415,7 +415,7 @@ export function ContractGroupsSection({
           status={payment.status || 'PENDENTE'}
           label={PAYMENT_STATUS_LABELS[payment.status as keyof typeof PAYMENT_STATUS_LABELS] || payment.status}
         />
-        {payment.status === 'PENDENTE' && (
+        {editable && payment.status === 'PENDENTE' && (
           <Button
             size="sm"
             variant="ghost"
