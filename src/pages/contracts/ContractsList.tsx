@@ -439,7 +439,7 @@ export default function ContractsList() {
           </div>
 
           <DataTable
-            columns={columns}
+            columns={getColumnsForTab('approved')}
             data={contracts.filter(c => 
               (c.status === 'APROVADO' || c.status === 'ASSINADO') &&
               (c.opportunities?.leads?.contacts?.full_name || '').toLowerCase().includes(search.toLowerCase())
