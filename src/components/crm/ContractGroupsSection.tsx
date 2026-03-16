@@ -53,6 +53,7 @@ export function ContractGroupsSection({
   const [deleteServiceLead, setDeleteServiceLead] = useState<any>(null);
   const [isDeletingService, setIsDeletingService] = useState(false);
   const [addingToContractId, setAddingToContractId] = useState<string | null>(null);
+  const [addServiceToContractId, setAddServiceToContractId] = useState<string | null>(null);
 
   // Fetch contract_leads for this contact's leads
   const leadIds = contactLeads.map(l => l.id);
@@ -638,18 +639,15 @@ export function ContractGroupsSection({
                       {group.leads.map(lead => renderLeadItem(lead, { 
                         contractId: isDraft ? contract.id : undefined 
                       }))}
-                      {isDraft && ungroupedLeads.length > 0 && (
+                      {isDraft && (
                         <Button
                           size="sm"
                           variant="ghost"
                           className="w-full border border-dashed"
                           onClick={() => {
-                            // Select all ungrouped leads by default for quick adding
-                            if (selectedLeadIds.size === 0) {
-                              toast({ title: 'Selecione os serviços abaixo e clique em "Adicionar ao Rascunho"', description: 'Marque os serviços sem contrato que deseja incluir.' });
-                            } else {
-                              handleAddToContract(contract.id);
-                            }
+                            setAddServiceToContractId(contract.id);
+                            setEditPaymentData(null);
+                            setShowPaymentAgreement(true);
                           }}
                         >
                           <Plus className="h-4 w-4 mr-1" />
@@ -738,9 +736,41 @@ export function ContractGroupsSection({
       {/* Payment Agreement Dialog */}
       <PaymentAgreementDialog
         open={showPaymentAgreement}
-        onOpenChange={(open) => {
+        onOpenChange={async (open) => {
+          if (!open) {
+            // If we were adding a service to a specific contract, link new leads
+            if (addServiceToContractId) {
+              // Wait a moment for queries to settle, then find newly created leads not yet linked
+              await new Promise(r => setTimeout(r, 500));
+              const { data: currentLinks } = await supabase
+                .from('contract_leads')
+                .select('lead_id')
+                .eq('contract_id', addServiceToContractId);
+              const linkedIds = new Set(currentLinks?.map(cl => cl.lead_id) || []);
+              
+              // Refresh leads for this contact
+              const { data: freshLeads } = await supabase
+                .from('leads')
+                .select('id')
+                .eq('contact_id', contactId)
+                .order('created_at', { ascending: false });
+              
+              const newLeads = (freshLeads || []).filter(l => !linkedIds.has(l.id));
+              if (newLeads.length > 0) {
+                // Link the most recently created lead (the one just added)
+                await supabase.from('contract_leads').upsert(
+                  [{ contract_id: addServiceToContractId, lead_id: newLeads[0].id }],
+                  { onConflict: 'contract_id,lead_id' }
+                );
+                queryClient.invalidateQueries({ queryKey: ['contract-leads', contactId] });
+                queryClient.invalidateQueries({ queryKey: ['contact-contracts', contactId] });
+                queryClient.invalidateQueries({ queryKey: ['contact-payments', contactId] });
+              }
+              setAddServiceToContractId(null);
+            }
+            setEditPaymentData(null);
+          }
           setShowPaymentAgreement(open);
-          if (!open) setEditPaymentData(null);
         }}
         contactId={contactId}
         contactName={contactName}
