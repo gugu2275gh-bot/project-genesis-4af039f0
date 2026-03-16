@@ -177,6 +177,16 @@ function buildHonorariosSection(data: ContractData): Paragraph[] {
     sections.push(para(`${formatCurrency(data.feeAmount, currency)} + IVA (${vatPercent}%)`));
   } else if (data.totalAmount) {
     sections.push(para(`${formatCurrency(data.totalAmount, currency)} (IVA incluido)`));
+  } else if (data.payments && data.payments.length > 0) {
+    const totalFromPayments = data.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    sections.push(para(`${formatCurrency(totalFromPayments, currency)}`));
+    if (data.payments.length > 1) {
+      sections.push(para(`Forma de pago: ${data.payments.length} cuotas`, { bold: true }));
+      for (const p of data.payments) {
+        const dueInfo = p.due_date ? ` — Vencimiento: ${p.due_date}` : '';
+        sections.push(bullet(`Cuota ${p.installment_number || '-'}: ${formatCurrency(p.amount, currency)}${dueInfo}`));
+      }
+    }
   } else {
     sections.push(para('[Detallar honorarios y forma de pago]'));
   }
