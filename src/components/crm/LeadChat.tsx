@@ -209,6 +209,10 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
         content: msg.mensagem_cliente,
         timestamp: msg.created_at,
         origem: msg.origem,
+        media_type: msg.media_type,
+        media_url: msg.media_url,
+        media_filename: msg.media_filename,
+        media_mimetype: msg.media_mimetype,
       });
     }
     
@@ -220,6 +224,10 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
         content: msg.mensagem_IA,
         timestamp: msg.created_at,
         origem: msg.origem,
+        media_type: null,
+        media_url: null,
+        media_filename: null,
+        media_mimetype: null,
       });
     }
     
