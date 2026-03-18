@@ -576,12 +576,19 @@ serve(async (req) => {
       origin_bot: false,
     })
 
+    // Build display text for media messages
+    const displayBody = message.body || (isMediaMessage ? `[${mediaType === 'ptt' ? 'audio' : mediaType}]` : '')
+
     // Store in mensagens_cliente
     await supabase.from('mensagens_cliente').insert({
       id_lead: lead.id,
       phone_id: parseInt(phoneNumber),
-      mensagem_cliente: message.body,
+      mensagem_cliente: displayBody,
       origem: 'WHATSAPP',
+      media_type: mediaType,
+      media_url: storedMediaUrl,
+      media_filename: mediaFilename,
+      media_mimetype: mediaMimetype,
     })
 
     // ========== AI AGENT SECTION ==========
