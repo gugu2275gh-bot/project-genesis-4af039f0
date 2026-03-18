@@ -461,13 +461,14 @@ serve(async (req) => {
     })
 
     // ========== AI AGENT SECTION ==========
-    // Check if WhatsApp bot is enabled and OpenAI key is available
+    // Check if WhatsApp bot is enabled and Gemini key is available
     const { data: botConfigs } = await supabase
       .from('system_config')
       .select('key, value')
       .in('key', [
         'whatsapp_bot_enabled',
         'whatsapp_bot_system_prompt',
+        'gemini_api_key',
         'uazapi_url',
         'uazapi_token',
       ])
@@ -478,9 +479,9 @@ serve(async (req) => {
     })
 
     const botEnabled = configMap['whatsapp_bot_enabled'] === 'true'
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
+    const geminiApiKey = configMap['gemini_api_key']
 
-    if (botEnabled && openaiApiKey) {
+    if (botEnabled && geminiApiKey) {
       console.log('AI agent is enabled, generating response...')
 
       try {
