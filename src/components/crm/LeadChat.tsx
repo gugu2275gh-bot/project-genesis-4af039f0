@@ -147,10 +147,17 @@ function parseWhatsAppFlowMessage(content: string) {
 }
 
 export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
-  const { messages, isLoading, sendMessage } = useLeadMessages(leadId, contactPhone, contactId);
+  const { messages, isLoading, sendMessage, resumeAI } = useLeadMessages(leadId, contactPhone, contactId);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+
+  // Detect if AI is paused (last outgoing message is from SISTEMA)
+  const isAIPaused = useMemo(() => {
+    const outgoing = messages.filter(m => m.mensagem_IA);
+    if (outgoing.length === 0) return false;
+    return outgoing[outgoing.length - 1].origem === 'SISTEMA';
+  }, [messages]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
