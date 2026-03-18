@@ -11,8 +11,9 @@ interface SLAConfig {
   value: string;
 }
 
-// N8N Webhook URL for WhatsApp
-const WHATSAPP_WEBHOOK_URL = 'https://webhook.robertobarros.ai/webhook/enviamsgccse'
+// UAZAPI credentials (loaded from system_config at runtime)
+let uazapiUrl: string | null = null
+let uazapiToken: string | null = null
 
 // Automation types available for filtering
 type AutomationType = 
