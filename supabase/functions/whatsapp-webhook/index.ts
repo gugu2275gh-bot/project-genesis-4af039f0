@@ -168,16 +168,61 @@ async function getConversationHistory(
   return history
 }
 
+/** Retrieve relevant knowledge base content for the AI context */
+async function getKnowledgeBaseContext(
+  supabase: ReturnType<typeof createClient>,
+  userMessage: string
+): Promise<string> {
+  // Fetch all active knowledge base entries
+  const { data: kbEntries } = await supabase
+    .from('knowledge_base')
+    .select('content, file_name')
+    .eq('is_active', true)
+    .order('file_name')
+    .order('chunk_index')
+
+  if (!kbEntries?.length) return ''
+
+  // Simple keyword matching: find chunks that contain words from the user message
+  const keywords = userMessage.toLowerCase().split(/\s+/).filter(w => w.length > 3)
+  
+  const scoredChunks = kbEntries.map(entry => {
+    const contentLower = entry.content.toLowerCase()
+    const score = keywords.reduce((acc, kw) => acc + (contentLower.includes(kw) ? 1 : 0), 0)
+    return { ...entry, score }
+  })
+
+  // Get top relevant chunks (max ~4000 chars to not bloat context)
+  const relevant = scoredChunks
+    .filter(c => c.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+
+  if (relevant.length === 0) {
+    // If no keyword match, include first chunks as general context
+    const generalContext = kbEntries.slice(0, 3).map(e => e.content).join('\n\n')
+    return generalContext.substring(0, 3000)
+  }
+
+  return relevant.map(c => c.content).join('\n\n').substring(0, 4000)
+}
+
 /** Call OpenAI to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
   currentMessage: string,
   contactName: string,
   systemPrompt: string,
-  openaiApiKey: string
+  openaiApiKey: string,
+  knowledgeContext: string
 ): Promise<string> {
+  let fullSystemPrompt = systemPrompt
+  if (knowledgeContext) {
+    fullSystemPrompt += `\n\n--- BASE DE CONHECIMENTO ---\nUse as informações abaixo como referência para responder perguntas. Priorize estas informações quando relevantes:\n\n${knowledgeContext}\n--- FIM DA BASE DE CONHECIMENTO ---`
+  }
+
   const messages = [
-    { role: 'system', content: systemPrompt },
+    { role: 'system', content: fullSystemPrompt },
     ...conversationHistory,
     { role: 'user', content: currentMessage },
   ]
