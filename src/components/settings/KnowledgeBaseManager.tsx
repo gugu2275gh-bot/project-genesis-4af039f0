@@ -34,7 +34,7 @@ export default function KnowledgeBaseManager() {
       const { data, error } = await (supabase as any)
         .from('knowledge_base')
         .select('file_name, file_path, content, chunk_index, created_at, is_active')
-        .order('file_name')
+        .order('created_at', { ascending: false })
         .order('chunk_index');
 
       if (error) throw error;
