@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Settings, Save, Mail, MessageSquare, Globe } from 'lucide-react';
+import KnowledgeBaseManager from '@/components/settings/KnowledgeBaseManager';
 
 interface SystemConfig {
   key: string;
@@ -338,6 +339,9 @@ export default function SystemSettings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Knowledge Base */}
+      <KnowledgeBaseManager />
 
       {/* Integrations */}
       <Card>
