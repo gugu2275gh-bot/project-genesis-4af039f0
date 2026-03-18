@@ -140,6 +140,10 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
         mensagem_cliente: null,
         origem: 'SISTEMA',
         phone_id: null,
+        media_type: null,
+        media_url: null,
+        media_filename: null,
+        media_mimetype: null,
       };
       
       queryClient.setQueryData<LeadMessage[]>(cacheKey, (old = []) => [
