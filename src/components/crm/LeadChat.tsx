@@ -250,10 +250,40 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
           <div className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5 text-green-600" />
             <CardTitle className="text-lg">Conversa WhatsApp</CardTitle>
+            {isAIPaused ? (
+              <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-50 dark:bg-orange-900/20 gap-1">
+                <BotOff className="h-3 w-3" />
+                IA Pausada
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50 dark:bg-green-900/20 gap-1">
+                <Bot className="h-3 w-3" />
+                IA Ativa
+              </Badge>
+            )}
           </div>
-          <Button variant="ghost" size="icon" onClick={handleRefresh}>
-            <RefreshCw className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {isAIPaused && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => resumeAI.mutate(leadId)}
+                    disabled={resumeAI.isPending}
+                    className="text-green-600 border-green-300 hover:bg-green-50 gap-1"
+                  >
+                    <Bot className="h-4 w-4" />
+                    Retomar IA
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Retomar respostas automáticas da IA</TooltipContent>
+              </Tooltip>
+            )}
+            <Button variant="ghost" size="icon" onClick={handleRefresh}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       
