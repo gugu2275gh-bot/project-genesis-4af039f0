@@ -45,9 +45,25 @@ interface WebhookPayload {
     type?: string;
   }>;
   phone?: string;
-  message?: string;
+  message?: string | {
+    text?: string;
+    content?: string;
+    messageid?: string;
+    type?: string;
+    sender?: string;
+    senderName?: string;
+    messageTimestamp?: number;
+    fromMe?: boolean;
+  };
   name?: string;
   source?: string;
+  // UAZAPI format
+  chat?: {
+    phone?: string;
+    name?: string;
+    wa_chatid?: string;
+  };
+  EventType?: string;
 }
 
 /** Round-robin: pick the ATENDENTE_WHATSAPP user with the fewest recent lead assignments */
