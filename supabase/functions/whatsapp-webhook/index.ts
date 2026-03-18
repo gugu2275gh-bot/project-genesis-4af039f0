@@ -389,12 +389,58 @@ serve(async (req) => {
 
     const message = parseMessage(payload)
 
-    if (!message || !message.from || !message.body) {
+    const isMediaMessage = message.mediaUrl && ['image', 'document', 'audio', 'video', 'ptt', 'sticker'].includes(message.type || '')
+
+    if (!message || !message.from || (!message.body && !isMediaMessage)) {
       console.log('No valid message found in payload')
       return new Response(
         JSON.stringify({ success: true, message: 'No message to process' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
+    }
+
+    // Download media if present and store in Supabase Storage
+    let storedMediaUrl: string | null = null
+    let mediaType: string | null = null
+    let mediaFilename: string | null = null
+    let mediaMimetype: string | null = null
+
+    if (isMediaMessage && message.mediaUrl) {
+      mediaType = message.type || null
+      mediaMimetype = message.mimetype || null
+      mediaFilename = message.filename || null
+
+      try {
+        console.log('Downloading media:', message.mediaUrl)
+        const mediaResponse = await fetch(message.mediaUrl)
+        if (mediaResponse.ok) {
+          const mediaBuffer = await mediaResponse.arrayBuffer()
+          const ext = getFileExtension(message.mimetype, message.filename, message.type)
+          const filePath = `${message.from}/${Date.now()}.${ext}`
+
+          const { error: uploadError } = await supabase.storage
+            .from('whatsapp-media')
+            .upload(filePath, mediaBuffer, {
+              contentType: message.mimetype || 'application/octet-stream',
+              upsert: false,
+            })
+
+          if (uploadError) {
+            console.error('Storage upload error:', uploadError)
+          } else {
+            const { data: publicUrlData } = supabase.storage
+              .from('whatsapp-media')
+              .getPublicUrl(filePath)
+            storedMediaUrl = publicUrlData.publicUrl
+            console.log('Media stored at:', storedMediaUrl)
+          }
+        } else {
+          console.error('Failed to download media:', mediaResponse.status)
+        }
+      } catch (mediaErr) {
+        console.error('Media download error:', mediaErr instanceof Error ? mediaErr.message : mediaErr)
+      }
+    }
     }
 
     const phoneNumber = message.from.replace(/\D/g, '')
