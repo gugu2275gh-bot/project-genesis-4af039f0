@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, MessageCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -209,6 +209,10 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
         content: msg.mensagem_cliente,
         timestamp: msg.created_at,
         origem: msg.origem,
+        media_type: msg.media_type,
+        media_url: msg.media_url,
+        media_filename: msg.media_filename,
+        media_mimetype: msg.media_mimetype,
       });
     }
     
@@ -220,6 +224,10 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
         content: msg.mensagem_IA,
         timestamp: msg.created_at,
         origem: msg.origem,
+        media_type: null,
+        media_url: null,
+        media_filename: null,
+        media_mimetype: null,
       });
     }
     
@@ -277,7 +285,42 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                     )}>
                       {getSenderLabel(msg.type, msg.origem)}
                     </p>
-                    {(() => {
+                    {/* Media content */}
+                    {msg.media_url && (
+                      <div className="mb-1.5">
+                        {msg.media_type === 'image' || msg.media_type === 'sticker' ? (
+                          <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={msg.media_url}
+                              alt="Imagem"
+                              className="max-w-[240px] rounded-md cursor-pointer hover:opacity-90 transition"
+                              loading="lazy"
+                            />
+                          </a>
+                        ) : msg.media_type === 'video' ? (
+                          <video
+                            src={msg.media_url}
+                            controls
+                            className="max-w-[240px] rounded-md"
+                          />
+                        ) : (msg.media_type === 'audio' || msg.media_type === 'ptt') ? (
+                          <audio src={msg.media_url} controls className="max-w-[240px]" />
+                        ) : msg.media_type === 'document' ? (
+                          <a
+                            href={msg.media_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 bg-background/50 rounded-md p-2 hover:bg-background/80 transition"
+                          >
+                            <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                            <span className="text-sm truncate">{msg.media_filename || 'Documento'}</span>
+                            <Download className="h-4 w-4 text-muted-foreground flex-shrink-0 ml-auto" />
+                          </a>
+                        ) : null}
+                      </div>
+                    )}
+                    {/* Text content */}
+                    {msg.content && !(msg.media_url && msg.content.match(/^\[(image|audio|video|document|sticker|ptt)\]$/)) && (() => {
                       const flowData = parseWhatsAppFlowMessage(msg.content);
                       if (flowData) {
                         return (

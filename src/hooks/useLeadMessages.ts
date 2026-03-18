@@ -23,6 +23,10 @@ export interface LeadMessage {
   origem: string | null;
   mensagem_cliente: string | null;
   mensagem_IA: string | null;
+  media_type: string | null;
+  media_url: string | null;
+  media_filename: string | null;
+  media_mimetype: string | null;
 }
 
 export function useLeadMessages(leadId: string | undefined, contactPhone: string | number | null = null, contactId?: string) {
@@ -136,6 +140,10 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
         mensagem_cliente: null,
         origem: 'SISTEMA',
         phone_id: null,
+        media_type: null,
+        media_url: null,
+        media_filename: null,
+        media_mimetype: null,
       };
       
       queryClient.setQueryData<LeadMessage[]>(cacheKey, (old = []) => [

@@ -13,6 +13,10 @@ interface WhatsAppMessage {
   messageId?: string;
   type?: string;
   name?: string;
+  mediaUrl?: string;
+  mimetype?: string;
+  filename?: string;
+  caption?: string;
 }
 
 interface WebhookPayload {
@@ -54,6 +58,11 @@ interface WebhookPayload {
     senderName?: string;
     messageTimestamp?: number;
     fromMe?: boolean;
+    mediaUrl?: string;
+    mimetype?: string;
+    filename?: string;
+    caption?: string;
+    base64?: string;
   };
   name?: string;
   source?: string;
@@ -123,6 +132,31 @@ async function getNextAttendant(supabase: ReturnType<typeof createClient>): Prom
   return selectedUserId
 }
 
+/** Get file extension from mimetype/filename/type */
+function getFileExtension(mimetype?: string, filename?: string, type?: string): string {
+  if (filename) {
+    const ext = filename.split('.').pop()
+    if (ext) return ext
+  }
+  if (mimetype) {
+    const map: Record<string, string> = {
+      'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+      'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'mp4', 'audio/opus': 'ogg',
+      'video/mp4': 'mp4', 'application/pdf': 'pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    }
+    if (map[mimetype]) return map[mimetype]
+    const sub = mimetype.split('/')[1]
+    if (sub) return sub.split(';')[0]
+  }
+  if (type === 'audio' || type === 'ptt') return 'ogg'
+  if (type === 'image') return 'jpg'
+  if (type === 'video') return 'mp4'
+  if (type === 'document') return 'pdf'
+  return 'bin'
+}
+
 function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
   // Meta/Cloud API format
   if (payload.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
@@ -147,7 +181,8 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
     }
     const phone = msg.sender?.replace(/[@s.whatsapp.net]/g, '').replace(/\D/g, '') ||
                   payload.chat.phone?.replace(/\D/g, '') || ''
-    const body = msg.text || msg.content || ''
+    const body = msg.text || msg.content || msg.caption || ''
+    const mediaType = ['image', 'document', 'audio', 'video', 'sticker', 'ptt'].includes(msg.type || '') ? msg.type : undefined
     return {
       from: phone,
       body,
@@ -155,6 +190,10 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       messageId: msg.messageid,
       type: msg.type,
       name: msg.senderName || payload.chat.name,
+      mediaUrl: msg.mediaUrl,
+      mimetype: msg.mimetype,
+      filename: msg.filename,
+      caption: msg.caption,
     }
   }
   // Array messages format
@@ -375,12 +414,57 @@ serve(async (req) => {
 
     const message = parseMessage(payload)
 
-    if (!message || !message.from || !message.body) {
+    const isMediaMessage = message?.mediaUrl && ['image', 'document', 'audio', 'video', 'ptt', 'sticker'].includes(message?.type || '')
+
+    if (!message || !message.from || (!message.body && !isMediaMessage)) {
       console.log('No valid message found in payload')
       return new Response(
         JSON.stringify({ success: true, message: 'No message to process' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
+    }
+
+    // Download media if present and store in Supabase Storage
+    let storedMediaUrl: string | null = null
+    let mediaType: string | null = null
+    let mediaFilename: string | null = null
+    let mediaMimetype: string | null = null
+
+    if (isMediaMessage && message.mediaUrl) {
+      mediaType = message.type || null
+      mediaMimetype = message.mimetype || null
+      mediaFilename = message.filename || null
+
+      try {
+        console.log('Downloading media:', message.mediaUrl)
+        const mediaResponse = await fetch(message.mediaUrl)
+        if (mediaResponse.ok) {
+          const mediaBuffer = await mediaResponse.arrayBuffer()
+          const ext = getFileExtension(message.mimetype, message.filename, message.type)
+          const filePath = `${message.from}/${Date.now()}.${ext}`
+
+          const { error: uploadError } = await supabase.storage
+            .from('whatsapp-media')
+            .upload(filePath, mediaBuffer, {
+              contentType: message.mimetype || 'application/octet-stream',
+              upsert: false,
+            })
+
+          if (uploadError) {
+            console.error('Storage upload error:', uploadError)
+          } else {
+            const { data: publicUrlData } = supabase.storage
+              .from('whatsapp-media')
+              .getPublicUrl(filePath)
+            storedMediaUrl = publicUrlData.publicUrl
+            console.log('Media stored at:', storedMediaUrl)
+          }
+        } else {
+          console.error('Failed to download media:', mediaResponse.status)
+        }
+      } catch (mediaErr) {
+        console.error('Media download error:', mediaErr instanceof Error ? mediaErr.message : mediaErr)
+      }
     }
 
     const phoneNumber = message.from.replace(/\D/g, '')
@@ -487,16 +571,23 @@ serve(async (req) => {
       contact_id: contact.id,
       channel: 'WHATSAPP',
       direction: 'INBOUND',
-      content: message.body,
+      content: message.body || (isMediaMessage ? `[${mediaType === 'ptt' ? 'audio' : mediaType}]` : ''),
       origin_bot: false,
     })
+
+    // Build display text for media messages
+    const displayBody = message.body || (isMediaMessage ? `[${mediaType === 'ptt' ? 'audio' : mediaType}]` : '')
 
     // Store in mensagens_cliente
     await supabase.from('mensagens_cliente').insert({
       id_lead: lead.id,
       phone_id: parseInt(phoneNumber),
-      mensagem_cliente: message.body,
+      mensagem_cliente: displayBody,
       origem: 'WHATSAPP',
+      media_type: mediaType,
+      media_url: storedMediaUrl,
+      media_filename: mediaFilename,
+      media_mimetype: mediaMimetype,
     })
 
     // ========== AI AGENT SECTION ==========
