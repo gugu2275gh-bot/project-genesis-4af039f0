@@ -1337,6 +1337,10 @@ export type Database = {
           created_at: string
           id: number
           id_lead: string | null
+          media_filename: string | null
+          media_mimetype: string | null
+          media_type: string | null
+          media_url: string | null
           mensagem_cliente: string | null
           mensagem_IA: string | null
           origem: string | null
@@ -1346,6 +1350,10 @@ export type Database = {
           created_at?: string
           id?: number
           id_lead?: string | null
+          media_filename?: string | null
+          media_mimetype?: string | null
+          media_type?: string | null
+          media_url?: string | null
           mensagem_cliente?: string | null
           mensagem_IA?: string | null
           origem?: string | null
@@ -1355,6 +1363,10 @@ export type Database = {
           created_at?: string
           id?: number
           id_lead?: string | null
+          media_filename?: string | null
+          media_mimetype?: string | null
+          media_type?: string | null
+          media_url?: string | null
           mensagem_cliente?: string | null
           mensagem_IA?: string | null
           origem?: string | null
