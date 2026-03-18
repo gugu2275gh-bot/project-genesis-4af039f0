@@ -13,6 +13,10 @@ interface WhatsAppMessage {
   messageId?: string;
   type?: string;
   name?: string;
+  mediaUrl?: string;
+  mimetype?: string;
+  filename?: string;
+  caption?: string;
 }
 
 interface WebhookPayload {
