@@ -483,8 +483,13 @@ Suas diretrizes:
 
         const systemPrompt = configMap['whatsapp_bot_system_prompt'] || defaultSystemPrompt
 
-        // Get conversation history for context
-        const history = await getConversationHistory(supabase, lead.id)
+        // Get conversation history and knowledge base context
+        const [history, knowledgeContext] = await Promise.all([
+          getConversationHistory(supabase, lead.id),
+          getKnowledgeBaseContext(supabase, message.body),
+        ])
+
+        console.log(`Knowledge base context: ${knowledgeContext.length} chars`)
 
         // Generate AI response
         const aiResponse = await generateAIResponse(
@@ -492,7 +497,8 @@ Suas diretrizes:
           message.body,
           contact.full_name,
           systemPrompt.replace('{nome}', contact.full_name),
-          openaiApiKey
+          openaiApiKey,
+          knowledgeContext
         )
 
         if (aiResponse) {
