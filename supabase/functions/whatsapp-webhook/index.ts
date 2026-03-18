@@ -591,6 +591,22 @@ serve(async (req) => {
     })
 
     // ========== AI AGENT SECTION ==========
+    // Check if a human agent has taken over this lead (last outgoing message is from SISTEMA)
+    let aiPausedByHuman = false
+    const { data: lastOutgoing } = await supabase
+      .from('mensagens_cliente')
+      .select('origem')
+      .eq('id_lead', lead.id)
+      .not('mensagem_IA', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (lastOutgoing?.origem === 'SISTEMA') {
+      aiPausedByHuman = true
+      console.log('AI agent paused: human agent (SISTEMA) is handling this lead')
+    }
+
     // Check if WhatsApp bot is enabled and Gemini key is available
     const { data: botConfigs } = await supabase
       .from('system_config')
