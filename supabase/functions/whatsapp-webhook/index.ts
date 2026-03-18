@@ -572,7 +572,7 @@ serve(async (req) => {
       contact_id: contact.id,
       channel: 'WHATSAPP',
       direction: 'INBOUND',
-      content: message.body,
+      content: message.body || (isMediaMessage ? `[${mediaType === 'ptt' ? 'audio' : mediaType}]` : ''),
       origin_bot: false,
     })
 
