@@ -1,14 +1,16 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLeadMessages } from '@/hooks/useLeadMessages';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download } from 'lucide-react';
+import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface LeadChatProps {
   leadId: string;
@@ -145,10 +147,17 @@ function parseWhatsAppFlowMessage(content: string) {
 }
 
 export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
-  const { messages, isLoading, sendMessage } = useLeadMessages(leadId, contactPhone, contactId);
+  const { messages, isLoading, sendMessage, resumeAI } = useLeadMessages(leadId, contactPhone, contactId);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+
+  // Detect if AI is paused (last outgoing message is from SISTEMA)
+  const isAIPaused = useMemo(() => {
+    const outgoing = messages.filter(m => m.mensagem_IA);
+    if (outgoing.length === 0) return false;
+    return outgoing[outgoing.length - 1].origem === 'SISTEMA';
+  }, [messages]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -241,10 +250,40 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
           <div className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5 text-green-600" />
             <CardTitle className="text-lg">Conversa WhatsApp</CardTitle>
+            {isAIPaused ? (
+              <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-50 dark:bg-orange-900/20 gap-1">
+                <BotOff className="h-3 w-3" />
+                IA Pausada
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50 dark:bg-green-900/20 gap-1">
+                <Bot className="h-3 w-3" />
+                IA Ativa
+              </Badge>
+            )}
           </div>
-          <Button variant="ghost" size="icon" onClick={handleRefresh}>
-            <RefreshCw className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {isAIPaused && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => resumeAI.mutate(leadId)}
+                    disabled={resumeAI.isPending}
+                    className="text-green-600 border-green-300 hover:bg-green-50 gap-1"
+                  >
+                    <Bot className="h-4 w-4" />
+                    Retomar IA
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Retomar respostas automáticas da IA</TooltipContent>
+              </Tooltip>
+            )}
+            <Button variant="ghost" size="icon" onClick={handleRefresh}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       

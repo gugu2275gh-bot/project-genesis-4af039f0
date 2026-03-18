@@ -591,6 +591,22 @@ serve(async (req) => {
     })
 
     // ========== AI AGENT SECTION ==========
+    // Check if a human agent has taken over this lead (last outgoing message is from SISTEMA)
+    let aiPausedByHuman = false
+    const { data: lastOutgoing } = await supabase
+      .from('mensagens_cliente')
+      .select('origem')
+      .eq('id_lead', lead.id)
+      .not('mensagem_IA', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (lastOutgoing?.origem === 'SISTEMA') {
+      aiPausedByHuman = true
+      console.log('AI agent paused: human agent (SISTEMA) is handling this lead')
+    }
+
     // Check if WhatsApp bot is enabled and Gemini key is available
     const { data: botConfigs } = await supabase
       .from('system_config')
@@ -611,7 +627,7 @@ serve(async (req) => {
     const botEnabled = configMap['whatsapp_bot_enabled'] === 'true'
     const geminiApiKey = configMap['gemini_api_key']
 
-    if (botEnabled && geminiApiKey) {
+    if (botEnabled && geminiApiKey && !aiPausedByHuman) {
       console.log('AI agent is enabled, generating response...')
 
       try {
@@ -684,7 +700,7 @@ Suas diretrizes:
         // AI errors don't block the webhook processing
       }
     } else {
-      console.log(`AI agent skipped: botEnabled=${botEnabled}, hasGeminiKey=${!!geminiApiKey}`)
+      console.log(`AI agent skipped: botEnabled=${botEnabled}, hasGeminiKey=${!!geminiApiKey}, pausedByHuman=${aiPausedByHuman}`)
     }
 
     // Update webhook log as processed

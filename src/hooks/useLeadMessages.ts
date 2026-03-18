@@ -168,6 +168,27 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
     },
   });
 
+  const resumeAI = useMutation({
+    mutationFn: async (targetLeadId: string) => {
+      // Insert a marker message with origem='IA' to signal the AI is resumed
+      const { error } = await supabase
+        .from('mensagens_cliente')
+        .insert({
+          id_lead: targetLeadId,
+          mensagem_IA: '🤖 Agente IA retomado pelo atendente.',
+          origem: 'IA',
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Agente IA retomado');
+      queryClient.invalidateQueries({ queryKey: cacheKey });
+    },
+    onError: (err: Error) => {
+      toast.error('Erro ao retomar IA: ' + err.message);
+    },
+  });
+
   // Realtime subscription for new messages (subscribe to all leads of contact)
   useEffect(() => {
     if (effectiveLeadIds.length === 0) return;
@@ -199,5 +220,6 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
     messages,
     isLoading,
     sendMessage,
+    resumeAI,
   };
 }
