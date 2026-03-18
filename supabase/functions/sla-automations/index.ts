@@ -11,9 +11,9 @@ interface SLAConfig {
   value: string;
 }
 
-// UAZAPI credentials (loaded from system_config at runtime)
-let uazapiUrl: string | null = null
-let uazapiToken: string | null = null
+// WhatsApp API credentials (loaded from system_config at runtime)
+let whatsappApiUrl: string | null = null
+let whatsappApiToken: string | null = null
 
 // Automation types available for filtering
 type AutomationType = 
