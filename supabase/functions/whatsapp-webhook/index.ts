@@ -218,7 +218,11 @@ async function generateAIResponse(
 ): Promise<string> {
   let fullSystemPrompt = systemPrompt
   if (knowledgeContext) {
-    fullSystemPrompt += `\n\n--- BASE DE CONHECIMENTO ---\nUse as informações abaixo como referência para responder perguntas. Priorize estas informações quando relevantes:\n\n${knowledgeContext}\n--- FIM DA BASE DE CONHECIMENTO ---`
+    fullSystemPrompt += `\n\n--- BASE DE CONHECIMENTO ---\nAs informações abaixo são sua ÚNICA fonte de verdade. Responda EXCLUSIVAMENTE com base neste conteúdo.
+Se a pergunta do cliente NÃO puder ser respondida com as informações abaixo, diga educadamente que não possui essa informação no momento e sugira que entre em contato diretamente com a equipe da CB Asesoria para mais detalhes.
+NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está documentado aqui:\n\n${knowledgeContext}\n--- FIM DA BASE DE CONHECIMENTO ---`
+  } else {
+    fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
   }
 
   const messages = [
