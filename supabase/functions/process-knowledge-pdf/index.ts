@@ -58,7 +58,11 @@ function extractTextFromPDF(pdfBytes: Uint8Array): string {
     }
   }
 
-  return extractedTexts.join(' ').replace(/\s+/g, ' ').trim()
+  return extractedTexts.join(' ')
+    .replace(/\x00/g, '')           // Remove null bytes
+    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g, '') // Remove other control chars
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 /** Split text into chunks of roughly maxChars characters at sentence boundaries */
