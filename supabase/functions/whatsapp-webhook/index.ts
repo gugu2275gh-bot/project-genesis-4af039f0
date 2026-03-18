@@ -45,9 +45,25 @@ interface WebhookPayload {
     type?: string;
   }>;
   phone?: string;
-  message?: string;
+  message?: string | {
+    text?: string;
+    content?: string;
+    messageid?: string;
+    type?: string;
+    sender?: string;
+    senderName?: string;
+    messageTimestamp?: number;
+    fromMe?: boolean;
+  };
   name?: string;
   source?: string;
+  // UAZAPI format
+  chat?: {
+    phone?: string;
+    name?: string;
+    wa_chatid?: string;
+  };
+  EventType?: string;
 }
 
 /** Round-robin: pick the ATENDENTE_WHATSAPP user with the fewest recent lead assignments */
@@ -108,6 +124,7 @@ async function getNextAttendant(supabase: ReturnType<typeof createClient>): Prom
 }
 
 function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
+  // Meta/Cloud API format
   if (payload.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
     const msg = payload.entry[0].changes[0].value.messages[0]
     const contacts = payload.entry[0].changes[0].value.contacts
@@ -120,6 +137,27 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       name: contacts?.[0]?.profile?.name,
     }
   }
+  // UAZAPI format: message is an object with text/content, chat has phone/name
+  if (payload.message && typeof payload.message === 'object' && payload.chat) {
+    const msg = payload.message
+    // Ignore messages sent by us (fromMe)
+    if (msg.fromMe) {
+      console.log('Ignoring fromMe message')
+      return null
+    }
+    const phone = msg.sender?.replace(/[@s.whatsapp.net]/g, '').replace(/\D/g, '') ||
+                  payload.chat.phone?.replace(/\D/g, '') || ''
+    const body = msg.text || msg.content || ''
+    return {
+      from: phone,
+      body,
+      timestamp: msg.messageTimestamp ? String(msg.messageTimestamp) : undefined,
+      messageId: msg.messageid,
+      type: msg.type,
+      name: msg.senderName || payload.chat.name,
+    }
+  }
+  // Array messages format
   if (payload.messages?.[0]) {
     const msg = payload.messages[0]
     return {
@@ -131,7 +169,8 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       name: payload.contacts?.[0]?.profile?.name,
     }
   }
-  if (payload.phone && payload.message) {
+  // Simple format
+  if (payload.phone && typeof payload.message === 'string') {
     return {
       from: payload.phone.replace(/\D/g, ''),
       body: payload.message,
@@ -593,7 +632,7 @@ Suas diretrizes:
         contactId: contact.id,
         leadId: lead.id,
         assignedTo: lead.assigned_to_user_id,
-        aiResponseSent: botEnabled && !!openaiApiKey,
+        aiResponseSent: botEnabled && !!geminiApiKey,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
