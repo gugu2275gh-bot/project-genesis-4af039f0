@@ -340,9 +340,6 @@ export default function SystemSettings() {
         </CardContent>
       </Card>
 
-      {/* Knowledge Base */}
-      <KnowledgeBaseManager />
-
       {/* Integrations */}
       <Card>
         <CardHeader>
@@ -371,6 +368,9 @@ export default function SystemSettings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Knowledge Base */}
+      <KnowledgeBaseManager />
     </div>
   );
 }
