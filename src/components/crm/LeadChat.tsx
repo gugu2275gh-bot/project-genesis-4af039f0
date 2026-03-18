@@ -1,14 +1,16 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLeadMessages } from '@/hooks/useLeadMessages';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download } from 'lucide-react';
+import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface LeadChatProps {
   leadId: string;
