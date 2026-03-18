@@ -77,7 +77,11 @@ export default function KnowledgeBaseManager() {
 
     setUploading(true);
     try {
-      const filePath = `pdfs/${Date.now()}_${file.name}`;
+      // Sanitize filename: remove accents, replace spaces/special chars
+      const sanitizedName = file.name
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove accents
+        .replace(/[^a-zA-Z0-9._-]/g, '_'); // replace special chars with underscore
+      const filePath = `pdfs/${Date.now()}_${sanitizedName}`;
 
       // Upload to storage
       const { error: uploadError } = await supabase.storage
