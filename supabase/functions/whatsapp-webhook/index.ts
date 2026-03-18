@@ -627,7 +627,7 @@ serve(async (req) => {
     const botEnabled = configMap['whatsapp_bot_enabled'] === 'true'
     const geminiApiKey = configMap['gemini_api_key']
 
-    if (botEnabled && geminiApiKey) {
+    if (botEnabled && geminiApiKey && !aiPausedByHuman) {
       console.log('AI agent is enabled, generating response...')
 
       try {
