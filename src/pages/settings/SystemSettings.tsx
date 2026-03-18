@@ -368,6 +368,9 @@ export default function SystemSettings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Knowledge Base */}
+      <KnowledgeBaseManager />
     </div>
   );
 }
