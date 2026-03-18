@@ -132,6 +132,31 @@ async function getNextAttendant(supabase: ReturnType<typeof createClient>): Prom
   return selectedUserId
 }
 
+/** Get file extension from mimetype/filename/type */
+function getFileExtension(mimetype?: string, filename?: string, type?: string): string {
+  if (filename) {
+    const ext = filename.split('.').pop()
+    if (ext) return ext
+  }
+  if (mimetype) {
+    const map: Record<string, string> = {
+      'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+      'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'mp4', 'audio/opus': 'ogg',
+      'video/mp4': 'mp4', 'application/pdf': 'pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    }
+    if (map[mimetype]) return map[mimetype]
+    const sub = mimetype.split('/')[1]
+    if (sub) return sub.split(';')[0]
+  }
+  if (type === 'audio' || type === 'ptt') return 'ogg'
+  if (type === 'image') return 'jpg'
+  if (type === 'video') return 'mp4'
+  if (type === 'document') return 'pdf'
+  return 'bin'
+}
+
 function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
   // Meta/Cloud API format
   if (payload.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
