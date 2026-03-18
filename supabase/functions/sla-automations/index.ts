@@ -148,23 +148,47 @@ serve(async (req) => {
       if (t.value) templateMap[t.key] = t.value
     })
 
-    // Helper to send WhatsApp directly (no auth needed for cron jobs)
+    // Load UAZAPI credentials from system_config
+    const { data: uazapiConfigs } = await supabase
+      .from('system_config')
+      .select('key, value')
+      .in('key', ['uazapi_url', 'uazapi_token'])
+
+    uazapiConfigs?.forEach((c: { key: string; value: string }) => {
+      if (c.key === 'uazapi_url') uazapiUrl = c.value
+      if (c.key === 'uazapi_token') uazapiToken = c.value
+    })
+
+    if (!uazapiUrl || !uazapiToken) {
+      console.warn('UAZAPI not configured in system_config - WhatsApp messages will be skipped')
+    }
+
+    // Helper to send WhatsApp via UAZAPI directly
     async function sendWhatsApp(phone: string | number, message: string, leadId?: string) {
       try {
+        if (!uazapiUrl || !uazapiToken) {
+          console.warn('UAZAPI not configured, skipping WhatsApp send')
+          return false
+        }
+
         const phoneStr = String(phone).replace(/\D/g, '')
         
-        const response = await fetch(WHATSAPP_WEBHOOK_URL, {
+        const apiUrl = `${uazapiUrl.replace(/\/$/, '')}/sendText`
+        const response = await fetch(apiUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mensagem: message, numero: phoneStr })
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${uazapiToken}`,
+          },
+          body: JSON.stringify({ phone: phoneStr, message })
         })
         
         if (!response.ok) {
-          console.error('WhatsApp webhook error:', await response.text())
+          console.error('UAZAPI error:', await response.text())
           return false
         }
         
-        console.log('WhatsApp sent successfully to:', phoneStr.slice(-4))
+        console.log('WhatsApp sent via UAZAPI to:', phoneStr.slice(-4))
         
         // Register message in mensagens_cliente for CRM chat history
         if (leadId) {
