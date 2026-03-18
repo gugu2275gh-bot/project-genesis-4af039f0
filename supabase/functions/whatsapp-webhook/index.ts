@@ -632,7 +632,7 @@ Suas diretrizes:
         contactId: contact.id,
         leadId: lead.id,
         assignedTo: lead.assigned_to_user_id,
-        aiResponseSent: botEnabled && !!openaiApiKey,
+        aiResponseSent: botEnabled && !!geminiApiKey,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
