@@ -173,7 +173,7 @@ serve(async (req) => {
 
         const phoneStr = String(phone).replace(/\D/g, '')
         
-        const apiUrl = `${uazapiUrl.replace(/\/$/, '')}/sendText`
+        const apiUrl = `${uazapiUrl.replace(/\/$/, '')}/send/text`
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
