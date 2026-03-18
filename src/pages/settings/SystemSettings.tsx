@@ -95,6 +95,22 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
     category: 'messaging',
   },
   {
+    key: 'openai_api_key',
+    value: '',
+    label: 'OpenAI API Key',
+    description: 'Chave de API da OpenAI para o agente de IA (GPT-4o-mini)',
+    type: 'text',
+    category: 'integration',
+  },
+  {
+    key: 'gemini_api_key',
+    value: '',
+    label: 'Google Gemini API Key',
+    description: 'Chave de API do Google Gemini para funcionalidades de IA',
+    type: 'text',
+    category: 'integration',
+  },
+  {
     key: 'uazapi_url',
     value: '',
     label: 'WhatsApp API - URL',
