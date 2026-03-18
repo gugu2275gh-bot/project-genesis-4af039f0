@@ -11,9 +11,9 @@ interface SLAConfig {
   value: string;
 }
 
-// UAZAPI credentials (loaded from system_config at runtime)
-let uazapiUrl: string | null = null
-let uazapiToken: string | null = null
+// WhatsApp API credentials (loaded from system_config at runtime)
+let whatsappApiUrl: string | null = null
+let whatsappApiToken: string | null = null
 
 // Automation types available for filtering
 type AutomationType = 
@@ -148,47 +148,47 @@ serve(async (req) => {
       if (t.value) templateMap[t.key] = t.value
     })
 
-    // Load UAZAPI credentials from system_config
-    const { data: uazapiConfigs } = await supabase
+    // Load WhatsApp API credentials from system_config
+    const { data: waConfigs } = await supabase
       .from('system_config')
       .select('key, value')
       .in('key', ['uazapi_url', 'uazapi_token'])
 
-    uazapiConfigs?.forEach((c: { key: string; value: string }) => {
-      if (c.key === 'uazapi_url') uazapiUrl = c.value
-      if (c.key === 'uazapi_token') uazapiToken = c.value
+    waConfigs?.forEach((c: { key: string; value: string }) => {
+      if (c.key === 'uazapi_url') whatsappApiUrl = c.value
+      if (c.key === 'uazapi_token') whatsappApiToken = c.value
     })
 
-    if (!uazapiUrl || !uazapiToken) {
-      console.warn('UAZAPI not configured in system_config - WhatsApp messages will be skipped')
+    if (!whatsappApiUrl || !whatsappApiToken) {
+      console.warn('WhatsApp API not configured in system_config - messages will be skipped')
     }
 
-    // Helper to send WhatsApp via UAZAPI directly
+    // Helper to send WhatsApp via API directly
     async function sendWhatsApp(phone: string | number, message: string, leadId?: string) {
       try {
-        if (!uazapiUrl || !uazapiToken) {
-          console.warn('UAZAPI not configured, skipping WhatsApp send')
+        if (!whatsappApiUrl || !whatsappApiToken) {
+          console.warn('WhatsApp API not configured, skipping send')
           return false
         }
 
         const phoneStr = String(phone).replace(/\D/g, '')
         
-        const apiUrl = `${uazapiUrl.replace(/\/$/, '')}/sendText`
+        const apiUrl = `${whatsappApiUrl.replace(/\/$/, '')}/send/text`
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${uazapiToken}`,
+            'token': whatsappApiToken!,
           },
           body: JSON.stringify({ phone: phoneStr, message })
         })
         
         if (!response.ok) {
-          console.error('UAZAPI error:', await response.text())
+          console.error('WhatsApp API error:', await response.text())
           return false
         }
         
-        console.log('WhatsApp sent via UAZAPI to:', phoneStr.slice(-4))
+        console.log('WhatsApp sent to:', phoneStr.slice(-4))
         
         // Register message in mensagens_cliente for CRM chat history
         if (leadId) {

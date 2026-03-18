@@ -74,7 +74,7 @@ serve(async (req) => {
       )
     }
 
-    // Fetch UAZAPI config from system_config using service role
+    // Fetch WhatsApp API config from system_config using service role
     const adminSupabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -94,22 +94,22 @@ serve(async (req) => {
     const uazapiToken = configMap['uazapi_token']
 
     if (!uazapiUrl || !uazapiToken) {
-      console.error('UAZAPI not configured in system_config')
+      console.error('WhatsApp API not configured in system_config')
       return new Response(
-        JSON.stringify({ error: 'UAZAPI não configurada. Acesse Configurações > Sistema para configurar.' }),
+        JSON.stringify({ error: 'API WhatsApp não configurada. Acesse Configurações > Sistema para configurar.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Call UAZAPI directly to send text message
-    const apiUrl = `${uazapiUrl.replace(/\/$/, '')}/sendText`
-    console.log('Sending via UAZAPI:', { phone: phoneStr, apiUrl })
+    // Call WhatsApp API directly to send text message
+    const apiUrl = `${uazapiUrl.replace(/\/$/, '')}/send/text`
+    console.log('Sending via WhatsApp API:', { phone: phoneStr, apiUrl })
 
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${uazapiToken}`,
+        'token': uazapiToken,
       },
       body: JSON.stringify({
         phone: phoneStr,
@@ -118,15 +118,15 @@ serve(async (req) => {
     })
 
     const responseData = await response.text()
-    console.log('UAZAPI response:', response.status, responseData)
+    console.log('WhatsApp API response:', response.status, responseData)
 
     if (!response.ok) {
-      console.error('UAZAPI error:', responseData)
-      throw new Error(`UAZAPI retornou status ${response.status}: ${responseData}`)
+      console.error('WhatsApp API error:', responseData)
+      throw new Error(`WhatsApp API retornou status ${response.status}: ${responseData}`)
     }
 
     return new Response(
-      JSON.stringify({ success: true, uazapiResponse: responseData }),
+      JSON.stringify({ success: true, response: responseData }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {

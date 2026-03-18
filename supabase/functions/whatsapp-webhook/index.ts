@@ -16,6 +16,7 @@ interface WhatsAppMessage {
 }
 
 interface WebhookPayload {
+  // Format 1: WhatsApp Cloud API (Meta) format
   entry?: Array<{
     changes?: Array<{
       value?: {
@@ -33,6 +34,19 @@ interface WebhookPayload {
       };
     }>;
   }>;
+  // Format 2: UAZAPI direct format (contacts + messages at root)
+  contacts?: Array<{
+    profile?: { name: string };
+    wa_id?: string;
+  }>;
+  messages?: Array<{
+    from: string;
+    text?: { body: string };
+    timestamp?: string;
+    id?: string;
+    type?: string;
+  }>;
+  // Format 3: Simple format (legacy)
   phone?: string;
   message?: string;
   name?: string;
@@ -104,7 +118,7 @@ async function getNextAttendant(supabase: ReturnType<typeof createClient>): Prom
 }
 
 function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
-  // Format 1: WhatsApp Cloud API format
+  // Format 1: WhatsApp Cloud API format (Meta)
   if (payload.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
     const msg = payload.entry[0].changes[0].value.messages[0]
     const contacts = payload.entry[0].changes[0].value.contacts
@@ -117,7 +131,19 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       name: contacts?.[0]?.profile?.name,
     }
   }
-  // Format 2: Simple format (N8N/custom integrations)
+  // Format 2: UAZAPI direct format (contacts + messages at root level)
+  if (payload.messages?.[0]) {
+    const msg = payload.messages[0]
+    return {
+      from: msg.from,
+      body: msg.text?.body || '',
+      timestamp: msg.timestamp,
+      messageId: msg.id,
+      type: msg.type,
+      name: payload.contacts?.[0]?.profile?.name,
+    }
+  }
+  // Format 3: Simple format (legacy)
   if (payload.phone && payload.message) {
     return {
       from: payload.phone.replace(/\D/g, ''),
