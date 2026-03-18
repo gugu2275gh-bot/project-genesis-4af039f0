@@ -178,7 +178,7 @@ serve(async (req) => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${uazapiToken}`,
+            'token': uazapiToken!,
           },
           body: JSON.stringify({ phone: phoneStr, message })
         })
