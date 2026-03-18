@@ -156,7 +156,8 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
     }
     const phone = msg.sender?.replace(/[@s.whatsapp.net]/g, '').replace(/\D/g, '') ||
                   payload.chat.phone?.replace(/\D/g, '') || ''
-    const body = msg.text || msg.content || ''
+    const body = msg.text || msg.content || msg.caption || ''
+    const mediaType = ['image', 'document', 'audio', 'video', 'sticker', 'ptt'].includes(msg.type || '') ? msg.type : undefined
     return {
       from: phone,
       body,
@@ -164,6 +165,10 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       messageId: msg.messageid,
       type: msg.type,
       name: msg.senderName || payload.chat.name,
+      mediaUrl: msg.mediaUrl,
+      mimetype: msg.mimetype,
+      filename: msg.filename,
+      caption: msg.caption,
     }
   }
   // Array messages format
