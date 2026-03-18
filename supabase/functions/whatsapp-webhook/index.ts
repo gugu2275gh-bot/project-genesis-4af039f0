@@ -207,13 +207,13 @@ async function getKnowledgeBaseContext(
   return relevant.map(c => c.content).join('\n\n').substring(0, 4000)
 }
 
-/** Call OpenAI to generate an AI response */
+/** Call Gemini 1.5 Flash to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
   currentMessage: string,
   contactName: string,
   systemPrompt: string,
-  openaiApiKey: string,
+  geminiApiKey: string,
   knowledgeContext: string
 ): Promise<string> {
   let fullSystemPrompt = systemPrompt
@@ -225,34 +225,47 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
   }
 
-  const messages = [
-    { role: 'system', content: fullSystemPrompt },
-    ...conversationHistory,
-    { role: 'user', content: currentMessage },
-  ]
+  // Build Gemini-compatible contents array
+  const contents: Array<{ role: string; parts: Array<{ text: string }> }> = []
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${openaiApiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages,
-      max_tokens: 500,
-      temperature: 0.7,
-    }),
+  // Add conversation history
+  for (const msg of conversationHistory) {
+    contents.push({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }],
+    })
+  }
+
+  // Add current message
+  contents.push({
+    role: 'user',
+    parts: [{ text: currentMessage }],
   })
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: fullSystemPrompt }] },
+        contents,
+        generationConfig: {
+          maxOutputTokens: 500,
+          temperature: 0.7,
+        },
+      }),
+    }
+  )
 
   if (!response.ok) {
     const errorText = await response.text()
-    console.error('OpenAI API error:', response.status, errorText)
-    throw new Error(`OpenAI API error: ${response.status}`)
+    console.error('Gemini API error:', response.status, errorText)
+    throw new Error(`Gemini API error: ${response.status}`)
   }
 
   const data = await response.json()
-  return data.choices?.[0]?.message?.content?.trim() || ''
+  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
 }
 
 /** Send WhatsApp message via API */
