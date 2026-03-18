@@ -466,7 +466,6 @@ serve(async (req) => {
         console.error('Media download error:', mediaErr instanceof Error ? mediaErr.message : mediaErr)
       }
     }
-    }
 
     const phoneNumber = message.from.replace(/\D/g, '')
     console.log('Processing message from:', phoneNumber)
