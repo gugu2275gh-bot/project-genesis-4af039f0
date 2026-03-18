@@ -1120,6 +1120,47 @@ export type Database = {
           },
         ]
       }
+      knowledge_base: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string | null
+          created_by_user_id: string | null
+          file_name: string
+          file_path: string
+          id: string
+          is_active: boolean | null
+        }
+        Insert: {
+          chunk_index?: number
+          content: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          file_name: string
+          file_path: string
+          id?: string
+          is_active?: boolean | null
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          file_name?: string
+          file_path?: string
+          id?: string
+          is_active?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_base_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_intake: {
         Row: {
           contact_id: string | null
