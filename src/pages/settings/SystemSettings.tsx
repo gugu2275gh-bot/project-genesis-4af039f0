@@ -340,6 +340,9 @@ export default function SystemSettings() {
         </CardContent>
       </Card>
 
+      {/* Knowledge Base */}
+      <KnowledgeBaseManager />
+
       {/* Integrations */}
       <Card>
         <CardHeader>
