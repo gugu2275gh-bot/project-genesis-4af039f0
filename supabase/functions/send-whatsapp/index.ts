@@ -118,11 +118,11 @@ serve(async (req) => {
     })
 
     const responseData = await response.text()
-    console.log('UAZAPI response:', response.status, responseData)
+    console.log('WhatsApp API response:', response.status, responseData)
 
     if (!response.ok) {
-      console.error('UAZAPI error:', responseData)
-      throw new Error(`UAZAPI retornou status ${response.status}: ${responseData}`)
+      console.error('WhatsApp API error:', responseData)
+      throw new Error(`WhatsApp API retornou status ${response.status}: ${responseData}`)
     }
 
     return new Response(
