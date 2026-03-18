@@ -218,7 +218,11 @@ async function generateAIResponse(
 ): Promise<string> {
   let fullSystemPrompt = systemPrompt
   if (knowledgeContext) {
-    fullSystemPrompt += `\n\n--- BASE DE CONHECIMENTO ---\nUse as informações abaixo como referência para responder perguntas. Priorize estas informações quando relevantes:\n\n${knowledgeContext}\n--- FIM DA BASE DE CONHECIMENTO ---`
+    fullSystemPrompt += `\n\n--- BASE DE CONHECIMENTO ---\nAs informações abaixo são sua ÚNICA fonte de verdade. Responda EXCLUSIVAMENTE com base neste conteúdo.
+Se a pergunta do cliente NÃO puder ser respondida com as informações abaixo, diga educadamente que não possui essa informação no momento e sugira que entre em contato diretamente com a equipe da CB Asesoria para mais detalhes.
+NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está documentado aqui:\n\n${knowledgeContext}\n--- FIM DA BASE DE CONHECIMENTO ---`
+  } else {
+    fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
   }
 
   const messages = [
@@ -473,12 +477,11 @@ serve(async (req) => {
 Suas diretrizes:
 - Seja cordial, empática e profissional
 - Responda em português do Brasil
-- Ajude com dúvidas sobre processos de imigração na Espanha (vistos, residências, nacionalidade, etc.)
-- Se não souber a resposta exata, oriente o cliente a agendar uma consulta com a equipe
-- Nunca invente informações legais ou prazos
+- Responda SOMENTE com base nas informações da base de conhecimento fornecida
+- Se a informação não estiver na base de conhecimento, diga que não possui essa informação e oriente o cliente a entrar em contato com a equipe
+- Nunca invente informações legais, prazos ou valores
 - Mantenha as respostas concisas (máximo 3-4 parágrafos) para serem lidas facilmente no WhatsApp
 - Use emojis com moderação para tornar a conversa amigável
-- Se o cliente perguntar sobre valores ou custos, informe que cada caso é analisado individualmente e sugira uma consulta
 - Nome do cliente: ${contact.full_name}`
 
         const systemPrompt = configMap['whatsapp_bot_system_prompt'] || defaultSystemPrompt
