@@ -103,13 +103,13 @@ serve(async (req) => {
 
     // Call UAZAPI directly to send text message
     const apiUrl = `${uazapiUrl.replace(/\/$/, '')}/sendText`
-    console.log('Sending via UAZAPI:', { phone: phoneStr, apiUrl })
+    console.log('Sending via WhatsApp API:', { phone: phoneStr, apiUrl })
 
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${uazapiToken}`,
+        'token': uazapiToken,
       },
       body: JSON.stringify({
         phone: phoneStr,
