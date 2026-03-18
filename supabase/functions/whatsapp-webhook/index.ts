@@ -16,7 +16,6 @@ interface WhatsAppMessage {
 }
 
 interface WebhookPayload {
-  // Format 1: WhatsApp Cloud API (Meta) format
   entry?: Array<{
     changes?: Array<{
       value?: {
@@ -34,7 +33,6 @@ interface WebhookPayload {
       };
     }>;
   }>;
-  // Format 2: UAZAPI direct format (contacts + messages at root)
   contacts?: Array<{
     profile?: { name: string };
     wa_id?: string;
@@ -46,7 +44,6 @@ interface WebhookPayload {
     id?: string;
     type?: string;
   }>;
-  // Format 3: Simple format (legacy)
   phone?: string;
   message?: string;
   name?: string;
@@ -55,7 +52,6 @@ interface WebhookPayload {
 
 /** Round-robin: pick the ATENDENTE_WHATSAPP user with the fewest recent lead assignments */
 async function getNextAttendant(supabase: ReturnType<typeof createClient>): Promise<string | null> {
-  // Get all active users with role ATENDENTE_WHATSAPP
   const { data: attendants, error: attError } = await supabase
     .from('user_roles')
     .select('user_id')
@@ -63,17 +59,14 @@ async function getNextAttendant(supabase: ReturnType<typeof createClient>): Prom
 
   if (attError || !attendants?.length) {
     console.log('No ATENDENTE_WHATSAPP users found, falling back to ATENCAO_CLIENTE')
-    // Fallback to ATENCAO_CLIENTE
     const { data: fallback } = await supabase
       .from('user_roles')
       .select('user_id')
       .eq('role', 'ATENCAO_CLIENTE')
     if (!fallback?.length) return null
-    // Use first available as fallback
     return fallback[0].user_id
   }
 
-  // Filter only active profiles
   const userIds = attendants.map(a => a.user_id)
   const { data: activeProfiles } = await supabase
     .from('profiles')
@@ -85,7 +78,6 @@ async function getNextAttendant(supabase: ReturnType<typeof createClient>): Prom
 
   const activeIds = activeProfiles.map(p => p.id)
 
-  // Count leads assigned to each attendant (created in last 30 days)
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
   const { data: leadCounts } = await supabase
     .from('leads')
@@ -93,7 +85,6 @@ async function getNextAttendant(supabase: ReturnType<typeof createClient>): Prom
     .in('assigned_to_user_id', activeIds)
     .gte('created_at', thirtyDaysAgo)
 
-  // Build count map
   const countMap: Record<string, number> = {}
   for (const id of activeIds) {
     countMap[id] = 0
@@ -104,7 +95,6 @@ async function getNextAttendant(supabase: ReturnType<typeof createClient>): Prom
     }
   }
 
-  // Pick the one with fewest assignments (round-robin by load)
   let minCount = Infinity
   let selectedUserId: string | null = null
   for (const [userId, count] of Object.entries(countMap)) {
@@ -118,7 +108,6 @@ async function getNextAttendant(supabase: ReturnType<typeof createClient>): Prom
 }
 
 function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
-  // Format 1: WhatsApp Cloud API format (Meta)
   if (payload.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
     const msg = payload.entry[0].changes[0].value.messages[0]
     const contacts = payload.entry[0].changes[0].value.contacts
@@ -131,7 +120,6 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       name: contacts?.[0]?.profile?.name,
     }
   }
-  // Format 2: UAZAPI direct format (contacts + messages at root level)
   if (payload.messages?.[0]) {
     const msg = payload.messages[0]
     return {
@@ -143,7 +131,6 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       name: payload.contacts?.[0]?.profile?.name,
     }
   }
-  // Format 3: Simple format (legacy)
   if (payload.phone && payload.message) {
     return {
       from: payload.phone.replace(/\D/g, ''),
@@ -152,6 +139,99 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
     }
   }
   return null
+}
+
+/** Build conversation history from mensagens_cliente for OpenAI context */
+async function getConversationHistory(
+  supabase: ReturnType<typeof createClient>,
+  leadId: string,
+  limit = 20
+): Promise<Array<{ role: string; content: string }>> {
+  const { data: messages } = await supabase
+    .from('mensagens_cliente')
+    .select('mensagem_cliente, mensagem_IA, origem, created_at')
+    .eq('id_lead', leadId)
+    .order('created_at', { ascending: true })
+    .limit(limit)
+
+  if (!messages?.length) return []
+
+  const history: Array<{ role: string; content: string }> = []
+  for (const msg of messages) {
+    if (msg.mensagem_cliente) {
+      history.push({ role: 'user', content: msg.mensagem_cliente })
+    }
+    if (msg.mensagem_IA) {
+      history.push({ role: 'assistant', content: msg.mensagem_IA })
+    }
+  }
+  return history
+}
+
+/** Call OpenAI to generate an AI response */
+async function generateAIResponse(
+  conversationHistory: Array<{ role: string; content: string }>,
+  currentMessage: string,
+  contactName: string,
+  systemPrompt: string,
+  openaiApiKey: string
+): Promise<string> {
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...conversationHistory,
+    { role: 'user', content: currentMessage },
+  ]
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${openaiApiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages,
+      max_tokens: 500,
+      temperature: 0.7,
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('OpenAI API error:', response.status, errorText)
+    throw new Error(`OpenAI API error: ${response.status}`)
+  }
+
+  const data = await response.json()
+  return data.choices?.[0]?.message?.content?.trim() || ''
+}
+
+/** Send WhatsApp message via API */
+async function sendWhatsAppMessage(
+  phone: string,
+  message: string,
+  uazapiUrl: string,
+  uazapiToken: string
+): Promise<void> {
+  const apiUrl = `${uazapiUrl.replace(/\/$/, '')}/send/text`
+  console.log('Sending AI response via WhatsApp API:', { phone, apiUrl })
+
+  const response = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'token': uazapiToken,
+    },
+    body: JSON.stringify({ phone, message }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error('WhatsApp API send error:', errorText)
+    throw new Error(`WhatsApp API error: ${response.status}`)
+  }
+
+  console.log('AI response sent successfully')
 }
 
 serve(async (req) => {
@@ -248,7 +328,6 @@ serve(async (req) => {
     lead = existingLead
 
     if (!lead) {
-      // Auto-assign via round-robin
       const assignedUserId = await getNextAttendant(supabase)
       console.log('Auto-assigned to user:', assignedUserId)
 
@@ -269,7 +348,6 @@ serve(async (req) => {
       }
       lead = newLead
 
-      // Create a task for the new lead
       await supabase.from('tasks').insert({
         title: `Novo lead via WhatsApp: ${contact.full_name}`,
         description: `Mensagem inicial: ${message.body.substring(0, 200)}`,
@@ -278,7 +356,6 @@ serve(async (req) => {
         ...(assignedUserId ? { assigned_to_user_id: assignedUserId } : {}),
       })
 
-      // Notify the assigned user
       if (assignedUserId) {
         await supabase.from('notifications').insert({
           user_id: assignedUserId,
@@ -288,7 +365,6 @@ serve(async (req) => {
         })
       }
     } else if (!lead.assigned_to_user_id) {
-      // Existing lead without assignment — auto-assign now
       const assignedUserId = await getNextAttendant(supabase)
       if (assignedUserId) {
         await supabase.from('leads').update({ assigned_to_user_id: assignedUserId }).eq('id', lead.id)
@@ -314,7 +390,7 @@ serve(async (req) => {
       origin_bot: false,
     })
 
-    // Store in mensagens_cliente for AI processing
+    // Store in mensagens_cliente
     await supabase.from('mensagens_cliente').insert({
       id_lead: lead.id,
       phone_id: parseInt(phoneNumber),
@@ -322,13 +398,104 @@ serve(async (req) => {
       origem: 'WHATSAPP',
     })
 
+    // ========== AI AGENT SECTION ==========
+    // Check if WhatsApp bot is enabled and OpenAI key is available
+    const { data: botConfigs } = await supabase
+      .from('system_config')
+      .select('key, value')
+      .in('key', [
+        'whatsapp_bot_enabled',
+        'whatsapp_bot_system_prompt',
+        'uazapi_url',
+        'uazapi_token',
+      ])
+
+    const configMap: Record<string, string> = {}
+    botConfigs?.forEach((c: { key: string; value: string }) => {
+      configMap[c.key] = c.value
+    })
+
+    const botEnabled = configMap['whatsapp_bot_enabled'] === 'true'
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
+
+    if (botEnabled && openaiApiKey) {
+      console.log('AI agent is enabled, generating response...')
+
+      try {
+        // Build system prompt
+        const defaultSystemPrompt = `Você é a assistente virtual da CB Asesoria, uma empresa especializada em assessoria de imigração na Espanha.
+
+Suas diretrizes:
+- Seja cordial, empática e profissional
+- Responda em português do Brasil
+- Ajude com dúvidas sobre processos de imigração na Espanha (vistos, residências, nacionalidade, etc.)
+- Se não souber a resposta exata, oriente o cliente a agendar uma consulta com a equipe
+- Nunca invente informações legais ou prazos
+- Mantenha as respostas concisas (máximo 3-4 parágrafos) para serem lidas facilmente no WhatsApp
+- Use emojis com moderação para tornar a conversa amigável
+- Se o cliente perguntar sobre valores ou custos, informe que cada caso é analisado individualmente e sugira uma consulta
+- Nome do cliente: ${contact.full_name}`
+
+        const systemPrompt = configMap['whatsapp_bot_system_prompt'] || defaultSystemPrompt
+
+        // Get conversation history for context
+        const history = await getConversationHistory(supabase, lead.id)
+
+        // Generate AI response
+        const aiResponse = await generateAIResponse(
+          history,
+          message.body,
+          contact.full_name,
+          systemPrompt.replace('{nome}', contact.full_name),
+          openaiApiKey
+        )
+
+        if (aiResponse) {
+          // Send AI response via WhatsApp
+          const uazapiUrl = configMap['uazapi_url']
+          const uazapiToken = configMap['uazapi_token']
+
+          if (uazapiUrl && uazapiToken) {
+            await sendWhatsAppMessage(phoneNumber, aiResponse, uazapiUrl, uazapiToken)
+
+            // Store AI response in mensagens_cliente
+            await supabase.from('mensagens_cliente').insert({
+              id_lead: lead.id,
+              phone_id: parseInt(phoneNumber),
+              mensagem_IA: aiResponse,
+              origem: 'IA',
+            })
+
+            // Create outbound interaction
+            await supabase.from('interactions').insert({
+              lead_id: lead.id,
+              contact_id: contact.id,
+              channel: 'WHATSAPP',
+              direction: 'OUTBOUND',
+              content: aiResponse,
+              origin_bot: true,
+            })
+
+            console.log('AI response sent and stored successfully')
+          } else {
+            console.error('WhatsApp API not configured, cannot send AI response')
+          }
+        }
+      } catch (aiError) {
+        console.error('AI agent error (non-blocking):', aiError instanceof Error ? aiError.message : aiError)
+        // AI errors don't block the webhook processing
+      }
+    } else {
+      console.log(`AI agent skipped: botEnabled=${botEnabled}, hasOpenAI=${!!openaiApiKey}`)
+    }
+
     // Update webhook log as processed
     await supabase
       .from('webhook_logs')
       .update({ processed: true })
       .eq('raw_payload', payload)
 
-    // Notify assigned user about new message (if lead already had assignment)
+    // Notify assigned user about new message
     if (lead.assigned_to_user_id) {
       await supabase.from('notifications').insert({
         user_id: lead.assigned_to_user_id,
@@ -337,7 +504,6 @@ serve(async (req) => {
         type: 'whatsapp_message',
       })
     } else {
-      // Notify all ATENCAO_CLIENTE users as fallback
       const { data: attentionUsers } = await supabase
         .from('user_roles')
         .select('user_id')
@@ -359,6 +525,7 @@ serve(async (req) => {
         contactId: contact.id,
         leadId: lead.id,
         assignedTo: lead.assigned_to_user_id,
+        aiResponseSent: botEnabled && !!openaiApiKey,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
