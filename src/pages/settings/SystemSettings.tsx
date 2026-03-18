@@ -95,6 +95,22 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
     category: 'messaging',
   },
   {
+    key: 'uazapi_url',
+    value: '',
+    label: 'UAZAPI - URL da Instância',
+    description: 'URL base da sua instância UAZAPI (ex: https://sua-instancia.uazapi.com)',
+    type: 'text',
+    category: 'integration',
+  },
+  {
+    key: 'uazapi_token',
+    value: '',
+    label: 'UAZAPI - Token de Autenticação',
+    description: 'Token/API Key da sua instância UAZAPI',
+    type: 'text',
+    category: 'integration',
+  },
+  {
     key: 'whatsapp_bot_enabled',
     value: 'false',
     label: 'Bot WhatsApp Ativado',

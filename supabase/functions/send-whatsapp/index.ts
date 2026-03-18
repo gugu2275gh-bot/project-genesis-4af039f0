@@ -3,46 +3,38 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-const WEBHOOK_URL = 'https://webhook.robertobarros.ai/webhook/enviamsgccse';
-
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    // Authentication check
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      console.error('Missing authorization header')
       return new Response(
         JSON.stringify({ error: 'Missing authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Create Supabase client with user's auth token
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    // Verify user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
-      console.error('Authentication failed:', authError?.message || 'No user found')
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Check if user has required role (ADMIN or ATENCAO_CLIENTE)
+    // Check role
     const { data: hasRole, error: roleError } = await supabase
       .rpc('has_any_role', {
         _user_id: user.id,
@@ -50,7 +42,6 @@ serve(async (req) => {
       })
 
     if (roleError || !hasRole) {
-      console.error('Role check failed:', roleError?.message || 'User lacks required role')
       return new Response(
         JSON.stringify({ error: 'Forbidden - insufficient permissions' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -59,22 +50,15 @@ serve(async (req) => {
 
     const { mensagem, numero } = await req.json()
 
-    console.log('Authenticated request from user:', user.id)
-    console.log('Received request:', { mensagem, numero: numero ? '***' : null })
-
-    // Input validation
     if (!mensagem || !numero) {
-      console.error('Missing parameters:', { hasMensagem: !!mensagem, hasNumero: !!numero })
       return new Response(
         JSON.stringify({ error: 'Parâmetros mensagem e numero são obrigatórios' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Validate phone number format (basic validation for numeric string)
     const phoneStr = String(numero).replace(/\D/g, '')
     if (phoneStr.length < 8 || phoneStr.length > 15) {
-      console.error('Invalid phone number format')
       return new Response(
         JSON.stringify({ error: 'Número de telefone inválido' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -83,54 +67,73 @@ serve(async (req) => {
 
     const rawMessage = String(mensagem ?? '')
 
-    // Normalize line breaks and remove them for webhook compatibility
-    // (Some WhatsApp/N8N providers fail to deliver messages containing actual newlines)
-    const normalizedMessage = rawMessage.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-    const messageForWebhook = normalizedMessage.replace(/\n+/g, ' ').replace(/\s{2,}/g, ' ').trim()
-
-    console.log('Message formatting:', {
-      hadNewlines: normalizedMessage.includes('\n'),
-      originalLength: rawMessage.length,
-      webhookLength: messageForWebhook.length,
-    })
-
-    // Validate message length
-    if (messageForWebhook.length > 4096) {
-      console.error('Message too long')
+    if (rawMessage.length > 4096) {
       return new Response(
         JSON.stringify({ error: 'Mensagem muito longa (máximo 4096 caracteres)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Call the N8N webhook
-    console.log('Calling webhook for authenticated user:', user.id)
-    const response = await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mensagem: messageForWebhook, numero: phoneStr })
+    // Fetch UAZAPI config from system_config using service role
+    const adminSupabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    )
+
+    const { data: configs } = await adminSupabase
+      .from('system_config')
+      .select('key, value')
+      .in('key', ['uazapi_url', 'uazapi_token'])
+
+    const configMap: Record<string, string> = {}
+    configs?.forEach((c: { key: string; value: string }) => {
+      configMap[c.key] = c.value
     })
 
-    console.log('Webhook response status:', response.status)
+    const uazapiUrl = configMap['uazapi_url']
+    const uazapiToken = configMap['uazapi_token']
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Webhook error:', errorText)
-      throw new Error(`Webhook retornou status ${response.status}`)
+    if (!uazapiUrl || !uazapiToken) {
+      console.error('UAZAPI not configured in system_config')
+      return new Response(
+        JSON.stringify({ error: 'UAZAPI não configurada. Acesse Configurações > Sistema para configurar.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
+    // Call UAZAPI directly to send text message
+    const apiUrl = `${uazapiUrl.replace(/\/$/, '')}/sendText`
+    console.log('Sending via UAZAPI:', { phone: phoneStr, apiUrl })
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${uazapiToken}`,
+      },
+      body: JSON.stringify({
+        phone: phoneStr,
+        message: rawMessage,
+      }),
+    })
+
     const responseData = await response.text()
-    console.log('Webhook response received successfully')
+    console.log('UAZAPI response:', response.status, responseData)
+
+    if (!response.ok) {
+      console.error('UAZAPI error:', responseData)
+      throw new Error(`UAZAPI retornou status ${response.status}: ${responseData}`)
+    }
 
     return new Response(
-      JSON.stringify({ success: true, webhookResponse: responseData }),
+      JSON.stringify({ success: true, uazapiResponse: responseData }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     console.error('Error in send-whatsapp function:', errorMessage)
     return new Response(
-      JSON.stringify({ error: 'Erro ao enviar mensagem' }),
+      JSON.stringify({ error: 'Erro ao enviar mensagem: ' + errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
