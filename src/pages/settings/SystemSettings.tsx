@@ -111,6 +111,14 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
     category: 'integration',
   },
   {
+    key: 'whatsapp_bot_system_prompt',
+    value: '',
+    label: 'Prompt do Agente IA (WhatsApp)',
+    description: 'Instruções personalizadas para o agente de IA. Deixe vazio para usar o prompt padrão. Use {nome} para o nome do cliente.',
+    type: 'textarea',
+    category: 'integration',
+  },
+  {
     key: 'whatsapp_bot_enabled',
     value: 'false',
     label: 'Bot WhatsApp Ativado',
