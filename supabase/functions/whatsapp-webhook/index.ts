@@ -414,7 +414,7 @@ serve(async (req) => {
 
     const message = parseMessage(payload)
 
-    const isMediaMessage = message.mediaUrl && ['image', 'document', 'audio', 'video', 'ptt', 'sticker'].includes(message.type || '')
+    const isMediaMessage = message?.mediaUrl && ['image', 'document', 'audio', 'video', 'ptt', 'sticker'].includes(message?.type || '')
 
     if (!message || !message.from || (!message.body && !isMediaMessage)) {
       console.log('No valid message found in payload')
