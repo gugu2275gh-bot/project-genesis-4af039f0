@@ -16,6 +16,7 @@ interface WhatsAppMessage {
 }
 
 interface WebhookPayload {
+  // Format 1: WhatsApp Cloud API (Meta) format
   entry?: Array<{
     changes?: Array<{
       value?: {
@@ -33,6 +34,19 @@ interface WebhookPayload {
       };
     }>;
   }>;
+  // Format 2: UAZAPI direct format (contacts + messages at root)
+  contacts?: Array<{
+    profile?: { name: string };
+    wa_id?: string;
+  }>;
+  messages?: Array<{
+    from: string;
+    text?: { body: string };
+    timestamp?: string;
+    id?: string;
+    type?: string;
+  }>;
+  // Format 3: Simple format (legacy)
   phone?: string;
   message?: string;
   name?: string;
