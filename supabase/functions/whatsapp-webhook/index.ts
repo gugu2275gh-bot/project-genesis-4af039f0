@@ -323,7 +323,7 @@ async function sendWhatsAppMessage(
       'Content-Type': 'application/json',
       'token': uazapiToken,
     },
-    body: JSON.stringify({ phone, message }),
+    body: JSON.stringify({ number: phone, text: message }),
   })
 
   if (!response.ok) {
