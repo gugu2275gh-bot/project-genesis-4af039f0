@@ -94,9 +94,9 @@ serve(async (req) => {
     const uazapiToken = configMap['uazapi_token']
 
     if (!uazapiUrl || !uazapiToken) {
-      console.error('UAZAPI not configured in system_config')
+      console.error('WhatsApp API not configured in system_config')
       return new Response(
-        JSON.stringify({ error: 'UAZAPI não configurada. Acesse Configurações > Sistema para configurar.' }),
+        JSON.stringify({ error: 'API WhatsApp não configurada. Acesse Configurações > Sistema para configurar.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
