@@ -575,7 +575,7 @@ serve(async (req) => {
 
     const message = parseMessage(payload)
 
-    const isMediaMessage = message?.mediaUrl && ['image', 'document', 'audio', 'video', 'ptt', 'sticker'].includes(message?.type || '')
+    const isMediaMessage = message?.type && ['image', 'document', 'audio', 'video', 'ptt', 'sticker'].includes(message.type)
 
     if (!message || !message.from || (!message.body && !isMediaMessage)) {
       console.log('No valid message found in payload')
@@ -591,23 +591,105 @@ serve(async (req) => {
     let mediaFilename: string | null = null
     let mediaMimetype: string | null = null
 
-    if (isMediaMessage && message.mediaUrl) {
+    if (isMediaMessage) {
       mediaType = message.type || null
       mediaMimetype = message.mimetype || null
       mediaFilename = message.filename || null
 
       try {
-        console.log('Downloading media:', message.mediaUrl)
-        const mediaResponse = await fetch(message.mediaUrl)
-        if (mediaResponse.ok) {
-          const mediaBuffer = await mediaResponse.arrayBuffer()
-          const ext = getFileExtension(message.mimetype, message.filename, message.type)
+        // First try UAZAPI /message/download endpoint (returns decrypted binary)
+        const { data: sysConfigs } = await supabase
+          .from('system_config')
+          .select('key, value')
+          .in('key', ['uazapi_url', 'uazapi_token'])
+        
+        const cfgMap: Record<string, string> = {}
+        sysConfigs?.forEach((c: { key: string; value: string }) => { cfgMap[c.key] = c.value })
+        const uazapiUrl = cfgMap['uazapi_url']
+        const uazapiToken = cfgMap['uazapi_token']
+
+        let mediaBuffer: ArrayBuffer | null = null
+        let downloadSource = 'none'
+
+        // Try UAZAPI download endpoint if we have messageId and credentials
+        if (message.messageId && uazapiUrl && uazapiToken) {
+          try {
+            const downloadUrl = `${uazapiUrl.replace(/\/$/, '')}/message/download`
+            console.log('Downloading media via UAZAPI:', { messageId: message.messageId, downloadUrl })
+            
+            const uazapiResponse = await fetch(downloadUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'token': uazapiToken,
+              },
+              body: JSON.stringify({ id: message.messageId }),
+            })
+
+            if (uazapiResponse.ok) {
+              const contentType = uazapiResponse.headers.get('content-type') || ''
+              // If response is JSON, it's an error
+              if (contentType.includes('application/json')) {
+                const errData = await uazapiResponse.json()
+                console.warn('UAZAPI download returned JSON (error):', JSON.stringify(errData))
+              } else {
+                mediaBuffer = await uazapiResponse.arrayBuffer()
+                // Validate it's not encrypted/invalid (check first bytes)
+                const firstBytes = new Uint8Array(mediaBuffer.slice(0, 4))
+                const isJpeg = firstBytes[0] === 0xFF && firstBytes[1] === 0xD8
+                const isPng = firstBytes[0] === 0x89 && firstBytes[1] === 0x50 && firstBytes[2] === 0x4E && firstBytes[3] === 0x47
+                const isOgg = firstBytes[0] === 0x4F && firstBytes[1] === 0x67 && firstBytes[2] === 0x67 && firstBytes[3] === 0x53
+                const isPdf = firstBytes[0] === 0x25 && firstBytes[1] === 0x50 && firstBytes[2] === 0x44 && firstBytes[3] === 0x46
+                const isWebp = firstBytes[0] === 0x52 && firstBytes[1] === 0x49 // RIFF
+                
+                if (isJpeg || isPng || isOgg || isPdf || isWebp || mediaBuffer.byteLength > 1000) {
+                  downloadSource = 'uazapi'
+                  // Update mimetype from response if available
+                  if (contentType && !contentType.includes('octet-stream')) {
+                    mediaMimetype = contentType.split(';')[0].trim()
+                  }
+                  console.log('Media downloaded via UAZAPI, size:', mediaBuffer.byteLength, 'mimetype:', mediaMimetype)
+                } else {
+                  console.warn('UAZAPI returned invalid/encrypted data, first bytes:', Array.from(firstBytes).map(b => b.toString(16)).join(' '))
+                  mediaBuffer = null
+                }
+              }
+            } else {
+              console.warn('UAZAPI download failed:', uazapiResponse.status)
+            }
+          } catch (uazErr) {
+            console.warn('UAZAPI download error:', uazErr instanceof Error ? uazErr.message : uazErr)
+          }
+        }
+
+        // Fallback: try direct URL download (may return encrypted data for WhatsApp CDN)
+        if (!mediaBuffer && message.mediaUrl) {
+          console.log('Fallback: downloading media directly:', message.mediaUrl)
+          const directResponse = await fetch(message.mediaUrl)
+          if (directResponse.ok) {
+            const buf = await directResponse.arrayBuffer()
+            const firstBytes = new Uint8Array(buf.slice(0, 4))
+            const isJpeg = firstBytes[0] === 0xFF && firstBytes[1] === 0xD8
+            const isPng = firstBytes[0] === 0x89 && firstBytes[1] === 0x50
+            const isOgg = firstBytes[0] === 0x4F && firstBytes[1] === 0x67
+            if (isJpeg || isPng || isOgg || buf.byteLength > 100000) {
+              mediaBuffer = buf
+              downloadSource = 'direct'
+              console.log('Media downloaded directly, size:', buf.byteLength)
+            } else {
+              console.warn('Direct download returned encrypted/invalid data')
+            }
+          }
+        }
+
+        if (mediaBuffer) {
+          const ext = getFileExtension(mediaMimetype || undefined, message.filename, message.type)
           const filePath = `${message.from}/${Date.now()}.${ext}`
 
           const { error: uploadError } = await supabase.storage
             .from('whatsapp-media')
             .upload(filePath, mediaBuffer, {
-              contentType: message.mimetype || 'application/octet-stream',
+              contentType: mediaMimetype || 'application/octet-stream',
               upsert: false,
             })
 
@@ -618,10 +700,10 @@ serve(async (req) => {
               .from('whatsapp-media')
               .getPublicUrl(filePath)
             storedMediaUrl = publicUrlData.publicUrl
-            console.log('Media stored at:', storedMediaUrl)
+            console.log('Media stored at:', storedMediaUrl, '(source:', downloadSource, ')')
           }
         } else {
-          console.error('Failed to download media:', mediaResponse.status)
+          console.warn('Could not download media from any source')
         }
       } catch (mediaErr) {
         console.error('Media download error:', mediaErr instanceof Error ? mediaErr.message : mediaErr)
