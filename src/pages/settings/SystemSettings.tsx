@@ -274,29 +274,6 @@ export default function SystemSettings() {
         </CardContent>
       </Card>
 
-      {/* Message Templates */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5" />
-            Templates de Mensagens
-          </CardTitle>
-          <CardDescription>
-            Textos padrão para comunicações automáticas
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            {messagingConfigs.map((config) => (
-              <div key={config.key} className="space-y-2">
-                <Label htmlFor={config.key}>{config.label}</Label>
-                {renderConfigInput(config)}
-                <p className="text-xs text-muted-foreground">{config.description}</p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Integrations */}
       <Card>
