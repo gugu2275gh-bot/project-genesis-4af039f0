@@ -310,6 +310,33 @@ async function getKnowledgeBaseContext(
     .substring(0, 8000)
 }
 
+/** Try to extract name and email from a client message */
+function extractNameAndEmail(text: string): { name: string | null; email: string | null } {
+  let name: string | null = null
+  let email: string | null = null
+
+  // Extract email
+  const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
+  if (emailMatch) {
+    email = emailMatch[0].toLowerCase()
+  }
+
+  // Try to extract name patterns (Portuguese)
+  const namePatterns = [
+    /(?:me chamo|meu nome [eé]|sou (?:o |a )?)\s*([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*)/i,
+    /(?:nome|name)\s*[:=]?\s*([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*)/i,
+  ]
+  for (const pattern of namePatterns) {
+    const match = text.match(pattern)
+    if (match?.[1]) {
+      name = match[1].trim()
+      break
+    }
+  }
+
+  return { name, email }
+}
+
 /** Call OpenAI Chat Completions API (GPT-5-mini) to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
@@ -642,6 +669,15 @@ serve(async (req) => {
       console.log('AI agent is enabled, generating response...')
 
       try {
+        // Check if this is the first interaction for this lead
+        const { count: messageCount } = await supabase
+          .from('mensagens_cliente')
+          .select('id', { count: 'exact', head: true })
+          .eq('id_lead', lead.id)
+          .not('id', 'eq', 0) // just to trigger count
+        
+        const isFirstInteraction = (messageCount || 0) <= 1 // 1 because we just inserted the current message
+
         // Build system prompt
         const defaultSystemPrompt = `Você é a assistente virtual da CB Asesoria, uma empresa especializada em assessoria de imigração na Espanha.
 
@@ -655,7 +691,40 @@ Suas diretrizes:
 - Use emojis com moderação para tornar a conversa amigável
 - Nome do cliente: ${contact.full_name}`
 
-        const systemPrompt = configMap['whatsapp_bot_system_prompt'] || defaultSystemPrompt
+        let systemPrompt = configMap['whatsapp_bot_system_prompt'] || defaultSystemPrompt
+
+        // First interaction: add welcome instructions
+        if (isFirstInteraction) {
+          console.log('First interaction detected, using welcome prompt')
+          systemPrompt += `\n\n--- INSTRUÇÃO ESPECIAL: PRIMEIRA INTERAÇÃO ---
+Esta é a PRIMEIRA mensagem deste cliente. Você DEVE:
+1. Dar as boas-vindas calorosas à CB Asesoria
+2. Se apresentar como assistente virtual da CB Asesoria
+3. Explicar brevemente que a CB Asesoria é especializada em assessoria de imigração na Espanha
+4. Pedir educadamente o NOME COMPLETO e o E-MAIL do cliente para cadastro
+5. Exemplo: "Para que possamos te atender da melhor forma, poderia me informar seu nome completo e seu e-mail? 😊"
+NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça os dados.
+--- FIM DA INSTRUÇÃO ESPECIAL ---`
+        }
+
+        // Try to extract name/email from the current message and update contact
+        const extracted = extractNameAndEmail(message.body)
+        if (extracted.name || extracted.email) {
+          const updateData: Record<string, string> = {}
+          if (extracted.name && (contact.full_name.startsWith('WhatsApp ') || contact.full_name === message.name)) {
+            updateData.full_name = extracted.name
+            contact.full_name = extracted.name
+            console.log('Extracted and updating name:', extracted.name)
+          }
+          if (extracted.email) {
+            updateData.email = extracted.email
+            console.log('Extracted and updating email:', extracted.email)
+          }
+          if (Object.keys(updateData).length > 0) {
+            await supabase.from('contacts').update(updateData).eq('id', contact.id)
+            console.log('Contact updated with extracted data:', updateData)
+          }
+        }
 
         // Get conversation history and knowledge base context
         const [history, knowledgeContext] = await Promise.all([
