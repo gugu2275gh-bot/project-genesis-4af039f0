@@ -381,27 +381,46 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     { role: 'user', content: currentMessage },
   ]
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-5-mini',
-      messages,
-      max_completion_tokens: 500,
-    }),
-  })
+  console.log('Calling OpenAI API with', messages.length, 'messages, system prompt length:', fullSystemPrompt.length)
+  
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 45000) // 45s timeout
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error('OpenAI API error:', response.status, errorText)
-    throw new Error(`OpenAI API error: ${response.status}`)
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-5-mini',
+        messages,
+        max_completion_tokens: 500,
+      }),
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('OpenAI API error:', response.status, errorText)
+      throw new Error(`OpenAI API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    const result = data.choices?.[0]?.message?.content?.trim() || ''
+    console.log('OpenAI response received, length:', result.length)
+    return result
+  } catch (err) {
+    clearTimeout(timeoutId)
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      console.error('OpenAI API call timed out after 45s')
+      throw new Error('OpenAI API timeout')
+    }
+    throw err
   }
-
-  const data = await response.json()
-  return data.choices?.[0]?.message?.content?.trim() || ''
 }
 
 /** Send WhatsApp message via API */
