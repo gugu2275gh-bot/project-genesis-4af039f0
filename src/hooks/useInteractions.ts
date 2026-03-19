@@ -18,6 +18,7 @@ export function useInteractions(contactId?: string, leadId?: string) {
       let query = supabase
         .from('interactions')
         .select('*')
+        .eq('origin_bot', false)
         .order('created_at', { ascending: false });
       
       if (contactId) {
