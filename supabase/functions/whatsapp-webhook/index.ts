@@ -598,14 +598,14 @@ serve(async (req) => {
       console.log('AI agent paused: human agent (SISTEMA) is handling this lead')
     }
 
-    // Check if WhatsApp bot is enabled and Gemini key is available
+    // Check if WhatsApp bot is enabled and OpenAI key is available
     const { data: botConfigs } = await supabase
       .from('system_config')
       .select('key, value')
       .in('key', [
         'whatsapp_bot_enabled',
         'whatsapp_bot_system_prompt',
-        'gemini_api_key',
+        'openai_api_key',
         'uazapi_url',
         'uazapi_token',
       ])
@@ -616,9 +616,9 @@ serve(async (req) => {
     })
 
     const botEnabled = configMap['whatsapp_bot_enabled'] === 'true'
-    const geminiApiKey = configMap['gemini_api_key']
+    const openaiApiKey = configMap['openai_api_key']
 
-    if (botEnabled && geminiApiKey && !aiPausedByHuman) {
+    if (botEnabled && openaiApiKey && !aiPausedByHuman) {
       console.log('AI agent is enabled, generating response...')
 
       try {
