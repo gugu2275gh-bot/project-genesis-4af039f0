@@ -20,7 +20,7 @@ interface SystemConfig {
   label: string;
   description: string;
   type: 'text' | 'textarea' | 'boolean';
-  category: 'general' | 'messaging' | 'integration';
+  category: 'general' | 'integration';
 }
 
 const SYSTEM_CONFIGS: SystemConfig[] = [
