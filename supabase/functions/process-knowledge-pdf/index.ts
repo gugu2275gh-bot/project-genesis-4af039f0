@@ -263,24 +263,74 @@ serve(async (req) => {
 
     // Extract text from PDF
     const pdfBytes = new Uint8Array(await fileData.arrayBuffer())
-    let extractedText = extractTextFromPDF(pdfBytes)
+    let extractedText = await extractTextFromPDF(pdfBytes)
 
-    if (!extractedText || extractedText.length < 10) {
-      // Fallback: try to use OpenAI to extract text if basic parsing fails
-      const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
+    console.log(`Basic extraction result: ${extractedText.length} chars`)
+
+    if (!extractedText || extractedText.length < 50) {
+      console.log('Basic extraction failed or too short, trying AI fallback...')
       
-      // Also check system_config for openai key
-      let apiKey = openaiApiKey
+      // Fallback: use OpenAI to extract text via base64
+      let apiKey = Deno.env.get('OPENAI_API_KEY')
       if (!apiKey) {
         const { data: configKey } = await supabaseAdmin
           .from('system_config')
           .select('value')
           .eq('key', 'openai_api_key')
           .single()
-        apiKey = configKey?.value
+        apiKey = configKey?.value || null
       }
 
-      if (!apiKey) {
+      if (apiKey) {
+        try {
+          // Convert PDF to base64
+          const base64Pdf = btoa(String.fromCharCode(...pdfBytes))
+          
+          const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              messages: [
+                {
+                  role: 'system',
+                  content: 'Extract ALL text content from this PDF document. Return ONLY the extracted text, preserving the original structure and paragraphs. Do not add any commentary or formatting beyond what exists in the document.',
+                },
+                {
+                  role: 'user',
+                  content: [
+                    { type: 'text', text: `Extract all text from this PDF document named "${fileName}":` },
+                    {
+                      type: 'image_url',
+                      image_url: { url: `data:application/pdf;base64,${base64Pdf}` },
+                    },
+                  ],
+                },
+              ],
+              max_tokens: 16000,
+            }),
+          })
+
+          if (aiResponse.ok) {
+            const aiData = await aiResponse.json()
+            const aiText = aiData.choices?.[0]?.message?.content?.trim()
+            if (aiText && aiText.length > 50) {
+              extractedText = aiText
+              console.log(`AI extraction succeeded: ${extractedText.length} chars`)
+            }
+          } else {
+            const errText = await aiResponse.text()
+            console.error('AI extraction failed:', aiResponse.status, errText)
+          }
+        } catch (aiErr) {
+          console.error('AI extraction error:', aiErr instanceof Error ? aiErr.message : aiErr)
+        }
+      }
+
+      if (!extractedText || extractedText.length < 50) {
         return new Response(JSON.stringify({ 
           error: 'Não foi possível extrair texto do PDF. Verifique se o PDF contém texto selecionável (não escaneado).' 
         }), {
@@ -288,9 +338,6 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-
-      // If basic extraction fails, store raw content with a note
-      extractedText = `[PDF: ${fileName}] Conteúdo não pôde ser extraído automaticamente. Este PDF pode conter imagens escaneadas.`
     }
 
     console.log(`Extracted ${extractedText.length} chars from PDF`)
