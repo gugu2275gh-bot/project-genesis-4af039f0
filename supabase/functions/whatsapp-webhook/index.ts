@@ -730,7 +730,7 @@ Suas diretrizes:
         contactId: contact.id,
         leadId: lead.id,
         assignedTo: lead.assigned_to_user_id,
-        aiResponseSent: botEnabled && !!geminiApiKey,
+        aiResponseSent: botEnabled && !!openaiApiKey,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
