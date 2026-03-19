@@ -765,10 +765,13 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
           }
         }
 
+        // For audio/media-only messages without text, use a placeholder for AI context
+        const messageForAI = message.body || (mediaType ? `[Cliente enviou um ${mediaType === 'ptt' ? 'áudio' : mediaType}]` : '')
+        
         // Get conversation history and knowledge base context
         const [history, knowledgeContext] = await Promise.all([
           getConversationHistory(supabase, lead.id),
-          getKnowledgeBaseContext(supabase, message.body),
+          messageForAI ? getKnowledgeBaseContext(supabase, messageForAI) : Promise.resolve(''),
         ])
 
         console.log(`Knowledge base context: ${knowledgeContext.length} chars`)
