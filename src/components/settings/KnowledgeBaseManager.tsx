@@ -26,6 +26,7 @@ export default function KnowledgeBaseManager() {
   const isAdmin = hasRole('ADMIN');
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
+  const [reprocessing, setReprocessing] = useState(false);
 
   // Fetch knowledge base entries grouped by file
   const { data: entries, isLoading } = useQuery({
