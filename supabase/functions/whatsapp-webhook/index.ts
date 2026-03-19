@@ -310,7 +310,7 @@ async function getKnowledgeBaseContext(
     .substring(0, 8000)
 }
 
-/** Call OpenAI Chat Completions API (GPT-4o-mini) to generate an AI response */
+/** Call OpenAI Chat Completions API (GPT-5-mini) to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
   currentMessage: string,
@@ -341,7 +341,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-mini',
       messages,
       max_tokens: 500,
       temperature: 0.7,
