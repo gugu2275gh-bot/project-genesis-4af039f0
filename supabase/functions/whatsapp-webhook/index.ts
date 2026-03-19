@@ -737,7 +737,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
         }
 
         // Try to extract name/email from the current message and update contact
-        const extracted = extractNameAndEmail(message.body)
+        const extracted = extractNameAndEmail(String(message.body || ''))
         if (extracted.name || extracted.email) {
           const updateData: Record<string, string> = {}
           if (extracted.name && (contact.full_name.startsWith('WhatsApp ') || contact.full_name === message.name)) {
