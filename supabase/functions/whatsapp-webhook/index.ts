@@ -285,13 +285,13 @@ async function getKnowledgeBaseContext(
   return relevant.map(c => c.content).join('\n\n').substring(0, 4000)
 }
 
-/** Call Gemini 1.5 Flash to generate an AI response */
+/** Call OpenAI Chat Completions API to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
   currentMessage: string,
   contactName: string,
   systemPrompt: string,
-  geminiApiKey: string,
+  apiKey: string,
   knowledgeContext: string
 ): Promise<string> {
   let fullSystemPrompt = systemPrompt
@@ -303,47 +303,38 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
   }
 
-  // Build Gemini-compatible contents array
-  const contents: Array<{ role: string; parts: Array<{ text: string }> }> = []
-
-  // Add conversation history
-  for (const msg of conversationHistory) {
-    contents.push({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }],
-    })
-  }
-
-  // Add current message
-  contents.push({
-    role: 'user',
-    parts: [{ text: currentMessage }],
-  })
+  // Build OpenAI-compatible messages array
+  const messages: Array<{ role: string; content: string }> = [
+    { role: 'system', content: fullSystemPrompt },
+    ...conversationHistory,
+    { role: 'user', content: currentMessage },
+  ]
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+    'https://api.openai.com/v1/chat/completions',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: fullSystemPrompt }] },
-        contents,
-        generationConfig: {
-          maxOutputTokens: 500,
-          temperature: 0.7,
-        },
+        model: 'gpt-4o-mini',
+        messages,
+        max_tokens: 500,
+        temperature: 0.7,
       }),
     }
   )
 
   if (!response.ok) {
     const errorText = await response.text()
-    console.error('Gemini API error:', response.status, errorText)
-    throw new Error(`Gemini API error: ${response.status}`)
+    console.error('OpenAI API error:', response.status, errorText)
+    throw new Error(`OpenAI API error: ${response.status}`)
   }
 
   const data = await response.json()
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
+  return data.choices?.[0]?.message?.content?.trim() || ''
 }
 
 /** Send WhatsApp message via API */
@@ -607,14 +598,14 @@ serve(async (req) => {
       console.log('AI agent paused: human agent (SISTEMA) is handling this lead')
     }
 
-    // Check if WhatsApp bot is enabled and Gemini key is available
+    // Check if WhatsApp bot is enabled and OpenAI key is available
     const { data: botConfigs } = await supabase
       .from('system_config')
       .select('key, value')
       .in('key', [
         'whatsapp_bot_enabled',
         'whatsapp_bot_system_prompt',
-        'gemini_api_key',
+        'openai_api_key',
         'uazapi_url',
         'uazapi_token',
       ])
@@ -625,9 +616,9 @@ serve(async (req) => {
     })
 
     const botEnabled = configMap['whatsapp_bot_enabled'] === 'true'
-    const geminiApiKey = configMap['gemini_api_key']
+    const openaiApiKey = configMap['openai_api_key']
 
-    if (botEnabled && geminiApiKey && !aiPausedByHuman) {
+    if (botEnabled && openaiApiKey && !aiPausedByHuman) {
       console.log('AI agent is enabled, generating response...')
 
       try {
@@ -660,7 +651,7 @@ Suas diretrizes:
           message.body,
           contact.full_name,
           systemPrompt.replace('{nome}', contact.full_name),
-          geminiApiKey,
+          openaiApiKey,
           knowledgeContext
         )
 
@@ -700,7 +691,7 @@ Suas diretrizes:
         // AI errors don't block the webhook processing
       }
     } else {
-      console.log(`AI agent skipped: botEnabled=${botEnabled}, hasGeminiKey=${!!geminiApiKey}, pausedByHuman=${aiPausedByHuman}`)
+      console.log(`AI agent skipped: botEnabled=${botEnabled}, hasOpenAIKey=${!!openaiApiKey}, pausedByHuman=${aiPausedByHuman}`)
     }
 
     // Update webhook log as processed
@@ -739,7 +730,7 @@ Suas diretrizes:
         contactId: contact.id,
         leadId: lead.id,
         assignedTo: lead.assigned_to_user_id,
-        aiResponseSent: botEnabled && !!geminiApiKey,
+        aiResponseSent: botEnabled && !!openaiApiKey,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
