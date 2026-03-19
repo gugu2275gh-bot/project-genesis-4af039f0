@@ -3,150 +3,50 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-/** Decompress FlateDecode (zlib/deflate) stream data */
-async function decompressFlate(data: Uint8Array): Promise<Uint8Array> {
-  try {
-    const ds = new DecompressionStream('deflate')
-    const writer = ds.writable.getWriter()
-    const reader = ds.readable.getReader()
-    
-    const chunks: Uint8Array[] = []
-    const readAll = (async () => {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        chunks.push(value)
-      }
-    })()
-    
-    await writer.write(data)
-    await writer.close()
-    await readAll
-    
-    const totalLength = chunks.reduce((acc, c) => acc + c.length, 0)
-    const result = new Uint8Array(totalLength)
-    let offset = 0
-    for (const chunk of chunks) {
-      result.set(chunk, offset)
-      offset += chunk.length
-    }
-    return result
-  } catch {
-    // Try raw deflate (without zlib header)
-    try {
-      const ds = new DecompressionStream('raw')
-      const writer = ds.writable.getWriter()
-      const reader = ds.readable.getReader()
-      
-      const chunks: Uint8Array[] = []
-      const readAll = (async () => {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          chunks.push(value)
-        }
-      })()
-      
-      await writer.write(data)
-      await writer.close()
-      await readAll
-      
-      const totalLength = chunks.reduce((acc, c) => acc + c.length, 0)
-      const result = new Uint8Array(totalLength)
-      let offset = 0
-      for (const chunk of chunks) {
-        result.set(chunk, offset)
-        offset += chunk.length
-      }
-      return result
-    } catch {
-      return data // Return as-is if decompression fails
-    }
-  }
-}
-
-/** Extract text operators from a decompressed PDF content stream */
-function extractTextFromStream(streamText: string): string {
-  const parts: string[] = []
-  
-  // Extract text from TJ arrays: [(text) -kern (text)] TJ
-  const tjRegex = /\[((?:\([^)]*\)|[^\]])*)\]\s*TJ/gi
-  let match: RegExpExecArray | null
-  while ((match = tjRegex.exec(streamText)) !== null) {
-    const inner = match[1]
-    const strRegex = /\(([^)]*)\)/g
-    let strMatch: RegExpExecArray | null
-    const tjParts: string[] = []
-    while ((strMatch = strRegex.exec(inner)) !== null) {
-      tjParts.push(strMatch[1])
-    }
-    if (tjParts.length > 0) parts.push(tjParts.join(''))
-  }
-  
-  // Extract Tj operator: (text) Tj
-  const singleTjRegex = /\(([^)]*)\)\s*Tj/gi
-  while ((match = singleTjRegex.exec(streamText)) !== null) {
-    if (match[1].trim()) parts.push(match[1])
-  }
-  
-  return parts.join(' ')
-}
-
-/** Extract text from PDF binary data with stream decompression */
-async function extractTextFromPDF(pdfBytes: Uint8Array): Promise<string> {
+/** Extract visible text from PDF without decompression (uncompressed streams only) */
+function extractBasicText(pdfBytes: Uint8Array): string {
   const rawText = new TextDecoder('latin1').decode(pdfBytes)
-  const extractedTexts: string[] = []
+  const parts: string[] = []
 
-  // Find all stream objects
+  // Extract text from uncompressed streams using Tj/TJ operators
   const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g
   let match: RegExpExecArray | null
-  const streamPositions: Array<{ start: number; end: number }> = []
 
   while ((match = streamRegex.exec(rawText)) !== null) {
-    streamPositions.push({
-      start: match.index,
-      end: match.index + match[0].length,
-    })
-  }
+    // Check if this stream is NOT compressed (skip FlateDecode streams)
+    const headerStart = Math.max(0, match.index - 500)
+    const header = rawText.substring(headerStart, match.index)
+    if (header.includes('FlateDecode') || header.includes('DCTDecode') || header.includes('JPXDecode')) {
+      continue
+    }
 
-  for (const pos of streamPositions) {
-    // Check if this stream uses FlateDecode by looking at the object header before it
-    const headerStart = Math.max(0, pos.start - 500)
-    const header = rawText.substring(headerStart, pos.start)
-    const isFlate = header.includes('FlateDecode')
+    const content = match[1]
     
-    // Get raw stream bytes
-    const streamMatch = /stream\r?\n([\s\S]*?)\r?\nendstream/.exec(rawText.substring(pos.start))
-    if (!streamMatch) continue
-    
-    const streamContentStr = streamMatch[1]
-    
-    if (isFlate) {
-      // Convert latin1 string back to bytes for decompression
-      const streamBytes = new Uint8Array(streamContentStr.length)
-      for (let i = 0; i < streamContentStr.length; i++) {
-        streamBytes[i] = streamContentStr.charCodeAt(i)
+    // TJ arrays
+    const tjRegex = /\[((?:\([^)]*\)|[^\]])*)\]\s*TJ/gi
+    let tjMatch: RegExpExecArray | null
+    while ((tjMatch = tjRegex.exec(content)) !== null) {
+      const strRegex = /\(([^)]*)\)/g
+      let strMatch: RegExpExecArray | null
+      const tjParts: string[] = []
+      while ((strMatch = strRegex.exec(tjMatch[1])) !== null) {
+        tjParts.push(strMatch[1])
       }
-      
-      try {
-        const decompressed = await decompressFlate(streamBytes)
-        const decompressedText = new TextDecoder('latin1').decode(decompressed)
-        const text = extractTextFromStream(decompressedText)
-        if (text.trim()) extractedTexts.push(text)
-      } catch {
-        // Skip failed decompressions
-      }
-    } else {
-      // Try direct text extraction from uncompressed stream
-      const text = extractTextFromStream(streamContentStr)
-      if (text.trim()) extractedTexts.push(text)
+      if (tjParts.length > 0) parts.push(tjParts.join(''))
+    }
+
+    // Single Tj
+    const singleTjRegex = /\(([^)]*)\)\s*Tj/gi
+    let sjMatch: RegExpExecArray | null
+    while ((sjMatch = singleTjRegex.exec(content)) !== null) {
+      if (sjMatch[1].trim()) parts.push(sjMatch[1])
     }
   }
 
-  let result = extractedTexts.join(' ')
+  return parts.join(' ')
     .replace(/\\n/g, '\n')
     .replace(/\\r/g, '')
     .replace(/\\\(/g, '(')
@@ -156,11 +56,22 @@ async function extractTextFromPDF(pdfBytes: Uint8Array): Promise<string> {
     .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-
-  return result
 }
 
-/** Split text into chunks of roughly maxChars characters at sentence boundaries */
+/** Encode Uint8Array to base64 without stack overflow */
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunkSize = 8192
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const slice = bytes.subarray(i, Math.min(i + chunkSize, bytes.length))
+    for (let j = 0; j < slice.length; j++) {
+      binary += String.fromCharCode(slice[j])
+    }
+  }
+  return btoa(binary)
+}
+
+/** Split text into chunks */
 function chunkText(text: string, maxChars = 2000): string[] {
   if (text.length <= maxChars) return [text]
 
@@ -207,7 +118,6 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Verify user is admin
     const supabaseUser = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
@@ -247,7 +157,6 @@ serve(async (req) => {
 
     console.log('Processing PDF:', fileName, 'at', filePath)
 
-    // Download the PDF from storage
     const { data: fileData, error: downloadError } = await supabaseAdmin
       .storage
       .from('knowledge-base')
@@ -261,16 +170,21 @@ serve(async (req) => {
       })
     }
 
-    // Extract text from PDF
     const pdfBytes = new Uint8Array(await fileData.arrayBuffer())
-    let extractedText = await extractTextFromPDF(pdfBytes)
+    
+    // Try basic extraction first (uncompressed streams only - no DecompressionStream)
+    let extractedText = ''
+    try {
+      extractedText = extractBasicText(pdfBytes)
+      console.log(`Basic extraction result: ${extractedText.length} chars`)
+    } catch (e) {
+      console.error('Basic extraction error:', e)
+    }
 
-    console.log(`Basic extraction result: ${extractedText.length} chars`)
-
+    // If basic extraction insufficient, use OpenAI to read the PDF
     if (!extractedText || extractedText.length < 50) {
-      console.log('Basic extraction failed or too short, trying AI fallback...')
+      console.log('Basic extraction insufficient, using OpenAI to extract text...')
       
-      // Fallback: use OpenAI to extract text via base64
       let apiKey = Deno.env.get('OPENAI_API_KEY')
       if (!apiKey) {
         const { data: configKey } = await supabaseAdmin
@@ -283,8 +197,8 @@ serve(async (req) => {
 
       if (apiKey) {
         try {
-          // Convert PDF to base64
-          const base64Pdf = btoa(String.fromCharCode(...pdfBytes))
+          const base64Pdf = uint8ToBase64(pdfBytes)
+          console.log(`PDF base64 size: ${base64Pdf.length} chars`)
           
           const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -297,7 +211,7 @@ serve(async (req) => {
               messages: [
                 {
                   role: 'system',
-                  content: 'Extract ALL text content from this PDF document. Return ONLY the extracted text, preserving the original structure and paragraphs. Do not add any commentary or formatting beyond what exists in the document.',
+                  content: 'Extract ALL text content from this PDF document. Return ONLY the extracted text, preserving the original structure and paragraphs. Do not add any commentary.',
                 },
                 {
                   role: 'user',
@@ -319,20 +233,24 @@ serve(async (req) => {
             const aiText = aiData.choices?.[0]?.message?.content?.trim()
             if (aiText && aiText.length > 50) {
               extractedText = aiText
-              console.log(`AI extraction succeeded: ${extractedText.length} chars`)
+              console.log(`OpenAI extraction succeeded: ${extractedText.length} chars`)
+            } else {
+              console.log('OpenAI returned insufficient text')
             }
           } else {
             const errText = await aiResponse.text()
-            console.error('AI extraction failed:', aiResponse.status, errText)
+            console.error('OpenAI extraction failed:', aiResponse.status, errText)
           }
         } catch (aiErr) {
-          console.error('AI extraction error:', aiErr instanceof Error ? aiErr.message : aiErr)
+          console.error('OpenAI extraction error:', aiErr instanceof Error ? aiErr.message : aiErr)
         }
+      } else {
+        console.error('No OpenAI API key found')
       }
 
       if (!extractedText || extractedText.length < 50) {
         return new Response(JSON.stringify({ 
-          error: 'Não foi possível extrair texto do PDF. Verifique se o PDF contém texto selecionável (não escaneado).' 
+          error: 'Não foi possível extrair texto do PDF. Verifique se a chave da OpenAI está configurada em Configurações > Sistema.' 
         }), {
           status: 422,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -340,7 +258,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Extracted ${extractedText.length} chars from PDF`)
+    console.log(`Final extracted ${extractedText.length} chars from PDF`)
 
     // Delete any existing entries for this file
     await supabaseAdmin
