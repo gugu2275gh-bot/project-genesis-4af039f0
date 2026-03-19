@@ -1,52 +1,92 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { inflate, inflateRaw } from "https://esm.sh/pako@2.1.0"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-/** Extract visible text from PDF without decompression (uncompressed streams only) */
-function extractBasicText(pdfBytes: Uint8Array): string {
-  const rawText = new TextDecoder('latin1').decode(pdfBytes)
+const MIN_EXTRACTED_TEXT_LENGTH = 10
+
+/** Extract text operators from a PDF content stream */
+function extractTextFromStream(streamText: string): string {
   const parts: string[] = []
 
-  // Extract text from uncompressed streams using Tj/TJ operators
+  // Extract text from TJ arrays: [(text) -kern (text)] TJ
+  const tjRegex = /\[((?:\([^)]*\)|[^\]])*)\]\s*TJ/gi
+  let match: RegExpExecArray | null
+  while ((match = tjRegex.exec(streamText)) !== null) {
+    const inner = match[1]
+    const strRegex = /\(([^)]*)\)/g
+    let strMatch: RegExpExecArray | null
+    const tjParts: string[] = []
+    while ((strMatch = strRegex.exec(inner)) !== null) {
+      tjParts.push(strMatch[1])
+    }
+    if (tjParts.length > 0) parts.push(tjParts.join(''))
+  }
+
+  // Extract Tj operator: (text) Tj
+  const singleTjRegex = /\(([^)]*)\)\s*Tj/gi
+  while ((match = singleTjRegex.exec(streamText)) !== null) {
+    if (match[1].trim()) parts.push(match[1])
+  }
+
+  return parts.join(' ')
+}
+
+/** Extract text from PDF bytes (supports FlateDecode without DecompressionStream) */
+function extractTextFromPDF(pdfBytes: Uint8Array): string {
+  const rawText = new TextDecoder('latin1').decode(pdfBytes)
+  const extractedTexts: string[] = []
+
   const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g
   let match: RegExpExecArray | null
 
   while ((match = streamRegex.exec(rawText)) !== null) {
-    // Check if this stream is NOT compressed (skip FlateDecode streams)
     const headerStart = Math.max(0, match.index - 500)
     const header = rawText.substring(headerStart, match.index)
-    if (header.includes('FlateDecode') || header.includes('DCTDecode') || header.includes('JPXDecode')) {
-      continue
-    }
+    const streamContentStr = match[1]
 
-    const content = match[1]
-    
-    // TJ arrays
-    const tjRegex = /\[((?:\([^)]*\)|[^\]])*)\]\s*TJ/gi
-    let tjMatch: RegExpExecArray | null
-    while ((tjMatch = tjRegex.exec(content)) !== null) {
-      const strRegex = /\(([^)]*)\)/g
-      let strMatch: RegExpExecArray | null
-      const tjParts: string[] = []
-      while ((strMatch = strRegex.exec(tjMatch[1])) !== null) {
-        tjParts.push(strMatch[1])
+    let streamText = ''
+
+    if (header.includes('FlateDecode')) {
+      try {
+        const streamBytes = new Uint8Array(streamContentStr.length)
+        for (let i = 0; i < streamContentStr.length; i++) {
+          streamBytes[i] = streamContentStr.charCodeAt(i) & 0xff
+        }
+
+        let decompressed: Uint8Array | null = null
+        try {
+          decompressed = inflate(streamBytes)
+        } catch {
+          try {
+            decompressed = inflateRaw(streamBytes)
+          } catch {
+            decompressed = null
+          }
+        }
+
+        if (decompressed) {
+          streamText = new TextDecoder('latin1').decode(decompressed)
+        }
+      } catch {
+        // Ignore decompression errors for individual streams
       }
-      if (tjParts.length > 0) parts.push(tjParts.join(''))
+    } else if (!header.includes('DCTDecode') && !header.includes('JPXDecode')) {
+      // Try direct extraction for uncompressed text streams
+      streamText = streamContentStr
     }
 
-    // Single Tj
-    const singleTjRegex = /\(([^)]*)\)\s*Tj/gi
-    let sjMatch: RegExpExecArray | null
-    while ((sjMatch = singleTjRegex.exec(content)) !== null) {
-      if (sjMatch[1].trim()) parts.push(sjMatch[1])
-    }
+    if (!streamText) continue
+
+    const text = extractTextFromStream(streamText)
+    if (text.trim()) extractedTexts.push(text)
   }
 
-  return parts.join(' ')
+  return extractedTexts.join(' ')
     .replace(/\\n/g, '\n')
     .replace(/\\r/g, '')
     .replace(/\\\(/g, '(')
@@ -56,19 +96,6 @@ function extractBasicText(pdfBytes: Uint8Array): string {
     .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-}
-
-/** Encode Uint8Array to base64 without stack overflow */
-function uint8ToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  const chunkSize = 8192
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const slice = bytes.subarray(i, Math.min(i + chunkSize, bytes.length))
-    for (let j = 0; j < slice.length; j++) {
-      binary += String.fromCharCode(slice[j])
-    }
-  }
-  return btoa(binary)
 }
 
 /** Split text into chunks */
@@ -171,20 +198,19 @@ serve(async (req) => {
     }
 
     const pdfBytes = new Uint8Array(await fileData.arrayBuffer())
-    
-    // Try basic extraction first (uncompressed streams only - no DecompressionStream)
+
     let extractedText = ''
     try {
-      extractedText = extractBasicText(pdfBytes)
+      extractedText = extractTextFromPDF(pdfBytes)
       console.log(`Basic extraction result: ${extractedText.length} chars`)
     } catch (e) {
       console.error('Basic extraction error:', e)
     }
 
-    // If basic extraction insufficient, use OpenAI to read the PDF
-    if (!extractedText || extractedText.length < 50) {
+    // Fallback to OpenAI only if low text extracted
+    if (!extractedText || extractedText.length < MIN_EXTRACTED_TEXT_LENGTH) {
       console.log('Basic extraction insufficient, using OpenAI to extract text...')
-      
+
       let apiKey = Deno.env.get('OPENAI_API_KEY')
       if (!apiKey) {
         const { data: configKey } = await supabaseAdmin
@@ -197,7 +223,6 @@ serve(async (req) => {
 
       if (apiKey) {
         try {
-          // Step 1: Upload the PDF file to OpenAI
           const formData = new FormData()
           const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' })
           formData.append('file', pdfBlob, fileName)
@@ -206,23 +231,20 @@ serve(async (req) => {
           console.log('Uploading PDF to OpenAI Files API...')
           const uploadResponse = await fetch('https://api.openai.com/v1/files', {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-            },
+            headers: { 'Authorization': `Bearer ${apiKey}` },
             body: formData,
           })
 
           if (!uploadResponse.ok) {
             const uploadErr = await uploadResponse.text()
             console.error('OpenAI file upload failed:', uploadResponse.status, uploadErr)
-            throw new Error(`File upload failed: ${uploadResponse.status}`)
+            throw new Error(`OpenAI upload failed (${uploadResponse.status})`)
           }
 
           const uploadData = await uploadResponse.json()
           const fileId = uploadData.id
           console.log(`PDF uploaded to OpenAI, file_id: ${fileId}`)
 
-          // Step 2: Use Responses API with file input to extract text
           const aiResponse = await fetch('https://api.openai.com/v1/responses', {
             method: 'POST',
             headers: {
@@ -234,53 +256,51 @@ serve(async (req) => {
               input: [
                 {
                   role: 'system',
-                  content: 'Extract ALL text content from this PDF document. Return ONLY the extracted text, preserving the original structure and paragraphs. Do not add any commentary or formatting beyond what exists in the document.',
+                  content: 'Extract ALL text content from this PDF document. Return ONLY the extracted text, preserving original structure and paragraphs. Do not add commentary.',
                 },
                 {
                   role: 'user',
                   content: [
-                    {
-                      type: 'input_file',
-                      file_id: fileId,
-                    },
-                    {
-                      type: 'input_text',
-                      text: `Extract all text from this PDF document named "${fileName}". Return the complete text content.`,
-                    },
+                    { type: 'input_file', file_id: fileId },
+                    { type: 'input_text', text: `Extract all text from "${fileName}".` },
                   ],
                 },
               ],
-              max_output_tokens: 16000,
+              max_output_tokens: 12000,
             }),
           })
 
           if (aiResponse.ok) {
             const aiData = await aiResponse.json()
-            const aiText = aiData.output?.filter((o: any) => o.type === 'message')
-              ?.flatMap((o: any) => o.content)
-              ?.filter((c: any) => c.type === 'output_text')
-              ?.map((c: any) => c.text)
-              ?.join('\n')
-              ?.trim()
-            if (aiText && aiText.length > 50) {
+            const aiText = (
+              (typeof aiData.output_text === 'string' ? aiData.output_text : '') ||
+              aiData.output?.filter((o: any) => o.type === 'message')
+                ?.flatMap((o: any) => o.content)
+                ?.filter((c: any) => c.type === 'output_text')
+                ?.map((c: any) => c.text)
+                ?.join('\n') || ''
+            ).trim()
+
+            if (aiText.length >= MIN_EXTRACTED_TEXT_LENGTH) {
               extractedText = aiText
               console.log(`OpenAI extraction succeeded: ${extractedText.length} chars`)
             } else {
-              console.log('OpenAI returned insufficient text:', aiText?.length || 0)
+              console.log(`OpenAI returned insufficient text: ${aiText.length} chars`)
             }
           } else {
             const errText = await aiResponse.text()
             console.error('OpenAI extraction failed:', aiResponse.status, errText)
           }
 
-          // Step 3: Clean up the uploaded file
+          // Cleanup uploaded file
           try {
             await fetch(`https://api.openai.com/v1/files/${fileId}`, {
               method: 'DELETE',
               headers: { 'Authorization': `Bearer ${apiKey}` },
             })
-          } catch { /* ignore cleanup errors */ }
-
+          } catch {
+            // Ignore cleanup failures
+          }
         } catch (aiErr) {
           console.error('OpenAI extraction error:', aiErr instanceof Error ? aiErr.message : aiErr)
         }
@@ -288,9 +308,9 @@ serve(async (req) => {
         console.error('No OpenAI API key found')
       }
 
-      if (!extractedText || extractedText.length < 50) {
-        return new Response(JSON.stringify({ 
-          error: 'Não foi possível extrair texto do PDF. Verifique se a chave da OpenAI está configurada em Configurações > Sistema.' 
+      if (!extractedText || extractedText.length < MIN_EXTRACTED_TEXT_LENGTH) {
+        return new Response(JSON.stringify({
+          error: 'Não foi possível extrair texto deste PDF. Pode ser um PDF escaneado/imagem, protegido ou sem texto legível.'
         }), {
           status: 422,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -300,13 +320,11 @@ serve(async (req) => {
 
     console.log(`Final extracted ${extractedText.length} chars from PDF`)
 
-    // Delete any existing entries for this file
     await supabaseAdmin
       .from('knowledge_base')
       .delete()
       .eq('file_path', filePath)
 
-    // Chunk and store
     const chunks = chunkText(extractedText)
     console.log(`Split into ${chunks.length} chunks`)
 
@@ -328,8 +346,8 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ 
-      success: true, 
+    return new Response(JSON.stringify({
+      success: true,
       chunks: chunks.length,
       totalChars: extractedText.length,
     }), {
