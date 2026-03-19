@@ -310,7 +310,7 @@ async function getKnowledgeBaseContext(
     .substring(0, 8000)
 }
 
-/** Call Lovable AI Gateway (GPT-5-mini) to generate an AI response */
+/** Call OpenAI Chat Completions API (GPT-4o-mini) to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
   currentMessage: string,
@@ -334,26 +334,14 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     { role: 'user', content: currentMessage },
   ]
 
-  // Use Lovable AI Gateway with GPT-5-mini
-  const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')
-  const gatewayUrl = 'https://ai.gateway.lovable.dev/v1/chat/completions'
-
-  // Fallback: if no LOVABLE_API_KEY, use OpenAI directly with the provided key
-  const useGateway = !!lovableApiKey
-  const url = useGateway ? gatewayUrl : 'https://api.openai.com/v1/chat/completions'
-  const authKey = useGateway ? lovableApiKey : apiKey
-  const model = useGateway ? 'openai/gpt-5-mini' : 'gpt-4o-mini'
-
-  console.log(`Using AI model: ${model} via ${useGateway ? 'Lovable Gateway' : 'OpenAI direct'}`)
-
-  const response = await fetch(url, {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${authKey}`,
+      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model,
+      model: 'gpt-4o-mini',
       messages,
       max_tokens: 500,
       temperature: 0.7,
@@ -362,8 +350,8 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 
   if (!response.ok) {
     const errorText = await response.text()
-    console.error('AI API error:', response.status, errorText)
-    throw new Error(`AI API error: ${response.status}`)
+    console.error('OpenAI API error:', response.status, errorText)
+    throw new Error(`OpenAI API error: ${response.status}`)
   }
 
   const data = await response.json()
