@@ -10,8 +10,9 @@ import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Settings, Save, Mail, MessageSquare, Globe } from 'lucide-react';
+import { Settings, Save, Mail, MessageSquare, Globe, EyeOff } from 'lucide-react';
 import KnowledgeBaseManager from '@/components/settings/KnowledgeBaseManager';
+import { useSuperuser } from '@/hooks/useSuperuser';
 
 interface SystemConfig {
   key: string;
