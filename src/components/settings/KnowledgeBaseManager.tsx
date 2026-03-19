@@ -250,6 +250,7 @@ export default function KnowledgeBaseManager() {
                 id="pdf-upload"
                 type="file"
                 accept=".pdf"
+                multiple
                 className="hidden"
                 onChange={handleUpload}
                 disabled={uploading}
