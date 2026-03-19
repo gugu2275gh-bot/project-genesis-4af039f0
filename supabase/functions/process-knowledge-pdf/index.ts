@@ -223,8 +223,8 @@ serve(async (req) => {
       console.error('Basic extraction error:', e)
     }
 
-    // Fallback to OpenAI only if low text extracted
-    if (!extractedText || extractedText.length < MIN_EXTRACTED_TEXT_LENGTH) {
+    // Fallback to OpenAI only if low/invalid text extracted
+    if (!extractedText || extractedText.length < MIN_EXTRACTED_TEXT_LENGTH || isInvalidExtractionText(extractedText)) {
       console.log('Basic extraction insufficient, using OpenAI to extract text...')
 
       let apiKey = Deno.env.get('OPENAI_API_KEY')
@@ -261,32 +261,40 @@ serve(async (req) => {
           const fileId = uploadData.id
           console.log(`PDF uploaded to OpenAI, file_id: ${fileId}`)
 
-          const aiResponse = await fetch('https://api.openai.com/v1/responses', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: 'gpt-4o-mini',
-              input: [
-                {
-                  role: 'system',
-                  content: 'Extract ALL text content from this PDF document. Return ONLY the extracted text, preserving original structure and paragraphs. Do not add commentary.',
-                },
-                {
-                  role: 'user',
-                  content: [
-                    { type: 'input_file', file_id: fileId },
-                    { type: 'input_text', text: `Extract all text from "${fileName}".` },
-                  ],
-                },
-              ],
-              max_output_tokens: 12000,
-            }),
-          })
+          const modelsToTry = ['gpt-4.1-mini', 'gpt-4o-mini']
 
-          if (aiResponse.ok) {
+          for (const model of modelsToTry) {
+            const aiResponse = await fetch('https://api.openai.com/v1/responses', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model,
+                input: [
+                  {
+                    role: 'system',
+                    content: 'You must extract text from the provided PDF file. Return only extracted document text. Do not explain limitations or apologize. Preserve paragraphs when possible.',
+                  },
+                  {
+                    role: 'user',
+                    content: [
+                      { type: 'input_file', file_id: fileId },
+                      { type: 'input_text', text: `Extract all text from "${fileName}". Return only the extracted text.` },
+                    ],
+                  },
+                ],
+                max_output_tokens: 12000,
+              }),
+            })
+
+            if (!aiResponse.ok) {
+              const errText = await aiResponse.text()
+              console.error(`OpenAI extraction failed for ${model}:`, aiResponse.status, errText)
+              continue
+            }
+
             const aiData = await aiResponse.json()
             const aiText = (
               (typeof aiData.output_text === 'string' ? aiData.output_text : '') ||
@@ -297,15 +305,13 @@ serve(async (req) => {
                 ?.join('\n') || ''
             ).trim()
 
-            if (aiText.length >= MIN_EXTRACTED_TEXT_LENGTH) {
+            if (aiText.length >= MIN_EXTRACTED_TEXT_LENGTH && !isInvalidExtractionText(aiText)) {
               extractedText = aiText
-              console.log(`OpenAI extraction succeeded: ${extractedText.length} chars`)
-            } else {
-              console.log(`OpenAI returned insufficient text: ${aiText.length} chars`)
+              console.log(`OpenAI extraction succeeded with ${model}: ${extractedText.length} chars`)
+              break
             }
-          } else {
-            const errText = await aiResponse.text()
-            console.error('OpenAI extraction failed:', aiResponse.status, errText)
+
+            console.log(`OpenAI returned invalid/insufficient text with ${model}: ${aiText.length} chars`)
           }
 
           // Cleanup uploaded file
@@ -324,9 +330,9 @@ serve(async (req) => {
         console.error('No OpenAI API key found')
       }
 
-      if (!extractedText || extractedText.length < MIN_EXTRACTED_TEXT_LENGTH) {
+      if (!extractedText || extractedText.length < MIN_EXTRACTED_TEXT_LENGTH || isInvalidExtractionText(extractedText)) {
         return new Response(JSON.stringify({
-          error: 'Não foi possível extrair texto deste PDF. Pode ser um PDF escaneado/imagem, protegido ou sem texto legível.'
+          error: 'Não foi possível extrair texto útil deste PDF. Verifique se o arquivo contém texto legível (não apenas imagem) e tente novamente.'
         }), {
           status: 422,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
