@@ -7,7 +7,23 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-const MIN_EXTRACTED_TEXT_LENGTH = 10
+const MIN_EXTRACTED_TEXT_LENGTH = 30
+
+const INVALID_EXTRACTION_PATTERNS = [
+  /unable to extract text from pdf/i,
+  /cannot extract text from pdf/i,
+  /can't extract text from pdf/i,
+  /i\s*(?:am|'m)\s*unable to extract/i,
+  /forne[çc]a o texto/i,
+  /provide the text or key points/i,
+  /não (?:consigo|foi possível) extrair/i,
+]
+
+function isInvalidExtractionText(text: string): boolean {
+  const normalized = text.trim()
+  if (!normalized) return true
+  return INVALID_EXTRACTION_PATTERNS.some((pattern) => pattern.test(normalized))
+}
 
 /** Extract text operators from a PDF content stream */
 function extractTextFromStream(streamText: string): string {
