@@ -246,7 +246,7 @@ export default function KnowledgeBaseManager() {
               <p className="text-xs text-muted-foreground mt-1">
                 Máximo 10MB. O texto será extraído automaticamente.
               </p>
-              {entries && entries.length > 0 && (
+              {(
                 <Button
                   variant="outline"
                   size="sm"
