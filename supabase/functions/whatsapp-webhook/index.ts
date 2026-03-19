@@ -651,7 +651,7 @@ Suas diretrizes:
           message.body,
           contact.full_name,
           systemPrompt.replace('{nome}', contact.full_name),
-          geminiApiKey,
+          openaiApiKey,
           knowledgeContext
         )
 
