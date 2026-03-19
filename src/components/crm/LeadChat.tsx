@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff } from 'lucide-react';
+import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -326,12 +326,12 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                     </p>
                     {/* Media content */}
                     {msg.media_url && (
-                      <div className="mb-1.5">
-                        {msg.media_type === 'image' || msg.media_type === 'sticker' ? (
+                      <div className="mb-1.5 space-y-1.5">
+                        {msg.media_type === 'image' || msg.media_type === 'sticker' || msg.media_mimetype?.startsWith('image/') ? (
                           <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
                             <img
                               src={msg.media_url}
-                              alt="Imagem"
+                              alt="Imagem recebida"
                               className="max-w-[240px] rounded-md cursor-pointer hover:opacity-90 transition"
                               loading="lazy"
                             />
@@ -356,6 +356,16 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                             <Download className="h-4 w-4 text-muted-foreground flex-shrink-0 ml-auto" />
                           </a>
                         ) : null}
+
+                        <a
+                          href={msg.media_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-foreground/80 hover:text-foreground underline underline-offset-2"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          Abrir mídia em nova aba
+                        </a>
                       </div>
                     )}
                     {/* Text content */}
