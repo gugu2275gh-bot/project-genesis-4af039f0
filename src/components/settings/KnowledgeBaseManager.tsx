@@ -226,6 +226,22 @@ export default function KnowledgeBaseManager() {
               <p className="text-xs text-muted-foreground mt-1">
                 Máximo 10MB. O texto será extraído automaticamente.
               </p>
+              {entries && entries.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={handleReprocessAll}
+                  disabled={reprocessing}
+                >
+                  {reprocessing ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  {reprocessing ? `Reprocessando ${processing || '...'}` : 'Reprocessar todos os PDFs'}
+                </Button>
+              )}
             </div>
           )}
 
