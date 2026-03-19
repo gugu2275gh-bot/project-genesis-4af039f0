@@ -310,7 +310,7 @@ async function getKnowledgeBaseContext(
     .substring(0, 8000)
 }
 
-/** Call OpenAI Chat Completions API to generate an AI response */
+/** Call Lovable AI Gateway (GPT-5-mini) to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
   currentMessage: string,
@@ -328,34 +328,42 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
   }
 
-  // Build OpenAI-compatible messages array
   const messages: Array<{ role: string; content: string }> = [
     { role: 'system', content: fullSystemPrompt },
     ...conversationHistory,
     { role: 'user', content: currentMessage },
   ]
 
-  const response = await fetch(
-    'https://api.openai.com/v1/chat/completions',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages,
-        max_tokens: 500,
-        temperature: 0.7,
-      }),
-    }
-  )
+  // Use Lovable AI Gateway with GPT-5-mini
+  const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')
+  const gatewayUrl = 'https://ai.gateway.lovable.dev/v1/chat/completions'
+
+  // Fallback: if no LOVABLE_API_KEY, use OpenAI directly with the provided key
+  const useGateway = !!lovableApiKey
+  const url = useGateway ? gatewayUrl : 'https://api.openai.com/v1/chat/completions'
+  const authKey = useGateway ? lovableApiKey : apiKey
+  const model = useGateway ? 'openai/gpt-5-mini' : 'gpt-4o-mini'
+
+  console.log(`Using AI model: ${model} via ${useGateway ? 'Lovable Gateway' : 'OpenAI direct'}`)
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      max_tokens: 500,
+      temperature: 0.7,
+    }),
+  })
 
   if (!response.ok) {
     const errorText = await response.text()
-    console.error('OpenAI API error:', response.status, errorText)
-    throw new Error(`OpenAI API error: ${response.status}`)
+    console.error('AI API error:', response.status, errorText)
+    throw new Error(`AI API error: ${response.status}`)
   }
 
   const data = await response.json()
