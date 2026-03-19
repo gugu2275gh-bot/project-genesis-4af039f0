@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Settings, Save, Mail, MessageSquare, Globe, EyeOff } from 'lucide-react';
+import { Settings, Save, Globe } from 'lucide-react';
 import KnowledgeBaseManager from '@/components/settings/KnowledgeBaseManager';
 import { useSuperuser } from '@/hooks/useSuperuser';
 
@@ -20,7 +20,7 @@ interface SystemConfig {
   label: string;
   description: string;
   type: 'text' | 'textarea' | 'boolean';
-  category: 'general' | 'messaging' | 'integration';
+  category: 'general' | 'integration';
 }
 
 const SYSTEM_CONFIGS: SystemConfig[] = [
@@ -47,54 +47,6 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
     description: 'Telefone exibido nas comunicações',
     type: 'text',
     category: 'general',
-  },
-  {
-    key: 'welcome_message_template',
-    value: 'Olá {nome}! 👋 Bem-vindo à CB Asesoria. Somos especialistas em assessoria de imigração na Espanha. Como podemos ajudá-lo?',
-    label: 'Mensagem de Boas-vindas',
-    description: 'Mensagem automática enviada a novos leads. Use {nome} para personalizar.',
-    type: 'textarea',
-    category: 'messaging',
-  },
-  {
-    key: 'reengagement_message_template',
-    value: 'Olá {nome}! Notamos que você entrou em contato conosco. Podemos ajudá-lo com seu processo de imigração? Estamos à disposição!',
-    label: 'Mensagem de Reengajamento',
-    description: 'Mensagem enviada para leads sem resposta',
-    type: 'textarea',
-    category: 'messaging',
-  },
-  {
-    key: 'contract_reminder_template',
-    value: 'Olá {nome}! Seu contrato está aguardando assinatura. Clique no link para assinar: {link}',
-    label: 'Lembrete de Contrato',
-    description: 'Mensagem de lembrete para assinatura de contrato',
-    type: 'textarea',
-    category: 'messaging',
-  },
-  {
-    key: 'payment_reminder_template',
-    value: 'Olá {nome}! Identificamos um pagamento pendente de {valor}. Acesse o link para efetuar o pagamento: {link}',
-    label: 'Lembrete de Pagamento',
-    description: 'Mensagem de lembrete para pagamentos pendentes',
-    type: 'textarea',
-    category: 'messaging',
-  },
-  {
-    key: 'submission_confirmation_template',
-    value: 'Ótimas notícias, {nome}! 🎉 Seu processo foi submetido ao órgão competente. Número de protocolo: {protocolo}. Prazo estimado: {prazo}.',
-    label: 'Confirmação de Submissão',
-    description: 'Mensagem enviada após submissão do processo',
-    type: 'textarea',
-    category: 'messaging',
-  },
-  {
-    key: 'nps_survey_template',
-    value: 'Olá {nome}! Seu processo foi finalizado. Gostaríamos muito de saber sua opinião! Em uma escala de 0 a 10, o quanto você recomendaria nossos serviços?',
-    label: 'Pesquisa NPS',
-    description: 'Mensagem para coleta de feedback pós-serviço',
-    type: 'textarea',
-    category: 'messaging',
   },
   {
     key: 'openai_api_key',
@@ -282,7 +234,7 @@ export default function SystemSettings() {
   }
 
   const generalConfigs = SYSTEM_CONFIGS.filter(c => c.category === 'general');
-  const messagingConfigs = SYSTEM_CONFIGS.filter(c => c.category === 'messaging');
+  
   const integrationConfigs = SYSTEM_CONFIGS.filter(c => c.category === 'integration')
     .filter(c => isSuperuser || !SENSITIVE_KEYS.includes(c.key));
 
@@ -322,29 +274,6 @@ export default function SystemSettings() {
         </CardContent>
       </Card>
 
-      {/* Message Templates */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5" />
-            Templates de Mensagens
-          </CardTitle>
-          <CardDescription>
-            Textos padrão para comunicações automáticas
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            {messagingConfigs.map((config) => (
-              <div key={config.key} className="space-y-2">
-                <Label htmlFor={config.key}>{config.label}</Label>
-                {renderConfigInput(config)}
-                <p className="text-xs text-muted-foreground">{config.description}</p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Integrations */}
       <Card>
