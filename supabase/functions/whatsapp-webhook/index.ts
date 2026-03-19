@@ -246,43 +246,68 @@ async function getConversationHistory(
   return history
 }
 
+const INVALID_KNOWLEDGE_PATTERNS = [
+  /unable to extract text from pdf/i,
+  /cannot extract text from pdf/i,
+  /can't extract text from pdf/i,
+  /i\s*(?:am|'m)\s*unable to extract/i,
+  /forne[çc]a o texto/i,
+  /provide the text or key points/i,
+  /não (?:consigo|foi possível) extrair/i,
+]
+
+function isInvalidKnowledgeChunk(content: string): boolean {
+  const normalized = content.trim()
+  if (!normalized) return true
+  return INVALID_KNOWLEDGE_PATTERNS.some((pattern) => pattern.test(normalized))
+}
+
+function normalizeForSearch(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+}
+
 /** Retrieve relevant knowledge base content for the AI context */
 async function getKnowledgeBaseContext(
   supabase: ReturnType<typeof createClient>,
   userMessage: string
 ): Promise<string> {
-  // Fetch all active knowledge base entries
   const { data: kbEntries } = await supabase
     .from('knowledge_base')
-    .select('content, file_name')
+    .select('content, file_name, chunk_index')
     .eq('is_active', true)
     .order('file_name')
     .order('chunk_index')
 
   if (!kbEntries?.length) return ''
 
-  // Simple keyword matching: find chunks that contain words from the user message
-  const keywords = userMessage.toLowerCase().split(/\s+/).filter(w => w.length > 3)
-  
-  const scoredChunks = kbEntries.map(entry => {
-    const contentLower = entry.content.toLowerCase()
-    const score = keywords.reduce((acc, kw) => acc + (contentLower.includes(kw) ? 1 : 0), 0)
-    return { ...entry, score }
+  const validEntries = kbEntries.filter((entry) => !isInvalidKnowledgeChunk(entry.content))
+  if (!validEntries.length) return ''
+
+  const normalizedQuestion = normalizeForSearch(userMessage)
+  const keywords = normalizedQuestion.split(/\s+/).filter((w) => w.length > 2)
+
+  const scoredChunks = validEntries.map((entry) => {
+    const normalizedContent = normalizeForSearch(entry.content)
+    const keywordScore = keywords.reduce((acc, kw) => acc + (normalizedContent.includes(kw) ? 1 : 0), 0)
+    const phraseBonus = normalizedContent.includes(normalizedQuestion) ? 5 : 0
+    return { ...entry, score: keywordScore + phraseBonus }
   })
 
-  // Get top relevant chunks (max ~4000 chars to not bloat context)
   const relevant = scoredChunks
-    .filter(c => c.score > 0)
+    .filter((chunk) => chunk.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
+    .slice(0, 8)
 
-  if (relevant.length === 0) {
-    // If no keyword match, include first chunks as general context
-    const generalContext = kbEntries.slice(0, 3).map(e => e.content).join('\n\n')
-    return generalContext.substring(0, 3000)
-  }
+  const selected = relevant.length > 0 ? relevant : validEntries.slice(0, 8)
 
-  return relevant.map(c => c.content).join('\n\n').substring(0, 4000)
+  return selected
+    .map((chunk) => `[Fonte: ${chunk.file_name} | Bloco ${chunk.chunk_index}]\n${chunk.content}`)
+    .join('\n\n')
+    .substring(0, 8000)
 }
 
 /** Call OpenAI Chat Completions API to generate an AI response */
