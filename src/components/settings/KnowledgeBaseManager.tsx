@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { BookOpen, Upload, Trash2, FileText, Loader2 } from 'lucide-react';
+import { BookOpen, Upload, Trash2, FileText, Loader2, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface KnowledgeEntry {
