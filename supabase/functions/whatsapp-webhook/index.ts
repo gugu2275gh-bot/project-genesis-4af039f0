@@ -357,6 +357,81 @@ function extractNameAndEmail(text: string): { name: string | null; email: string
   return { name, email }
 }
 
+function extractTextFromOpenAIResponse(data: Record<string, unknown>): string {
+  const choice0 = Array.isArray(data.choices) && data.choices.length > 0
+    ? (data.choices[0] as Record<string, unknown>)
+    : null
+
+  const message = choice0 && typeof choice0.message === 'object'
+    ? (choice0.message as Record<string, unknown>)
+    : null
+
+  if (message && typeof message.content === 'string') {
+    return message.content.trim()
+  }
+
+  if (message && Array.isArray(message.content)) {
+    const contentText = message.content
+      .map((part) => {
+        if (typeof part === 'string') return part
+        if (part && typeof part === 'object') {
+          const item = part as Record<string, unknown>
+          if (typeof item.text === 'string') return item.text
+          if (typeof item.output_text === 'string') return item.output_text
+        }
+        return ''
+      })
+      .filter(Boolean)
+      .join('\n')
+      .trim()
+
+    if (contentText) return contentText
+  }
+
+  if (choice0 && typeof choice0.text === 'string') {
+    return choice0.text.trim()
+  }
+
+  if (typeof data.output_text === 'string') {
+    return data.output_text.trim()
+  }
+
+  if (Array.isArray(data.output_text)) {
+    const outputText = data.output_text
+      .map((item) => (typeof item === 'string' ? item : ''))
+      .filter(Boolean)
+      .join('\n')
+      .trim()
+    if (outputText) return outputText
+  }
+
+  if (Array.isArray(data.output)) {
+    const outputText = data.output
+      .map((item) => {
+        if (!item || typeof item !== 'object') return ''
+        const outputItem = item as Record<string, unknown>
+        const content = outputItem.content
+        if (!Array.isArray(content)) return ''
+        return content
+          .map((part) => {
+            if (!part || typeof part !== 'object') return ''
+            const contentItem = part as Record<string, unknown>
+            if (typeof contentItem.text === 'string') return contentItem.text
+            return ''
+          })
+          .filter(Boolean)
+          .join('\n')
+      })
+      .filter(Boolean)
+      .join('\n')
+      .trim()
+
+    if (outputText) return outputText
+  }
+
+  return ''
+}
+
 /** Call OpenAI Chat Completions API (GPT-5-mini) to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
@@ -382,7 +457,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
   ]
 
   console.log('Calling OpenAI API with', messages.length, 'messages, system prompt length:', fullSystemPrompt.length)
-  
+
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 45000) // 45s timeout
 
@@ -409,8 +484,17 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
       throw new Error(`OpenAI API error: ${response.status}`)
     }
 
-    const data = await response.json()
-    const result = data.choices?.[0]?.message?.content?.trim() || ''
+    const data = await response.json() as Record<string, unknown>
+    const result = extractTextFromOpenAIResponse(data)
+
+    if (!result) {
+      const finishReason = Array.isArray(data.choices) && data.choices[0] && typeof data.choices[0] === 'object'
+        ? (data.choices[0] as Record<string, unknown>).finish_reason
+        : 'unknown'
+      console.warn('OpenAI returned empty assistant content', { finishReason })
+      return 'Desculpe, tive uma instabilidade agora para responder. Pode me enviar novamente sua pergunta em texto?'
+    }
+
     console.log('OpenAI response received, length:', result.length)
     return result
   } catch (err) {
