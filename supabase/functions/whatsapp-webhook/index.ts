@@ -310,6 +310,33 @@ async function getKnowledgeBaseContext(
     .substring(0, 8000)
 }
 
+/** Try to extract name and email from a client message */
+function extractNameAndEmail(text: string): { name: string | null; email: string | null } {
+  let name: string | null = null
+  let email: string | null = null
+
+  // Extract email
+  const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
+  if (emailMatch) {
+    email = emailMatch[0].toLowerCase()
+  }
+
+  // Try to extract name patterns (Portuguese)
+  const namePatterns = [
+    /(?:me chamo|meu nome [eé]|sou (?:o |a )?)\s*([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*)/i,
+    /(?:nome|name)\s*[:=]?\s*([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)*)/i,
+  ]
+  for (const pattern of namePatterns) {
+    const match = text.match(pattern)
+    if (match?.[1]) {
+      name = match[1].trim()
+      break
+    }
+  }
+
+  return { name, email }
+}
+
 /** Call OpenAI Chat Completions API (GPT-5-mini) to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
