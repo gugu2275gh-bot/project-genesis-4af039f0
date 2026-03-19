@@ -133,29 +133,49 @@ export default function KnowledgeBaseManager() {
   });
 
   const handleReprocessAll = async () => {
-    if (!entries?.length) return;
     setReprocessing(true);
     let success = 0;
     let failed = 0;
     
-    // Get unique file paths from storage
-    const { data: storageFiles } = await supabase.storage.from('knowledge-base').list('pdfs');
+    // Get files from storage if entries list is empty (e.g. after cleanup)
+    let filesToProcess: Array<{ file_name: string; file_path: string }> = [];
     
-    for (const entry of entries) {
+    if (entries?.length) {
+      filesToProcess = entries.map(e => ({ file_name: e.file_name, file_path: e.file_path }));
+    } else {
+      // List from storage
+      const { data: storageFiles } = await supabase.storage.from('knowledge-base').list('pdfs');
+      if (storageFiles?.length) {
+        filesToProcess = storageFiles
+          .filter(f => f.name.toLowerCase().endsWith('.pdf'))
+          .map(f => ({
+            file_name: f.name.replace(/^\d+_/, '').replace(/_/g, ' '),
+            file_path: `pdfs/${f.name}`,
+          }));
+      }
+    }
+
+    if (!filesToProcess.length) {
+      setReprocessing(false);
+      toast({ title: 'Nenhum PDF encontrado para reprocessar', variant: 'destructive' });
+      return;
+    }
+    
+    for (const file of filesToProcess) {
       try {
-        setProcessing(entry.file_name);
+        setProcessing(file.file_name);
         const { data, error } = await supabase.functions.invoke('process-knowledge-pdf', {
-          body: { filePath: entry.file_path, fileName: entry.file_name },
+          body: { filePath: file.file_path, fileName: file.file_name },
         });
         if (error || data?.error) {
           failed++;
-          console.error('Reprocess error for', entry.file_name, error || data?.error);
+          console.error('Reprocess error for', file.file_name, error || data?.error);
         } else {
           success++;
         }
       } catch (err) {
         failed++;
-        console.error('Reprocess error for', entry.file_name, err);
+        console.error('Reprocess error for', file.file_name, err);
       }
     }
     
