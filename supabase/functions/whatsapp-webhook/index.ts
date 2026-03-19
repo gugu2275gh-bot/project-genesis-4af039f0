@@ -51,10 +51,20 @@ interface WebhookPayload {
   phone?: string;
   message?: string | {
     text?: string;
-    content?: string;
+    content?: string | Record<string, unknown>;
     messageid?: string;
     type?: string;
+    mediaType?: string;
     sender?: string;
+    senderName?: string;
+    messageTimestamp?: number;
+    fromMe?: boolean;
+    mediaUrl?: string;
+    mimetype?: string;
+    filename?: string;
+    caption?: string;
+    base64?: string;
+  };
     senderName?: string;
     messageTimestamp?: number;
     fromMe?: boolean;
