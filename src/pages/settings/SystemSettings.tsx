@@ -155,6 +155,10 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
 ];
 
 export default function SystemSettings() {
+  const { isSuperuser } = useSuperuser();
+
+  const SENSITIVE_KEYS = ['openai_api_key', 'gemini_api_key', 'uazapi_url', 'uazapi_token'];
+
   const { toast } = useToast();
   const { hasRole } = useAuth();
   const queryClient = useQueryClient();
