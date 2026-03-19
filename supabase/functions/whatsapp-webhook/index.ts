@@ -691,7 +691,7 @@ Suas diretrizes:
         // AI errors don't block the webhook processing
       }
     } else {
-      console.log(`AI agent skipped: botEnabled=${botEnabled}, hasGeminiKey=${!!geminiApiKey}, pausedByHuman=${aiPausedByHuman}`)
+      console.log(`AI agent skipped: botEnabled=${botEnabled}, hasOpenAIKey=${!!openaiApiKey}, pausedByHuman=${aiPausedByHuman}`)
     }
 
     // Update webhook log as processed
