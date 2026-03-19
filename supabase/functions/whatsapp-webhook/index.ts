@@ -779,7 +779,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
         // Generate AI response
         const aiResponse = await generateAIResponse(
           history,
-          message.body,
+          messageForAI,
           contact.full_name,
           systemPrompt.replace('{nome}', contact.full_name),
           openaiApiKey,
