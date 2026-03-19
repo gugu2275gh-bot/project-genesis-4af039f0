@@ -63,52 +63,63 @@ export default function KnowledgeBaseManager() {
   });
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      toast({ title: 'Apenas arquivos PDF são aceitos', variant: 'destructive' });
-      return;
+    const validFiles: File[] = [];
+    for (const file of Array.from(files)) {
+      if (!file.name.toLowerCase().endsWith('.pdf')) {
+        toast({ title: `"${file.name}" não é PDF — ignorado`, variant: 'destructive' });
+        continue;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast({ title: `"${file.name}" excede 10MB — ignorado`, variant: 'destructive' });
+        continue;
+      }
+      validFiles.push(file);
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ title: 'Arquivo muito grande (máx. 10MB)', variant: 'destructive' });
-      return;
-    }
+    if (validFiles.length === 0) return;
 
     setUploading(true);
-    try {
-      // Sanitize filename: remove accents, replace spaces/special chars
-      const sanitizedName = file.name
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove accents
-        .replace(/[^a-zA-Z0-9._-]/g, '_'); // replace special chars with underscore
-      const filePath = `pdfs/${Date.now()}_${sanitizedName}`;
+    let success = 0;
+    let failed = 0;
 
-      // Upload to storage
-      const { error: uploadError } = await supabase.storage
-        .from('knowledge-base')
-        .upload(filePath, file, { contentType: 'application/pdf' });
+    for (const file of validFiles) {
+      try {
+        const sanitizedName = file.name
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-zA-Z0-9._-]/g, '_');
+        const filePath = `pdfs/${Date.now()}_${sanitizedName}`;
 
-      if (uploadError) throw uploadError;
+        const { error: uploadError } = await supabase.storage
+          .from('knowledge-base')
+          .upload(filePath, file, { contentType: 'application/pdf' });
 
-      // Process the PDF
-      setProcessing(file.name);
-      const { data, error } = await supabase.functions.invoke('process-knowledge-pdf', {
-        body: { filePath, fileName: file.name },
-      });
+        if (uploadError) throw uploadError;
 
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+        setProcessing(file.name);
+        const { data, error } = await supabase.functions.invoke('process-knowledge-pdf', {
+          body: { filePath, fileName: file.name },
+        });
 
-      toast({ title: `PDF processado: ${data.chunks} blocos extraídos (${data.totalChars} caracteres)` });
-      queryClient.invalidateQueries({ queryKey: ['knowledge-base'] });
-    } catch (err: any) {
-      toast({ title: 'Erro ao processar PDF', description: err.message, variant: 'destructive' });
-    } finally {
-      setUploading(false);
-      setProcessing(null);
-      e.target.value = '';
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        success++;
+      } catch (err: any) {
+        failed++;
+        console.error('Upload error for', file.name, err);
+      }
     }
+
+    setProcessing(null);
+    setUploading(false);
+    e.target.value = '';
+    queryClient.invalidateQueries({ queryKey: ['knowledge-base'] });
+    toast({
+      title: `Upload concluído`,
+      description: `${success} PDF(s) processado(s)${failed > 0 ? `, ${failed} falharam` : ''}`,
+    });
   };
 
   const deleteMutation = useMutation({
