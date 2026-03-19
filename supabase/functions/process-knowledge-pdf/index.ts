@@ -197,10 +197,33 @@ serve(async (req) => {
 
       if (apiKey) {
         try {
-          const base64Pdf = uint8ToBase64(pdfBytes)
-          console.log(`PDF base64 size: ${base64Pdf.length} chars`)
-          
-          const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          // Step 1: Upload the PDF file to OpenAI
+          const formData = new FormData()
+          const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' })
+          formData.append('file', pdfBlob, fileName)
+          formData.append('purpose', 'assistants')
+
+          console.log('Uploading PDF to OpenAI Files API...')
+          const uploadResponse = await fetch('https://api.openai.com/v1/files', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+            },
+            body: formData,
+          })
+
+          if (!uploadResponse.ok) {
+            const uploadErr = await uploadResponse.text()
+            console.error('OpenAI file upload failed:', uploadResponse.status, uploadErr)
+            throw new Error(`File upload failed: ${uploadResponse.status}`)
+          }
+
+          const uploadData = await uploadResponse.json()
+          const fileId = uploadData.id
+          console.log(`PDF uploaded to OpenAI, file_id: ${fileId}`)
+
+          // Step 2: Use Responses API with file input to extract text
+          const aiResponse = await fetch('https://api.openai.com/v1/responses', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -208,39 +231,56 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               model: 'gpt-4o-mini',
-              messages: [
+              input: [
                 {
                   role: 'system',
-                  content: 'Extract ALL text content from this PDF document. Return ONLY the extracted text, preserving the original structure and paragraphs. Do not add any commentary.',
+                  content: 'Extract ALL text content from this PDF document. Return ONLY the extracted text, preserving the original structure and paragraphs. Do not add any commentary or formatting beyond what exists in the document.',
                 },
                 {
                   role: 'user',
                   content: [
-                    { type: 'text', text: `Extract all text from this PDF document named "${fileName}":` },
                     {
-                      type: 'image_url',
-                      image_url: { url: `data:application/pdf;base64,${base64Pdf}` },
+                      type: 'input_file',
+                      file_id: fileId,
+                    },
+                    {
+                      type: 'input_text',
+                      text: `Extract all text from this PDF document named "${fileName}". Return the complete text content.`,
                     },
                   ],
                 },
               ],
-              max_tokens: 16000,
+              max_output_tokens: 16000,
             }),
           })
 
           if (aiResponse.ok) {
             const aiData = await aiResponse.json()
-            const aiText = aiData.choices?.[0]?.message?.content?.trim()
+            const aiText = aiData.output?.filter((o: any) => o.type === 'message')
+              ?.flatMap((o: any) => o.content)
+              ?.filter((c: any) => c.type === 'output_text')
+              ?.map((c: any) => c.text)
+              ?.join('\n')
+              ?.trim()
             if (aiText && aiText.length > 50) {
               extractedText = aiText
               console.log(`OpenAI extraction succeeded: ${extractedText.length} chars`)
             } else {
-              console.log('OpenAI returned insufficient text')
+              console.log('OpenAI returned insufficient text:', aiText?.length || 0)
             }
           } else {
             const errText = await aiResponse.text()
             console.error('OpenAI extraction failed:', aiResponse.status, errText)
           }
+
+          // Step 3: Clean up the uploaded file
+          try {
+            await fetch(`https://api.openai.com/v1/files/${fileId}`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${apiKey}` },
+            })
+          } catch { /* ignore cleanup errors */ }
+
         } catch (aiErr) {
           console.error('OpenAI extraction error:', aiErr instanceof Error ? aiErr.message : aiErr)
         }
