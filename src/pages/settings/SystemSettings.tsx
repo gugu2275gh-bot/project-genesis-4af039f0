@@ -234,7 +234,7 @@ export default function SystemSettings() {
   }
 
   const generalConfigs = SYSTEM_CONFIGS.filter(c => c.category === 'general');
-  const messagingConfigs = SYSTEM_CONFIGS.filter(c => c.category === 'messaging');
+  
   const integrationConfigs = SYSTEM_CONFIGS.filter(c => c.category === 'integration')
     .filter(c => isSuperuser || !SENSITIVE_KEYS.includes(c.key));
 
