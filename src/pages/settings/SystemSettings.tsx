@@ -10,8 +10,9 @@ import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Settings, Save, Mail, MessageSquare, Globe } from 'lucide-react';
+import { Settings, Save, Mail, MessageSquare, Globe, EyeOff } from 'lucide-react';
 import KnowledgeBaseManager from '@/components/settings/KnowledgeBaseManager';
+import { useSuperuser } from '@/hooks/useSuperuser';
 
 interface SystemConfig {
   key: string;
@@ -154,6 +155,10 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
 ];
 
 export default function SystemSettings() {
+  const { isSuperuser } = useSuperuser();
+
+  const SENSITIVE_KEYS = ['openai_api_key', 'gemini_api_key', 'uazapi_url', 'uazapi_token'];
+
   const { toast } = useToast();
   const { hasRole } = useAuth();
   const queryClient = useQueryClient();
@@ -278,7 +283,8 @@ export default function SystemSettings() {
 
   const generalConfigs = SYSTEM_CONFIGS.filter(c => c.category === 'general');
   const messagingConfigs = SYSTEM_CONFIGS.filter(c => c.category === 'messaging');
-  const integrationConfigs = SYSTEM_CONFIGS.filter(c => c.category === 'integration');
+  const integrationConfigs = SYSTEM_CONFIGS.filter(c => c.category === 'integration')
+    .filter(c => isSuperuser || !SENSITIVE_KEYS.includes(c.key));
 
   return (
     <div className="space-y-6">
