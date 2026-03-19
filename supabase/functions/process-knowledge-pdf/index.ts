@@ -6,63 +6,158 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-/** Extract text from PDF binary data using basic parsing */
-function extractTextFromPDF(pdfBytes: Uint8Array): string {
-  const text = new TextDecoder('latin1').decode(pdfBytes)
+/** Decompress FlateDecode (zlib/deflate) stream data */
+async function decompressFlate(data: Uint8Array): Promise<Uint8Array> {
+  try {
+    const ds = new DecompressionStream('deflate')
+    const writer = ds.writable.getWriter()
+    const reader = ds.readable.getReader()
+    
+    const chunks: Uint8Array[] = []
+    const readAll = (async () => {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        chunks.push(value)
+      }
+    })()
+    
+    await writer.write(data)
+    await writer.close()
+    await readAll
+    
+    const totalLength = chunks.reduce((acc, c) => acc + c.length, 0)
+    const result = new Uint8Array(totalLength)
+    let offset = 0
+    for (const chunk of chunks) {
+      result.set(chunk, offset)
+      offset += chunk.length
+    }
+    return result
+  } catch {
+    // Try raw deflate (without zlib header)
+    try {
+      const ds = new DecompressionStream('raw')
+      const writer = ds.writable.getWriter()
+      const reader = ds.readable.getReader()
+      
+      const chunks: Uint8Array[] = []
+      const readAll = (async () => {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          chunks.push(value)
+        }
+      })()
+      
+      await writer.write(data)
+      await writer.close()
+      await readAll
+      
+      const totalLength = chunks.reduce((acc, c) => acc + c.length, 0)
+      const result = new Uint8Array(totalLength)
+      let offset = 0
+      for (const chunk of chunks) {
+        result.set(chunk, offset)
+        offset += chunk.length
+      }
+      return result
+    } catch {
+      return data // Return as-is if decompression fails
+    }
+  }
+}
+
+/** Extract text operators from a decompressed PDF content stream */
+function extractTextFromStream(streamText: string): string {
+  const parts: string[] = []
+  
+  // Extract text from TJ arrays: [(text) -kern (text)] TJ
+  const tjRegex = /\[((?:\([^)]*\)|[^\]])*)\]\s*TJ/gi
+  let match: RegExpExecArray | null
+  while ((match = tjRegex.exec(streamText)) !== null) {
+    const inner = match[1]
+    const strRegex = /\(([^)]*)\)/g
+    let strMatch: RegExpExecArray | null
+    const tjParts: string[] = []
+    while ((strMatch = strRegex.exec(inner)) !== null) {
+      tjParts.push(strMatch[1])
+    }
+    if (tjParts.length > 0) parts.push(tjParts.join(''))
+  }
+  
+  // Extract Tj operator: (text) Tj
+  const singleTjRegex = /\(([^)]*)\)\s*Tj/gi
+  while ((match = singleTjRegex.exec(streamText)) !== null) {
+    if (match[1].trim()) parts.push(match[1])
+  }
+  
+  return parts.join(' ')
+}
+
+/** Extract text from PDF binary data with stream decompression */
+async function extractTextFromPDF(pdfBytes: Uint8Array): Promise<string> {
+  const rawText = new TextDecoder('latin1').decode(pdfBytes)
   const extractedTexts: string[] = []
 
-  // Extract text from stream objects
+  // Find all stream objects
   const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g
   let match: RegExpExecArray | null
+  const streamPositions: Array<{ start: number; end: number }> = []
 
-  while ((match = streamRegex.exec(text)) !== null) {
-    const streamContent = match[1]
-    // Extract text between parentheses (PDF literal strings)
-    const textRegex = /\(([^)]*)\)/g
-    let textMatch: RegExpExecArray | null
-    while ((textMatch = textRegex.exec(streamContent)) !== null) {
-      const cleaned = textMatch[1]
-        .replace(/\\n/g, '\n')
-        .replace(/\\r/g, '')
-        .replace(/\\\(/g, '(')
-        .replace(/\\\)/g, ')')
-        .replace(/\\\\/g, '\\')
-      if (cleaned.trim().length > 0) {
-        extractedTexts.push(cleaned)
-      }
-    }
+  while ((match = streamRegex.exec(rawText)) !== null) {
+    streamPositions.push({
+      start: match.index,
+      end: match.index + match[0].length,
+    })
+  }
 
-    // Extract text from TJ arrays
-    const tjRegex = /\[((?:\([^)]*\)|[^\]])*)\]\s*TJ/g
-    let tjMatch: RegExpExecArray | null
-    while ((tjMatch = tjRegex.exec(streamContent)) !== null) {
-      const tjContent = tjMatch[1]
-      const tjTextRegex = /\(([^)]*)\)/g
-      let tjTextMatch: RegExpExecArray | null
-      const parts: string[] = []
-      while ((tjTextMatch = tjTextRegex.exec(tjContent)) !== null) {
-        parts.push(tjTextMatch[1])
+  for (const pos of streamPositions) {
+    // Check if this stream uses FlateDecode by looking at the object header before it
+    const headerStart = Math.max(0, pos.start - 500)
+    const header = rawText.substring(headerStart, pos.start)
+    const isFlate = header.includes('FlateDecode')
+    
+    // Get raw stream bytes
+    const streamMatch = /stream\r?\n([\s\S]*?)\r?\nendstream/.exec(rawText.substring(pos.start))
+    if (!streamMatch) continue
+    
+    const streamContentStr = streamMatch[1]
+    
+    if (isFlate) {
+      // Convert latin1 string back to bytes for decompression
+      const streamBytes = new Uint8Array(streamContentStr.length)
+      for (let i = 0; i < streamContentStr.length; i++) {
+        streamBytes[i] = streamContentStr.charCodeAt(i)
       }
-      if (parts.length > 0) {
-        extractedTexts.push(parts.join(''))
+      
+      try {
+        const decompressed = await decompressFlate(streamBytes)
+        const decompressedText = new TextDecoder('latin1').decode(decompressed)
+        const text = extractTextFromStream(decompressedText)
+        if (text.trim()) extractedTexts.push(text)
+      } catch {
+        // Skip failed decompressions
       }
-    }
-
-    // Extract Tj operator text
-    const singleTjRegex = /\(([^)]*)\)\s*Tj/g
-    let singleTjMatch: RegExpExecArray | null
-    while ((singleTjMatch = singleTjRegex.exec(streamContent)) !== null) {
-      if (singleTjMatch[1].trim().length > 0) {
-        extractedTexts.push(singleTjMatch[1])
-      }
+    } else {
+      // Try direct text extraction from uncompressed stream
+      const text = extractTextFromStream(streamContentStr)
+      if (text.trim()) extractedTexts.push(text)
     }
   }
 
-  return extractedTexts.join(' ')
-    .replace(/\x00/g, '')           // Remove null bytes
-    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g, '') // Remove other control chars
+  let result = extractedTexts.join(' ')
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '')
+    .replace(/\\\(/g, '(')
+    .replace(/\\\)/g, ')')
+    .replace(/\\\\/g, '\\')
+    .replace(/\x00/g, '')
+    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+
+  return result
 }
 
 /** Split text into chunks of roughly maxChars characters at sentence boundaries */
