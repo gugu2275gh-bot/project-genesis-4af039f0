@@ -243,7 +243,7 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
 async function getConversationHistory(
   supabase: ReturnType<typeof createClient>,
   leadId: string,
-  limit = 20
+  limit = 10
 ): Promise<Array<{ role: string; content: string }>> {
   const { data: messages } = await supabase
     .from('mensagens_cliente')
