@@ -381,27 +381,46 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     { role: 'user', content: currentMessage },
   ]
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-5-mini',
-      messages,
-      max_completion_tokens: 500,
-    }),
-  })
+  console.log('Calling OpenAI API with', messages.length, 'messages, system prompt length:', fullSystemPrompt.length)
+  
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 45000) // 45s timeout
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error('OpenAI API error:', response.status, errorText)
-    throw new Error(`OpenAI API error: ${response.status}`)
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-5-mini',
+        messages,
+        max_completion_tokens: 500,
+      }),
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('OpenAI API error:', response.status, errorText)
+      throw new Error(`OpenAI API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    const result = data.choices?.[0]?.message?.content?.trim() || ''
+    console.log('OpenAI response received, length:', result.length)
+    return result
+  } catch (err) {
+    clearTimeout(timeoutId)
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      console.error('OpenAI API call timed out after 45s')
+      throw new Error('OpenAI API timeout')
+    }
+    throw err
   }
-
-  const data = await response.json()
-  return data.choices?.[0]?.message?.content?.trim() || ''
 }
 
 /** Send WhatsApp message via API */
@@ -746,10 +765,13 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
           }
         }
 
+        // For audio/media-only messages without text, use a placeholder for AI context
+        const messageForAI = message.body || (mediaType ? `[Cliente enviou um ${mediaType === 'ptt' ? 'áudio' : mediaType}]` : '')
+        
         // Get conversation history and knowledge base context
         const [history, knowledgeContext] = await Promise.all([
           getConversationHistory(supabase, lead.id),
-          getKnowledgeBaseContext(supabase, message.body),
+          messageForAI ? getKnowledgeBaseContext(supabase, messageForAI) : Promise.resolve(''),
         ])
 
         console.log(`Knowledge base context: ${knowledgeContext.length} chars`)
@@ -757,7 +779,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
         // Generate AI response
         const aiResponse = await generateAIResponse(
           history,
-          message.body,
+          messageForAI,
           contact.full_name,
           systemPrompt.replace('{nome}', contact.full_name),
           openaiApiKey,
