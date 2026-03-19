@@ -65,15 +65,6 @@ interface WebhookPayload {
     caption?: string;
     base64?: string;
   };
-    senderName?: string;
-    messageTimestamp?: number;
-    fromMe?: boolean;
-    mediaUrl?: string;
-    mimetype?: string;
-    filename?: string;
-    caption?: string;
-    base64?: string;
-  };
   name?: string;
   source?: string;
   // UAZAPI format
