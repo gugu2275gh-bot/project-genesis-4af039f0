@@ -243,7 +243,7 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
 async function getConversationHistory(
   supabase: ReturnType<typeof createClient>,
   leadId: string,
-  limit = 20
+  limit = 10
 ): Promise<Array<{ role: string; content: string }>> {
   const { data: messages } = await supabase
     .from('mensagens_cliente')
@@ -471,7 +471,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
       body: JSON.stringify({
         model: 'gpt-5-mini',
         messages,
-        max_completion_tokens: 500,
+        max_completion_tokens: 1000,
       }),
       signal: controller.signal,
     })
