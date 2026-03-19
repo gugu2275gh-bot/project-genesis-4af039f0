@@ -628,10 +628,49 @@ serve(async (req) => {
 
             if (uazapiResponse.ok) {
               const contentType = uazapiResponse.headers.get('content-type') || ''
-              // If response is JSON, it's an error
+              // Some UAZAPI setups return JSON with fileURL instead of binary
               if (contentType.includes('application/json')) {
-                const errData = await uazapiResponse.json()
-                console.warn('UAZAPI download returned JSON (error):', JSON.stringify(errData))
+                const jsonData = await uazapiResponse.json().catch(() => null) as Record<string, unknown> | null
+                console.warn('UAZAPI download returned JSON:', JSON.stringify(jsonData))
+
+                const fileUrlFromJson =
+                  (typeof jsonData?.fileURL === 'string' && jsonData.fileURL) ||
+                  (typeof jsonData?.fileUrl === 'string' && jsonData.fileUrl) ||
+                  (typeof jsonData?.url === 'string' && jsonData.url) ||
+                  null
+                const mimeFromJson = typeof jsonData?.mimetype === 'string' ? jsonData.mimetype : null
+
+                if (fileUrlFromJson) {
+                  try {
+                    console.log('Downloading media from UAZAPI fileURL:', fileUrlFromJson)
+                    const fileUrlResponse = await fetch(fileUrlFromJson)
+                    if (fileUrlResponse.ok) {
+                      mediaBuffer = await fileUrlResponse.arrayBuffer()
+                      const firstBytes = new Uint8Array(mediaBuffer.slice(0, 4))
+                      const isJpeg = firstBytes[0] === 0xFF && firstBytes[1] === 0xD8
+                      const isPng = firstBytes[0] === 0x89 && firstBytes[1] === 0x50 && firstBytes[2] === 0x4E && firstBytes[3] === 0x47
+                      const isOgg = firstBytes[0] === 0x4F && firstBytes[1] === 0x67 && firstBytes[2] === 0x67 && firstBytes[3] === 0x53
+                      const isPdf = firstBytes[0] === 0x25 && firstBytes[1] === 0x50 && firstBytes[2] === 0x44 && firstBytes[3] === 0x46
+                      const isWebp = firstBytes[0] === 0x52 && firstBytes[1] === 0x49 // RIFF
+
+                      if (isJpeg || isPng || isOgg || isPdf || isWebp || mediaBuffer.byteLength > 1000) {
+                        downloadSource = 'uazapi_fileURL'
+                        mediaMimetype = mimeFromJson || fileUrlResponse.headers.get('content-type')?.split(';')[0].trim() || mediaMimetype
+                        console.log('Media downloaded from UAZAPI fileURL, size:', mediaBuffer.byteLength, 'mimetype:', mediaMimetype)
+                      } else {
+                        console.warn('UAZAPI fileURL returned invalid/encrypted data, first bytes:', Array.from(firstBytes).map(b => b.toString(16)).join(' '))
+                        mediaBuffer = null
+                        storedMediaUrl = fileUrlFromJson // keep at least a clickable link
+                      }
+                    } else {
+                      console.warn('UAZAPI fileURL download failed:', fileUrlResponse.status)
+                      storedMediaUrl = fileUrlFromJson // fallback to external URL
+                    }
+                  } catch (fileUrlErr) {
+                    console.warn('UAZAPI fileURL fetch error:', fileUrlErr instanceof Error ? fileUrlErr.message : fileUrlErr)
+                    storedMediaUrl = fileUrlFromJson // fallback to external URL
+                  }
+                }
               } else {
                 mediaBuffer = await uazapiResponse.arrayBuffer()
                 // Validate it's not encrypted/invalid (check first bytes)
@@ -641,7 +680,7 @@ serve(async (req) => {
                 const isOgg = firstBytes[0] === 0x4F && firstBytes[1] === 0x67 && firstBytes[2] === 0x67 && firstBytes[3] === 0x53
                 const isPdf = firstBytes[0] === 0x25 && firstBytes[1] === 0x50 && firstBytes[2] === 0x44 && firstBytes[3] === 0x46
                 const isWebp = firstBytes[0] === 0x52 && firstBytes[1] === 0x49 // RIFF
-                
+
                 if (isJpeg || isPng || isOgg || isPdf || isWebp || mediaBuffer.byteLength > 1000) {
                   downloadSource = 'uazapi'
                   // Update mimetype from response if available
