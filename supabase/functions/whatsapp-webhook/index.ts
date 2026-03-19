@@ -51,9 +51,10 @@ interface WebhookPayload {
   phone?: string;
   message?: string | {
     text?: string;
-    content?: string;
+    content?: string | Record<string, unknown>;
     messageid?: string;
     type?: string;
+    mediaType?: string;
     sender?: string;
     senderName?: string;
     messageTimestamp?: number;
@@ -181,17 +182,36 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
     }
     const phone = msg.sender?.replace(/[@s.whatsapp.net]/g, '').replace(/\D/g, '') ||
                   payload.chat.phone?.replace(/\D/g, '') || ''
-    const body = msg.text || msg.content || msg.caption || ''
-    const mediaType = ['image', 'document', 'audio', 'video', 'sticker', 'ptt'].includes(msg.type || '') ? msg.type : undefined
+
+    // Map UAZAPI messageType to standard media types
+    const uazapiTypeMap: Record<string, string> = {
+      'AudioMessage': 'ptt',
+      'ImageMessage': 'image',
+      'VideoMessage': 'video',
+      'DocumentMessage': 'document',
+      'StickerMessage': 'sticker',
+    }
+    const standardTypes = ['image', 'document', 'audio', 'video', 'sticker', 'ptt']
+    const resolvedType = uazapiTypeMap[msg.type || ''] || msg.mediaType || msg.type || undefined
+    const isMedia = standardTypes.includes(resolvedType || '')
+
+    // For media messages, content may be an object with URL/mimetype — don't use as text
+    const contentObj = typeof msg.content === 'object' && msg.content !== null ? msg.content as Record<string, unknown> : null
+    const body = msg.text || msg.caption || (contentObj ? '' : (msg.content as string || ''))
+
+    // Extract media URL: direct field, or from content.URL
+    const mediaUrl = msg.mediaUrl || (contentObj && typeof contentObj.URL === 'string' ? contentObj.URL : undefined)
+    const mimetype = msg.mimetype || (contentObj && typeof contentObj.mimetype === 'string' ? contentObj.mimetype : undefined)
+
     return {
       from: phone,
       body,
       timestamp: msg.messageTimestamp ? String(msg.messageTimestamp) : undefined,
       messageId: msg.messageid,
-      type: msg.type,
+      type: isMedia ? resolvedType : msg.type,
       name: msg.senderName || payload.chat.name,
-      mediaUrl: msg.mediaUrl,
-      mimetype: msg.mimetype,
+      mediaUrl,
+      mimetype,
       filename: msg.filename,
       caption: msg.caption,
     }
@@ -708,7 +728,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
         }
 
         // Try to extract name/email from the current message and update contact
-        const extracted = extractNameAndEmail(message.body)
+        const extracted = extractNameAndEmail(String(message.body || ''))
         if (extracted.name || extracted.email) {
           const updateData: Record<string, string> = {}
           if (extracted.name && (contact.full_name.startsWith('WhatsApp ') || contact.full_name === message.name)) {
