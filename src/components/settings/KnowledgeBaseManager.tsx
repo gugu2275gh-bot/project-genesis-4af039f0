@@ -132,6 +132,42 @@ export default function KnowledgeBaseManager() {
     },
   });
 
+  const handleReprocessAll = async () => {
+    if (!entries?.length) return;
+    setReprocessing(true);
+    let success = 0;
+    let failed = 0;
+    
+    // Get unique file paths from storage
+    const { data: storageFiles } = await supabase.storage.from('knowledge-base').list('pdfs');
+    
+    for (const entry of entries) {
+      try {
+        setProcessing(entry.file_name);
+        const { data, error } = await supabase.functions.invoke('process-knowledge-pdf', {
+          body: { filePath: entry.file_path, fileName: entry.file_name },
+        });
+        if (error || data?.error) {
+          failed++;
+          console.error('Reprocess error for', entry.file_name, error || data?.error);
+        } else {
+          success++;
+        }
+      } catch (err) {
+        failed++;
+        console.error('Reprocess error for', entry.file_name, err);
+      }
+    }
+    
+    setProcessing(null);
+    setReprocessing(false);
+    queryClient.invalidateQueries({ queryKey: ['knowledge-base'] });
+    toast({
+      title: `Reprocessamento concluído`,
+      description: `${success} PDFs reprocessados com sucesso${failed > 0 ? `, ${failed} falharam` : ''}`,
+    });
+  };
+
   if (isLoading) {
     return (
       <Card>
