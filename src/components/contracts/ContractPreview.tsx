@@ -200,14 +200,19 @@ export function ContractPreview({
         {isEditing && (
           <div className="mb-6 p-4 border border-border rounded-lg bg-muted/50 space-y-4">
             <p className="text-sm font-medium text-foreground">Campos editáveis:</p>
-            <div>
-              <Label className="text-xs text-muted-foreground">Detalhes do Contrato e Pagamento</Label>
-              <Textarea
-                value={editedPaymentConditions}
-                onChange={(e) => setEditedPaymentConditions(e.target.value)}
-                className="mt-1 min-h-[160px]"
-                placeholder="Preencha todos os detalhes: nome do cliente, nº documento, nº contrato, valor dos honorários, condições e parcelas de pagamento..."
-              />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Nome do Cliente</Label>
+                <Input value={editedName} onChange={(e) => setEditedName(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Nº Documento</Label>
+                <Input value={editedDocument} onChange={(e) => setEditedDocument(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Nº Contrato</Label>
+                <Input value={editedContractNumber} onChange={(e) => setEditedContractNumber(e.target.value)} className="mt-1" />
+              </div>
             </div>
           </div>
         )}
