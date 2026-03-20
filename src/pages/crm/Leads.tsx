@@ -144,11 +144,11 @@ export default function Leads() {
       return;
     } else {
       if (!newLead.full_name) return;
-      const phoneNumber = newLead.phone ? parseInt(newLead.phone.replace(/\D/g, ''), 10) : undefined;
+      const phoneStr = newLead.phone ? newLead.phone.replace(/\D/g, '') : undefined;
       const contact = await createContact.mutateAsync({
         full_name: newLead.full_name,
         email: newLead.email || undefined,
-        phone: phoneNumber,
+        phone: phoneStr,
         origin_channel: newLead.origin_channel,
         referral_name: newLead.origin_channel === 'COLABORADOR' ? newLead.referral_name : undefined,
         preferred_language: 'pt',

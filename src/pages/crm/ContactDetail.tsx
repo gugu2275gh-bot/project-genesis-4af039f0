@@ -222,11 +222,11 @@ export default function ContactDetail() {
     if (!id) return;
     
     try {
-      const phoneNumber = phoneInput ? parseInt(phoneInput.replace(/\D/g, ''), 10) : null;
+      const phoneStr = phoneInput ? phoneInput.replace(/\D/g, '') : null;
       await updateContact.mutateAsync({
         id,
         ...editedContact,
-        phone: phoneNumber || undefined,
+        phone: phoneStr || undefined,
       });
       toast({
         title: 'Contato atualizado',

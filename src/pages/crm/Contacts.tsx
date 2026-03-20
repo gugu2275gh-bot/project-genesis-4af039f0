@@ -38,10 +38,10 @@ export default function Contacts() {
   const handleCreate = async () => {
     if (!newContact.full_name) return;
     if (isBeneficiary && !principalContactId) return;
-    const phoneNumber = phoneInput ? parseInt(phoneInput.replace(/\D/g, ''), 10) : null;
+    const phoneStr = phoneInput ? phoneInput.replace(/\D/g, '') : null;
     const created = await createContact.mutateAsync({ 
       ...newContact, 
-      phone: phoneNumber || undefined,
+      phone: phoneStr || undefined,
       is_beneficiary: isBeneficiary,
       linked_principal_contact_id: isBeneficiary ? principalContactId : null,
     } as ContactInsert);

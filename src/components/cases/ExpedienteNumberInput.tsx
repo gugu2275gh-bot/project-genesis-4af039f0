@@ -21,7 +21,7 @@ interface ExpedienteNumberInputProps {
   serviceCaseId: string;
   expedienteNumber: string | null;
   clientName: string;
-  clientPhone: number | null;
+  clientPhone: string | number | null;
   clientUserId: string | null;
   serviceType: string;
   onSaveSuccess?: () => void;

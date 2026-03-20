@@ -802,7 +802,7 @@ export function useTieNotification() {
     }: { 
       caseId: string;
       clientName: string;
-      clientPhone: number | string;
+      clientPhone: string | number;
       leadId: string;
       clientUserId?: string | null;
     }) => {

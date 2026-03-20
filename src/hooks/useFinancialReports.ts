@@ -31,7 +31,7 @@ export interface ContractNotStarted {
   first_due_date: string | null;
   days_without_payment: number;
   client_name: string;
-  client_phone: number | null;
+  client_phone: string | number | null;
   opportunity_id: string;
   contact_id: string | null;
 }

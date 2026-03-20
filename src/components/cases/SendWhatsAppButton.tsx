@@ -231,7 +231,7 @@ Equipe CB Asesoria 🙌`,
 ];
 
 interface SendWhatsAppButtonProps {
-  phone: number | null;
+  phone: string | number | null;
   clientName: string;
   leadId?: string | null;
   serviceType?: string;

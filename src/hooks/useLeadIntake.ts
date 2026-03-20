@@ -130,7 +130,7 @@ export function useLeadIntakeMutations() {
           .from("contacts")
           .insert({
             full_name: intake.full_name || `Cliente ${normalizedPhone}`,
-            phone: phoneNumber,
+            phone: phoneNumber || null,
             email: intake.email || null,
             preferred_language: preferredLang,
             origin_channel: originChannel,
