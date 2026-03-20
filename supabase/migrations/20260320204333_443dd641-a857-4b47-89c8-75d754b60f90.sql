@@ -1,0 +1,1 @@
+ALTER TABLE public.contacts ALTER COLUMN phone TYPE text USING phone::text;
