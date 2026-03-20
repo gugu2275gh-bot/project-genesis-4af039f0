@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -237,39 +238,14 @@ export function ContractPreview({
               </div>
             </div>
 
-            {/* Editable Payments */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-muted-foreground">Parcelas / Cuotas</Label>
-                <Button variant="outline" size="sm" onClick={addPayment} type="button">
-                  + Adicionar Parcela
-                </Button>
-              </div>
-              {editedPayments.map((p, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground w-16 shrink-0">Cuota {i + 1}</span>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={p.amount}
-                    onChange={(e) => updatePayment(i, 'amount', parseFloat(e.target.value) || 0)}
-                    placeholder="Valor"
-                    className="flex-1"
-                  />
-                  <Input
-                    type="date"
-                    value={p.due_date || ''}
-                    onChange={(e) => updatePayment(i, 'due_date', e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button variant="ghost" size="icon" onClick={() => removePayment(i)} className="shrink-0">
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-              {editedPayments.length === 0 && (
-                <p className="text-xs text-muted-foreground italic">Nenhuma parcela adicionada</p>
-              )}
+            <div>
+              <Label className="text-xs text-muted-foreground">Detalhes de Pagamento</Label>
+              <Textarea
+                value={editedPaymentConditions}
+                onChange={(e) => setEditedPaymentConditions(e.target.value)}
+                className="mt-1 min-h-[120px]"
+                placeholder="Descreva as condições de pagamento, parcelas, valores e datas de vencimento..."
+              />
             </div>
           </div>
         )}
