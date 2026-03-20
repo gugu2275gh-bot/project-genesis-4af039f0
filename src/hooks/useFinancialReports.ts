@@ -13,7 +13,7 @@ export interface ContractWithBalance {
   signed_at: string | null;
   is_suspended: boolean | null;
   client_name: string;
-  client_phone: number | null;
+  client_phone: string | number | null;
   paid_amount: number;
   balance: number;
   overdue_count: number;
