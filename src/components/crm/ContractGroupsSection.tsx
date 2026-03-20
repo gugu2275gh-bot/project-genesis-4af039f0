@@ -24,6 +24,11 @@ import {
   CONTRACT_STATUS_LABELS,
 } from '@/types/database';
 
+export interface BeneficiaryContact {
+  id: string;
+  full_name: string;
+}
+
 interface ContractGroupsSectionProps {
   contactId: string;
   contactName: string;
@@ -31,6 +36,7 @@ interface ContractGroupsSectionProps {
   paymentNotes: string | null;
   confirmedLeadIds: string[];
   navigate: (path: string) => void;
+  beneficiaryContacts?: BeneficiaryContact[];
 }
 
 export function ContractGroupsSection({
@@ -40,6 +46,7 @@ export function ContractGroupsSection({
   paymentNotes,
   confirmedLeadIds,
   navigate,
+  beneficiaryContacts = [],
 }: ContractGroupsSectionProps) {
   const { user } = useAuth();
   const { toast } = useToast();
