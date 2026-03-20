@@ -80,7 +80,7 @@ export default function Leads() {
       contactId: string;
       contactName: string;
       contactEmail: string | null;
-      contactPhone: number | null;
+      contactPhone: string | null;
       leads: typeof filteredLeads;
     }>();
 
