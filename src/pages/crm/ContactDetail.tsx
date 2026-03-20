@@ -1197,6 +1197,13 @@ export default function ContactDetail() {
               navigate={navigate}
             />
           )}
+
+          {/* Pendências por Setor */}
+          <PendingItemsSection contactId={id!} />
+
+          {/* Log de Reativações */}
+          <ReactivationLogSection contactId={id!} />
+
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
