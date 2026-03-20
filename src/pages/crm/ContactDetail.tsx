@@ -1178,6 +1178,10 @@ export default function ContactDetail() {
               paymentNotes={paymentNotes}
               confirmedLeadIds={confirmedLeadIds}
               navigate={navigate}
+              beneficiaryContacts={contactBeneficiaries.map(b => ({
+                id: b.contact_id || b.id,
+                full_name: b.full_name,
+              }))}
             />
           )}
 
