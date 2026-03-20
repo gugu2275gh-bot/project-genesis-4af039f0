@@ -538,7 +538,7 @@ export function ContractGroupsSection({
     const editable = options?.editable !== false; // default true
 
     // Find payments for this lead
-    const leadPayments = contactPayments.filter((p: any) => {
+    const leadPayments = deduplicatedPayments.filter((p: any) => {
       const pLeadId = p.opportunities?.leads?.id || p.opportunities?.lead_id;
       return pLeadId === lead.id;
     });
