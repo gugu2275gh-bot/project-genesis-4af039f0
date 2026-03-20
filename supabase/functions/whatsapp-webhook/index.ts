@@ -767,7 +767,7 @@ serve(async (req) => {
       const { data: newContact, error: contactError } = await supabase
         .from('contacts')
         .insert({
-          phone: parseInt(phoneNumber),
+          phone: phoneNumber,
           full_name: message.name || `WhatsApp ${phoneNumber.slice(-4)}`,
           origin_channel: 'WHATSAPP',
         })
