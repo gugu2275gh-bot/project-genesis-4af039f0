@@ -104,6 +104,47 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
     type: 'boolean',
     category: 'integration',
   },
+  // Reactivation settings
+  {
+    key: 'enable_smart_reactivation',
+    value: 'true',
+    label: 'Reativação Inteligente',
+    description: 'Habilita o motor de reativação inteligente de sessões expiradas',
+    type: 'boolean',
+    category: 'reactivation',
+  },
+  {
+    key: 'active_session_timeout_minutes',
+    value: '120',
+    label: 'Timeout da Sessão (minutos)',
+    description: 'Tempo em minutos sem interação para considerar a sessão expirada',
+    type: 'number',
+    category: 'reactivation',
+  },
+  {
+    key: 'llm_confidence_threshold_direct_route',
+    value: '0.90',
+    label: 'Threshold Roteamento Direto',
+    description: 'Confiança mínima (0-1) para rotear diretamente sem pedir confirmação',
+    type: 'number',
+    category: 'reactivation',
+  },
+  {
+    key: 'llm_confidence_threshold_confirmation',
+    value: '0.70',
+    label: 'Threshold Confirmação',
+    description: 'Confiança mínima (0-1) para pedir confirmação ao cliente',
+    type: 'number',
+    category: 'reactivation',
+  },
+  {
+    key: 'reactivation_context_message_limit',
+    value: '5',
+    label: 'Limite de Mensagens de Contexto',
+    description: 'Número máximo de mensagens recentes por pendência enviadas à LLM',
+    type: 'number',
+    category: 'reactivation',
+  },
 ];
 
 export default function SystemSettings() {
