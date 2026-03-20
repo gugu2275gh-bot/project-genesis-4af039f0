@@ -881,14 +881,50 @@ export function ContractGroupsSection({
         </CardContent>
       </Card>
 
+      {/* Person Selector Dialog */}
+      <Dialog open={showPersonSelector} onOpenChange={(open) => { if (!open) setShowPersonSelector(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Para quem é o serviço?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-2 h-auto py-3"
+              onClick={() => handlePersonSelected(null, contactName)}
+            >
+              <User className="h-4 w-4 shrink-0" />
+              <div className="text-left">
+                <p className="font-medium">{contactName}</p>
+                <p className="text-xs text-muted-foreground">Titular</p>
+              </div>
+            </Button>
+            {beneficiaryContacts.map(b => (
+              <Button
+                key={b.id}
+                variant="outline"
+                className="w-full justify-start gap-2 h-auto py-3"
+                onClick={() => handlePersonSelected(b.id, b.full_name)}
+              >
+                <Users className="h-4 w-4 shrink-0" />
+                <div className="text-left">
+                  <p className="font-medium">{b.full_name}</p>
+                  <p className="text-xs text-muted-foreground">Beneficiário</p>
+                </div>
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Payment Agreement Dialog */}
       <PaymentAgreementDialog
         open={showPaymentAgreement}
         onOpenChange={async (open) => {
           if (!open) {
+            const targetContactId = selectedBeneficiaryId || contactId;
             // If we were adding a service to a specific contract, link new leads
             if (addServiceToContractId) {
-              // Wait a moment for queries to settle, then find newly created leads not yet linked
               await new Promise(r => setTimeout(r, 500));
               const { data: currentLinks } = await supabase
                 .from('contract_leads')
@@ -896,16 +932,15 @@ export function ContractGroupsSection({
                 .eq('contract_id', addServiceToContractId);
               const linkedIds = new Set(currentLinks?.map(cl => cl.lead_id) || []);
               
-              // Refresh leads for this contact
+              // Refresh leads for the target contact
               const { data: freshLeads } = await supabase
                 .from('leads')
                 .select('id')
-                .eq('contact_id', contactId)
+                .eq('contact_id', targetContactId)
                 .order('created_at', { ascending: false });
               
               const newLeads = (freshLeads || []).filter(l => !linkedIds.has(l.id));
               if (newLeads.length > 0) {
-                // Link the most recently created lead (the one just added)
                 await supabase.from('contract_leads').upsert(
                   [{ contract_id: addServiceToContractId, lead_id: newLeads[0].id }],
                   { onConflict: 'contract_id,lead_id' }
@@ -913,15 +948,22 @@ export function ContractGroupsSection({
                 queryClient.invalidateQueries({ queryKey: ['contract-leads', contactId] });
                 queryClient.invalidateQueries({ queryKey: ['contact-contracts', contactId] });
                 queryClient.invalidateQueries({ queryKey: ['contact-payments', contactId] });
+                queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', contactId] });
+                queryClient.invalidateQueries({ queryKey: ['beneficiary-contract-leads', contactId] });
+                queryClient.invalidateQueries({ queryKey: ['beneficiary-payments-in-groups', contactId] });
               }
               setAddServiceToContractId(null);
             }
             setEditPaymentData(null);
+            setSelectedBeneficiaryId(null);
+            setSelectedBeneficiaryName('');
+            // Also invalidate beneficiary queries
+            queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', contactId] });
           }
           setShowPaymentAgreement(open);
         }}
-        contactId={contactId}
-        contactName={contactName}
+        contactId={selectedBeneficiaryId || contactId}
+        contactName={selectedBeneficiaryName || contactName}
         initialData={editPaymentData}
       />
 
