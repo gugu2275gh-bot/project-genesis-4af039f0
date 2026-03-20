@@ -559,7 +559,14 @@ export function ContractGroupsSection({
               className="cursor-pointer flex-1"
               onClick={() => navigate(`/crm/leads/${lead.id}`)}
             >
-              <p className={`font-medium ${isServiceCompleted ? 'text-muted-foreground' : ''}`}>{displayName}</p>
+              <p className={`font-medium ${isServiceCompleted ? 'text-muted-foreground' : ''}`}>
+                {displayName}
+                {lead._isBeneficiary && (
+                  <Badge variant="outline" className="ml-2 text-xs border-primary/30 text-primary bg-primary/5">
+                    {lead._beneficiaryName}
+                  </Badge>
+                )}
+              </p>
               <p className="text-sm text-muted-foreground">
                 Criado em {format(new Date(lead.created_at!), "dd/MM/yyyy", { locale: ptBR })}
               </p>
