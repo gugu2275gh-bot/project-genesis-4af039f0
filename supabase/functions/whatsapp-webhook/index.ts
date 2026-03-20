@@ -757,7 +757,7 @@ serve(async (req) => {
     const { data: existingContact } = await supabase
       .from('contacts')
       .select('id, full_name')
-      .eq('phone', parseInt(phoneNumber))
+      .eq('phone', phoneNumber)
       .single()
 
     contact = existingContact
