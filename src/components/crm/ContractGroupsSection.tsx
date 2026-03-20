@@ -710,11 +710,7 @@ export function ContractGroupsSection({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          setAddServiceToContractId(null);
-                          setEditPaymentData(null);
-                          setShowPaymentAgreement(true);
-                        }}
+                        onClick={() => handleAddServiceClick(null)}
                       >
                         <Plus className="h-4 w-4 mr-1" />
                         Adicionar Serviço
