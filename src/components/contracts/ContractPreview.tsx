@@ -151,7 +151,7 @@ export function ContractPreview({
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg">Pré-visualização do Contrato</CardTitle>
         <div className="flex gap-2">
-          {contractStatus !== 'ASSINADO' && (
+          {contractStatus === 'EM_ELABORACAO' && (
             <>
               {isEditing ? (
                 <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
@@ -165,6 +165,33 @@ export function ContractPreview({
                 </Button>
               )}
             </>
+          )}
+          {contractStatus === 'EM_ELABORACAO' && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline">
+                  <Download className="h-4 w-4 mr-1" />
+                  Baixar
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={handleDownloadPDF}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDownloadWord}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Word (.docx)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {canDownload && contractStatus === 'APROVADO' && (
+            <Button size="sm" onClick={handleDownloadPDF}>
+              <Download className="h-4 w-4 mr-1" />
+              Baixar PDF
+            </Button>
           )}
           {canDownload && contractStatus === 'ASSINADO' && (
             <DropdownMenu>
@@ -186,12 +213,6 @@ export function ContractPreview({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          )}
-          {canDownload && contractStatus === 'APROVADO' && (
-            <Button size="sm" onClick={handleDownloadPDF}>
-              <Download className="h-4 w-4 mr-1" />
-              Baixar PDF
-            </Button>
           )}
         </div>
       </CardHeader>
