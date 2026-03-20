@@ -467,6 +467,29 @@ export function ContractGroupsSection({
   // Draft contracts that can receive more services
   const draftContracts = contractGroups.filter(g => g.contract?.status === 'EM_ELABORACAO');
 
+  // Helper: open person selector or directly open payment dialog
+  const handleAddServiceClick = (contractId?: string | null) => {
+    if (beneficiaryContacts.length > 0) {
+      setPendingAddServiceContractId(contractId ?? null);
+      setShowPersonSelector(true);
+    } else {
+      setAddServiceToContractId(contractId ?? null);
+      setEditPaymentData(null);
+      setSelectedBeneficiaryId(null);
+      setSelectedBeneficiaryName('');
+      setShowPaymentAgreement(true);
+    }
+  };
+
+  const handlePersonSelected = (personId: string | null, personName: string) => {
+    setSelectedBeneficiaryId(personId);
+    setSelectedBeneficiaryName(personName);
+    setAddServiceToContractId(pendingAddServiceContractId ?? null);
+    setEditPaymentData(null);
+    setShowPersonSelector(false);
+    setShowPaymentAgreement(true);
+  };
+
   const renderPaymentRow = (payment: any, servicePayments: any[], editable: boolean = true) => (
     <div key={payment.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-background">
       <div className="flex-1 min-w-0">
