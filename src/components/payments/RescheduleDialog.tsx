@@ -33,7 +33,7 @@ interface RescheduleDialogProps {
       leads?: {
         contacts?: {
           full_name: string;
-          phone?: number | null;
+          phone?: string | number | null;
         } | null;
       };
     };

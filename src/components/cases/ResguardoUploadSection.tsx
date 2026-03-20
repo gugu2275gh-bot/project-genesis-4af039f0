@@ -36,7 +36,7 @@ interface ResguardoUploadSectionProps {
     technical_status?: string;
   };
   clientName?: string;
-  clientPhone?: number | null;
+  clientPhone?: string | number | null;
   onRegisterTieAvailable: (data: {
     tie_lot_number: string;
     tie_validity_date?: string;

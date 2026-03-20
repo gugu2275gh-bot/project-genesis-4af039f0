@@ -134,7 +134,7 @@ export default function LeadDetail() {
     await updateContact.mutateAsync({
       id: lead.contact_id,
       full_name: editForm.full_name.trim(),
-      phone: editForm.phone ? parseInt(editForm.phone.replace(/\D/g, '')) : null,
+      phone: editForm.phone ? editForm.phone.replace(/\D/g, '') : null,
       email: editForm.email.trim() || null,
       nationality: editForm.nationality.trim() || null,
       country_of_origin: editForm.country_of_origin.trim() || null,

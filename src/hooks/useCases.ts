@@ -206,7 +206,7 @@ export function useCases() {
         // Send final congratulatory WhatsApp message
         try {
           const oppData = (data as any).opportunities as { 
-            leads: { id: string; contacts: { full_name: string; phone: number | null } } 
+            leads: { id: string; contacts: { full_name: string; phone: string | null } } 
           };
           const contact = oppData?.leads?.contacts;
           const leadId = oppData?.leads?.id;
@@ -802,7 +802,7 @@ export function useTieNotification() {
     }: { 
       caseId: string;
       clientName: string;
-      clientPhone: number | string;
+      clientPhone: string | number;
       leadId: string;
       clientUserId?: string | null;
     }) => {
