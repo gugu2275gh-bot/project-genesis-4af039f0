@@ -356,6 +356,35 @@ export default function SystemSettings() {
         </CardContent>
       </Card>
 
+      {/* Smart Reactivation */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5" />
+            Reativação Inteligente
+          </CardTitle>
+          <CardDescription>
+            Configuração do motor de reativação de sessões expiradas com IA
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {SYSTEM_CONFIGS.filter(c => c.category === 'reactivation').map((config) => (
+              <div 
+                key={config.key} 
+                className="flex items-center justify-between p-4 rounded-lg border"
+              >
+                <div className="space-y-0.5">
+                  <Label htmlFor={config.key}>{config.label}</Label>
+                  <p className="text-xs text-muted-foreground">{config.description}</p>
+                </div>
+                {renderConfigInput(config)}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Knowledge Base */}
       <KnowledgeBaseManager />
     </div>
