@@ -248,6 +248,17 @@ export default function SystemSettings() {
             disabled={!isAdmin}
           />
         );
+      case 'number':
+        return (
+          <Input
+            id={config.key}
+            type="number"
+            step="any"
+            value={currentValue}
+            onChange={(e) => handleChange(config.key, e.target.value)}
+            disabled={!isAdmin}
+          />
+        );
       default:
         return (
           <Input
