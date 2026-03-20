@@ -961,7 +961,7 @@ serve(async (req) => {
     const botEnabled = configMap['whatsapp_bot_enabled'] === 'true'
     const openaiApiKey = configMap['openai_api_key']
 
-    if (botEnabled && openaiApiKey && !aiPausedByHuman) {
+    if (botEnabled && openaiApiKey && !aiPausedByHuman && !skipAIAgent) {
       console.log('AI agent is enabled, generating response...')
 
       try {
