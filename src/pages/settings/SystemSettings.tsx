@@ -19,8 +19,8 @@ interface SystemConfig {
   value: string;
   label: string;
   description: string;
-  type: 'text' | 'textarea' | 'boolean';
-  category: 'general' | 'integration';
+  type: 'text' | 'textarea' | 'boolean' | 'number';
+  category: 'general' | 'integration' | 'reactivation';
 }
 
 const SYSTEM_CONFIGS: SystemConfig[] = [
