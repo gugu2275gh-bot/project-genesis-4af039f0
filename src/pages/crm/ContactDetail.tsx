@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { PaymentAgreementDialog, PaymentAgreementInitialData } from '@/components/crm/PaymentAgreementDialog';
 import { ContractGroupsSection } from '@/components/crm/ContractGroupsSection';
+import PendingItemsSection from '@/components/contacts/PendingItemsSection';
+import ReactivationLogSection from '@/components/contacts/ReactivationLogSection';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
@@ -1195,6 +1197,13 @@ export default function ContactDetail() {
               navigate={navigate}
             />
           )}
+
+          {/* Pendências por Setor */}
+          <PendingItemsSection contactId={id!} />
+
+          {/* Log de Reativações */}
+          <ReactivationLogSection contactId={id!} />
+
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">

@@ -872,6 +872,58 @@ serve(async (req) => {
       media_mimetype: mediaMimetype,
     })
 
+    // ========== SMART REACTIVATION CHECK ==========
+    let skipAIAgent = false
+    let reactivationLeadOverride: string | null = null
+
+    try {
+      const reactivationResponse = await fetch(
+        `${Deno.env.get('SUPABASE_URL')}/functions/v1/smart-reactivation`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({
+            contactId: contact.id,
+            incomingMessageText: message.body || '',
+            phoneNumber,
+            leadId: lead.id,
+          }),
+        }
+      )
+
+      if (reactivationResponse.ok) {
+        const reactivationResult = await reactivationResponse.json()
+        console.log('Smart reactivation result:', JSON.stringify(reactivationResult))
+
+        if (reactivationResult.action === 'SEND_MESSAGE') {
+          // Reactivation sent a message to the customer, skip AI agent
+          skipAIAgent = true
+
+          // Store the reactivation message in mensagens_cliente
+          await supabase.from('mensagens_cliente').insert({
+            id_lead: lead.id,
+            phone_id: parseInt(phoneNumber),
+            mensagem_IA: reactivationResult.message_to_customer,
+            origem: 'REACTIVATION',
+          })
+        } else if (reactivationResult.action === 'DIRECT_ROUTE') {
+          // Direct route to a specific lead/sector
+          if (reactivationResult.lead_id) {
+            reactivationLeadOverride = reactivationResult.lead_id
+          }
+          skipAIAgent = true
+        } else if (reactivationResult.action === 'NEW_SUBJECT' || reactivationResult.action === 'CURRENT_FLOW') {
+          // Continue with normal flow
+          skipAIAgent = false
+        }
+      }
+    } catch (reactivationError) {
+      console.error('Smart reactivation error (non-blocking):', reactivationError instanceof Error ? reactivationError.message : reactivationError)
+    }
+
     // ========== AI AGENT SECTION ==========
     // Check if a human agent has taken over this lead (last outgoing message is from SISTEMA)
     let aiPausedByHuman = false
@@ -909,7 +961,7 @@ serve(async (req) => {
     const botEnabled = configMap['whatsapp_bot_enabled'] === 'true'
     const openaiApiKey = configMap['openai_api_key']
 
-    if (botEnabled && openaiApiKey && !aiPausedByHuman) {
+    if (botEnabled && openaiApiKey && !aiPausedByHuman && !skipAIAgent) {
       console.log('AI agent is enabled, generating response...')
 
       try {
@@ -1027,7 +1079,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
         // AI errors don't block the webhook processing
       }
     } else {
-      console.log(`AI agent skipped: botEnabled=${botEnabled}, hasOpenAIKey=${!!openaiApiKey}, pausedByHuman=${aiPausedByHuman}`)
+      console.log(`AI agent skipped: botEnabled=${botEnabled}, hasOpenAIKey=${!!openaiApiKey}, pausedByHuman=${aiPausedByHuman}, skipReactivation=${skipAIAgent}`)
     }
 
     // Update webhook log as processed

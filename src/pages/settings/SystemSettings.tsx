@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Settings, Save, Globe } from 'lucide-react';
+import { Settings, Save, Globe, Brain } from 'lucide-react';
 import KnowledgeBaseManager from '@/components/settings/KnowledgeBaseManager';
 import { useSuperuser } from '@/hooks/useSuperuser';
 
@@ -19,8 +19,8 @@ interface SystemConfig {
   value: string;
   label: string;
   description: string;
-  type: 'text' | 'textarea' | 'boolean';
-  category: 'general' | 'integration';
+  type: 'text' | 'textarea' | 'boolean' | 'number';
+  category: 'general' | 'integration' | 'reactivation';
 }
 
 const SYSTEM_CONFIGS: SystemConfig[] = [
@@ -103,6 +103,47 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
     description: 'Enviar notificações por email para a equipe',
     type: 'boolean',
     category: 'integration',
+  },
+  // Reactivation settings
+  {
+    key: 'enable_smart_reactivation',
+    value: 'true',
+    label: 'Reativação Inteligente',
+    description: 'Habilita o motor de reativação inteligente de sessões expiradas',
+    type: 'boolean',
+    category: 'reactivation',
+  },
+  {
+    key: 'active_session_timeout_minutes',
+    value: '120',
+    label: 'Timeout da Sessão (minutos)',
+    description: 'Tempo em minutos sem interação para considerar a sessão expirada',
+    type: 'number',
+    category: 'reactivation',
+  },
+  {
+    key: 'llm_confidence_threshold_direct_route',
+    value: '0.90',
+    label: 'Threshold Roteamento Direto',
+    description: 'Confiança mínima (0-1) para rotear diretamente sem pedir confirmação',
+    type: 'number',
+    category: 'reactivation',
+  },
+  {
+    key: 'llm_confidence_threshold_confirmation',
+    value: '0.70',
+    label: 'Threshold Confirmação',
+    description: 'Confiança mínima (0-1) para pedir confirmação ao cliente',
+    type: 'number',
+    category: 'reactivation',
+  },
+  {
+    key: 'reactivation_context_message_limit',
+    value: '5',
+    label: 'Limite de Mensagens de Contexto',
+    description: 'Número máximo de mensagens recentes por pendência enviadas à LLM',
+    type: 'number',
+    category: 'reactivation',
   },
 ];
 
@@ -207,6 +248,17 @@ export default function SystemSettings() {
             disabled={!isAdmin}
           />
         );
+      case 'number':
+        return (
+          <Input
+            id={config.key}
+            type="number"
+            step="any"
+            value={currentValue}
+            onChange={(e) => handleChange(config.key, e.target.value)}
+            disabled={!isAdmin}
+          />
+        );
       default:
         return (
           <Input
@@ -289,6 +341,35 @@ export default function SystemSettings() {
         <CardContent>
           <div className="space-y-4">
             {integrationConfigs.map((config) => (
+              <div 
+                key={config.key} 
+                className="flex items-center justify-between p-4 rounded-lg border"
+              >
+                <div className="space-y-0.5">
+                  <Label htmlFor={config.key}>{config.label}</Label>
+                  <p className="text-xs text-muted-foreground">{config.description}</p>
+                </div>
+                {renderConfigInput(config)}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Smart Reactivation */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5" />
+            Reativação Inteligente
+          </CardTitle>
+          <CardDescription>
+            Configuração do motor de reativação de sessões expiradas com IA
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {SYSTEM_CONFIGS.filter(c => c.category === 'reactivation').map((config) => (
               <div 
                 key={config.key} 
                 className="flex items-center justify-between p-4 rounded-lg border"

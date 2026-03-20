@@ -773,6 +773,94 @@ export type Database = {
           },
         ]
       }
+      customer_sector_pending_items: {
+        Row: {
+          awaiting_customer_reply: boolean | null
+          closed_by_user_id: string | null
+          contact_id: string
+          created_at: string | null
+          id: string
+          last_company_message_at: string | null
+          last_customer_message_at: string | null
+          last_question_to_customer: string | null
+          lead_id: string | null
+          metadata_json: Json | null
+          pending_context_summary: string | null
+          pending_reason: string | null
+          pending_subject_title: string | null
+          priority: number | null
+          resolved_at: string | null
+          sector: string
+          service_case_id: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          awaiting_customer_reply?: boolean | null
+          closed_by_user_id?: string | null
+          contact_id: string
+          created_at?: string | null
+          id?: string
+          last_company_message_at?: string | null
+          last_customer_message_at?: string | null
+          last_question_to_customer?: string | null
+          lead_id?: string | null
+          metadata_json?: Json | null
+          pending_context_summary?: string | null
+          pending_reason?: string | null
+          pending_subject_title?: string | null
+          priority?: number | null
+          resolved_at?: string | null
+          sector: string
+          service_case_id?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          awaiting_customer_reply?: boolean | null
+          closed_by_user_id?: string | null
+          contact_id?: string
+          created_at?: string | null
+          id?: string
+          last_company_message_at?: string | null
+          last_customer_message_at?: string | null
+          last_question_to_customer?: string | null
+          lead_id?: string | null
+          metadata_json?: Json | null
+          pending_context_summary?: string | null
+          pending_reason?: string | null
+          pending_subject_title?: string | null
+          priority?: number | null
+          resolved_at?: string | null
+          sector?: string
+          service_case_id?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_sector_pending_items_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_sector_pending_items_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_sector_pending_items_service_case_id_fkey"
+            columns: ["service_case_id"]
+            isOneToOne: false
+            referencedRelation: "service_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_reminders: {
         Row: {
           created_at: string | null
@@ -1775,6 +1863,81 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      reactivation_resolutions: {
+        Row: {
+          action_taken: string | null
+          confidence_score: number | null
+          confirmation_attempt_count: number | null
+          contact_id: string
+          created_at: string | null
+          id: string
+          incoming_message_text: string | null
+          llm_input_snapshot: Json | null
+          llm_output_snapshot: Json | null
+          open_pending_count: number | null
+          ranked_candidates_json: Json | null
+          secondary_pending_id: string | null
+          selected_pending_id: string | null
+          selected_sector: string | null
+          session_expired: boolean | null
+          updated_at: string | null
+          user_confirmation_status: string | null
+        }
+        Insert: {
+          action_taken?: string | null
+          confidence_score?: number | null
+          confirmation_attempt_count?: number | null
+          contact_id: string
+          created_at?: string | null
+          id?: string
+          incoming_message_text?: string | null
+          llm_input_snapshot?: Json | null
+          llm_output_snapshot?: Json | null
+          open_pending_count?: number | null
+          ranked_candidates_json?: Json | null
+          secondary_pending_id?: string | null
+          selected_pending_id?: string | null
+          selected_sector?: string | null
+          session_expired?: boolean | null
+          updated_at?: string | null
+          user_confirmation_status?: string | null
+        }
+        Update: {
+          action_taken?: string | null
+          confidence_score?: number | null
+          confirmation_attempt_count?: number | null
+          contact_id?: string
+          created_at?: string | null
+          id?: string
+          incoming_message_text?: string | null
+          llm_input_snapshot?: Json | null
+          llm_output_snapshot?: Json | null
+          open_pending_count?: number | null
+          ranked_candidates_json?: Json | null
+          secondary_pending_id?: string | null
+          selected_pending_id?: string | null
+          selected_sector?: string | null
+          session_expired?: boolean | null
+          updated_at?: string | null
+          user_confirmation_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reactivation_resolutions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reactivation_resolutions_selected_pending_id_fkey"
+            columns: ["selected_pending_id"]
+            isOneToOne: false
+            referencedRelation: "customer_sector_pending_items"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       requirement_reminders: {
         Row: {
