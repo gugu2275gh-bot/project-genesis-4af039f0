@@ -650,7 +650,7 @@ export function ContractGroupsSection({
     );
   };
 
-  const totalServices = contactLeads.length;
+  const totalServices = allLeads.length;
 
   // Show last payment note
   const lastNote = (() => {
