@@ -1079,7 +1079,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
         // AI errors don't block the webhook processing
       }
     } else {
-      console.log(`AI agent skipped: botEnabled=${botEnabled}, hasOpenAIKey=${!!openaiApiKey}, pausedByHuman=${aiPausedByHuman}`)
+      console.log(`AI agent skipped: botEnabled=${botEnabled}, hasOpenAIKey=${!!openaiApiKey}, pausedByHuman=${aiPausedByHuman}, skipReactivation=${skipAIAgent}`)
     }
 
     // Update webhook log as processed
