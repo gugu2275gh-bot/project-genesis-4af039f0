@@ -45,6 +45,7 @@ export function ContractPreview({
   const [editedFeeAmount, setEditedFeeAmount] = useState(feeAmount?.toString() || '');
   const [editedPaymentConditions, setEditedPaymentConditions] = useState(paymentConditions || '');
   const [editedPayments, setEditedPayments] = useState<PaymentData[]>(payments || []);
+  const [editedDate, setEditedDate] = useState(date ? date.toISOString().split('T')[0] : '');
 
   const currentData: ContractData = {
     template,
