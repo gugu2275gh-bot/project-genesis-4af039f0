@@ -216,19 +216,26 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       payment_notes: existingNotes + separator + summary,
     });
 
-    // Create or update a lead for this contact with the selected service_type_id
+    // Create or reuse a lead for this contact with the selected service_type_id
     let leadId: string | null = null;
     if (selectedServiceTypeId) {
-      const { data: existingLeads } = await supabase
-        .from('leads')
-        .select('id')
-        .eq('contact_id', contactId)
-        .eq('service_type_id', selectedServiceTypeId)
-        .limit(1);
+      // When editing an existing agreement, reuse the existing lead
+      // When creating a new agreement, always create a new lead
+      if (initialData?.serviceTypeId === selectedServiceTypeId) {
+        const { data: existingLeads } = await supabase
+          .from('leads')
+          .select('id')
+          .eq('contact_id', contactId)
+          .eq('service_type_id', selectedServiceTypeId)
+          .order('created_at', { ascending: false })
+          .limit(1);
 
-      if (existingLeads?.length) {
-        leadId = existingLeads[0].id;
-      } else {
+        if (existingLeads?.length) {
+          leadId = existingLeads[0].id;
+        }
+      }
+
+      if (!leadId) {
         const { data: newLead, error: leadError } = await supabase.from('leads').insert({
           contact_id: contactId,
           service_type_id: selectedServiceTypeId,
