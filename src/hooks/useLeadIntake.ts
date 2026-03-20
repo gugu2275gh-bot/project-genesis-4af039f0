@@ -84,8 +84,8 @@ export function useLeadIntakeMutations() {
 
       // Normalize phone - remove non-digits except leading +
       const normalizedPhone = intake.phone.replace(/\s+/g, "").replace(/[^+\d]/g, "");
-      // Convert to number for database query (remove + sign for numeric comparison)
-      const phoneNumber = parseInt(normalizedPhone.replace(/^\+/, ""), 10);
+      // Use normalized phone string for database query
+      const phoneNumber = normalizedPhone.replace(/^\+/, "");
 
       // Check if contact exists
       const { data: existingContact } = await supabase
