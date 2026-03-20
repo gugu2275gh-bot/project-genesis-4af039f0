@@ -200,51 +200,13 @@ export function ContractPreview({
         {isEditing && (
           <div className="mb-6 p-4 border border-border rounded-lg bg-muted/50 space-y-4">
             <p className="text-sm font-medium text-foreground">Campos editáveis:</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground">Nome do Cliente</Label>
-                <Input value={editedName} onChange={(e) => setEditedName(e.target.value)} className="mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Nº Documento</Label>
-                <Input value={editedDocument} onChange={(e) => setEditedDocument(e.target.value)} className="mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Nº Contrato</Label>
-                <Input value={editedContractNumber} onChange={(e) => setEditedContractNumber(e.target.value)} className="mt-1" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <Label className="text-xs text-muted-foreground">Valor dos Honorários (€)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={editedFeeAmount}
-                  onChange={(e) => setEditedFeeAmount(e.target.value)}
-                  className="mt-1"
-                  placeholder="Ex: 1000.00"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <Label className="text-xs text-muted-foreground">Condições de Pagamento</Label>
-                <Input
-                  value={editedPaymentConditions}
-                  onChange={(e) => setEditedPaymentConditions(e.target.value)}
-                  className="mt-1"
-                  placeholder="Ex: Pagamento único à vista"
-                />
-              </div>
-            </div>
-
             <div>
-              <Label className="text-xs text-muted-foreground">Detalhes de Pagamento</Label>
+              <Label className="text-xs text-muted-foreground">Detalhes do Contrato e Pagamento</Label>
               <Textarea
                 value={editedPaymentConditions}
                 onChange={(e) => setEditedPaymentConditions(e.target.value)}
-                className="mt-1 min-h-[120px]"
-                placeholder="Descreva as condições de pagamento, parcelas, valores e datas de vencimento..."
+                className="mt-1 min-h-[160px]"
+                placeholder="Preencha todos os detalhes: nome do cliente, nº documento, nº contrato, valor dos honorários, condições e parcelas de pagamento..."
               />
             </div>
           </div>
