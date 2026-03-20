@@ -147,12 +147,80 @@ export function ContractGroupsSection({
     enabled: !!contactId,
   });
 
+  // Fetch beneficiary leads (leads belonging to beneficiary contacts)
+  const beneficiaryContactIds = beneficiaryContacts.map(b => b.id);
+  const { data: beneficiaryLeads = [] } = useQuery({
+    queryKey: ['beneficiary-leads-in-groups', contactId, beneficiaryContactIds],
+    queryFn: async () => {
+      if (!beneficiaryContactIds.length) return [];
+      const { data } = await supabase
+        .from('leads')
+        .select('*, contacts:contact_id(id, full_name)')
+        .in('contact_id', beneficiaryContactIds)
+        .neq('status', 'ARQUIVADO_SEM_RETORNO')
+        .order('created_at', { ascending: false });
+      return (data || []).map((l: any) => ({
+        ...l,
+        _beneficiaryName: l.contacts?.full_name || '',
+        _isBeneficiary: true,
+      }));
+    },
+    enabled: beneficiaryContactIds.length > 0,
+  });
+
+  // Fetch contract_leads for beneficiary leads too
+  const beneficiaryLeadIds = beneficiaryLeads.map((l: any) => l.id);
+  const { data: beneficiaryContractLeadLinks = [] } = useQuery({
+    queryKey: ['beneficiary-contract-leads', contactId, beneficiaryLeadIds],
+    queryFn: async () => {
+      if (!beneficiaryLeadIds.length) return [];
+      const { data, error } = await supabase
+        .from('contract_leads')
+        .select('*, contracts(id, contract_number, status, total_fee, service_type, created_at, opportunity_id)')
+        .in('lead_id', beneficiaryLeadIds);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: beneficiaryLeadIds.length > 0,
+  });
+
+  // Fetch payments for beneficiary leads
+  const { data: beneficiaryPayments = [] } = useQuery({
+    queryKey: ['beneficiary-payments-in-groups', contactId, beneficiaryContactIds],
+    queryFn: async () => {
+      if (!beneficiaryContactIds.length) return [];
+      const { data: bLeads } = await supabase.from('leads').select('id').in('contact_id', beneficiaryContactIds);
+      if (!bLeads?.length) return [];
+      const { data: opps } = await supabase.from('opportunities').select('id').in('lead_id', bLeads.map(l => l.id));
+      if (!opps?.length) return [];
+      const { data: payments } = await supabase
+        .from('payments')
+        .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest))')
+        .in('opportunity_id', opps.map(o => o.id))
+        .order('due_date', { ascending: true });
+      return payments || [];
+    },
+    enabled: beneficiaryContactIds.length > 0,
+  });
+
+  // Combine all leads (titular + beneficiary)
+  const allLeads = [...contactLeads, ...beneficiaryLeads];
+  const allContractLeadLinks = [...contractLeadLinks, ...beneficiaryContractLeadLinks];
+  const allPayments = [...contactPayments, ...beneficiaryPayments];
+  // Deduplicate payments
+  const seenPaymentIds = new Set<string>();
+  const deduplicatedPayments = allPayments.filter(p => {
+    if (seenPaymentIds.has(p.id)) return false;
+    seenPaymentIds.add(p.id);
+    return true;
+  });
+
   // Build contract groups
   const contractGroups = useMemo(() => {
     const groups: Record<string, { contract: any; leads: any[]; payments: any[] }> = {};
     
     // Group by contract via contract_leads
-    contractLeadLinks.forEach((cl: any) => {
+    allContractLeadLinks.forEach((cl: any) => {
       const contractId = cl.contract_id;
       if (!groups[contractId]) {
         groups[contractId] = {
@@ -161,17 +229,16 @@ export function ContractGroupsSection({
           payments: [],
         };
       }
-      const lead = contactLeads.find(l => l.id === cl.lead_id);
+      const lead = allLeads.find(l => l.id === cl.lead_id);
       if (lead) groups[contractId].leads.push(lead);
     });
 
-    // Also check contracts linked via opportunity (legacy - contracts that exist but don't have contract_leads entries)
+    // Also check contracts linked via opportunity (legacy)
     contactContracts.forEach((contract: any) => {
       if (!groups[contract.id]) {
-        // Check if this contract has any contract_leads entries
-        const hasLinks = contractLeadLinks.some((cl: any) => cl.contract_id === contract.id);
+        const hasLinks = allContractLeadLinks.some((cl: any) => cl.contract_id === contract.id);
         if (!hasLinks && contract.lead_id) {
-          const lead = contactLeads.find(l => l.id === contract.lead_id);
+          const lead = allLeads.find(l => l.id === contract.lead_id);
           groups[contract.id] = {
             contract,
             leads: lead ? [lead] : [],
@@ -182,9 +249,8 @@ export function ContractGroupsSection({
     });
 
     // Attach payments to groups
-    contactPayments.forEach((p: any) => {
+    deduplicatedPayments.forEach((p: any) => {
       const leadId = p.opportunities?.leads?.id || p.opportunities?.lead_id;
-      // Find which group this payment belongs to
       for (const gId of Object.keys(groups)) {
         if (groups[gId].leads.some(l => l.id === leadId)) {
           groups[gId].payments.push(p);
@@ -194,15 +260,15 @@ export function ContractGroupsSection({
     });
 
     return Object.values(groups);
-  }, [contractLeadLinks, contactContracts, contactLeads, contactPayments]);
+  }, [allContractLeadLinks, contactContracts, allLeads, deduplicatedPayments]);
 
   // Ungrouped leads (not linked to any contract)
   const groupedLeadIds = new Set(contractGroups.flatMap(g => g.leads.map(l => l.id)));
-  const ungroupedLeads = contactLeads.filter(l => !groupedLeadIds.has(l.id));
+  const ungroupedLeads = allLeads.filter(l => !groupedLeadIds.has(l.id));
 
   // Ungrouped payments
   const groupedPaymentIds = new Set(contractGroups.flatMap(g => g.payments.map(p => p.id)));
-  const ungroupedPayments = contactPayments.filter(p => !groupedPaymentIds.has(p.id));
+  const ungroupedPayments = deduplicatedPayments.filter(p => !groupedPaymentIds.has(p.id));
 
   const getLeadDisplayName = (lead: any) => {
     const serviceTypeName = lead.service_type_id
