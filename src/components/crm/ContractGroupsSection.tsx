@@ -13,7 +13,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { 
-  Briefcase, CreditCard, DollarSign, Loader2, Plus, Pencil, Trash2, CheckCircle2, FileText, Package, ChevronRight, ChevronDown
+  Briefcase, CreditCard, DollarSign, Loader2, Plus, Pencil, Trash2, CheckCircle2, FileText, Package, ChevronRight, ChevronDown, User, Users
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
