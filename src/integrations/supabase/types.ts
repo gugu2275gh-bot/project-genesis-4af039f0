@@ -291,7 +291,7 @@ export type Database = {
           onboarding_completed: boolean | null
           origin_channel: Database["public"]["Enums"]["origin_channel"] | null
           payment_notes: string | null
-          phone: number | null
+          phone: string | null
           preferred_language:
             | Database["public"]["Enums"]["language_code"]
             | null
@@ -346,7 +346,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           origin_channel?: Database["public"]["Enums"]["origin_channel"] | null
           payment_notes?: string | null
-          phone?: number | null
+          phone?: string | null
           preferred_language?:
             | Database["public"]["Enums"]["language_code"]
             | null
@@ -401,7 +401,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           origin_channel?: Database["public"]["Enums"]["origin_channel"] | null
           payment_notes?: string | null
-          phone?: number | null
+          phone?: string | null
           preferred_language?:
             | Database["public"]["Enums"]["language_code"]
             | null
