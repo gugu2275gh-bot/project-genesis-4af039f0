@@ -45,6 +45,7 @@ export function ContractPreview({
   const [editedFeeAmount, setEditedFeeAmount] = useState(feeAmount?.toString() || '');
   const [editedPaymentConditions, setEditedPaymentConditions] = useState(paymentConditions || '');
   const [editedPayments, setEditedPayments] = useState<PaymentData[]>(payments || []);
+  const [editedDate, setEditedDate] = useState(date ? date.toISOString().split('T')[0] : '');
 
   const currentData: ContractData = {
     template,
@@ -200,7 +201,7 @@ export function ContractPreview({
         {isEditing && (
           <div className="mb-6 p-4 border border-border rounded-lg bg-muted/50 space-y-4">
             <p className="text-sm font-medium text-foreground">Campos editáveis:</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div>
                 <Label className="text-xs text-muted-foreground">Nome do Cliente</Label>
                 <Input value={editedName} onChange={(e) => setEditedName(e.target.value)} className="mt-1" />
@@ -213,6 +214,19 @@ export function ContractPreview({
                 <Label className="text-xs text-muted-foreground">Nº Contrato</Label>
                 <Input value={editedContractNumber} onChange={(e) => setEditedContractNumber(e.target.value)} className="mt-1" />
               </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Data</Label>
+                <Input type="date" value={editedDate} onChange={(e) => setEditedDate(e.target.value)} className="mt-1" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Detalhes de Pagamento</Label>
+              <Textarea
+                value={editedPaymentConditions}
+                onChange={(e) => setEditedPaymentConditions(e.target.value)}
+                className="mt-1 min-h-[120px]"
+                placeholder="Descreva as condições de pagamento, parcelas, valores e datas de vencimento..."
+              />
             </div>
           </div>
         )}
