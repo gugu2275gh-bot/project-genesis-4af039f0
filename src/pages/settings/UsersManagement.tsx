@@ -910,6 +910,9 @@ export default function UsersManagement() {
                 {sectors.filter(s => s.is_active).length === 0 && (
                   <p className="text-sm text-muted-foreground">Nenhum setor disponível</p>
                 )}
+                {sectors.filter(s => s.is_active).length > 0 && editUserForm.sectorIds.length === 0 && (
+                  <p className="text-xs text-destructive mt-1">Selecione pelo menos um setor</p>
+                )}
               </div>
             </div>
           </div>
