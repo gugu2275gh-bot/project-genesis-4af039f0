@@ -27,7 +27,11 @@ export interface LeadMessage {
   media_url: string | null;
   media_filename: string | null;
   media_mimetype: string | null;
+  setor: string | null;
 }
+
+// Roles that can see all sectors' messages
+const GLOBAL_VIEW_ROLES = ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA'];
 
 export function useLeadMessages(leadId: string | undefined, contactPhone: string | number | null = null, contactId?: string) {
   const queryClient = useQueryClient();
