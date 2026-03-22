@@ -24,6 +24,7 @@ import {
   useServiceSectors, 
   useCreateServiceSector, 
   useUpdateServiceSector,
+  useDeleteServiceSector,
   ServiceSector,
   ServiceSectorInsert 
 } from '@/hooks/useServiceSectors';
