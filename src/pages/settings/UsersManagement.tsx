@@ -320,12 +320,26 @@ export default function UsersManagement() {
       });
       return;
     }
+    if (!createUserForm.role) {
+      toast({ 
+        title: 'Selecione pelo menos um papel para o usuário',
+        variant: 'destructive' 
+      });
+      return;
+    }
+    if (createUserForm.sectorIds.length === 0) {
+      toast({ 
+        title: 'Selecione pelo menos um setor para o usuário',
+        variant: 'destructive' 
+      });
+      return;
+    }
     createUserMutation.mutate({
       email: createUserForm.email,
       password: createUserForm.password,
       full_name: createUserForm.full_name,
-      role: createUserForm.role || undefined,
-      sector_ids: createUserForm.sectorIds.length > 0 ? createUserForm.sectorIds : undefined,
+      role: createUserForm.role,
+      sector_ids: createUserForm.sectorIds,
     });
   };
 
