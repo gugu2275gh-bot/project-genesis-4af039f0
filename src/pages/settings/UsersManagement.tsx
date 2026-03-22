@@ -558,8 +558,8 @@ export default function UsersManagement() {
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label>Setores (opcional)</Label>
-                        <div className="space-y-2 border rounded-md p-3">
+                        <Label>Setores *</Label>
+                        <div className={`space-y-2 border rounded-md p-3 ${createUserForm.sectorIds.length === 0 ? 'border-destructive' : ''}`}>
                           {sectors.filter(s => s.is_active).map((sector) => (
                             <div key={sector.id} className="flex items-center space-x-2">
                               <Checkbox
