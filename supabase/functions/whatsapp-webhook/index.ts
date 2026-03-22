@@ -180,8 +180,15 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       console.log('Ignoring fromMe message')
       return null
     }
-    const phone = msg.sender?.replace(/[@s.whatsapp.net]/g, '').replace(/\D/g, '') ||
-                  payload.chat.phone?.replace(/\D/g, '') || ''
+    // Prefer chat.phone or wa_chatid for actual phone number.
+    // msg.sender may contain a WhatsApp LID (Linked ID) like "193171137020042@lid"
+    // which is NOT a phone number.
+    const chatPhone = payload.chat.phone?.replace(/\D/g, '') || ''
+    const waChatId = payload.chat.wa_chatid?.replace(/@.*$/, '').replace(/\D/g, '') || ''
+    const senderPhone = msg.sender && !msg.sender.includes('@lid')
+      ? msg.sender.replace(/@.*$/, '').replace(/\D/g, '')
+      : ''
+    const phone = chatPhone || waChatId || senderPhone || ''
 
     // Map UAZAPI messageType to standard media types
     const uazapiTypeMap: Record<string, string> = {
