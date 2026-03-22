@@ -540,7 +540,7 @@ export default function UsersManagement() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="role">Papel inicial (opcional)</Label>
+                        <Label htmlFor="role">Papel inicial *</Label>
                         <Select
                           value={createUserForm.role}
                           onValueChange={(value) => setCreateUserForm(prev => ({ ...prev, role: value as AppRole }))}
