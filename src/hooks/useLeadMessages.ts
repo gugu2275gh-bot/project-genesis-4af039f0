@@ -269,5 +269,7 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
     isLoading,
     sendMessage,
     resumeAI,
+    userSectorName,
+    hasGlobalView,
   };
 }
