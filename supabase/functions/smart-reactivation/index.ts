@@ -8,7 +8,8 @@ const corsHeaders = {
 
 // Confirmation reply mappings
 const POSITIVE_REPLIES = ['sim', 'isso', 'correto', 'exatamente', 'pode seguir', 'é esse', 'é isso', 'isso mesmo', 'ok', 'certo', 'positivo', 'ss', 'sss', 'simmm']
-const NEGATIVE_REPLIES = ['não', 'nao', 'não é isso', 'nao e isso', 'outro assunto', 'nada a ver', 'errado', 'negativo', 'nn', 'nope']
+const NEGATIVE_REPLIES = ['não', 'nao', 'não é isso', 'nao e isso', 'errado', 'negativo', 'nn', 'nope']
+const NEW_SUBJECT_REPLIES = ['novo assunto', 'outro assunto', 'outro', 'outra coisa', 'nada a ver', 'diferente', 'não é nenhum', 'nao e nenhum', 'nenhum', 'nenhuma']
 
 function isPositiveReply(text: string): boolean {
   const normalized = text.toLowerCase().trim().replace(/[!?.]+$/g, '')
@@ -18,6 +19,34 @@ function isPositiveReply(text: string): boolean {
 function isNegativeReply(text: string): boolean {
   const normalized = text.toLowerCase().trim().replace(/[!?.]+$/g, '')
   return NEGATIVE_REPLIES.some(r => normalized === r || normalized.startsWith(r + ' '))
+}
+
+function isNewSubjectReply(text: string): boolean {
+  const normalized = text.toLowerCase().trim().replace(/[!?.]+$/g, '')
+  return NEW_SUBJECT_REPLIES.some(r => normalized === r || normalized.startsWith(r + ' '))
+}
+
+function parseNumericReply(text: string): number | null {
+  const normalized = text.trim().replace(/[.!?,;:]+$/g, '')
+  const num = parseInt(normalized, 10)
+  if (!isNaN(num) && num >= 1 && num <= 9 && normalized === String(num)) {
+    return num
+  }
+  return null
+}
+
+function findCandidateByText(
+  text: string,
+  candidates: Array<{ pending_id: string; sector: string; subject?: string }>
+): { pending_id: string; sector: string } | null {
+  const normalized = text.toLowerCase().trim().replace(/[!?.]+$/g, '')
+  for (const c of candidates) {
+    const sector = c.sector?.toLowerCase() || ''
+    const subject = (c.subject || '').toLowerCase()
+    if (sector && normalized.includes(sector)) return c
+    if (subject && normalized.includes(subject)) return c
+  }
+  return null
 }
 
 interface PendingItem {
@@ -64,6 +93,7 @@ Formato de resposta obrigatório:
     {
       "pending_id": "string",
       "sector": "string",
+      "subject": "string",
       "score": 0.0,
       "reason": "motivo resumido"
     }
@@ -138,7 +168,7 @@ serve(async (req) => {
     if (pendingResolution) {
       console.log('Found pending reactivation resolution:', pendingResolution.id)
       return await handleConfirmationReply(
-        supabase, pendingResolution, incomingMessageText, cfg
+        supabase, pendingResolution, incomingMessageText, cfg, contactId, phoneNumber
       )
     }
 
@@ -297,12 +327,13 @@ serve(async (req) => {
       const selectedPendingId = llmResult.selected_pending_id as string | null
       const selectedSector = llmResult.selected_sector_id as string | null
       const suggestedPrompt = llmResult.suggested_customer_prompt as string | null
+      const ranked = llmResult.ranked_candidates as Array<{ pending_id: string; sector: string; subject?: string }> | null
 
       // Find the pending item to get lead_id
       const selectedItem = pendingItems.find((p: PendingItem) => p.id === selectedPendingId)
 
       if (decision === 'new_subject' || confidence < thresholdConfirmation) {
-        result = { action: 'NEW_SUBJECT', reason: 'LLM classified as new subject or low confidence' }
+        result = { action: 'NEW_SUBJECT', reason: 'LLM classified as new subject or low confidence' } as ReactivationResult & { reason: string }
         await logResolution(supabase, {
           contact_id: contactId,
           incoming_message_text: incomingMessageText,
@@ -316,18 +347,17 @@ serve(async (req) => {
           ranked_candidates_json: llmResult.ranked_candidates,
         })
       } else if (confidence >= thresholdDirect && decision === 'direct_route') {
+        // BUG 1 FIX: Keep action as DIRECT_ROUTE, add message_to_customer separately
+        const msg = suggestedPrompt || `Recebi sua resposta e vou te encaminhar para o setor de ${selectedItem?.sector || 'atendimento'}.`
+        await sendMessage(cfg, phoneNumber, msg)
+
         result = {
           action: 'DIRECT_ROUTE',
+          message_to_customer: msg,
           selected_pending_id: selectedPendingId || undefined,
           selected_sector: selectedItem?.sector || selectedSector || undefined,
           lead_id: selectedItem?.lead_id || undefined,
         }
-
-        // Send confirmation message to customer
-        const msg = suggestedPrompt || `Recebi sua resposta e vou te encaminhar para o setor de ${selectedItem?.sector || 'atendimento'}.`
-        await sendMessage(cfg, phoneNumber, msg)
-        result.message_to_customer = msg
-        result.action = 'SEND_MESSAGE'
 
         await logResolution(supabase, {
           contact_id: contactId,
@@ -350,13 +380,36 @@ serve(async (req) => {
             .update({ last_customer_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
             .eq('id', selectedPendingId)
         }
+      } else if (decision === 'ask_disambiguation' && ranked && ranked.length > 1) {
+        // BUG 3 FIX: ask_disambiguation sends numbered list instead of single confirmation
+        const options = ranked.slice(0, 3).map((c, i) =>
+          `${i + 1}. ${c.subject || c.sector}`
+        ).join('\n')
+        const msg = suggestedPrompt || `Para te direcionar corretamente, você está falando sobre qual assunto?\n\n${options}\n\nOu é um novo assunto?`
+        await sendMessage(cfg, phoneNumber, msg)
+
+        await logResolution(supabase, {
+          contact_id: contactId,
+          incoming_message_text: incomingMessageText,
+          session_expired: true,
+          open_pending_count: pendingItems.length,
+          llm_input_snapshot: { new_message: incomingMessageText, pending_count: pendingContexts.length },
+          llm_output_snapshot: llmResult,
+          selected_sector: selectedItem?.sector || selectedSector,
+          selected_pending_id: selectedPendingId,
+          confidence_score: confidence,
+          action_taken: 'ask_disambiguation',
+          user_confirmation_status: 'pending',
+          secondary_pending_id: ranked.length > 1 ? ranked[1].pending_id : null,
+          ranked_candidates_json: ranked,
+        })
+
+        result = { action: 'SEND_MESSAGE', message_to_customer: msg }
       } else {
-        // Ask confirmation
+        // ask_confirmation: single candidate confirmation
         const msg = suggestedPrompt || `Sua mensagem parece estar relacionada ao assunto de ${selectedItem?.pending_subject_title || selectedItem?.sector || 'atendimento'}. É sobre isso?`
         await sendMessage(cfg, phoneNumber, msg)
 
-        // Find secondary candidate
-        const ranked = llmResult.ranked_candidates as Array<{ pending_id: string }> | null
         const secondaryId = ranked && ranked.length > 1 ? ranked[1].pending_id : null
 
         await logResolution(supabase, {
@@ -369,10 +422,10 @@ serve(async (req) => {
           selected_sector: selectedItem?.sector || selectedSector,
           selected_pending_id: selectedPendingId,
           confidence_score: confidence,
-          action_taken: decision === 'ask_disambiguation' ? 'ask_disambiguation' : 'ask_confirmation',
+          action_taken: 'ask_confirmation',
           user_confirmation_status: 'pending',
           secondary_pending_id: secondaryId,
-          ranked_candidates_json: llmResult.ranked_candidates,
+          ranked_candidates_json: ranked,
         })
 
         result = { action: 'SEND_MESSAGE', message_to_customer: msg }
@@ -401,22 +454,30 @@ async function handleConfirmationReply(
   supabase: ReturnType<typeof createClient>,
   resolution: Record<string, unknown>,
   messageText: string,
-  cfg: Record<string, string>
+  cfg: Record<string, string>,
+  contactId: string,
+  phoneNumber: string
 ): Promise<Response> {
   const resolutionId = resolution.id as string
-  const contactId = resolution.contact_id as string
   const attemptCount = (resolution.confirmation_attempt_count as number) || 0
   const selectedPendingId = resolution.selected_pending_id as string | null
   const secondaryPendingId = resolution.secondary_pending_id as string | null
-  const ranked = resolution.ranked_candidates_json as Array<{ pending_id: string; sector: string }> | null
+  const ranked = resolution.ranked_candidates_json as Array<{ pending_id: string; sector: string; subject?: string }> | null
+  const actionTaken = resolution.action_taken as string
 
+  // Get phone number if not provided
+  let phone = phoneNumber
+  if (!phone) {
+    const { data: contact } = await supabase.from('contacts').select('phone').eq('id', contactId).single()
+    phone = contact?.phone || ''
+  }
+
+  // 1. Positive reply → confirm and route
   if (isPositiveReply(messageText)) {
-    // Confirmed - route to selected sector
     await supabase.from('reactivation_resolutions')
       .update({ user_confirmation_status: 'confirmed', updated_at: new Date().toISOString() })
       .eq('id', resolutionId)
 
-    // Get the pending item to find lead_id
     let leadId: string | null = null
     let sector: string | null = null
     if (selectedPendingId) {
@@ -444,9 +505,24 @@ async function handleConfirmationReply(
     )
   }
 
+  // 2. "Novo assunto" / "outro" → treat as new subject immediately
+  if (isNewSubjectReply(messageText)) {
+    await supabase.from('reactivation_resolutions')
+      .update({ user_confirmation_status: 'denied', updated_at: new Date().toISOString() })
+      .eq('id', resolutionId)
+
+    const msg = 'Entendi! É um novo assunto então. Como posso te ajudar?'
+    if (phone) await sendMessage(cfg, phone, msg)
+
+    return new Response(
+      JSON.stringify({ action: 'NEW_SUBJECT', message_to_customer: msg } as ReactivationResult),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
+  // 3. Negative reply → try next candidate
   if (isNegativeReply(messageText)) {
     if (attemptCount < 2 && secondaryPendingId) {
-      // Try secondary candidate
       const { data: secItem } = await supabase.from('customer_sector_pending_items')
         .select('id, sector, pending_subject_title')
         .eq('id', secondaryPendingId)
@@ -455,7 +531,6 @@ async function handleConfirmationReply(
       if (secItem) {
         const msg = `Entendi. Então é sobre ${secItem.pending_subject_title || secItem.sector}?`
 
-        // Find next secondary
         let nextSecondary: string | null = null
         if (ranked && ranked.length > attemptCount + 2) {
           nextSecondary = ranked[attemptCount + 2].pending_id
@@ -471,11 +546,7 @@ async function handleConfirmationReply(
           })
           .eq('id', resolutionId)
 
-        // Get phone to send message
-        const { data: contact } = await supabase.from('contacts').select('phone').eq('id', contactId).single()
-        if (contact?.phone) {
-          await sendMessage(cfg, contact.phone, msg)
-        }
+        if (phone) await sendMessage(cfg, phone, msg)
 
         return new Response(
           JSON.stringify({ action: 'SEND_MESSAGE', message_to_customer: msg } as ReactivationResult),
@@ -484,16 +555,13 @@ async function handleConfirmationReply(
       }
     }
 
-    // Max attempts reached or no secondary - treat as new subject
+    // Max attempts reached or no secondary → new subject
     await supabase.from('reactivation_resolutions')
       .update({ user_confirmation_status: 'denied', updated_at: new Date().toISOString() })
       .eq('id', resolutionId)
 
     const msg = 'Entendi! É um novo assunto então. Como posso te ajudar?'
-    const { data: contact } = await supabase.from('contacts').select('phone').eq('id', contactId).single()
-    if (contact?.phone) {
-      await sendMessage(cfg, contact.phone, msg)
-    }
+    if (phone) await sendMessage(cfg, phone, msg)
 
     return new Response(
       JSON.stringify({ action: 'NEW_SUBJECT', message_to_customer: msg } as ReactivationResult),
@@ -501,13 +569,126 @@ async function handleConfirmationReply(
     )
   }
 
-  // Ambiguous reply - treat as new message and re-evaluate
+  // 4. BUG 2 FIX: Numeric reply → select candidate by index
+  const numericChoice = parseNumericReply(messageText)
+  if (numericChoice !== null && ranked && ranked.length > 0) {
+    const idx = numericChoice - 1
+    if (idx >= 0 && idx < ranked.length) {
+      const chosen = ranked[idx]
+      const { data: chosenItem } = await supabase.from('customer_sector_pending_items')
+        .select('lead_id, sector, pending_subject_title')
+        .eq('id', chosen.pending_id)
+        .single()
+
+      if (chosenItem) {
+        await supabase.from('reactivation_resolutions')
+          .update({
+            user_confirmation_status: 'confirmed',
+            selected_pending_id: chosen.pending_id,
+            selected_sector: chosenItem.sector,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', resolutionId)
+
+        await supabase.from('customer_sector_pending_items')
+          .update({ last_customer_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq('id', chosen.pending_id)
+
+        return new Response(
+          JSON.stringify({
+            action: 'DIRECT_ROUTE',
+            selected_pending_id: chosen.pending_id,
+            selected_sector: chosenItem.sector,
+            lead_id: chosenItem.lead_id,
+            reason: `Customer selected option ${numericChoice}`,
+          } as ReactivationResult),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+  }
+
+  // 5. BUG 2 FIX: Text match with sector/subject name
+  if (ranked && ranked.length > 0) {
+    const enrichedCandidates = ranked.map(r => ({
+      ...r,
+      subject: r.subject || '',
+    }))
+    const textMatch = findCandidateByText(messageText, enrichedCandidates)
+    if (textMatch) {
+      const { data: matchItem } = await supabase.from('customer_sector_pending_items')
+        .select('lead_id, sector, pending_subject_title')
+        .eq('id', textMatch.pending_id)
+        .single()
+
+      if (matchItem) {
+        await supabase.from('reactivation_resolutions')
+          .update({
+            user_confirmation_status: 'confirmed',
+            selected_pending_id: textMatch.pending_id,
+            selected_sector: matchItem.sector,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', resolutionId)
+
+        await supabase.from('customer_sector_pending_items')
+          .update({ last_customer_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq('id', textMatch.pending_id)
+
+        return new Response(
+          JSON.stringify({
+            action: 'DIRECT_ROUTE',
+            selected_pending_id: textMatch.pending_id,
+            selected_sector: matchItem.sector,
+            lead_id: matchItem.lead_id,
+            reason: `Customer mentioned sector/subject: ${matchItem.sector}`,
+          } as ReactivationResult),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+  }
+
+  // 6. BUG 4 FIX: Ambiguous reply — re-ask with clarification instead of CURRENT_FLOW
+  if (attemptCount < 2) {
+    // Re-send options with a neutral clarification message
+    let msg: string
+    if (ranked && ranked.length > 1) {
+      const options = ranked.slice(0, 3).map((c, i) =>
+        `${i + 1}. ${c.subject || c.sector}`
+      ).join('\n')
+      msg = `Não entendi sua resposta. Poderia me indicar sobre qual assunto deseja falar?\n\n${options}\n\nOu responda "novo assunto" se for algo diferente.`
+    } else if (ranked && ranked.length === 1) {
+      msg = `Não entendi. Sua mensagem é sobre ${ranked[0].subject || ranked[0].sector}? Responda "sim" ou "não".`
+    } else {
+      msg = 'Não entendi sua resposta. Poderia explicar melhor sobre o que deseja falar?'
+    }
+
+    await supabase.from('reactivation_resolutions')
+      .update({
+        confirmation_attempt_count: attemptCount + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', resolutionId)
+
+    if (phone) await sendMessage(cfg, phone, msg)
+
+    return new Response(
+      JSON.stringify({ action: 'SEND_MESSAGE', message_to_customer: msg } as ReactivationResult),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+
+  // 7. Max ambiguous attempts reached → treat as new subject
   await supabase.from('reactivation_resolutions')
     .update({ user_confirmation_status: 'no_response', updated_at: new Date().toISOString() })
     .eq('id', resolutionId)
 
+  const msg = 'Vou te encaminhar para um novo atendimento. Como posso te ajudar?'
+  if (phone) await sendMessage(cfg, phone, msg)
+
   return new Response(
-    JSON.stringify({ action: 'CURRENT_FLOW', reason: 'Ambiguous reply to confirmation' } as ReactivationResult),
+    JSON.stringify({ action: 'NEW_SUBJECT', message_to_customer: msg } as ReactivationResult),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   )
 }
@@ -534,6 +715,7 @@ async function deterministicFallback(
       selected_pending_id: item.id,
       action_taken: 'ask_confirmation',
       user_confirmation_status: 'pending',
+      ranked_candidates_json: [{ pending_id: item.id, sector: item.sector, subject: item.pending_subject_title }],
     })
 
     return { action: 'SEND_MESSAGE', message_to_customer: msg }
@@ -551,9 +733,10 @@ async function deterministicFallback(
     incoming_message_text: messageText,
     session_expired: true,
     open_pending_count: pendingItems.length,
-    action_taken: 'fallback_manual',
+    action_taken: 'ask_disambiguation',
     user_confirmation_status: 'pending',
-    ranked_candidates_json: pendingItems.map(p => ({ pending_id: p.id, sector: p.sector })),
+    ranked_candidates_json: pendingItems.slice(0, 3).map(p => ({ pending_id: p.id, sector: p.sector, subject: p.pending_subject_title })),
+    secondary_pending_id: pendingItems.length > 1 ? pendingItems[1].id : null,
   })
 
   return { action: 'SEND_MESSAGE', message_to_customer: msg }

@@ -898,24 +898,49 @@ serve(async (req) => {
         const reactivationResult = await reactivationResponse.json()
         console.log('Smart reactivation result:', JSON.stringify(reactivationResult))
 
-        if (reactivationResult.action === 'SEND_MESSAGE') {
-          // Reactivation sent a message to the customer, skip AI agent
+        if (reactivationResult.action === 'DIRECT_ROUTE') {
+          // BUG 1 FIX: DIRECT_ROUTE now sends message AND applies lead override
           skipAIAgent = true
 
-          // Store the reactivation message in mensagens_cliente
-          await supabase.from('mensagens_cliente').insert({
-            id_lead: lead.id,
-            phone_id: parseInt(phoneNumber),
-            mensagem_IA: reactivationResult.message_to_customer,
-            origem: 'REACTIVATION',
-          })
-        } else if (reactivationResult.action === 'DIRECT_ROUTE') {
-          // Direct route to a specific lead/sector
+          // Store the reactivation message if present
+          if (reactivationResult.message_to_customer) {
+            await supabase.from('mensagens_cliente').insert({
+              id_lead: reactivationResult.lead_id || lead.id,
+              phone_id: parseInt(phoneNumber),
+              mensagem_IA: reactivationResult.message_to_customer,
+              origem: 'REACTIVATION',
+            })
+          }
+
+          // Apply lead override for sector routing
           if (reactivationResult.lead_id) {
             reactivationLeadOverride = reactivationResult.lead_id
           }
+        } else if (reactivationResult.action === 'SEND_MESSAGE') {
+          // Reactivation sent a confirmation/disambiguation message, skip AI agent
           skipAIAgent = true
-        } else if (reactivationResult.action === 'NEW_SUBJECT' || reactivationResult.action === 'CURRENT_FLOW') {
+
+          // Store the reactivation message in mensagens_cliente
+          if (reactivationResult.message_to_customer) {
+            await supabase.from('mensagens_cliente').insert({
+              id_lead: lead.id,
+              phone_id: parseInt(phoneNumber),
+              mensagem_IA: reactivationResult.message_to_customer,
+              origem: 'REACTIVATION',
+            })
+          }
+        } else if (reactivationResult.action === 'NEW_SUBJECT') {
+          // New subject: store message if present, then continue normal flow
+          skipAIAgent = false
+          if (reactivationResult.message_to_customer) {
+            await supabase.from('mensagens_cliente').insert({
+              id_lead: lead.id,
+              phone_id: parseInt(phoneNumber),
+              mensagem_IA: reactivationResult.message_to_customer,
+              origem: 'REACTIVATION',
+            })
+          }
+        } else if (reactivationResult.action === 'CURRENT_FLOW') {
           // Continue with normal flow
           skipAIAgent = false
         }
