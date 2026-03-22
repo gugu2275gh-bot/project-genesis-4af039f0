@@ -117,12 +117,14 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
 
       // First, call the webhook via Edge Function if we have a phone number
       if (contactPhone) {
-        console.log('Sending WhatsApp via Edge Function:', { message: prefixedMessage, phone: contactPhone });
+        console.log('Sending WhatsApp via Edge Function:', { message: prefixedMessage, phone: contactPhone, sector: userInfo?.sector });
         
         const { data: webhookData, error: webhookError } = await supabase.functions.invoke('send-whatsapp', {
           body: { 
             mensagem: prefixedMessage, 
-            numero: String(contactPhone) 
+            numero: String(contactPhone),
+            sector: userInfo?.sector || undefined,
+            contact_id: contactId || undefined,
           }
         });
 
