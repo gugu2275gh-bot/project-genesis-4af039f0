@@ -54,16 +54,28 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
   const effectiveLeadIds = contactId && contactLeadIds?.length ? contactLeadIds : leadId ? [leadId] : [];
   const cacheKey = contactId ? ['lead-messages-contact', contactId] : ['lead-messages', leadId];
 
+  // Check if user has global view (admin/manager/supervisor)
+  const hasGlobalView = userInfo?.roles?.some((r: string) => GLOBAL_VIEW_ROLES.includes(r)) ?? false;
+  const userSectorName = userInfo?.sector || '';
+
   const { data: messages = [], isLoading } = useQuery({
-    queryKey: cacheKey,
+    queryKey: [...cacheKey, userSectorName, hasGlobalView],
     queryFn: async () => {
       if (effectiveLeadIds.length === 0) return [];
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('mensagens_cliente')
         .select('*')
         .in('id_lead', effectiveLeadIds)
         .order('created_at', { ascending: true });
+
+      // If user doesn't have global view, filter by their sector
+      // Show messages that match their sector OR have no sector (legacy/untagged)
+      if (!hasGlobalView && userSectorName) {
+        query = query.or(`setor.eq.${userSectorName},setor.is.null`);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return data as LeadMessage[];
