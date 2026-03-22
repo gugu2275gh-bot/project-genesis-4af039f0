@@ -128,10 +128,6 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
     },
     enabled: effectiveLeadIds.length > 0,
   });
-    },
-    enabled: !!user?.id,
-    staleTime: 5 * 60 * 1000,
-  });
 
   const sendMessage = useMutation({
     mutationFn: async ({ leadId, message }: { leadId: string; message: string }) => {
