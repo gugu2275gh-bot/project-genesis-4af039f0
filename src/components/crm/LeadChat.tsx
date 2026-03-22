@@ -288,6 +288,16 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
               </Badge>
             )}
           </div>
+          {activeSetores.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-[10px] text-muted-foreground">Setores ativos:</span>
+              {activeSetores.map(setor => (
+                <Badge key={setor} variant="secondary" className="text-[10px] px-1.5 py-0">
+                  {setor}
+                </Badge>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-1">
             {isAIPaused && (
               <Tooltip>
