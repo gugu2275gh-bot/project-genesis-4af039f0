@@ -25,6 +25,7 @@ import {
   useUserProfileDefinitions, 
   useCreateUserProfileDefinition, 
   useUpdateUserProfileDefinition,
+  useDeleteUserProfileDefinition,
   UserProfileDefinition,
   UserProfileDefinitionInsert 
 } from '@/hooks/useUserProfileDefinitions';
