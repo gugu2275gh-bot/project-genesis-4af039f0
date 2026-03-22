@@ -364,14 +364,21 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                         : 'bg-primary/10 text-foreground rounded-br-none'
                     )}
                   >
-                    <p className={cn(
-                      'text-[10px] font-medium mb-1',
-                      msg.type === 'client'
-                        ? 'text-green-700 dark:text-green-300'
-                        : 'text-primary/70'
-                    )}>
-                      {getSenderLabel(msg.type, msg.origem)}
-                    </p>
+                    <div className="flex items-center gap-1 mb-1">
+                      <p className={cn(
+                        'text-[10px] font-medium',
+                        msg.type === 'client'
+                          ? 'text-green-700 dark:text-green-300'
+                          : 'text-primary/70'
+                      )}>
+                        {getSenderLabel(msg.type, msg.origem)}
+                      </p>
+                      {hasGlobalView && msg.setor && (
+                        <span className="text-[9px] bg-muted px-1 rounded text-muted-foreground">
+                          {msg.setor}
+                        </span>
+                      )}
+                    </div>
                     {/* Media content */}
                     {msg.media_url && (
                       <div className="mb-1.5 space-y-1.5">
