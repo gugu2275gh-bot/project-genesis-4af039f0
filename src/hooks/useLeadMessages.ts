@@ -119,7 +119,12 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
         }
       }
       
-      return { name: profile?.full_name || 'Usuário', role: roleName, sector };
+      const allSectorNames = (userSectors || []).map((s: any) => {
+        const row = s as unknown as { service_sectors: { name: string } | null };
+        return row.service_sectors?.name;
+      }).filter(Boolean) as string[];
+      
+      return { name: profile?.full_name || 'Usuário', role: roleName, sector, roles: roles || [], sectorNames: allSectorNames };
     },
     enabled: !!user?.id,
     staleTime: 5 * 60 * 1000,
