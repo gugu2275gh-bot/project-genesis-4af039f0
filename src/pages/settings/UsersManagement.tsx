@@ -654,10 +654,19 @@ export default function UsersManagement() {
                                 className={`${ROLE_COLORS[role]} border-0 gap-1`}
                               >
                                 {ROLE_LABELS[role]}
-                                {isAdmin && (
+                                {isAdmin && user.roles.length > 1 && (
                                   <button
                                     onClick={() => removeRoleMutation.mutate({ userId: user.id, role })}
                                     className="ml-1 hover:text-destructive"
+                                  >
+                                    <XCircle className="h-3 w-3" />
+                                  </button>
+                                )}
+                                {isAdmin && user.roles.length <= 1 && (
+                                  <button
+                                    onClick={() => toast({ title: 'O usuário deve ter pelo menos um papel', variant: 'destructive' })}
+                                    className="ml-1 opacity-30 cursor-not-allowed"
+                                    title="Não é possível remover o último papel"
                                   >
                                     <XCircle className="h-3 w-3" />
                                   </button>
