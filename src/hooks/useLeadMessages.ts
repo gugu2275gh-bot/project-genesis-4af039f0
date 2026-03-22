@@ -69,17 +69,41 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
 
   const { user } = useAuth();
 
-  // Fetch current user's profile and roles for message prefix
+  // Fetch current user's profile, roles and sector for message prefix + routing
   const { data: userInfo } = useQuery({
     queryKey: ['user-info-for-chat', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
-      const [{ data: profile }, { data: roles }] = await Promise.all([
+      const [{ data: profile }, { data: roles }, { data: userSectors }] = await Promise.all([
         supabase.from('profiles').select('full_name').eq('id', user.id).single(),
         supabase.rpc('get_user_roles', { _user_id: user.id }),
+        supabase.from('user_sectors').select('sector_id, service_sectors(name)').eq('user_id', user.id).limit(1),
       ]);
       const roleName = roles?.length ? ROLE_LABELS[roles[0]] || roles[0] : '';
-      return { name: profile?.full_name || 'Usuário', role: roleName };
+      
+      // Resolve sector: from user_sectors or from role
+      let sector = '';
+      if (userSectors?.length) {
+        const sectorRow = userSectors[0] as unknown as { sector_id: string; service_sectors: { name: string } | null };
+        sector = sectorRow.service_sectors?.name || '';
+      }
+      if (!sector && roles?.length) {
+        const roleToSector: Record<string, string> = {
+          JURIDICO: 'Jurídico',
+          FINANCEIRO: 'Financeiro',
+          TECNICO: 'Técnico',
+          ATENCAO_CLIENTE: 'Atenção ao Cliente',
+          ATENDENTE_WHATSAPP: 'Atenção ao Cliente',
+        };
+        for (const r of roles) {
+          if (roleToSector[r]) {
+            sector = roleToSector[r];
+            break;
+          }
+        }
+      }
+      
+      return { name: profile?.full_name || 'Usuário', role: roleName, sector };
     },
     enabled: !!user?.id,
     staleTime: 5 * 60 * 1000,
