@@ -879,11 +879,18 @@ serve(async (req) => {
       media_mimetype: mediaMimetype,
     })
 
-    // ========== MULTICHAT SECTOR ROUTING ==========
+    // ========== MULTICHAT SECTOR ROUTING (REFINED) ==========
     let routedSector: string | null = null
 
+    // Helper: detect generic/short messages that should default to ultimo_setor
+    const GENERIC_PATTERNS = /^(ok|sim|não|nao|obrigad[oa]|enviei|pode verificar|pronto|certo|tá|ta|beleza|blz|perfeito|entendi|combinado|valeu|👍|✅|pode ser|tudo bem|fechado|confirmado|feito|já enviei|já fiz|show|massa|bom dia|boa tarde|boa noite|oi|olá|ola|hola)[\s!?.]*$/i
+    const isGenericMessage = (msg: string): boolean => {
+      if (!msg) return false
+      const trimmed = msg.trim()
+      return trimmed.length <= 30 && GENERIC_PATTERNS.test(trimmed)
+    }
+
     try {
-      // Get chat context for this contact
       const { data: chatCtx } = await supabase
         .from('customer_chat_context')
         .select('*')
@@ -891,7 +898,6 @@ serve(async (req) => {
         .single()
 
       if (chatCtx) {
-        // Get configurable timeout (default 60 min)
         const { data: timeoutConfig } = await supabase
           .from('system_config')
           .select('value')
@@ -900,23 +906,46 @@ serve(async (req) => {
 
         const timeoutMs = (parseInt(timeoutConfig?.value || '60') || 60) * 60 * 1000
         const now = Date.now()
+        const clientMessage = (message.body || '').trim()
 
-        // Filter expired sectors
         const setoresAtivos = ((chatCtx.setores_ativos as Array<{ setor: string; user_id: string; last_sent_at: string }>) || [])
           .filter(s => now - new Date(s.last_sent_at).getTime() < timeoutMs)
 
-        console.log('Active sectors after expiry filter:', setoresAtivos.map(s => s.setor))
+        const sectorNames = setoresAtivos.map(s => s.setor)
+        console.log('Active sectors after expiry filter:', sectorNames)
 
-        if (setoresAtivos.length === 1) {
-          // Direct route to single active sector
+        let routingMethod = ''
+        let routingScore: number | null = null
+
+        // --- PRIORITY 1: Check sector lock ---
+        const lockSector = (chatCtx as Record<string, unknown>).setor_travado as string | null
+        const lockExpiry = (chatCtx as Record<string, unknown>).lock_expira_em as string | null
+        const lockActive = lockSector && lockExpiry && new Date(lockExpiry).getTime() > now
+
+        if (lockActive && sectorNames.includes(lockSector!)) {
+          routedSector = lockSector!
+          routingMethod = 'sector_lock'
+          routingScore = 1.0
+          console.log('Multichat: sector lock active, routing to:', routedSector)
+        }
+        // --- PRIORITY 2: Single sector active ---
+        else if (setoresAtivos.length === 1) {
           routedSector = setoresAtivos[0].setor
+          routingMethod = 'single_sector'
+          routingScore = 1.0
           console.log('Multichat: single sector active, routing to:', routedSector)
-        } else if (setoresAtivos.length > 1) {
-          // Multiple sectors active - try LLM classification
-          const sectorNames = setoresAtivos.map(s => s.setor)
-          console.log('Multichat: multiple sectors active:', sectorNames)
+        }
+        // --- PRIORITY 3: Generic message → use ultimo_setor ---
+        else if (setoresAtivos.length > 1 && isGenericMessage(clientMessage) && chatCtx.ultimo_setor && sectorNames.includes(chatCtx.ultimo_setor)) {
+          routedSector = chatCtx.ultimo_setor
+          routingMethod = 'generic_message'
+          routingScore = 0.95
+          console.log('Multichat: generic message detected, using ultimo_setor:', routedSector)
+        }
+        // --- PRIORITY 4: Multiple sectors → LLM with ultimo_setor bias ---
+        else if (setoresAtivos.length > 1) {
+          console.log('Multichat: multiple sectors, trying LLM classification')
 
-          // Check if OpenAI is available for classification
           const { data: aiConfig } = await supabase
             .from('system_config')
             .select('value')
@@ -924,7 +953,6 @@ serve(async (req) => {
             .single()
 
           const openaiKey = aiConfig?.value
-          const clientMessage = message.body || ''
 
           if (openaiKey && clientMessage) {
             try {
@@ -941,7 +969,7 @@ serve(async (req) => {
                   messages: [
                     {
                       role: 'system',
-                      content: `Classifique a mensagem do cliente entre APENAS estes setores: [${sectorNames.join(', ')}]. Responda APENAS em JSON: {"sector":"...","confidence":0.0-1.0}. Se não conseguir determinar com segurança, use confidence baixa.`
+                      content: `Classifique a mensagem do cliente entre APENAS estes setores: [${sectorNames.join(', ')}]. O último setor que interagiu foi "${chatCtx.ultimo_setor || 'desconhecido'}". Responda APENAS em JSON: {"sector":"...","confidence":0.0-1.0}. Se não conseguir determinar com segurança, use confidence baixa.`
                     },
                     { role: 'user', content: clientMessage }
                   ],
@@ -955,12 +983,25 @@ serve(async (req) => {
 
                 try {
                   const parsed = JSON.parse(content)
-                  if (parsed.sector && parsed.confidence >= 0.85 && sectorNames.includes(parsed.sector)) {
+                  let finalScore = parsed.confidence || 0
+
+                  // Apply ultimo_setor bias: +0.10 bonus
+                  if (parsed.sector === chatCtx.ultimo_setor) {
+                    finalScore = Math.min(finalScore + 0.10, 1.0)
+                    console.log('Multichat: applied ultimo_setor bias, adjusted score:', finalScore)
+                  }
+
+                  if (parsed.sector && finalScore >= 0.85 && sectorNames.includes(parsed.sector)) {
                     routedSector = parsed.sector
-                    console.log('Multichat: LLM routed to:', routedSector, 'confidence:', parsed.confidence)
+                    routingMethod = 'llm'
+                    routingScore = finalScore
+                    console.log('Multichat: LLM routed to:', routedSector, 'score:', finalScore)
                   } else {
-                    console.log('Multichat: LLM confidence too low or invalid sector:', parsed)
-                    // Send disambiguation to client
+                    console.log('Multichat: LLM confidence too low:', parsed, 'adjusted:', finalScore)
+                    routingMethod = 'disambiguation'
+                    routingScore = finalScore
+
+                    // Send improved disambiguation
                     const { data: waConfig } = await supabase
                       .from('system_config')
                       .select('key, value')
@@ -970,8 +1011,14 @@ serve(async (req) => {
                     waConfig?.forEach((c: { key: string; value: string }) => { waMap[c.key] = c.value })
 
                     if (waMap['uazapi_url'] && waMap['uazapi_token']) {
-                      const options = sectorNames.map((s, i) => `${i + 1}. ${s}`).join('\n')
-                      const disambigMsg = `Olá! Notamos que você está em contato com mais de um setor. Para direcionar sua mensagem corretamente, por favor responda com o número:\n\n${options}\n\nOu simplesmente nos diga sobre qual assunto deseja falar. 😊`
+                      const sectorLabels: Record<string, string> = {
+                        'Financeiro': '💰 Pagamentos e cobranças',
+                        'Jurídico': '⚖️ Documentos e processos legais',
+                        'Técnico': '🔧 Suporte técnico e expedientes',
+                        'Atenção ao Cliente': '📋 Atendimento geral',
+                      }
+                      const options = sectorNames.map((s, i) => `*${i + 1}.* ${sectorLabels[s] || s}`).join('\n')
+                      const disambigMsg = `Olá! Você está em contato com mais de um setor da nossa equipe.\n\nPara direcionar sua mensagem corretamente, responda apenas com o *número*:\n\n${options}\n\nOu descreva brevemente sobre qual assunto deseja tratar. 😊`
 
                       await fetch(`${waMap['uazapi_url'].replace(/\/$/, '')}/send/text`, {
                         method: 'POST',
@@ -985,8 +1032,7 @@ serve(async (req) => {
                         mensagem_IA: disambigMsg,
                         origem: 'ROUTING',
                       })
-
-                      console.log('Multichat: disambiguation message sent to client')
+                      console.log('Multichat: disambiguation message sent')
                     }
                   }
                 } catch {
@@ -996,25 +1042,51 @@ serve(async (req) => {
             } catch (llmErr) {
               console.error('Multichat LLM error:', llmErr instanceof Error ? llmErr.message : llmErr)
             }
-          } else {
-            // No AI available - use ultimo_setor as fallback
+          }
+
+          // Fallback: no AI or AI failed → use ultimo_setor
+          if (!routedSector && !routingMethod && chatCtx.ultimo_setor && sectorNames.includes(chatCtx.ultimo_setor)) {
             routedSector = chatCtx.ultimo_setor
-            console.log('Multichat: no AI, fallback to ultimo_setor:', routedSector)
+            routingMethod = 'ultimo_setor_fallback'
+            routingScore = 0.70
+            console.log('Multichat: fallback to ultimo_setor:', routedSector)
           }
         }
 
-        // Update context: clean expired sectors
-        if (setoresAtivos.length !== ((chatCtx.setores_ativos as unknown[]) || []).length) {
+        // --- LOG ROUTING DECISION ---
+        if (routingMethod) {
+          try {
+            await supabase.from('chat_routing_logs').insert({
+              contact_id: contact.id,
+              mensagem_cliente: (clientMessage || '').substring(0, 500),
+              setores_candidatos: sectorNames,
+              setor_escolhido: routedSector,
+              metodo: routingMethod,
+              score_confianca: routingScore,
+              ultimo_setor_usado: chatCtx.ultimo_setor,
+            })
+          } catch (logErr) {
+            console.error('Failed to log routing decision:', logErr)
+          }
+        }
+
+        // Update context: clean expired sectors + clear expired lock
+        if (setoresAtivos.length !== ((chatCtx.setores_ativos as unknown[]) || []).length || (!lockActive && lockSector)) {
+          const updatePayload: Record<string, unknown> = {
+            setores_ativos: setoresAtivos,
+            updated_at: new Date().toISOString(),
+          }
+          if (!lockActive && lockSector) {
+            updatePayload.setor_travado = null
+            updatePayload.lock_expira_em = null
+          }
           await supabase
             .from('customer_chat_context')
-            .update({
-              setores_ativos: setoresAtivos,
-              updated_at: new Date().toISOString(),
-            })
+            .update(updatePayload)
             .eq('contact_id', contact.id)
         }
 
-        // If routed, notify sector users
+        // Notify sector users
         if (routedSector) {
           const { data: sectorData } = await supabase
             .from('service_sectors')

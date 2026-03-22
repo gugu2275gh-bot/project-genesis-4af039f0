@@ -161,6 +161,50 @@ export type Database = {
           },
         ]
       }
+      chat_routing_logs: {
+        Row: {
+          contact_id: string
+          created_at: string | null
+          id: string
+          mensagem_cliente: string | null
+          metodo: string | null
+          score_confianca: number | null
+          setor_escolhido: string | null
+          setores_candidatos: Json | null
+          ultimo_setor_usado: string | null
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string | null
+          id?: string
+          mensagem_cliente?: string | null
+          metodo?: string | null
+          score_confianca?: number | null
+          setor_escolhido?: string | null
+          setores_candidatos?: Json | null
+          ultimo_setor_usado?: string | null
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string | null
+          id?: string
+          mensagem_cliente?: string | null
+          metodo?: string | null
+          score_confianca?: number | null
+          setor_escolhido?: string | null
+          setores_candidatos?: Json | null
+          ultimo_setor_usado?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_routing_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       commissions: {
         Row: {
           approved_at: string | null
@@ -778,6 +822,8 @@ export type Database = {
           contact_id: string
           created_at: string | null
           id: string
+          lock_expira_em: string | null
+          setor_travado: string | null
           setores_ativos: Json | null
           ultima_interacao: string | null
           ultimo_setor: string | null
@@ -787,6 +833,8 @@ export type Database = {
           contact_id: string
           created_at?: string | null
           id?: string
+          lock_expira_em?: string | null
+          setor_travado?: string | null
           setores_ativos?: Json | null
           ultima_interacao?: string | null
           ultimo_setor?: string | null
@@ -796,6 +844,8 @@ export type Database = {
           contact_id?: string
           created_at?: string | null
           id?: string
+          lock_expira_em?: string | null
+          setor_travado?: string | null
           setores_ativos?: Json | null
           ultima_interacao?: string | null
           ultimo_setor?: string | null

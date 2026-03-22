@@ -211,6 +211,9 @@ serve(async (req) => {
           setoresAtivos.push({ setor: effectiveSector, user_id: user.id, last_sent_at: now })
         }
 
+        // Apply sector lock (10 min) when operator sends message
+        const lockExpiry = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+
         await adminSupabase
           .from('customer_chat_context')
           .update({
@@ -218,10 +221,13 @@ serve(async (req) => {
             setores_ativos: setoresAtivos,
             ultima_interacao: now,
             updated_at: now,
+            setor_travado: effectiveSector,
+            lock_expira_em: lockExpiry,
           })
           .eq('contact_id', resolvedContactId)
       } else {
         // Create new context
+        const newLockExpiry = new Date(Date.now() + 10 * 60 * 1000).toISOString()
         await adminSupabase
           .from('customer_chat_context')
           .insert({
@@ -229,6 +235,8 @@ serve(async (req) => {
             ultimo_setor: effectiveSector,
             setores_ativos: [{ setor: effectiveSector, user_id: user.id, last_sent_at: now }],
             ultima_interacao: now,
+            setor_travado: effectiveSector,
+            lock_expira_em: newLockExpiry,
           })
       }
 
