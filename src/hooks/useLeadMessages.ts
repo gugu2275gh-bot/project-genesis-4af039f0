@@ -192,6 +192,7 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
         media_url: null,
         media_filename: null,
         media_mimetype: null,
+        setor: userInfo?.sector || null,
       };
       
       queryClient.setQueryData<LeadMessage[]>(cacheKey, (old = []) => [
