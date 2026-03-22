@@ -351,6 +351,13 @@ export default function UsersManagement() {
       });
       return;
     }
+    if (editUserForm.sectorIds.length === 0) {
+      toast({ 
+        title: 'Selecione pelo menos um setor para o usuário',
+        variant: 'destructive' 
+      });
+      return;
+    }
 
     try {
       await updateProfileMutation.mutateAsync({
