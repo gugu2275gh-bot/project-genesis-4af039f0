@@ -773,6 +773,44 @@ export type Database = {
           },
         ]
       }
+      customer_chat_context: {
+        Row: {
+          contact_id: string
+          created_at: string | null
+          id: string
+          setores_ativos: Json | null
+          ultima_interacao: string | null
+          ultimo_setor: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string | null
+          id?: string
+          setores_ativos?: Json | null
+          ultima_interacao?: string | null
+          ultimo_setor?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string | null
+          id?: string
+          setores_ativos?: Json | null
+          ultima_interacao?: string | null
+          ultimo_setor?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_chat_context_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_sector_pending_items: {
         Row: {
           awaiting_customer_reply: boolean | null
@@ -1486,6 +1524,7 @@ export type Database = {
           id: string
           is_read: boolean | null
           message: string | null
+          sector: string | null
           title: string
           type: string
           user_id: string
@@ -1495,6 +1534,7 @@ export type Database = {
           id?: string
           is_read?: boolean | null
           message?: string | null
+          sector?: string | null
           title: string
           type: string
           user_id: string
@@ -1504,6 +1544,7 @@ export type Database = {
           id?: string
           is_read?: boolean | null
           message?: string | null
+          sector?: string | null
           title?: string
           type?: string
           user_id?: string

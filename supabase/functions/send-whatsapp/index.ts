@@ -57,7 +57,7 @@ serve(async (req) => {
       )
     }
 
-    const allowedRoles = ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'ATENDENTE_WHATSAPP', 'SUPERVISOR']
+    const allowedRoles = ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'ATENDENTE_WHATSAPP', 'SUPERVISOR', 'JURIDICO', 'FINANCEIRO', 'TECNICO']
     const hasPermission = userRoles?.some(r => allowedRoles.includes(r.role))
     if (!hasPermission) {
       console.error('Insufficient permissions, user roles:', userRoles)
@@ -67,7 +67,7 @@ serve(async (req) => {
       )
     }
 
-    const { mensagem, numero } = await req.json()
+    const { mensagem, numero, sector, contact_id } = await req.json()
 
     if (!mensagem || !numero) {
       return new Response(
@@ -94,7 +94,6 @@ serve(async (req) => {
     }
 
     // Fetch WhatsApp API config from system_config using service role (reuse adminSupabase)
-
     const { data: configs } = await adminSupabase
       .from('system_config')
       .select('key, value')
@@ -138,6 +137,104 @@ serve(async (req) => {
     if (!response.ok) {
       console.error('WhatsApp API error:', responseData)
       throw new Error(`WhatsApp API retornou status ${response.status}: ${responseData}`)
+    }
+
+    // ========== UPDATE CUSTOMER CHAT CONTEXT ==========
+    // Determine the sector of the sending user
+    let effectiveSector = sector || null
+
+    if (!effectiveSector) {
+      // Try to resolve sector from user_sectors table
+      const { data: userSectorData } = await adminSupabase
+        .from('user_sectors')
+        .select('sector_id, service_sectors(name)')
+        .eq('user_id', user.id)
+        .limit(1)
+
+      if (userSectorData?.length) {
+        const sectorRow = userSectorData[0] as { sector_id: string; service_sectors: { name: string } | null }
+        effectiveSector = sectorRow.service_sectors?.name || null
+      }
+
+      // Fallback: derive from role
+      if (!effectiveSector && userRoles?.length) {
+        const roleToSector: Record<string, string> = {
+          JURIDICO: 'Jurídico',
+          FINANCEIRO: 'Financeiro',
+          TECNICO: 'Técnico',
+          ATENCAO_CLIENTE: 'Atenção ao Cliente',
+          ATENDENTE_WHATSAPP: 'Atenção ao Cliente',
+        }
+        for (const r of userRoles) {
+          if (roleToSector[r.role]) {
+            effectiveSector = roleToSector[r.role]
+            break
+          }
+        }
+      }
+    }
+
+    // Resolve contact_id if provided, otherwise try to find by phone
+    let resolvedContactId = contact_id || null
+    if (!resolvedContactId) {
+      const { data: contactData } = await adminSupabase
+        .from('contacts')
+        .select('id')
+        .eq('phone', phoneStr)
+        .limit(1)
+      if (contactData?.length) {
+        resolvedContactId = contactData[0].id
+      }
+    }
+
+    if (resolvedContactId && effectiveSector) {
+      console.log('Updating chat context:', { contactId: resolvedContactId, sector: effectiveSector })
+
+      const now = new Date().toISOString()
+
+      // Get existing context
+      const { data: existingCtx } = await adminSupabase
+        .from('customer_chat_context')
+        .select('*')
+        .eq('contact_id', resolvedContactId)
+        .single()
+
+      if (existingCtx) {
+        // Update existing: add/update sector in setores_ativos
+        const setoresAtivos = (existingCtx.setores_ativos as Array<{ setor: string; user_id: string; last_sent_at: string }>) || []
+        const existingIdx = setoresAtivos.findIndex(s => s.setor === effectiveSector)
+
+        if (existingIdx >= 0) {
+          setoresAtivos[existingIdx].last_sent_at = now
+          setoresAtivos[existingIdx].user_id = user.id
+        } else {
+          setoresAtivos.push({ setor: effectiveSector, user_id: user.id, last_sent_at: now })
+        }
+
+        await adminSupabase
+          .from('customer_chat_context')
+          .update({
+            ultimo_setor: effectiveSector,
+            setores_ativos: setoresAtivos,
+            ultima_interacao: now,
+            updated_at: now,
+          })
+          .eq('contact_id', resolvedContactId)
+      } else {
+        // Create new context
+        await adminSupabase
+          .from('customer_chat_context')
+          .insert({
+            contact_id: resolvedContactId,
+            ultimo_setor: effectiveSector,
+            setores_ativos: [{ setor: effectiveSector, user_id: user.id, last_sent_at: now }],
+            ultima_interacao: now,
+          })
+      }
+
+      console.log('Chat context updated successfully')
+    } else {
+      console.log('Skipping chat context update:', { hasContactId: !!resolvedContactId, hasSector: !!effectiveSector })
     }
 
     return new Response(

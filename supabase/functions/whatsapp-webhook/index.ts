@@ -879,6 +879,172 @@ serve(async (req) => {
       media_mimetype: mediaMimetype,
     })
 
+    // ========== MULTICHAT SECTOR ROUTING ==========
+    let routedSector: string | null = null
+
+    try {
+      // Get chat context for this contact
+      const { data: chatCtx } = await supabase
+        .from('customer_chat_context')
+        .select('*')
+        .eq('contact_id', contact.id)
+        .single()
+
+      if (chatCtx) {
+        // Get configurable timeout (default 60 min)
+        const { data: timeoutConfig } = await supabase
+          .from('system_config')
+          .select('value')
+          .eq('key', 'chat_sector_timeout_minutes')
+          .single()
+
+        const timeoutMs = (parseInt(timeoutConfig?.value || '60') || 60) * 60 * 1000
+        const now = Date.now()
+
+        // Filter expired sectors
+        const setoresAtivos = ((chatCtx.setores_ativos as Array<{ setor: string; user_id: string; last_sent_at: string }>) || [])
+          .filter(s => now - new Date(s.last_sent_at).getTime() < timeoutMs)
+
+        console.log('Active sectors after expiry filter:', setoresAtivos.map(s => s.setor))
+
+        if (setoresAtivos.length === 1) {
+          // Direct route to single active sector
+          routedSector = setoresAtivos[0].setor
+          console.log('Multichat: single sector active, routing to:', routedSector)
+        } else if (setoresAtivos.length > 1) {
+          // Multiple sectors active - try LLM classification
+          const sectorNames = setoresAtivos.map(s => s.setor)
+          console.log('Multichat: multiple sectors active:', sectorNames)
+
+          // Check if OpenAI is available for classification
+          const { data: aiConfig } = await supabase
+            .from('system_config')
+            .select('value')
+            .eq('key', 'openai_api_key')
+            .single()
+
+          const openaiKey = aiConfig?.value
+          const clientMessage = message.body || ''
+
+          if (openaiKey && clientMessage) {
+            try {
+              const classifyResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${openaiKey}`,
+                },
+                body: JSON.stringify({
+                  model: 'gpt-4o-mini',
+                  temperature: 0,
+                  max_tokens: 100,
+                  messages: [
+                    {
+                      role: 'system',
+                      content: `Classifique a mensagem do cliente entre APENAS estes setores: [${sectorNames.join(', ')}]. Responda APENAS em JSON: {"sector":"...","confidence":0.0-1.0}. Se não conseguir determinar com segurança, use confidence baixa.`
+                    },
+                    { role: 'user', content: clientMessage }
+                  ],
+                }),
+              })
+
+              if (classifyResponse.ok) {
+                const classifyResult = await classifyResponse.json()
+                const content = classifyResult.choices?.[0]?.message?.content || ''
+                console.log('LLM sector classification:', content)
+
+                try {
+                  const parsed = JSON.parse(content)
+                  if (parsed.sector && parsed.confidence >= 0.85 && sectorNames.includes(parsed.sector)) {
+                    routedSector = parsed.sector
+                    console.log('Multichat: LLM routed to:', routedSector, 'confidence:', parsed.confidence)
+                  } else {
+                    console.log('Multichat: LLM confidence too low or invalid sector:', parsed)
+                    // Send disambiguation to client
+                    const { data: waConfig } = await supabase
+                      .from('system_config')
+                      .select('key, value')
+                      .in('key', ['uazapi_url', 'uazapi_token'])
+
+                    const waMap: Record<string, string> = {}
+                    waConfig?.forEach((c: { key: string; value: string }) => { waMap[c.key] = c.value })
+
+                    if (waMap['uazapi_url'] && waMap['uazapi_token']) {
+                      const options = sectorNames.map((s, i) => `${i + 1}. ${s}`).join('\n')
+                      const disambigMsg = `Olá! Notamos que você está em contato com mais de um setor. Para direcionar sua mensagem corretamente, por favor responda com o número:\n\n${options}\n\nOu simplesmente nos diga sobre qual assunto deseja falar. 😊`
+
+                      await fetch(`${waMap['uazapi_url'].replace(/\/$/, '')}/send/text`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'token': waMap['uazapi_token'] },
+                        body: JSON.stringify({ number: phoneNumber, text: disambigMsg }),
+                      })
+
+                      await supabase.from('mensagens_cliente').insert({
+                        id_lead: lead.id,
+                        phone_id: parseInt(phoneNumber),
+                        mensagem_IA: disambigMsg,
+                        origem: 'ROUTING',
+                      })
+
+                      console.log('Multichat: disambiguation message sent to client')
+                    }
+                  }
+                } catch {
+                  console.error('Multichat: failed to parse LLM response')
+                }
+              }
+            } catch (llmErr) {
+              console.error('Multichat LLM error:', llmErr instanceof Error ? llmErr.message : llmErr)
+            }
+          } else {
+            // No AI available - use ultimo_setor as fallback
+            routedSector = chatCtx.ultimo_setor
+            console.log('Multichat: no AI, fallback to ultimo_setor:', routedSector)
+          }
+        }
+
+        // Update context: clean expired sectors
+        if (setoresAtivos.length !== ((chatCtx.setores_ativos as unknown[]) || []).length) {
+          await supabase
+            .from('customer_chat_context')
+            .update({
+              setores_ativos: setoresAtivos,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('contact_id', contact.id)
+        }
+
+        // If routed, notify sector users
+        if (routedSector) {
+          const { data: sectorData } = await supabase
+            .from('service_sectors')
+            .select('id')
+            .eq('name', routedSector)
+            .single()
+
+          if (sectorData) {
+            const { data: sectorUsers } = await supabase
+              .from('user_sectors')
+              .select('user_id')
+              .eq('sector_id', sectorData.id)
+
+            for (const su of sectorUsers || []) {
+              await supabase.from('notifications').insert({
+                user_id: su.user_id,
+                title: `Mensagem direcionada - ${routedSector}`,
+                message: `${contact.full_name}: ${(message.body || '').substring(0, 100)}`,
+                type: 'sector_message',
+                sector: routedSector,
+              })
+            }
+            console.log(`Multichat: notified ${sectorUsers?.length || 0} users in sector ${routedSector}`)
+          }
+        }
+      }
+    } catch (routingError) {
+      console.error('Multichat routing error (non-blocking):', routingError instanceof Error ? routingError.message : routingError)
+    }
+
     // ========== SMART REACTIVATION CHECK ==========
     let skipAIAgent = false
     let reactivationLeadOverride: string | null = null

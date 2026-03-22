@@ -8,9 +8,10 @@ import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Vid
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { supabase } from '@/integrations/supabase/client';
 
 interface LeadChatProps {
   leadId: string;
@@ -152,6 +153,31 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
+  // Fetch active sectors for this contact
+  const { data: chatContext } = useQuery({
+    queryKey: ['chat-context', contactId],
+    queryFn: async () => {
+      if (!contactId) return null;
+      const { data } = await supabase
+        .from('customer_chat_context')
+        .select('ultimo_setor, setores_ativos, ultima_interacao')
+        .eq('contact_id', contactId)
+        .single();
+      return data;
+    },
+    enabled: !!contactId,
+    refetchInterval: 30000,
+  });
+
+  const activeSetores = useMemo(() => {
+    if (!chatContext?.setores_ativos) return [];
+    const timeoutMs = 60 * 60 * 1000; // 1h default
+    const now = Date.now();
+    return (chatContext.setores_ativos as Array<{ setor: string; last_sent_at: string }>)
+      .filter(s => now - new Date(s.last_sent_at).getTime() < timeoutMs)
+      .map(s => s.setor);
+  }, [chatContext]);
+
   // Detect if AI is paused (last outgoing message is from SISTEMA)
   const isAIPaused = useMemo(() => {
     const outgoing = messages.filter(m => m.mensagem_IA);
@@ -262,6 +288,16 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
               </Badge>
             )}
           </div>
+          {activeSetores.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-[10px] text-muted-foreground">Setores ativos:</span>
+              {activeSetores.map(setor => (
+                <Badge key={setor} variant="secondary" className="text-[10px] px-1.5 py-0">
+                  {setor}
+                </Badge>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-1">
             {isAIPaused && (
               <Tooltip>
