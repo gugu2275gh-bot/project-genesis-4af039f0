@@ -93,11 +93,7 @@ serve(async (req) => {
       )
     }
 
-    // Fetch WhatsApp API config from system_config using service role
-    const adminSupabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    )
+    // Fetch WhatsApp API config from system_config using service role (reuse adminSupabase)
 
     const { data: configs } = await adminSupabase
       .from('system_config')
