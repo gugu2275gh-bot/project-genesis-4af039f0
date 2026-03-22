@@ -320,12 +320,26 @@ export default function UsersManagement() {
       });
       return;
     }
+    if (!createUserForm.role) {
+      toast({ 
+        title: 'Selecione pelo menos um papel para o usuário',
+        variant: 'destructive' 
+      });
+      return;
+    }
+    if (createUserForm.sectorIds.length === 0) {
+      toast({ 
+        title: 'Selecione pelo menos um setor para o usuário',
+        variant: 'destructive' 
+      });
+      return;
+    }
     createUserMutation.mutate({
       email: createUserForm.email,
       password: createUserForm.password,
       full_name: createUserForm.full_name,
-      role: createUserForm.role || undefined,
-      sector_ids: createUserForm.sectorIds.length > 0 ? createUserForm.sectorIds : undefined,
+      role: createUserForm.role,
+      sector_ids: createUserForm.sectorIds,
     });
   };
 
@@ -333,6 +347,13 @@ export default function UsersManagement() {
     if (!editUserForm.full_name) {
       toast({ 
         title: 'Nome completo é obrigatório',
+        variant: 'destructive' 
+      });
+      return;
+    }
+    if (editUserForm.sectorIds.length === 0) {
+      toast({ 
+        title: 'Selecione pelo menos um setor para o usuário',
         variant: 'destructive' 
       });
       return;
@@ -519,7 +540,7 @@ export default function UsersManagement() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="role">Papel inicial (opcional)</Label>
+                        <Label htmlFor="role">Papel inicial *</Label>
                         <Select
                           value={createUserForm.role}
                           onValueChange={(value) => setCreateUserForm(prev => ({ ...prev, role: value as AppRole }))}
@@ -537,8 +558,8 @@ export default function UsersManagement() {
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label>Setores (opcional)</Label>
-                        <div className="space-y-2 border rounded-md p-3">
+                        <Label>Setores *</Label>
+                        <div className={`space-y-2 border rounded-md p-3 ${createUserForm.sectorIds.length === 0 ? 'border-destructive' : ''}`}>
                           {sectors.filter(s => s.is_active).map((sector) => (
                             <div key={sector.id} className="flex items-center space-x-2">
                               <Checkbox
@@ -556,6 +577,9 @@ export default function UsersManagement() {
                           ))}
                           {sectors.filter(s => s.is_active).length === 0 && (
                             <p className="text-sm text-muted-foreground">Nenhum setor disponível</p>
+                          )}
+                          {sectors.filter(s => s.is_active).length > 0 && createUserForm.sectorIds.length === 0 && (
+                            <p className="text-xs text-destructive mt-1">Selecione pelo menos um setor</p>
                           )}
                         </div>
                       </div>
@@ -630,10 +654,19 @@ export default function UsersManagement() {
                                 className={`${ROLE_COLORS[role]} border-0 gap-1`}
                               >
                                 {ROLE_LABELS[role]}
-                                {isAdmin && (
+                                {isAdmin && user.roles.length > 1 && (
                                   <button
                                     onClick={() => removeRoleMutation.mutate({ userId: user.id, role })}
                                     className="ml-1 hover:text-destructive"
+                                  >
+                                    <XCircle className="h-3 w-3" />
+                                  </button>
+                                )}
+                                {isAdmin && user.roles.length <= 1 && (
+                                  <button
+                                    onClick={() => toast({ title: 'O usuário deve ter pelo menos um papel', variant: 'destructive' })}
+                                    className="ml-1 opacity-30 cursor-not-allowed"
+                                    title="Não é possível remover o último papel"
                                   >
                                     <XCircle className="h-3 w-3" />
                                   </button>
@@ -857,8 +890,8 @@ export default function UsersManagement() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Setores</Label>
-              <div className="space-y-2 border rounded-md p-3">
+              <Label>Setores *</Label>
+              <div className={`space-y-2 border rounded-md p-3 ${editUserForm.sectorIds.length === 0 ? 'border-destructive' : ''}`}>
                 {sectors.filter(s => s.is_active).map((sector) => (
                   <div key={sector.id} className="flex items-center space-x-2">
                     <Checkbox
@@ -876,6 +909,9 @@ export default function UsersManagement() {
                 ))}
                 {sectors.filter(s => s.is_active).length === 0 && (
                   <p className="text-sm text-muted-foreground">Nenhum setor disponível</p>
+                )}
+                {sectors.filter(s => s.is_active).length > 0 && editUserForm.sectorIds.length === 0 && (
+                  <p className="text-xs text-destructive mt-1">Selecione pelo menos um setor</p>
                 )}
               </div>
             </div>
