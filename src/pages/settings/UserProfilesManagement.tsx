@@ -8,12 +8,24 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Loader2, AlertCircle, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { 
   useUserProfileDefinitions, 
   useCreateUserProfileDefinition, 
   useUpdateUserProfileDefinition,
+  useDeleteUserProfileDefinition,
   UserProfileDefinition,
   UserProfileDefinitionInsert 
 } from '@/hooks/useUserProfileDefinitions';
@@ -26,6 +38,7 @@ export default function UserProfilesManagement() {
   const { data: profiles, isLoading } = useUserProfileDefinitions(showInactive);
   const createProfile = useCreateUserProfileDefinition();
   const updateProfile = useUpdateUserProfileDefinition();
+  const deleteProfile = useDeleteUserProfileDefinition();
 
   const [formData, setFormData] = useState<UserProfileDefinitionInsert>({
     role_code: '',
@@ -214,9 +227,37 @@ export default function UserProfilesManagement() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => openEditDialog(profile)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openEditDialog(profile)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      {profile.role_code !== 'ADMIN' && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Excluir perfil "{profile.display_name}"?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                O perfil será desativado e não aparecerá mais nas listagens. Esta ação pode ser revertida reativando o perfil.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteProfile.mutate(profile.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Excluir
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
