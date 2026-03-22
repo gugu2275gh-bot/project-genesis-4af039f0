@@ -37,6 +37,7 @@ export default function SectorsManagement() {
   const { data: sectors, isLoading } = useServiceSectors(showInactive);
   const createSector = useCreateServiceSector();
   const updateSector = useUpdateServiceSector();
+  const deleteSector = useDeleteServiceSector();
 
   const [formData, setFormData] = useState<ServiceSectorInsert>({
     code: '',
