@@ -95,17 +95,17 @@ export function useDeleteUserProfileDefinition() {
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('user_profile_definitions')
-        .update({ is_active: false })
+        .delete()
         .eq('id', id);
       
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-profile-definitions'] });
-      toast({ title: 'Perfil desativado com sucesso' });
+      toast({ title: 'Perfil excluído com sucesso' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao desativar perfil', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao excluir perfil', description: error.message, variant: 'destructive' });
     },
   });
 }

@@ -95,17 +95,17 @@ export function useDeleteServiceSector() {
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('service_sectors')
-        .update({ is_active: false })
+        .delete()
         .eq('id', id);
       
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['service-sectors'] });
-      toast({ title: 'Setor desativado com sucesso' });
+      toast({ title: 'Setor excluído com sucesso' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Erro ao desativar setor', description: error.message, variant: 'destructive' });
+      toast({ title: 'Erro ao excluir setor', description: error.message, variant: 'destructive' });
     },
   });
 }
