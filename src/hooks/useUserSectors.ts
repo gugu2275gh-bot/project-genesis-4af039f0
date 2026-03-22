@@ -58,24 +58,26 @@ export function useAllUsersSectors() {
           user_id,
           sector_id,
           created_at,
-          service_sectors (
+          service_sectors!inner (
             id,
             code,
-            name
+            name,
+            is_active
           )
         `);
 
       if (error) throw error;
       
-      // Group by user_id
+      // Group by user_id — only include active sectors
       const grouped: Record<string, { id: string; code: string; name: string }[]> = {};
       
       data.forEach(item => {
         if (!grouped[item.user_id]) {
           grouped[item.user_id] = [];
         }
-        if (item.service_sectors) {
-          grouped[item.user_id].push(item.service_sectors as { id: string; code: string; name: string });
+        const sector = item.service_sectors as { id: string; code: string; name: string; is_active: boolean } | undefined;
+        if (sector && sector.is_active) {
+          grouped[item.user_id].push({ id: sector.id, code: sector.code, name: sector.name });
         }
       });
       
