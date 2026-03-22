@@ -276,6 +276,16 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
           <div className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5 text-green-600" />
             <CardTitle className="text-lg">Conversa WhatsApp</CardTitle>
+            {!hasGlobalView && userSectorName && (
+              <Badge variant="outline" className="text-blue-600 border-blue-300 bg-blue-50 dark:bg-blue-900/20 gap-1">
+                📂 {userSectorName}
+              </Badge>
+            )}
+            {hasGlobalView && (
+              <Badge variant="outline" className="text-purple-600 border-purple-300 bg-purple-50 dark:bg-purple-900/20 gap-1">
+                👁 Todos os setores
+              </Badge>
+            )}
             {isAIPaused ? (
               <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-50 dark:bg-orange-900/20 gap-1">
                 <BotOff className="h-3 w-3" />
