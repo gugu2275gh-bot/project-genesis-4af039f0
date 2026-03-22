@@ -38,6 +38,7 @@ export default function UserProfilesManagement() {
   const { data: profiles, isLoading } = useUserProfileDefinitions(showInactive);
   const createProfile = useCreateUserProfileDefinition();
   const updateProfile = useUpdateUserProfileDefinition();
+  const deleteProfile = useDeleteUserProfileDefinition();
 
   const [formData, setFormData] = useState<UserProfileDefinitionInsert>({
     role_code: '',
