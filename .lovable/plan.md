@@ -1,32 +1,44 @@
 
-# Plano: Smart Session Reactivation Engine — IMPLEMENTADO ✅
 
-## O que foi entregue
+# Plano: CRUD Completo de Usuarios com Setor Obrigatorio
 
-### Fase 1: Banco de Dados ✅
-- Tabela `customer_sector_pending_items` com RLS (staff autenticado)
-- Tabela `reactivation_resolutions` com RLS (staff autenticado)
-- Índices em contact_id e status
-- 5 configs no `system_config`: timeout, enable, thresholds, context limit
+## Estado Atual
 
-### Fase 2: Edge Function `smart-reactivation` ✅
-- Motor completo com: check sessão, pendências abertas, classificação LLM (GPT-4o-mini), fallback determinístico
-- Confirmation reply mapping (positivo/negativo)
-- Max 2 tentativas de desambiguação
-- Log completo em `reactivation_resolutions`
+A pagina `UsersManagement.tsx` ja possui:
+- Listagem de usuarios com roles e setores
+- Criacao de usuario via edge function `admin-create-user`
+- Edicao de nome/telefone/setores
+- Adicao/remocao de roles
+- Ativar/desativar usuario
+- Exclusao via edge function `admin-delete-user`
+- Busca por nome/email
 
-### Fase 3: Integração no `whatsapp-webhook` ✅
-- Chamada ao `smart-reactivation` ANTES da seção de IA
-- Se SEND_MESSAGE → envia e pula IA
-- Se DIRECT_ROUTE → roteia e pula IA
-- Se CURRENT_FLOW/NEW_SUBJECT → segue fluxo normal
+**O que falta:**
+- Validacao obrigatoria de pelo menos 1 setor na criacao e edicao
+- O role tambem deveria ser obrigatorio na criacao (atualmente opcional)
 
-### Fase 4: Interface Administrativa ✅
-- Seção "Reativação Inteligente" em SystemSettings com todos os campos
-- Componente `PendingItemsSection` na ficha do contato (CRUD completo)
-- Componente `ReactivationLogSection` na ficha do contato (histórico)
-- Hooks: `usePendingItems`, `useReactivationLog`
+## Alteracoes
 
-### Fase 5: Pendências automáticas
-- Criação manual disponível no frontend ✅
-- Lógica automática no webhook para criar/atualizar pendências quando operador envia pergunta — a ser implementado como melhoria futura
+### 1. Validacao de setor obrigatorio na criacao (`handleCreateUser`)
+- Adicionar validacao: se `createUserForm.sectorIds.length === 0`, exibir toast de erro e bloquear envio
+- Tambem validar que `role` nao esta vazio (cada usuario deve ter pelo menos 1 papel)
+
+### 2. Validacao de setor obrigatorio na edicao (`handleEditUser`)
+- Adicionar validacao: se `editUserForm.sectorIds.length === 0`, exibir toast de erro e bloquear envio
+
+### 3. Indicacao visual de obrigatoriedade
+- Adicionar asterisco (*) nos labels de Setor e Papel nos dialogs de criacao e edicao
+- Destacar visualmente a secao de setores quando vazia (borda vermelha ou mensagem)
+
+### 4. Validacao na remocao de role
+- Ao remover um role, verificar se o usuario ficaria sem roles. Se sim, bloquear e avisar.
+
+## Arquivos afetados
+
+| Arquivo | Acao |
+|---|---|
+| `src/pages/settings/UsersManagement.tsx` | Adicionar validacoes de setor e role obrigatorios |
+
+## Escopo
+Mudancas apenas no frontend (validacao). O backend (`admin-create-user`) ja aceita `sector_ids` -- nao precisa de alteracao.
+
