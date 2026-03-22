@@ -35,6 +35,52 @@ const GLOBAL_VIEW_ROLES = ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA'];
 
 export function useLeadMessages(leadId: string | undefined, contactPhone: string | number | null = null, contactId?: string) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  // Fetch current user's profile, roles and sector for message prefix + routing
+  const { data: userInfo } = useQuery({
+    queryKey: ['user-info-for-chat', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const [{ data: profile }, { data: roles }, { data: userSectors }] = await Promise.all([
+        supabase.from('profiles').select('full_name').eq('id', user.id).single(),
+        supabase.rpc('get_user_roles', { _user_id: user.id }),
+        supabase.from('user_sectors').select('sector_id, service_sectors(name)').eq('user_id', user.id),
+      ]);
+      const roleName = roles?.length ? ROLE_LABELS[roles[0]] || roles[0] : '';
+      
+      // Resolve sector: from user_sectors or from role
+      let sector = '';
+      if (userSectors?.length) {
+        const sectorRow = userSectors[0] as unknown as { sector_id: string; service_sectors: { name: string } | null };
+        sector = sectorRow.service_sectors?.name || '';
+      }
+      if (!sector && roles?.length) {
+        const roleToSector: Record<string, string> = {
+          JURIDICO: 'Jurídico',
+          FINANCEIRO: 'Financeiro',
+          TECNICO: 'Técnico',
+          ATENCAO_CLIENTE: 'Atenção ao Cliente',
+          ATENDENTE_WHATSAPP: 'Atenção ao Cliente',
+        };
+        for (const r of roles) {
+          if (roleToSector[r]) {
+            sector = roleToSector[r];
+            break;
+          }
+        }
+      }
+      
+      const allSectorNames = (userSectors || []).map((s: any) => {
+        const row = s as unknown as { service_sectors: { name: string } | null };
+        return row.service_sectors?.name;
+      }).filter(Boolean) as string[];
+      
+      return { name: profile?.full_name || 'Usuário', role: roleName, sector, roles: roles || [], sectorNames: allSectorNames };
+    },
+    enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Fetch all lead IDs for the same contact (for unified chat)
   const { data: contactLeadIds } = useQuery({
@@ -82,49 +128,6 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
     },
     enabled: effectiveLeadIds.length > 0,
   });
-
-  const { user } = useAuth();
-
-  // Fetch current user's profile, roles and sector for message prefix + routing
-  const { data: userInfo } = useQuery({
-    queryKey: ['user-info-for-chat', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      const [{ data: profile }, { data: roles }, { data: userSectors }] = await Promise.all([
-        supabase.from('profiles').select('full_name').eq('id', user.id).single(),
-        supabase.rpc('get_user_roles', { _user_id: user.id }),
-        supabase.from('user_sectors').select('sector_id, service_sectors(name)').eq('user_id', user.id),
-      ]);
-      const roleName = roles?.length ? ROLE_LABELS[roles[0]] || roles[0] : '';
-      
-      // Resolve sector: from user_sectors or from role
-      let sector = '';
-      if (userSectors?.length) {
-        const sectorRow = userSectors[0] as unknown as { sector_id: string; service_sectors: { name: string } | null };
-        sector = sectorRow.service_sectors?.name || '';
-      }
-      if (!sector && roles?.length) {
-        const roleToSector: Record<string, string> = {
-          JURIDICO: 'Jurídico',
-          FINANCEIRO: 'Financeiro',
-          TECNICO: 'Técnico',
-          ATENCAO_CLIENTE: 'Atenção ao Cliente',
-          ATENDENTE_WHATSAPP: 'Atenção ao Cliente',
-        };
-        for (const r of roles) {
-          if (roleToSector[r]) {
-            sector = roleToSector[r];
-            break;
-          }
-        }
-      }
-      
-      const allSectorNames = (userSectors || []).map((s: any) => {
-        const row = s as unknown as { service_sectors: { name: string } | null };
-        return row.service_sectors?.name;
-      }).filter(Boolean) as string[];
-      
-      return { name: profile?.full_name || 'Usuário', role: roleName, sector, roles: roles || [], sectorNames: allSectorNames };
     },
     enabled: !!user?.id,
     staleTime: 5 * 60 * 1000,
