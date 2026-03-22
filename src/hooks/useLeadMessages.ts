@@ -93,7 +93,7 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
       const [{ data: profile }, { data: roles }, { data: userSectors }] = await Promise.all([
         supabase.from('profiles').select('full_name').eq('id', user.id).single(),
         supabase.rpc('get_user_roles', { _user_id: user.id }),
-        supabase.from('user_sectors').select('sector_id, service_sectors(name)').eq('user_id', user.id).limit(1),
+        supabase.from('user_sectors').select('sector_id, service_sectors(name)').eq('user_id', user.id),
       ]);
       const roleName = roles?.length ? ROLE_LABELS[roles[0]] || roles[0] : '';
       
