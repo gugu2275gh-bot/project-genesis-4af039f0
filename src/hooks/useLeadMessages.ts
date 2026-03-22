@@ -167,6 +167,7 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
           id_lead: leadId,
           mensagem_IA: prefixedMessage,
           origem: 'SISTEMA',
+          setor: userInfo?.sector || null,
         })
         .select()
         .single();
