@@ -27,46 +27,14 @@ export interface LeadMessage {
   media_url: string | null;
   media_filename: string | null;
   media_mimetype: string | null;
+  setor: string | null;
 }
+
+// Roles that can see all sectors' messages
+const GLOBAL_VIEW_ROLES = ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA'];
 
 export function useLeadMessages(leadId: string | undefined, contactPhone: string | number | null = null, contactId?: string) {
   const queryClient = useQueryClient();
-
-  // Fetch all lead IDs for the same contact (for unified chat)
-  const { data: contactLeadIds } = useQuery({
-    queryKey: ['contact-lead-ids', contactId],
-    queryFn: async () => {
-      if (!contactId) return [];
-      const { data, error } = await supabase
-        .from('leads')
-        .select('id')
-        .eq('contact_id', contactId);
-      if (error) throw error;
-      return data.map(l => l.id);
-    },
-    enabled: !!contactId,
-  });
-
-  const effectiveLeadIds = contactId && contactLeadIds?.length ? contactLeadIds : leadId ? [leadId] : [];
-  const cacheKey = contactId ? ['lead-messages-contact', contactId] : ['lead-messages', leadId];
-
-  const { data: messages = [], isLoading } = useQuery({
-    queryKey: cacheKey,
-    queryFn: async () => {
-      if (effectiveLeadIds.length === 0) return [];
-      
-      const { data, error } = await supabase
-        .from('mensagens_cliente')
-        .select('*')
-        .in('id_lead', effectiveLeadIds)
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      return data as LeadMessage[];
-    },
-    enabled: effectiveLeadIds.length > 0,
-  });
-
   const { user } = useAuth();
 
   // Fetch current user's profile, roles and sector for message prefix + routing
@@ -77,7 +45,7 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
       const [{ data: profile }, { data: roles }, { data: userSectors }] = await Promise.all([
         supabase.from('profiles').select('full_name').eq('id', user.id).single(),
         supabase.rpc('get_user_roles', { _user_id: user.id }),
-        supabase.from('user_sectors').select('sector_id, service_sectors(name)').eq('user_id', user.id).limit(1),
+        supabase.from('user_sectors').select('sector_id, service_sectors(name)').eq('user_id', user.id),
       ]);
       const roleName = roles?.length ? ROLE_LABELS[roles[0]] || roles[0] : '';
       
@@ -103,10 +71,62 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
         }
       }
       
-      return { name: profile?.full_name || 'Usuário', role: roleName, sector };
+      const allSectorNames = (userSectors || []).map((s: any) => {
+        const row = s as unknown as { service_sectors: { name: string } | null };
+        return row.service_sectors?.name;
+      }).filter(Boolean) as string[];
+      
+      return { name: profile?.full_name || 'Usuário', role: roleName, sector, roles: roles || [], sectorNames: allSectorNames };
     },
     enabled: !!user?.id,
     staleTime: 5 * 60 * 1000,
+  });
+
+  // Fetch all lead IDs for the same contact (for unified chat)
+  const { data: contactLeadIds } = useQuery({
+    queryKey: ['contact-lead-ids', contactId],
+    queryFn: async () => {
+      if (!contactId) return [];
+      const { data, error } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('contact_id', contactId);
+      if (error) throw error;
+      return data.map(l => l.id);
+    },
+    enabled: !!contactId,
+  });
+
+  const effectiveLeadIds = contactId && contactLeadIds?.length ? contactLeadIds : leadId ? [leadId] : [];
+  const cacheKey = contactId ? ['lead-messages-contact', contactId] : ['lead-messages', leadId];
+
+  // Check if user has global view (admin/manager/supervisor)
+  const hasGlobalView = userInfo?.roles?.some((r: string) => GLOBAL_VIEW_ROLES.includes(r)) ?? false;
+  const userSectorName = userInfo?.sector || '';
+
+  const { data: messages = [], isLoading } = useQuery({
+    queryKey: [...cacheKey, userSectorName, hasGlobalView],
+    queryFn: async () => {
+      if (effectiveLeadIds.length === 0) return [];
+      
+      let query = supabase
+        .from('mensagens_cliente')
+        .select('*')
+        .in('id_lead', effectiveLeadIds)
+        .order('created_at', { ascending: true });
+
+      // If user doesn't have global view, filter by their sector
+      // Show messages that match their sector OR have no sector (legacy/untagged)
+      if (!hasGlobalView && userSectorName) {
+        query = query.or(`setor.eq.${userSectorName},setor.is.null`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return data as LeadMessage[];
+    },
+    enabled: effectiveLeadIds.length > 0,
   });
 
   const sendMessage = useMutation({
@@ -146,6 +166,7 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
           id_lead: leadId,
           mensagem_IA: prefixedMessage,
           origem: 'SISTEMA',
+          setor: userInfo?.sector || null,
         })
         .select()
         .single();
@@ -170,6 +191,7 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
         media_url: null,
         media_filename: null,
         media_mimetype: null,
+        setor: userInfo?.sector || null,
       };
       
       queryClient.setQueryData<LeadMessage[]>(cacheKey, (old = []) => [
@@ -247,5 +269,7 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
     isLoading,
     sendMessage,
     resumeAI,
+    userSectorName,
+    hasGlobalView,
   };
 }

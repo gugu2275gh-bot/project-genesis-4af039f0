@@ -1521,6 +1521,7 @@ export type Database = {
           mensagem_IA: string | null
           origem: string | null
           phone_id: number | null
+          setor: string | null
         }
         Insert: {
           created_at?: string
@@ -1534,6 +1535,7 @@ export type Database = {
           mensagem_IA?: string | null
           origem?: string | null
           phone_id?: number | null
+          setor?: string | null
         }
         Update: {
           created_at?: string
@@ -1547,6 +1549,7 @@ export type Database = {
           mensagem_IA?: string | null
           origem?: string | null
           phone_id?: number | null
+          setor?: string | null
         }
         Relationships: []
       }

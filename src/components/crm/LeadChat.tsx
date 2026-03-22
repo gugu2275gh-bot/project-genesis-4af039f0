@@ -148,7 +148,7 @@ function parseWhatsAppFlowMessage(content: string) {
 }
 
 export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
-  const { messages, isLoading, sendMessage, resumeAI } = useLeadMessages(leadId, contactPhone, contactId);
+  const { messages, isLoading, sendMessage, resumeAI, userSectorName, hasGlobalView } = useLeadMessages(leadId, contactPhone, contactId);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
@@ -244,6 +244,7 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
         content: msg.mensagem_cliente,
         timestamp: msg.created_at,
         origem: msg.origem,
+        setor: msg.setor,
         media_type: msg.media_type,
         media_url: msg.media_url,
         media_filename: msg.media_filename,
@@ -259,6 +260,7 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
         content: msg.mensagem_IA,
         timestamp: msg.created_at,
         origem: msg.origem,
+        setor: msg.setor,
         media_type: null,
         media_url: null,
         media_filename: null,
@@ -276,6 +278,16 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
           <div className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5 text-green-600" />
             <CardTitle className="text-lg">Conversa WhatsApp</CardTitle>
+            {!hasGlobalView && userSectorName && (
+              <Badge variant="outline" className="text-blue-600 border-blue-300 bg-blue-50 dark:bg-blue-900/20 gap-1">
+                📂 {userSectorName}
+              </Badge>
+            )}
+            {hasGlobalView && (
+              <Badge variant="outline" className="text-purple-600 border-purple-300 bg-purple-50 dark:bg-purple-900/20 gap-1">
+                👁 Todos os setores
+              </Badge>
+            )}
             {isAIPaused ? (
               <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-50 dark:bg-orange-900/20 gap-1">
                 <BotOff className="h-3 w-3" />
@@ -352,14 +364,21 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                         : 'bg-primary/10 text-foreground rounded-br-none'
                     )}
                   >
-                    <p className={cn(
-                      'text-[10px] font-medium mb-1',
-                      msg.type === 'client'
-                        ? 'text-green-700 dark:text-green-300'
-                        : 'text-primary/70'
-                    )}>
-                      {getSenderLabel(msg.type, msg.origem)}
-                    </p>
+                    <div className="flex items-center gap-1 mb-1">
+                      <p className={cn(
+                        'text-[10px] font-medium',
+                        msg.type === 'client'
+                          ? 'text-green-700 dark:text-green-300'
+                          : 'text-primary/70'
+                      )}>
+                        {getSenderLabel(msg.type, msg.origem)}
+                      </p>
+                      {hasGlobalView && msg.setor && (
+                        <span className="text-[9px] bg-muted px-1 rounded text-muted-foreground">
+                          {msg.setor}
+                        </span>
+                      )}
+                    </div>
                     {/* Media content */}
                     {msg.media_url && (
                       <div className="mb-1.5 space-y-1.5">
