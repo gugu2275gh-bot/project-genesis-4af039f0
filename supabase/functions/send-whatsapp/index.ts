@@ -7,6 +7,8 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+  console.log('send-whatsapp invoked, method:', req.method)
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -14,34 +16,51 @@ serve(async (req) => {
   try {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
+      console.error('Missing authorization header')
       return new Response(
         JSON.stringify({ error: 'Missing authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
-    )
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    })
 
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
+      console.error('Auth error:', authError?.message)
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    // Check role
-    const { data: hasRole, error: roleError } = await supabase
-      .rpc('has_any_role', {
-        _user_id: user.id,
-        _roles: ['ADMIN', 'ATENCAO_CLIENTE']
-      })
+    console.log('Authenticated user:', user.email)
 
-    if (roleError || !hasRole) {
+    // Check role using service role client to avoid RLS issues
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey)
+    const { data: userRoles, error: roleError } = await adminSupabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+
+    if (roleError) {
+      console.error('Role check error:', roleError.message)
+      return new Response(
+        JSON.stringify({ error: 'Erro ao verificar permissões' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const allowedRoles = ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'ATENDENTE_WHATSAPP', 'SUPERVISOR']
+    const hasPermission = userRoles?.some(r => allowedRoles.includes(r.role))
+    if (!hasPermission) {
+      console.error('Insufficient permissions, user roles:', userRoles)
       return new Response(
         JSON.stringify({ error: 'Forbidden - insufficient permissions' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
