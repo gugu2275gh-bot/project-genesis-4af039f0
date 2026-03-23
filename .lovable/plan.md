@@ -1,48 +1,38 @@
 
 
-## Plano: Tipo de Usuário (Administrador / Comum) no Cadastro e Controle de Acesso
+## Plano: Gerar Relatório de Auditoria Completa do Sistema (PDF)
 
-### Conceito
+### Escopo
 
-Adicionar um campo "Tipo de Usuário" na criação e edição de usuários com duas opções:
-- **Administrador**: Acesso total a todos os módulos (recebe automaticamente o role ADMIN)
-- **Comum**: Acesso restrito apenas aos módulos correspondentes aos perfis (roles) atribuídos
+Gerar um PDF abrangente com auditoria de todas as funcionalidades, regras de negócio, integração WhatsApp, controle de acesso (RBAC), RLS, Edge Functions e pontos de atenção identificados.
 
-### Como Funciona Hoje
+### Conteúdo do Relatório
 
-O sistema já usa roles (ADMIN, MANAGER, JURIDICO, etc.) para filtrar itens do menu na Sidebar e RLS no banco. O role ADMIN já concede acesso total. A mudança é tornar isso explícito e visível na interface de gestão.
+O PDF cobrirá as seguintes seções:
 
-### Alterações
+1. **Visão Geral do Sistema** - Stack, arquitetura, módulos
+2. **Autenticação e Controle de Acesso (RBAC)** - Roles, Sidebar, RLS policies, admin vs comum
+3. **Módulos do Sistema** - CRM, Financeiro, Jurídico, Técnico, Portal do Cliente
+4. **Integração WhatsApp** - Webhook, send-whatsapp, roteamento multichat, reativação inteligente
+5. **Automações SLA** - Tipos, configuração, lembretes
+6. **Banco de Dados** - Tabelas, triggers, functions, RLS
+7. **Edge Functions** - Inventário e análise
+8. **Pontos de Atenção e Bugs Identificados** - Inconsistências, riscos de segurança, melhorias recomendadas
 
-**1. Interface de Criação de Usuário (`src/pages/settings/UsersManagement.tsx`)**
-- Adicionar seletor "Tipo de Usuário" (Administrador / Comum) antes do campo de papel
-- Se "Administrador": atribuir automaticamente o role ADMIN, ocultar seletor de papel individual (já que tem acesso total)
-- Se "Comum": exibir seletor de papel normalmente (excluindo ADMIN da lista)
-- Mesma lógica no diálogo de edição
+### Implementação
 
-**2. Interface de Edição de Usuário (`src/pages/settings/UsersManagement.tsx`)**
-- Adicionar campo "Tipo de Usuário" no diálogo de edição
-- Ao mudar de Comum para Administrador: adicionar role ADMIN
-- Ao mudar de Administrador para Comum: remover role ADMIN, exigir seleção de pelo menos um papel
+- Gerar via script Python usando reportlab
+- Salvar em `/mnt/documents/auditoria_sistema_cb_asesoria.pdf`
+- QA visual antes de entregar
 
-**3. Tabela de Usuários (`src/pages/settings/UsersManagement.tsx`)**
-- Adicionar indicador visual de "Administrador" ou "Comum" na coluna de perfis ou como badge separado
+### Achados Preliminares
 
-**4. Sidebar (`src/components/layout/Sidebar.tsx`)**
-- Já funciona corretamente: se o usuário tem ADMIN, todos os itens aparecem. Nenhuma alteração necessária.
-
-**5. RLS e Backend**
-- Nenhuma alteração necessária no banco. O role ADMIN já é utilizado em todas as policies RLS para conceder acesso total. Usuários comuns terão acesso filtrado pelos seus roles específicos.
-
-**6. Validação na criação via Edge Function (`supabase/functions/admin-create-user/index.ts`)**
-- Nenhuma alteração necessária. A function já recebe o role e o atribui.
-
-### Detalhes Técnicos
-
-- O campo "Tipo de Usuário" é derivado da presença do role ADMIN na lista de roles do usuário (não é um campo novo no banco)
-- Administrador = usuário que possui role ADMIN
-- Comum = usuário que NÃO possui role ADMIN
-- Ao selecionar "Administrador" na criação, o role enviado é ADMIN
-- Ao selecionar "Comum", o usuário escolhe entre os roles disponíveis (MANAGER, JURIDICO, FINANCEIRO, etc.)
-- A Sidebar e todo o sistema já respeitam os roles via `hasRole`/`hasAnyRole`, garantindo consistência
+Problemas identificados durante a análise:
+- Sidebar não inclui SUPERVISOR, DIRETORIA, ATENDENTE_WHATSAPP na maioria dos menus
+- Bootstrap key hardcoded na Edge Function admin-create-user
+- Webhook log update usa `eq('raw_payload', payload)` que pode não funcionar com JSONB
+- Tarefas visíveis para todos (sem filtro de role no Sidebar)
+- isStaff() não inclui SUPERVISOR, DIRETORIA, ATENDENTE_WHATSAPP
+- Lead Intake sem role EXPEDIENTE nas RLS
+- Falta role EXPEDIENTE em várias RLS policies
 
