@@ -494,7 +494,7 @@ export default function UsersManagement() {
                 Gestão de Usuários
               </CardTitle>
               <CardDescription>
-                Gerencie usuários e seus papéis no sistema
+                Gerencie usuários e seus perfis no sistema
               </CardDescription>
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
