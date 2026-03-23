@@ -43,7 +43,7 @@ export function useContracts() {
             leads (
               *,
               contacts (
-                id, full_name, email, phone, address, document_type, document_number
+                id, full_name, email, phone, address, document_type, document_number, payment_notes
               ),
               service_types (
                 id, name
@@ -454,7 +454,7 @@ export function useContract(id: string | undefined) {
             leads (
               *,
               contacts (
-                id, full_name, email, phone, address, document_type, document_number
+                id, full_name, email, phone, address, document_type, document_number, payment_notes
               )
             )
           )
