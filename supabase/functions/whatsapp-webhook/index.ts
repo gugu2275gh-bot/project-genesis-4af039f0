@@ -761,13 +761,15 @@ serve(async (req) => {
 
     // Find existing contact by phone
     let contact: { id: string; full_name: string } | null = null
-    const { data: existingContact } = await supabase
+    // Use .limit(1) instead of .single() to avoid error when duplicate contacts exist for same phone
+    const { data: existingContacts } = await supabase
       .from('contacts')
       .select('id, full_name')
       .eq('phone', phoneNumber)
-      .single()
+      .order('created_at', { ascending: true })
+      .limit(1)
 
-    contact = existingContact
+    contact = existingContacts?.[0] || null
 
     // If no contact, create one
     if (!contact) {
