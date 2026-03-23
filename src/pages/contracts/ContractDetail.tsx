@@ -196,6 +196,67 @@ export default function ContractDetail() {
     }
   }, [contract]);
 
+  // Build formatted payment agreement text from payments data
+  const formattedPaymentText = useMemo(() => {
+    if (!contractPayments || contractPayments.length === 0) return '';
+    const currency = contract?.currency || 'EUR';
+    const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(v);
+    
+    return contractPayments.map((p: any) => {
+      const lines: string[] = [];
+      const dateStr = p.created_at ? format(new Date(p.created_at), 'dd/MM/yyyy', { locale: ptBR }) : '';
+      lines.push(`Acordo de Pagamento — ${dateStr}`);
+      
+      // Service name from opportunity's lead
+      const serviceName = contract?.opportunities?.leads?.service_interest 
+        ? SERVICE_INTEREST_LABELS[contract.opportunities.leads.service_interest] 
+        : '';
+      if (serviceName) lines.push(`Serviço: ${serviceName}`);
+      
+      if (p.gross_amount) lines.push(`Valor Bruto: ${fmt(p.gross_amount)}`);
+      
+      // VAT
+      if (p.vat_amount && p.vat_amount > 0) {
+        const vatPct = p.vat_rate ? `${(p.vat_rate * 100).toFixed(0)}%` : '';
+        lines.push(`IVA: ${fmt(p.vat_amount)}${vatPct ? ` (${vatPct})` : ''}`);
+      }
+      
+      // Subtotal (before discount)
+      const subtotal = (p.gross_amount || p.amount || 0) + (p.vat_amount || 0);
+      if (p.discount_value && p.discount_value > 0) {
+        lines.push(`Total: ${fmt(subtotal)}`);
+        const discountLabel = p.discount_type === 'PERCENTUAL' 
+          ? `${p.discount_value}%` 
+          : '';
+        const discountAmount = p.discount_type === 'PERCENTUAL'
+          ? subtotal * (p.discount_value / 100)
+          : p.discount_value;
+        lines.push(`Desconto: - ${fmt(discountAmount)}${discountLabel ? ` (${discountLabel})` : ''}`);
+      }
+      
+      lines.push(`Total Final: ${fmt(p.amount)}`);
+      
+      if (p.payment_method) {
+        lines.push(`Método: ${PAYMENT_METHOD_LABELS[p.payment_method as keyof typeof PAYMENT_METHOD_LABELS] || p.payment_method}`);
+      }
+      if (p.payment_form) {
+        lines.push(`Forma: ${PAYMENT_FORM_LABELS[p.payment_form as keyof typeof PAYMENT_FORM_LABELS] || p.payment_form}`);
+      }
+      
+      return lines.join('\n');
+    }).join('\n\n---\n\n');
+  }, [contractPayments, contract]);
+
+  // Auto-populate installment_conditions from payment data when empty
+  useEffect(() => {
+    if (contract && contractPayments && contractPayments.length > 0 && !contract.installment_conditions && formattedPaymentText) {
+      setFormData(prev => ({
+        ...prev,
+        installment_conditions: prev.installment_conditions || formattedPaymentText,
+      }));
+    }
+  }, [contract, contractPayments, formattedPaymentText]);
+
   // Auto-calculate installment amount when total or count changes
   useEffect(() => {
     const total = parseFloat(formData.total_fee);
