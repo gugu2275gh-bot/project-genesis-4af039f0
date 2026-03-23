@@ -547,23 +547,45 @@ export default function UsersManagement() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="role">Papel inicial *</Label>
+                        <Label>Tipo de Usuário *</Label>
                         <Select
-                          value={createUserForm.role}
-                          onValueChange={(value) => setCreateUserForm(prev => ({ ...prev, role: value as AppRole }))}
+                          value={createUserType}
+                          onValueChange={(value: 'admin' | 'comum') => {
+                            setCreateUserType(value);
+                            if (value === 'admin') {
+                              setCreateUserForm(prev => ({ ...prev, role: '' }));
+                            }
+                          }}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Selecione um papel" />
+                            <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-popover">
-                            {availableRoles.map((role) => (
-                              <SelectItem key={role} value={role}>
-                                {ROLE_LABELS[role]}
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="admin">Administrador (acesso total)</SelectItem>
+                            <SelectItem value="comum">Comum (acesso restrito)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
+                      {createUserType === 'comum' && (
+                        <div className="space-y-2">
+                          <Label htmlFor="role">Papel inicial *</Label>
+                          <Select
+                            value={createUserForm.role}
+                            onValueChange={(value) => setCreateUserForm(prev => ({ ...prev, role: value as AppRole }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione um papel" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover">
+                              {availableRoles.filter(r => r !== 'ADMIN').map((role) => (
+                                <SelectItem key={role} value={role}>
+                                  {ROLE_LABELS[role]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                       <div className="space-y-2">
                         <Label>Setores *</Label>
                         <div className={`space-y-2 border rounded-md p-3 ${createUserForm.sectorIds.length === 0 ? 'border-destructive' : ''}`}>
