@@ -93,6 +93,22 @@ export function useDeleteServiceSector() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      // Remove FK references from service_types before deleting
+      const { error: unlinkError } = await supabase
+        .from('service_types')
+        .update({ sector_id: null })
+        .eq('sector_id', id);
+      
+      if (unlinkError) throw unlinkError;
+
+      // Remove user_sectors references
+      const { error: userSectorsError } = await supabase
+        .from('user_sectors')
+        .delete()
+        .eq('sector_id', id);
+      
+      if (userSectorsError) throw userSectorsError;
+
       const { error } = await supabase
         .from('service_sectors')
         .delete()
