@@ -953,6 +953,27 @@ export default function UsersManagement() {
               />
             </div>
             <div className="space-y-2">
+              <Label>Tipo de Usuário *</Label>
+              <Select
+                value={editUserType}
+                onValueChange={(value: 'admin' | 'comum') => setEditUserType(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="admin">Administrador (acesso total)</SelectItem>
+                  <SelectItem value="comum">Comum (acesso restrito)</SelectItem>
+                </SelectContent>
+              </Select>
+              {editUserType === 'admin' && (
+                <p className="text-xs text-muted-foreground">O usuário terá acesso total a todos os módulos do sistema</p>
+              )}
+              {editUserType === 'comum' && (
+                <p className="text-xs text-muted-foreground">O acesso será limitado aos perfis atribuídos ao usuário</p>
+              )}
+            </div>
+            <div className="space-y-2">
               <Label>Setores *</Label>
               <div className={`space-y-2 border rounded-md p-3 ${editUserForm.sectorIds.length === 0 ? 'border-destructive' : ''}`}>
                 {sectors.filter(s => s.is_active).map((sector) => (
