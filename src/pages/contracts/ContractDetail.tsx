@@ -47,14 +47,14 @@ export default function ContractDetail() {
     },
   });
 
-  // Fetch all leads linked to this contract via contract_leads
+  // Fetch all leads linked to this contract via contract_leads (with service type names)
   const { data: contractLeadLinks } = useQuery({
     queryKey: ['contract-lead-links', id],
     queryFn: async () => {
       if (!id) return [];
       const { data, error } = await supabase
         .from('contract_leads')
-        .select('lead_id')
+        .select('lead_id, leads:lead_id(id, service_type_id, service_interest, service_types:service_type_id(name))')
         .eq('contract_id', id);
       if (error) throw error;
       return data || [];
@@ -169,19 +169,45 @@ export default function ContractDetail() {
   // Get assigned user name for display
   const assignedUser = profiles.find(p => p.id === (contract as any)?.assigned_to_user_id);
 
+  // Filter payment_notes to only include services linked to this contract
+  const filteredPaymentNotes = useMemo(() => {
+    if (!contract || !contractLeadLinks) return '';
+    const c = contract as any;
+    const opp = c?.opportunities;
+    const leads = opp?.leads;
+    const contact_data = leads?.contacts;
+    const resolvedContact = Array.isArray(contact_data) ? contact_data[0] : contact_data;
+    const rawNotes = resolvedContact?.payment_notes || '';
+    if (!rawNotes) return '';
+
+    // Get active service names from contract_leads
+    const activeServiceNames = new Set<string>();
+    contractLeadLinks.forEach((cl: any) => {
+      const lead = cl.leads;
+      if (lead) {
+        const stName = lead.service_types?.name;
+        if (stName) activeServiceNames.add(stName);
+      }
+    });
+
+    if (activeServiceNames.size === 0) return rawNotes;
+
+    // Filter blocks: keep only those whose "Serviço:" matches an active service
+    const parts = rawNotes.split('\n---\n').filter(Boolean).map((p: string) => p.trim());
+    const filtered = parts.filter((block: string) => {
+      const serviceMatch = block.match(/Serviço:\s*(.+?)(?:\n|$)/);
+      if (!serviceMatch) return true; // keep blocks without service name
+      return activeServiceNames.has(serviceMatch[1].trim());
+    });
+
+    return filtered.join('\n---\n');
+  }, [contract, contractLeadLinks]);
+
   // Initialize form data when contract loads
   useEffect(() => {
     if (contract) {
       const c = contract as any;
-      // For new contracts without installment_conditions, auto-populate from contact's payment_notes
-      // Handle both object and array responses from Supabase nested selects
-      const opp = c?.opportunities;
-      const leads = opp?.leads;
-      const contact_data = leads?.contacts;
-      // Supabase may return nested relations as arrays depending on FK direction
-      const resolvedContact = Array.isArray(contact_data) ? contact_data[0] : contact_data;
-      const paymentNotes = resolvedContact?.payment_notes || '';
-      const installmentConditions = contract.installment_conditions || paymentNotes || '';
+      const installmentConditions = contract.installment_conditions || filteredPaymentNotes || '';
       
       setFormData({
         scope_summary: contract.scope_summary || '',
@@ -203,7 +229,7 @@ export default function ContractDetail() {
       });
       setSignedDocumentUrl(c.signed_document_url || null);
     }
-  }, [contract]);
+  }, [contract, filteredPaymentNotes]);
 
   // Auto-calculate installment amount when total or count changes
   useEffect(() => {
