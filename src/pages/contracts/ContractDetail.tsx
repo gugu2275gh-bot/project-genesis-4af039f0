@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useContract, useContracts } from '@/hooks/useContracts';
 import { useQuery } from '@tanstack/react-query';
@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ArrowLeft, Send, Check, Save, X, Calendar, FileText, Upload, FileCheck, Loader2, User, Phone, MapPin, CreditCard, Pause, Play, AlertTriangle } from 'lucide-react';
-import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, LANGUAGE_LABELS, CONTRACT_TEMPLATE_LABELS, ContractTemplate, PAYMENT_METHOD_LABELS, PAYMENT_ACCOUNT_LABELS, PaymentAccount } from '@/types/database';
+import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, LANGUAGE_LABELS, CONTRACT_TEMPLATE_LABELS, ContractTemplate, PAYMENT_METHOD_LABELS, PAYMENT_ACCOUNT_LABELS, PAYMENT_FORM_LABELS, PaymentAccount } from '@/types/database';
 import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -195,6 +195,67 @@ export default function ContractDetail() {
       setSignedDocumentUrl(c.signed_document_url || null);
     }
   }, [contract]);
+
+  // Build formatted payment agreement text from payments data
+  const formattedPaymentText = useMemo(() => {
+    if (!contractPayments || contractPayments.length === 0) return '';
+    const currency = contract?.currency || 'EUR';
+    const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(v);
+    
+    return contractPayments.map((p: any) => {
+      const lines: string[] = [];
+      const dateStr = p.created_at ? format(new Date(p.created_at), 'dd/MM/yyyy', { locale: ptBR }) : '';
+      lines.push(`Acordo de Pagamento — ${dateStr}`);
+      
+      // Service name from opportunity's lead
+      const serviceName = contract?.opportunities?.leads?.service_interest 
+        ? SERVICE_INTEREST_LABELS[contract.opportunities.leads.service_interest] 
+        : '';
+      if (serviceName) lines.push(`Serviço: ${serviceName}`);
+      
+      if (p.gross_amount) lines.push(`Valor Bruto: ${fmt(p.gross_amount)}`);
+      
+      // VAT
+      if (p.vat_amount && p.vat_amount > 0) {
+        const vatPct = p.vat_rate ? `${(p.vat_rate * 100).toFixed(0)}%` : '';
+        lines.push(`IVA: ${fmt(p.vat_amount)}${vatPct ? ` (${vatPct})` : ''}`);
+      }
+      
+      // Subtotal (before discount)
+      const subtotal = (p.gross_amount || p.amount || 0) + (p.vat_amount || 0);
+      if (p.discount_value && p.discount_value > 0) {
+        lines.push(`Total: ${fmt(subtotal)}`);
+        const discountLabel = p.discount_type === 'PERCENTUAL' 
+          ? `${p.discount_value}%` 
+          : '';
+        const discountAmount = p.discount_type === 'PERCENTUAL'
+          ? subtotal * (p.discount_value / 100)
+          : p.discount_value;
+        lines.push(`Desconto: - ${fmt(discountAmount)}${discountLabel ? ` (${discountLabel})` : ''}`);
+      }
+      
+      lines.push(`Total Final: ${fmt(p.amount)}`);
+      
+      if (p.payment_method) {
+        lines.push(`Método: ${PAYMENT_METHOD_LABELS[p.payment_method as keyof typeof PAYMENT_METHOD_LABELS] || p.payment_method}`);
+      }
+      if (p.payment_form) {
+        lines.push(`Forma: ${PAYMENT_FORM_LABELS[p.payment_form as keyof typeof PAYMENT_FORM_LABELS] || p.payment_form}`);
+      }
+      
+      return lines.join('\n');
+    }).join('\n\n---\n\n');
+  }, [contractPayments, contract]);
+
+  // Auto-populate installment_conditions from payment data when empty
+  useEffect(() => {
+    if (contract && contractPayments && contractPayments.length > 0 && !contract.installment_conditions && formattedPaymentText) {
+      setFormData(prev => ({
+        ...prev,
+        installment_conditions: prev.installment_conditions || formattedPaymentText,
+      }));
+    }
+  }, [contract, contractPayments, formattedPaymentText]);
 
   // Auto-calculate installment amount when total or count changes
   useEffect(() => {
@@ -843,9 +904,6 @@ export default function ContractDetail() {
               contractStatus={contract.status || 'EM_ELABORACAO'}
               date={contract.created_at ? new Date(contract.created_at) : undefined}
               serviceDescription={contract.scope_summary || undefined}
-              feeAmount={contract.total_fee || undefined}
-              vatRate={0.21}
-              totalAmount={contract.total_fee ? contract.total_fee * 1.21 : undefined}
               paymentConditions={contract.installment_conditions || undefined}
               paymentMethod={(contract as any).payment_method || undefined}
               currency={contract.currency || 'EUR'}
