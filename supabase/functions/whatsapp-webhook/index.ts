@@ -1431,6 +1431,11 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
       }
     }
 
+    // Mark webhook log as processed to prevent deduplication
+    if (webhookLog?.id) {
+      await supabase.from('webhook_logs').update({ processed: true }).eq('id', webhookLog.id)
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 
