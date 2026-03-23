@@ -652,11 +652,31 @@ export function ContractGroupsSection({
 
   const totalServices = allLeads.length;
 
-  // Show last payment note
-  const lastNote = (() => {
+  // Show all payment notes from the last group (same date as the last block)
+  const lastGroupNotes = (() => {
     const notes = paymentNotes || '';
-    const parts = notes.split('\n---\n').filter(Boolean);
-    return parts.length > 0 ? parts[parts.length - 1].trim() : '';
+    const parts = notes.split('\n---\n').filter(Boolean).map(p => p.trim());
+    if (parts.length === 0) return '';
+    
+    // Extract date from the last block (format: "Acordo de Pagamento — DD/MM/YYYY")
+    const lastPart = parts[parts.length - 1];
+    const dateMatch = lastPart.match(/Acordo de Pagamento\s*[—–-]\s*(\d{2}\/\d{2}\/\d{4})/);
+    if (!dateMatch) return lastPart;
+    
+    const lastDate = dateMatch[1];
+    
+    // Collect all consecutive blocks from the end that share the same date
+    const groupBlocks: string[] = [];
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const blockDateMatch = parts[i].match(/Acordo de Pagamento\s*[—–-]\s*(\d{2}\/\d{2}\/\d{4})/);
+      if (blockDateMatch && blockDateMatch[1] === lastDate) {
+        groupBlocks.unshift(parts[i]);
+      } else {
+        break;
+      }
+    }
+    
+    return groupBlocks.join('\n\n');
   })();
 
   return (
@@ -678,10 +698,10 @@ export function ContractGroupsSection({
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Last payment agreement note */}
-          {lastNote ? (
+          {/* Last payment agreement group notes */}
+          {lastGroupNotes ? (
             <div className="rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-line">
-              {lastNote}
+              {lastGroupNotes}
             </div>
           ) : null}
 
