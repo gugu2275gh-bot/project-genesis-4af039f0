@@ -1,24 +1,14 @@
 
 
-## Plan: Update Fred William's Role
+## Plan: Add persistent "Save" button at bottom of System Settings
 
-**User**: Fred William (agencialigabr@gmail.com) — ID: `45d55019-6d49-4593-9441-7eec800d01d9`
+Currently the save button only appears at the top when changes are detected. The user wants a always-visible "Salvar Modificações" button at the bottom of the page.
 
-**Current role**: ADMIN
-**Desired role**: EXPEDIENTE
+### Changes
 
-### Steps
+**File: `src/pages/settings/SystemSettings.tsx`**
 
-1. **Remove ADMIN role** — Delete the record from `user_roles` where `user_id = '45d55019-...'` and `role = 'ADMIN'`
-2. **Add EXPEDIENTE role** — Insert a new record into `user_roles` with `user_id = '45d55019-...'` and `role = 'EXPEDIENTE'`
-
-### Technical Details
-
-Two SQL operations via the database insert tool:
-```sql
-DELETE FROM user_roles WHERE user_id = '45d55019-6d49-4593-9441-7eec800d01d9' AND role = 'ADMIN';
-INSERT INTO user_roles (user_id, role) VALUES ('45d55019-6d49-4593-9441-7eec800d01d9', 'EXPEDIENTE');
-```
-
-Also need to verify the user has at least one sector assigned (required by system constraints). If not, a sector assignment will be added.
+1. Add a fixed "Salvar Modificações" button at the bottom of the page, after the KnowledgeBaseManager component
+2. The button will be always visible (not conditional on `hasChanges`), but disabled when there are no changes or save is in progress
+3. Uses the same `handleSave` function already in place
 
