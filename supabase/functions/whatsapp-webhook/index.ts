@@ -573,12 +573,14 @@ serve(async (req) => {
     const payload: WebhookPayload = await req.json()
     console.log('Received webhook:', JSON.stringify(payload))
 
-    // Log the webhook
-    await supabase.from('webhook_logs').insert({
+    // Log the webhook (include messageId at top level for dedup queries)
+    const parsedMsg = parseMessage(payload)
+    const webhookPayloadWithId = { ...payload, messageId: parsedMsg?.messageId || null }
+    const { data: webhookLog } = await supabase.from('webhook_logs').insert({
       source: 'IA_WHATSAPP',
-      raw_payload: payload,
+      raw_payload: webhookPayloadWithId,
       processed: false,
-    })
+    }).select('id').single()
 
     const message = parseMessage(payload)
 
