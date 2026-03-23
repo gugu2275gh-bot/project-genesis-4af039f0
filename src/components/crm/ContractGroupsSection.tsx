@@ -652,32 +652,46 @@ export function ContractGroupsSection({
 
   const totalServices = allLeads.length;
 
-  // Show all payment notes from the last group (same date as the last block)
-  const lastGroupNotes = (() => {
+  // Show payment notes only for active leads (match by service name)
+  const lastGroupNotes = useMemo(() => {
     const notes = paymentNotes || '';
     const parts = notes.split('\n---\n').filter(Boolean).map(p => p.trim());
     if (parts.length === 0) return '';
     
-    // Extract date from the last block (format: "Acordo de Pagamento — DD/MM/YYYY")
+    // Build set of active service names from leads
+    const activeServiceNames = new Set<string>();
+    allLeads.forEach(lead => {
+      if (lead.service_type_id) {
+        const st = serviceTypes?.find(s => s.id === lead.service_type_id);
+        if (st?.name) activeServiceNames.add(st.name);
+      }
+    });
+    
+    // Extract date from the last block
     const lastPart = parts[parts.length - 1];
     const dateMatch = lastPart.match(/Acordo de Pagamento\s*[—–-]\s*(\d{2}\/\d{2}\/\d{4})/);
     if (!dateMatch) return lastPart;
     
     const lastDate = dateMatch[1];
     
-    // Collect all consecutive blocks from the end that share the same date
+    // Collect consecutive blocks from the end with same date AND matching active leads
     const groupBlocks: string[] = [];
     for (let i = parts.length - 1; i >= 0; i--) {
       const blockDateMatch = parts[i].match(/Acordo de Pagamento\s*[—–-]\s*(\d{2}\/\d{2}\/\d{4})/);
       if (blockDateMatch && blockDateMatch[1] === lastDate) {
-        groupBlocks.unshift(parts[i]);
+        // Check if this note's service matches an active lead
+        const serviceMatch = parts[i].match(/Serviço:\s*(.+?)(?:\n|$)/);
+        const serviceName = serviceMatch ? serviceMatch[1].trim() : null;
+        if (!serviceName || activeServiceNames.has(serviceName)) {
+          groupBlocks.unshift(parts[i]);
+        }
       } else {
         break;
       }
     }
     
     return groupBlocks.join('\n\n');
-  })();
+  }, [paymentNotes, allLeads, serviceTypes]);
 
   return (
     <>
