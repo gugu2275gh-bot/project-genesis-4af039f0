@@ -300,6 +300,7 @@ export default function UsersManagement() {
       queryClient.invalidateQueries({ queryKey: ['all-users-sectors'] });
       toast({ title: 'Usuário criado com sucesso' });
       setIsCreateUserOpen(false);
+      setCreateUserType('comum');
       setCreateUserForm({ email: '', full_name: '', password: '', role: '', sectorIds: [] });
     },
     onError: (error: Error) => {
