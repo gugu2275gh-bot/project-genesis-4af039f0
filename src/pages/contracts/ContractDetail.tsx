@@ -904,9 +904,7 @@ export default function ContractDetail() {
               contractStatus={contract.status || 'EM_ELABORACAO'}
               date={contract.created_at ? new Date(contract.created_at) : undefined}
               serviceDescription={contract.scope_summary || undefined}
-              feeAmount={contract.total_fee || undefined}
-              vatRate={0.21}
-              totalAmount={contract.total_fee ? contract.total_fee * 1.21 : undefined}
+              paymentConditions={contract.installment_conditions || undefined}
               paymentConditions={contract.installment_conditions || undefined}
               paymentMethod={(contract as any).payment_method || undefined}
               currency={contract.currency || 'EUR'}
