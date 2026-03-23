@@ -34,13 +34,13 @@ const navItems: NavItem[] = [
     label: 'CRM', 
     href: '/crm', 
     icon: Users, 
-    roles: ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'JURIDICO'],
+    roles: ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'JURIDICO', 'EXPEDIENTE'],
     children: [
       { label: 'Leads', href: '/crm/leads' },
       { label: 'Oportunidades', href: '/crm/opportunities' },
     ]
   },
-  { label: 'Ficha do Cliente', href: '/crm/contacts', icon: FileText, roles: ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE'] },
+  { label: 'Ficha do Cliente', href: '/crm/contacts', icon: FileText, roles: ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'EXPEDIENTE'] },
   { 
     label: 'Financeiro', 
     href: '/finance', 
