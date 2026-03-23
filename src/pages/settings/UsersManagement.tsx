@@ -112,6 +112,7 @@ export default function UsersManagement() {
   
   // Create user dialog state
   const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
+  const [createUserType, setCreateUserType] = useState<'admin' | 'comum'>('comum');
   const [createUserForm, setCreateUserForm] = useState({
     email: '',
     full_name: '',
@@ -122,6 +123,7 @@ export default function UsersManagement() {
 
   // Edit user dialog state
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [editUserType, setEditUserType] = useState<'admin' | 'comum'>('comum');
   const [editUserForm, setEditUserForm] = useState({
     id: '',
     full_name: '',
@@ -298,6 +300,7 @@ export default function UsersManagement() {
       queryClient.invalidateQueries({ queryKey: ['all-users-sectors'] });
       toast({ title: 'Usuário criado com sucesso' });
       setIsCreateUserOpen(false);
+      setCreateUserType('comum');
       setCreateUserForm({ email: '', full_name: '', password: '', role: '', sectorIds: [] });
     },
     onError: (error: Error) => {
@@ -324,7 +327,7 @@ export default function UsersManagement() {
       });
       return;
     }
-    if (!createUserForm.role) {
+    if (createUserType === 'comum' && !createUserForm.role) {
       toast({ 
         title: 'Selecione pelo menos um papel para o usuário',
         variant: 'destructive' 
@@ -342,7 +345,7 @@ export default function UsersManagement() {
       email: createUserForm.email,
       password: createUserForm.password,
       full_name: createUserForm.full_name,
-      role: createUserForm.role,
+      role: createUserType === 'admin' ? 'ADMIN' : createUserForm.role as AppRole,
       sector_ids: createUserForm.sectorIds,
     });
   };
@@ -375,7 +378,27 @@ export default function UsersManagement() {
         sectorIds: editUserForm.sectorIds,
       });
 
+      // Manage ADMIN role based on user type change
+      const currentUser = usersWithSectors.find(u => u.id === editUserForm.id);
+      const wasAdmin = currentUser?.roles.includes('ADMIN') || false;
+      
+      if (editUserType === 'admin' && !wasAdmin) {
+        await addRoleMutation.mutateAsync({ userId: editUserForm.id, role: 'ADMIN' });
+      } else if (editUserType === 'comum' && wasAdmin) {
+        // Check user has at least one other role before removing ADMIN
+        const otherRoles = currentUser?.roles.filter(r => r !== 'ADMIN') || [];
+        if (otherRoles.length === 0) {
+          toast({ 
+            title: 'Adicione pelo menos um papel antes de remover o acesso de Administrador',
+            variant: 'destructive' 
+          });
+          return;
+        }
+        await removeRoleMutation.mutateAsync({ userId: editUserForm.id, role: 'ADMIN' });
+      }
+
       setIsEditUserOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['users-with-roles'] });
       toast({ title: 'Usuário atualizado com sucesso' });
     } catch (error) {
       // Error already handled by mutation
@@ -383,6 +406,8 @@ export default function UsersManagement() {
   };
 
   const openEditDialog = (user: UserWithRoles) => {
+    const isUserAdmin = user.roles.includes('ADMIN');
+    setEditUserType(isUserAdmin ? 'admin' : 'comum');
     setEditUserForm({
       id: user.id,
       full_name: user.full_name,
@@ -544,23 +569,45 @@ export default function UsersManagement() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="role">Papel inicial *</Label>
+                        <Label>Tipo de Usuário *</Label>
                         <Select
-                          value={createUserForm.role}
-                          onValueChange={(value) => setCreateUserForm(prev => ({ ...prev, role: value as AppRole }))}
+                          value={createUserType}
+                          onValueChange={(value: 'admin' | 'comum') => {
+                            setCreateUserType(value);
+                            if (value === 'admin') {
+                              setCreateUserForm(prev => ({ ...prev, role: '' }));
+                            }
+                          }}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Selecione um papel" />
+                            <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-popover">
-                            {availableRoles.map((role) => (
-                              <SelectItem key={role} value={role}>
-                                {ROLE_LABELS[role]}
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="admin">Administrador (acesso total)</SelectItem>
+                            <SelectItem value="comum">Comum (acesso restrito)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
+                      {createUserType === 'comum' && (
+                        <div className="space-y-2">
+                          <Label htmlFor="role">Papel inicial *</Label>
+                          <Select
+                            value={createUserForm.role}
+                            onValueChange={(value) => setCreateUserForm(prev => ({ ...prev, role: value as AppRole }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione um papel" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover">
+                              {availableRoles.filter(r => r !== 'ADMIN').map((role) => (
+                                <SelectItem key={role} value={role}>
+                                  {ROLE_LABELS[role]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                       <div className="space-y-2">
                         <Label>Setores *</Label>
                         <div className={`space-y-2 border rounded-md p-3 ${createUserForm.sectorIds.length === 0 ? 'border-destructive' : ''}`}>
@@ -621,19 +668,20 @@ export default function UsersManagement() {
           <div className="rounded-md border">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Usuário</TableHead>
-                  <TableHead>Perfis</TableHead>
-                  <TableHead>Setores</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Criado em</TableHead>
-                  {isAdmin && <TableHead className="text-right">Ações</TableHead>}
-                </TableRow>
+               <TableRow>
+                   <TableHead>Usuário</TableHead>
+                   <TableHead>Tipo</TableHead>
+                   <TableHead>Perfis</TableHead>
+                   <TableHead>Setores</TableHead>
+                   <TableHead>Status</TableHead>
+                   <TableHead>Criado em</TableHead>
+                   {isAdmin && <TableHead className="text-right">Ações</TableHead>}
+                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Nenhum usuário encontrado
                     </TableCell>
                   </TableRow>
@@ -645,6 +693,17 @@ export default function UsersManagement() {
                           <p className="font-medium">{user.full_name}</p>
                           <p className="text-sm text-muted-foreground">{user.email}</p>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={user.roles.includes('ADMIN')
+                            ? 'bg-destructive/10 text-destructive border-0'
+                            : 'bg-primary/10 text-primary border-0'
+                          }
+                        >
+                          {user.roles.includes('ADMIN') ? 'Administrador' : 'Comum'}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
@@ -892,6 +951,27 @@ export default function UsersManagement() {
                 value={editUserForm.phone}
                 onChange={(e) => setEditUserForm(prev => ({ ...prev, phone: e.target.value }))}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo de Usuário *</Label>
+              <Select
+                value={editUserType}
+                onValueChange={(value: 'admin' | 'comum') => setEditUserType(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="admin">Administrador (acesso total)</SelectItem>
+                  <SelectItem value="comum">Comum (acesso restrito)</SelectItem>
+                </SelectContent>
+              </Select>
+              {editUserType === 'admin' && (
+                <p className="text-xs text-muted-foreground">O usuário terá acesso total a todos os módulos do sistema</p>
+              )}
+              {editUserType === 'comum' && (
+                <p className="text-xs text-muted-foreground">O acesso será limitado aos perfis atribuídos ao usuário</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Setores *</Label>
