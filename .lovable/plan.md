@@ -1,38 +1,30 @@
 
 
-## Plano: Gerar Relatório de Auditoria Completa do Sistema (PDF)
+## Plano: Auto-preencher "Detalhes de Pagamento" com dados do acordo do contato
 
-### Escopo
+### Problema
 
-Gerar um PDF abrangente com auditoria de todas as funcionalidades, regras de negócio, integração WhatsApp, controle de acesso (RBAC), RLS, Edge Functions e pontos de atenção identificados.
+O campo "Detalhes de Pagamento" no contrato não está sendo preenchido com os dados do acordo de pagamento (imagem 1). A lógica atual tenta reconstruir o texto a partir dos registros de pagamento, mas perde informações como o nome do serviço específico por pagamento, taxas, IVA, etc.
 
-### Conteúdo do Relatório
+### Solução
 
-O PDF cobrirá as seguintes seções:
+Usar diretamente o `payment_notes` do contato (onde o `PaymentAgreementDialog` já salva o resumo formatado completo) como fonte para auto-preencher o campo `installment_conditions`.
 
-1. **Visão Geral do Sistema** - Stack, arquitetura, módulos
-2. **Autenticação e Controle de Acesso (RBAC)** - Roles, Sidebar, RLS policies, admin vs comum
-3. **Módulos do Sistema** - CRM, Financeiro, Jurídico, Técnico, Portal do Cliente
-4. **Integração WhatsApp** - Webhook, send-whatsapp, roteamento multichat, reativação inteligente
-5. **Automações SLA** - Tipos, configuração, lembretes
-6. **Banco de Dados** - Tabelas, triggers, functions, RLS
-7. **Edge Functions** - Inventário e análise
-8. **Pontos de Atenção e Bugs Identificados** - Inconsistências, riscos de segurança, melhorias recomendadas
+### Alterações em `src/pages/contracts/ContractDetail.tsx`
 
-### Implementação
+1. **Buscar `payment_notes` do contato vinculado ao contrato**: Adicionar query para buscar o campo `payment_notes` do contato via `contract → opportunities → leads → contacts`
 
-- Gerar via script Python usando reportlab
-- Salvar em `/mnt/documents/auditoria_sistema_cb_asesoria.pdf`
-- QA visual antes de entregar
+2. **Substituir a lógica de `formattedPaymentText`**: Em vez de reconstruir o texto a partir dos registros de pagamento individuais, usar diretamente o `payment_notes` do contato
 
-### Achados Preliminares
+3. **Atualizar o `useEffect` de auto-populate**: Usar o `payment_notes` como fonte, mantendo a regra de só preencher quando o campo estiver vazio (editável após preenchido)
 
-Problemas identificados durante a análise:
-- Sidebar não inclui SUPERVISOR, DIRETORIA, ATENDENTE_WHATSAPP na maioria dos menus
-- Bootstrap key hardcoded na Edge Function admin-create-user
-- Webhook log update usa `eq('raw_payload', payload)` que pode não funcionar com JSONB
-- Tarefas visíveis para todos (sem filtro de role no Sidebar)
-- isStaff() não inclui SUPERVISOR, DIRETORIA, ATENDENTE_WHATSAPP
-- Lead Intake sem role EXPEDIENTE nas RLS
-- Falta role EXPEDIENTE em várias RLS policies
+### Fluxo
+
+```text
+PaymentAgreementDialog salva summary → contact.payment_notes
+                                            ↓
+ContractDetail lê contact.payment_notes → preenche installment_conditions
+                                            ↓
+Usuário pode editar livremente o campo
+```
 
