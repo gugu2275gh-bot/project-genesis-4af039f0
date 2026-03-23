@@ -852,7 +852,7 @@ export default function ContractDetail() {
               contractStatus={contract.status || 'EM_ELABORACAO'}
               date={contract.created_at ? new Date(contract.created_at) : undefined}
               serviceDescription={contract.scope_summary || undefined}
-              paymentConditions={contract.installment_conditions || undefined}
+              paymentConditions={formData.installment_conditions || contract.installment_conditions || undefined}
               paymentMethod={(contract as any).payment_method || undefined}
               currency={contract.currency || 'EUR'}
               phone={contract.opportunities?.leads?.contacts?.phone?.toString() || undefined}
