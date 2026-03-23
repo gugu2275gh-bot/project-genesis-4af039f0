@@ -649,7 +649,7 @@ export default function UsersManagement() {
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {user.roles.length === 0 ? (
-                            <span className="text-sm text-muted-foreground">Sem papéis</span>
+                            <span className="text-sm text-muted-foreground">Sem perfis</span>
                           ) : (
                             user.roles.map((role) => (
                               <Badge
