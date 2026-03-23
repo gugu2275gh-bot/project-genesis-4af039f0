@@ -792,16 +792,15 @@ serve(async (req) => {
 
     // Find or create lead for this contact
     let lead: { id: string; status: string | null; assigned_to_user_id: string | null } | null = null
-    const { data: existingLead } = await supabase
+    const { data: existingLeads } = await supabase
       .from('leads')
       .select('id, status, assigned_to_user_id')
       .eq('contact_id', contact.id)
       .not('status', 'eq', 'ARQUIVADO_SEM_RETORNO')
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
 
-    lead = existingLead
+    lead = existingLeads?.[0] || null
 
     if (!lead) {
       const assignedUserId = await getNextAttendant(supabase)
