@@ -648,14 +648,15 @@ export default function UsersManagement() {
           <div className="rounded-md border">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Usuário</TableHead>
-                  <TableHead>Perfis</TableHead>
-                  <TableHead>Setores</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Criado em</TableHead>
-                  {isAdmin && <TableHead className="text-right">Ações</TableHead>}
-                </TableRow>
+               <TableRow>
+                   <TableHead>Usuário</TableHead>
+                   <TableHead>Tipo</TableHead>
+                   <TableHead>Perfis</TableHead>
+                   <TableHead>Setores</TableHead>
+                   <TableHead>Status</TableHead>
+                   <TableHead>Criado em</TableHead>
+                   {isAdmin && <TableHead className="text-right">Ações</TableHead>}
+                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredUsers.length === 0 ? (
