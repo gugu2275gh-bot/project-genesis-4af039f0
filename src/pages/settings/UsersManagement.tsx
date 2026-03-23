@@ -446,7 +446,7 @@ export default function UsersManagement() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-warning">
               <UserPlus className="h-5 w-5" />
-              Usuários Sem Papéis ({usersWithoutRoles.length})
+              Usuários Sem Perfis ({usersWithoutRoles.length})
             </CardTitle>
             <CardDescription>
               Atribua papéis rapidamente aos novos usuários de teste
