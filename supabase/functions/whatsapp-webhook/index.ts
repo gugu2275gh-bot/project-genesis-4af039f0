@@ -1113,6 +1113,14 @@ serve(async (req) => {
             console.log(`Multichat: notified ${sectorUsers?.length || 0} users in sector ${routedSector}`)
           }
         }
+
+        // Update the client message with the routed sector
+        if (routedSector && insertedMsg?.id) {
+          await supabase.from('mensagens_cliente')
+            .update({ setor: routedSector })
+            .eq('id', insertedMsg.id)
+          console.log(`Multichat: tagged message ${insertedMsg.id} with sector ${routedSector}`)
+        }
       }
     } catch (routingError) {
       console.error('Multichat routing error (non-blocking):', routingError instanceof Error ? routingError.message : routingError)
