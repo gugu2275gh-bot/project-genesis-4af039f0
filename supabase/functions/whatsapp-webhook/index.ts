@@ -869,7 +869,7 @@ serve(async (req) => {
     const displayBody = message.body || (isMediaMessage ? `[${mediaType === 'ptt' ? 'audio' : mediaType}]` : '')
 
     // Store in mensagens_cliente
-    await supabase.from('mensagens_cliente').insert({
+    const { data: insertedMsg } = await supabase.from('mensagens_cliente').insert({
       id_lead: lead.id,
       phone_id: parseInt(phoneNumber),
       mensagem_cliente: displayBody,
@@ -878,7 +878,7 @@ serve(async (req) => {
       media_url: storedMediaUrl,
       media_filename: mediaFilename,
       media_mimetype: mediaMimetype,
-    })
+    }).select('id').single()
 
     // ========== MULTICHAT SECTOR ROUTING (REFINED) ==========
     let routedSector: string | null = null
@@ -1112,6 +1112,14 @@ serve(async (req) => {
             }
             console.log(`Multichat: notified ${sectorUsers?.length || 0} users in sector ${routedSector}`)
           }
+        }
+
+        // Update the client message with the routed sector
+        if (routedSector && insertedMsg?.id) {
+          await supabase.from('mensagens_cliente')
+            .update({ setor: routedSector })
+            .eq('id', insertedMsg.id)
+          console.log(`Multichat: tagged message ${insertedMsg.id} with sector ${routedSector}`)
         }
       }
     } catch (routingError) {
