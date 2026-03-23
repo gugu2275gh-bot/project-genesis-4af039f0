@@ -698,10 +698,10 @@ export function ContractGroupsSection({
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Last payment agreement note */}
-          {lastNote ? (
+          {/* Last payment agreement group notes */}
+          {lastGroupNotes ? (
             <div className="rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-line">
-              {lastNote}
+              {lastGroupNotes}
             </div>
           ) : null}
 
