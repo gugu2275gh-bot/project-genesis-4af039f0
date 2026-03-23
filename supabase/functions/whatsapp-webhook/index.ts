@@ -1243,6 +1243,37 @@ serve(async (req) => {
       console.error('Smart reactivation error (non-blocking):', reactivationError instanceof Error ? reactivationError.message : reactivationError)
     }
 
+    // ========== 5-SECOND BUFFER: wait and consolidate multiple client messages ==========
+    if (!skipAIAgent) {
+      console.log('Buffer: waiting 5 seconds for additional messages...')
+      await new Promise(resolve => setTimeout(resolve, 5000))
+
+      // Check if newer messages arrived from the same lead after our message was inserted
+      const { data: newerMessages } = await supabase
+        .from('mensagens_cliente')
+        .select('id')
+        .eq('id_lead', lead.id)
+        .not('mensagem_cliente', 'is', null)
+        .gt('id', insertedMsg?.id || 0)
+        .limit(1)
+
+      if (newerMessages && newerMessages.length > 0) {
+        console.log('Buffer: newer message detected, skipping AI response (will be handled by latest webhook)')
+        
+        // Mark webhook as processed and return early
+        if (webhookLog?.id) {
+          await supabase.from('webhook_logs').update({ processed: true }).eq('id', webhookLog.id)
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, message: 'Buffered: newer message will handle AI response' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      console.log('Buffer: no newer messages, proceeding with AI response')
+    }
+
     // ========== AI AGENT SECTION ==========
     // Check if a human agent has taken over this lead (last outgoing message is from SISTEMA)
     let aiPausedByHuman = false
