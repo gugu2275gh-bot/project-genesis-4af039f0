@@ -173,10 +173,14 @@ export default function ContractDetail() {
   useEffect(() => {
     if (contract) {
       const c = contract as any;
+      // For new contracts without installment_conditions, auto-populate from contact's payment_notes
+      const paymentNotes = c?.opportunities?.leads?.contacts?.payment_notes;
+      const installmentConditions = contract.installment_conditions || paymentNotes || '';
+      
       setFormData({
         scope_summary: contract.scope_summary || '',
         total_fee: contract.total_fee?.toString() || '',
-        installment_conditions: contract.installment_conditions || '',
+        installment_conditions: installmentConditions,
         refund_policy_text: contract.refund_policy_text || '',
         language: contract.language || 'pt',
         installment_count: contract.installment_count?.toString() || '1',
@@ -184,7 +188,6 @@ export default function ContractDetail() {
         first_due_date: contract.first_due_date || '',
         contract_template: c.contract_template || 'GENERICO',
         status: contract.status || 'EM_ELABORACAO',
-        // New fields
         contract_number: c.contract_number || '',
         assigned_to_user_id: c.assigned_to_user_id || '',
         down_payment: c.down_payment?.toString() || '',
@@ -193,19 +196,6 @@ export default function ContractDetail() {
         payment_account: c.payment_account || '',
       });
       setSignedDocumentUrl(c.signed_document_url || null);
-    }
-  }, [contract]);
-
-  // Auto-populate installment_conditions from contact's payment_notes when empty
-  useEffect(() => {
-    if (contract && !contract.installment_conditions) {
-      const paymentNotes = (contract as any)?.opportunities?.leads?.contacts?.payment_notes;
-      if (paymentNotes) {
-        setFormData(prev => ({
-          ...prev,
-          installment_conditions: prev.installment_conditions || paymentNotes,
-        }));
-      }
     }
   }, [contract]);
 
