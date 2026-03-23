@@ -326,7 +326,7 @@ export default function UsersManagement() {
       });
       return;
     }
-    if (!createUserForm.role) {
+    if (createUserType === 'comum' && !createUserForm.role) {
       toast({ 
         title: 'Selecione pelo menos um papel para o usuário',
         variant: 'destructive' 
@@ -344,7 +344,7 @@ export default function UsersManagement() {
       email: createUserForm.email,
       password: createUserForm.password,
       full_name: createUserForm.full_name,
-      role: createUserForm.role,
+      role: createUserType === 'admin' ? 'ADMIN' : createUserForm.role as AppRole,
       sector_ids: createUserForm.sectorIds,
     });
   };
