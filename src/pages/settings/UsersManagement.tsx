@@ -378,7 +378,27 @@ export default function UsersManagement() {
         sectorIds: editUserForm.sectorIds,
       });
 
+      // Manage ADMIN role based on user type change
+      const currentUser = usersWithSectors.find(u => u.id === editUserForm.id);
+      const wasAdmin = currentUser?.roles.includes('ADMIN') || false;
+      
+      if (editUserType === 'admin' && !wasAdmin) {
+        await addRoleMutation.mutateAsync({ userId: editUserForm.id, role: 'ADMIN' });
+      } else if (editUserType === 'comum' && wasAdmin) {
+        // Check user has at least one other role before removing ADMIN
+        const otherRoles = currentUser?.roles.filter(r => r !== 'ADMIN') || [];
+        if (otherRoles.length === 0) {
+          toast({ 
+            title: 'Adicione pelo menos um papel antes de remover o acesso de Administrador',
+            variant: 'destructive' 
+          });
+          return;
+        }
+        await removeRoleMutation.mutateAsync({ userId: editUserForm.id, role: 'ADMIN' });
+      }
+
       setIsEditUserOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['users-with-roles'] });
       toast({ title: 'Usuário atualizado com sucesso' });
     } catch (error) {
       // Error already handled by mutation
