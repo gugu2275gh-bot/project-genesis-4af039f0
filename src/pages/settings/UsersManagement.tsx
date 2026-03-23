@@ -446,10 +446,10 @@ export default function UsersManagement() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-warning">
               <UserPlus className="h-5 w-5" />
-              Usuários Sem Papéis ({usersWithoutRoles.length})
+              Usuários Sem Perfis ({usersWithoutRoles.length})
             </CardTitle>
             <CardDescription>
-              Atribua papéis rapidamente aos novos usuários de teste
+              Atribua perfis rapidamente aos novos usuários de teste
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -494,7 +494,7 @@ export default function UsersManagement() {
                 Gestão de Usuários
               </CardTitle>
               <CardDescription>
-                Gerencie usuários e seus papéis no sistema
+                Gerencie usuários e seus perfis no sistema
               </CardDescription>
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
@@ -623,7 +623,7 @@ export default function UsersManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Usuário</TableHead>
-                  <TableHead>Papéis</TableHead>
+                  <TableHead>Perfis</TableHead>
                   <TableHead>Setores</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Criado em</TableHead>
@@ -649,7 +649,7 @@ export default function UsersManagement() {
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {user.roles.length === 0 ? (
-                            <span className="text-sm text-muted-foreground">Sem papéis</span>
+                            <span className="text-sm text-muted-foreground">Sem perfis</span>
                           ) : (
                             user.roles.map((role) => (
                               <Badge
