@@ -439,7 +439,7 @@ function extractTextFromOpenAIResponse(data: Record<string, unknown>): string {
   return ''
 }
 
-/** Call OpenAI Chat Completions API (GPT-5-mini) to generate an AI response */
+/** Call Google Gemini API (gemini-2.0-flash-lite) to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
   currentMessage: string,
@@ -457,58 +457,68 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
   }
 
-  const messages: Array<{ role: string; content: string }> = [
-    { role: 'system', content: fullSystemPrompt },
-    ...conversationHistory,
-    { role: 'user', content: currentMessage },
-  ]
+  // Convert conversation history to Gemini format
+  const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = []
+  
+  for (const msg of conversationHistory) {
+    geminiContents.push({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }],
+    })
+  }
+  
+  // Add current message
+  geminiContents.push({
+    role: 'user',
+    parts: [{ text: currentMessage }],
+  })
 
-  console.log('Calling OpenAI API with', messages.length, 'messages, system prompt length:', fullSystemPrompt.length)
+  console.log('Calling Gemini API with', geminiContents.length, 'messages, system prompt length:', fullSystemPrompt.length)
 
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 45000) // 45s timeout
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages,
-        max_completion_tokens: 1000,
-      }),
-      signal: controller.signal,
-    })
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: fullSystemPrompt }] },
+          contents: geminiContents,
+          generationConfig: {
+            maxOutputTokens: 1000,
+          },
+        }),
+        signal: controller.signal,
+      }
+    )
 
     clearTimeout(timeoutId)
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('OpenAI API error:', response.status, errorText)
-      throw new Error(`OpenAI API error: ${response.status}`)
+      console.error('Gemini API error:', response.status, errorText)
+      throw new Error(`Gemini API error: ${response.status}`)
     }
 
-    const data = await response.json() as Record<string, unknown>
-    const result = extractTextFromOpenAIResponse(data)
+    const data = await response.json()
+    const result = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
 
     if (!result) {
-      const finishReason = Array.isArray(data.choices) && data.choices[0] && typeof data.choices[0] === 'object'
-        ? (data.choices[0] as Record<string, unknown>).finish_reason
-        : 'unknown'
-      console.warn('OpenAI returned empty assistant content', { finishReason })
+      const finishReason = data?.candidates?.[0]?.finishReason || 'unknown'
+      console.warn('Gemini returned empty content', { finishReason })
       return 'Desculpe, tive uma instabilidade agora para responder. Pode me enviar novamente sua pergunta em texto?'
     }
 
-    console.log('OpenAI response received, length:', result.length)
+    console.log('Gemini response received, length:', result.length)
     return result
   } catch (err) {
     clearTimeout(timeoutId)
     if (err instanceof DOMException && err.name === 'AbortError') {
-      console.error('OpenAI API call timed out after 45s')
-      throw new Error('OpenAI API timeout')
+      console.error('Gemini API call timed out after 45s')
+      throw new Error('Gemini API timeout')
     }
     throw err
   }
@@ -987,43 +997,34 @@ serve(async (req) => {
         else if (setoresAtivos.length > 1) {
           console.log('Multichat: multiple sectors, trying LLM classification')
 
-          const { data: aiConfig } = await supabase
-            .from('system_config')
-            .select('value')
-            .eq('key', 'openai_api_key')
-            .single()
+          const geminiKey = Deno.env.get('CBAsesoria_Key')
 
-          const openaiKey = aiConfig?.value
-
-          if (openaiKey && clientMessage) {
+          if (geminiKey && clientMessage) {
             try {
-              const classifyResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${openaiKey}`,
-                },
-                body: JSON.stringify({
-                  model: 'gpt-4o-mini',
-                  temperature: 0,
-                  max_tokens: 100,
-                  messages: [
-                    {
-                      role: 'system',
-                      content: `Classifique a mensagem do cliente entre APENAS estes setores: [${sectorNames.join(', ')}]. O último setor que interagiu foi "${chatCtx.ultimo_setor || 'desconhecido'}". Responda APENAS em JSON: {"sector":"...","confidence":0.0-1.0}. Se não conseguir determinar com segurança, use confidence baixa.`
-                    },
-                    { role: 'user', content: clientMessage }
-                  ],
-                }),
-              })
+              const classifyPrompt = `Classifique a mensagem do cliente entre APENAS estes setores: [${sectorNames.join(', ')}]. O último setor que interagiu foi "${chatCtx.ultimo_setor || 'desconhecido'}". Responda APENAS em JSON: {"sector":"...","confidence":0.0-1.0}. Se não conseguir determinar com segurança, use confidence baixa.`
+
+              const classifyResponse = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    system_instruction: { parts: [{ text: classifyPrompt }] },
+                    contents: [{ role: 'user', parts: [{ text: clientMessage }] }],
+                    generationConfig: { maxOutputTokens: 100 },
+                  }),
+                }
+              )
 
               if (classifyResponse.ok) {
                 const classifyResult = await classifyResponse.json()
-                const content = classifyResult.choices?.[0]?.message?.content || ''
+                const content = classifyResult?.candidates?.[0]?.content?.parts?.[0]?.text || ''
                 console.log('LLM sector classification:', content)
 
                 try {
-                  const parsed = JSON.parse(content)
+                  // Extract JSON from response (may have markdown fences)
+                  const jsonMatch = content.match(/\{[^}]+\}/)
+                  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content)
                   let finalScore = parsed.confidence || 0
 
                   // Apply ultimo_setor bias: +0.10 bonus
@@ -1291,14 +1292,13 @@ serve(async (req) => {
       console.log('AI agent paused: human agent (SISTEMA) is handling this lead')
     }
 
-    // Check if WhatsApp bot is enabled and OpenAI key is available
+    // Check if WhatsApp bot is enabled and Gemini key is available
     const { data: botConfigs } = await supabase
       .from('system_config')
       .select('key, value')
       .in('key', [
         'whatsapp_bot_enabled',
         'whatsapp_bot_system_prompt',
-        'openai_api_key',
         'uazapi_url',
         'uazapi_token',
       ])
@@ -1309,10 +1309,10 @@ serve(async (req) => {
     })
 
     const botEnabled = configMap['whatsapp_bot_enabled'] === 'true'
-    const openaiApiKey = configMap['openai_api_key']
+    const geminiApiKey = Deno.env.get('CBAsesoria_Key')
 
-    if (botEnabled && openaiApiKey && !aiPausedByHuman && !skipAIAgent) {
-      console.log('AI agent is enabled, generating response...')
+    if (botEnabled && geminiApiKey && !aiPausedByHuman && !skipAIAgent) {
+      console.log('AI agent is enabled (Gemini 2.0 Flash-Lite), generating response...')
 
       try {
         // Check if this is the first interaction for this lead
@@ -1408,7 +1408,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
           messageForAI,
           contact.full_name,
           systemPrompt.replace('{nome}', contact.full_name),
-          openaiApiKey,
+          geminiApiKey,
           knowledgeContext
         )
 
@@ -1448,7 +1448,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
         // AI errors don't block the webhook processing
       }
     } else {
-      console.log(`AI agent skipped: botEnabled=${botEnabled}, hasOpenAIKey=${!!openaiApiKey}, pausedByHuman=${aiPausedByHuman}, skipReactivation=${skipAIAgent}`)
+      console.log(`AI agent skipped: botEnabled=${botEnabled}, hasGeminiKey=${!!geminiApiKey}, pausedByHuman=${aiPausedByHuman}, skipReactivation=${skipAIAgent}`)
     }
 
     // Update webhook log as processed
@@ -1492,7 +1492,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
         contactId: contact.id,
         leadId: lead.id,
         assignedTo: lead.assigned_to_user_id,
-        aiResponseSent: botEnabled && !!openaiApiKey,
+        aiResponseSent: botEnabled && !!geminiApiKey,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
