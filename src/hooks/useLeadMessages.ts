@@ -31,7 +31,7 @@ export interface LeadMessage {
 }
 
 // Roles that can see all sectors' messages
-const GLOBAL_VIEW_ROLES = ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA'];
+const GLOBAL_VIEW_ROLES: string[] = ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA'];
 
 export function useLeadMessages(leadId: string | undefined, contactPhone: string | number | null = null, contactId?: string) {
   const queryClient = useQueryClient();
