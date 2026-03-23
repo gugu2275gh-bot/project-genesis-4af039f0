@@ -115,10 +115,10 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
         .in('id_lead', effectiveLeadIds)
         .order('created_at', { ascending: true });
 
-      // If user doesn't have global view, filter by their sector
-      // Show messages that match their sector OR have no sector (legacy/untagged)
+      // If user doesn't have global view, filter by their sector only
+      // Messages without sector (legacy) are only visible to global roles
       if (!hasGlobalView && userSectorName) {
-        query = query.or(`setor.eq.${userSectorName},setor.is.null`);
+        query = query.eq('setor', userSectorName);
       }
 
       const { data, error } = await query;
