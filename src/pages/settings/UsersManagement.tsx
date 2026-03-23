@@ -123,6 +123,7 @@ export default function UsersManagement() {
 
   // Edit user dialog state
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [editUserType, setEditUserType] = useState<'admin' | 'comum'>('comum');
   const [editUserForm, setEditUserForm] = useState({
     id: '',
     full_name: '',
