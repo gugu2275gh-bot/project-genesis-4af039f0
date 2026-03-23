@@ -623,7 +623,7 @@ export default function UsersManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Usuário</TableHead>
-                  <TableHead>Papéis</TableHead>
+                  <TableHead>Perfis</TableHead>
                   <TableHead>Setores</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Criado em</TableHead>
