@@ -661,9 +661,19 @@ export default function UsersManagement() {
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Nenhum usuário encontrado
-                       </TableCell>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredUsers.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium">{user.full_name}</p>
+                          <p className="text-sm text-muted-foreground">{user.email}</p>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
@@ -674,16 +684,6 @@ export default function UsersManagement() {
                         >
                           {user.roles.includes('ADMIN') ? 'Administrador' : 'Comum'}
                         </Badge>
-                      </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{user.full_name}</p>
-                          <p className="text-sm text-muted-foreground">{user.email}</p>
-                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
