@@ -592,6 +592,44 @@ serve(async (req) => {
       )
     }
 
+    // ========== DEDUPLICATION: prevent processing the same message twice ==========
+    if (message.messageId) {
+      const { data: existingLog } = await supabase
+        .from('webhook_logs')
+        .select('id')
+        .eq('source', 'IA_WHATSAPP')
+        .filter('raw_payload->>messageId', 'eq', message.messageId)
+        .eq('processed', true)
+        .limit(1)
+
+      if (existingLog && existingLog.length > 0) {
+        console.log('Duplicate messageId detected, skipping:', message.messageId)
+        return new Response(
+          JSON.stringify({ success: true, message: 'Duplicate message, skipped' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Also check mensagens_cliente for the same message text from the same phone within last 30 seconds
+      const phoneNumber = message.from.replace(/\D/g, '')
+      const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString()
+      const { data: recentMsgs } = await supabase
+        .from('mensagens_cliente')
+        .select('id')
+        .eq('phone_id', parseInt(phoneNumber))
+        .eq('mensagem_cliente', message.body || `[${message.type}]`)
+        .gte('created_at', thirtySecondsAgo)
+        .limit(1)
+
+      if (recentMsgs && recentMsgs.length > 0) {
+        console.log('Duplicate message detected (same text within 30s), skipping')
+        return new Response(
+          JSON.stringify({ success: true, message: 'Duplicate message, skipped' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+
     // Download media if present and store in Supabase Storage
     let storedMediaUrl: string | null = null
     let mediaType: string | null = null
