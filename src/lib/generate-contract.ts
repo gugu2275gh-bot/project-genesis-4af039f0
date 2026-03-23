@@ -172,7 +172,18 @@ function buildHonorariosSection(data: ContractData): Paragraph[] {
   sections.push(heading('SEGUNDA. Honorarios y Forma de Pago'));
   sections.push(para('Honorarios profesionales:', { bold: true }));
   
-  if (data.feeAmount && data.vatRate !== undefined) {
+  // Use paymentConditions text (from installment_conditions) as primary source
+  if (data.paymentConditions) {
+    // Split by lines and render each line
+    const lines = data.paymentConditions.split('\n').filter(l => l.trim());
+    for (const line of lines) {
+      if (line.trim() === '---') {
+        sections.push(emptyLine());
+      } else {
+        sections.push(para(line.trim()));
+      }
+    }
+  } else if (data.feeAmount && data.vatRate !== undefined) {
     const vatPercent = Math.round(data.vatRate * 100);
     sections.push(para(`${formatCurrency(data.feeAmount, currency)} + IVA (${vatPercent}%)`));
   } else if (data.totalAmount) {
@@ -191,14 +202,8 @@ function buildHonorariosSection(data: ContractData): Paragraph[] {
     sections.push(para('[Detallar honorarios y forma de pago]'));
   }
 
-  if (data.totalAmount) {
+  if (data.totalAmount && !data.paymentConditions) {
     sections.push(para(`Valor total: ${formatCurrency(data.totalAmount, currency)} (IVA incluido)`, { bold: true }));
-  }
-
-  if (data.paymentConditions) {
-    sections.push(emptyLine());
-    sections.push(para('Condiciones de pago:', { bold: true }));
-    sections.push(para(data.paymentConditions));
   }
 
   // Beneficiaries section (above bank details)
@@ -648,7 +653,17 @@ function sectionsHonorarios(data: ContractData): ContractSection[] {
   sections.push({ type: 'heading', text: 'SEGUNDA. Honorarios y Forma de Pago' });
   sections.push({ type: 'paragraph', text: 'Honorarios profesionales:', bold: true });
 
-  if (data.feeAmount && data.vatRate !== undefined) {
+  // Use paymentConditions text as primary source
+  if (data.paymentConditions) {
+    const lines = data.paymentConditions.split('\n').filter(l => l.trim());
+    for (const line of lines) {
+      if (line.trim() === '---') {
+        sections.push({ type: 'empty', text: '' });
+      } else {
+        sections.push({ type: 'paragraph', text: line.trim() });
+      }
+    }
+  } else if (data.feeAmount && data.vatRate !== undefined) {
     const vatPercent = Math.round(data.vatRate * 100);
     sections.push({ type: 'paragraph', text: `${formatCurrency(data.feeAmount, currency)} + IVA (${vatPercent}%)` });
   } else if (data.totalAmount) {
@@ -667,14 +682,8 @@ function sectionsHonorarios(data: ContractData): ContractSection[] {
     sections.push({ type: 'paragraph', text: '[Detallar honorarios y forma de pago]' });
   }
 
-  if (data.totalAmount) {
+  if (data.totalAmount && !data.paymentConditions) {
     sections.push({ type: 'paragraph', text: `Valor total: ${formatCurrency(data.totalAmount, currency)} (IVA incluido)`, bold: true });
-  }
-
-  if (data.paymentConditions) {
-    sections.push({ type: 'empty', text: '' });
-    sections.push({ type: 'paragraph', text: 'Condiciones de pago:', bold: true });
-    sections.push({ type: 'paragraph', text: data.paymentConditions });
   }
 
   // Beneficiaries
