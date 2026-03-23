@@ -828,29 +828,14 @@ export function ContractGroupsSection({
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                         <StatusBadge status={contract.status || 'EM_ELABORACAO'} label={statusLabel} />
                         {isDraft && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleAddServiceClick(contract.id)}
-                            >
-                              <Plus className="h-4 w-4 mr-1" />
-                              Adicionar Serviço
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="default"
-                              disabled={isFinalizingContract}
-                              onClick={() => handleFinalizeContract(contract.id)}
-                            >
-                              {isFinalizingContract ? (
-                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                              ) : (
-                                <CheckCircle2 className="h-4 w-4 mr-1" />
-                              )}
-                              Concluir
-                            </Button>
-                          </>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleAddServiceClick(contract.id)}
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Adicionar Serviço
+                          </Button>
                         )}
                         {!isDraft && (
                           <Button
