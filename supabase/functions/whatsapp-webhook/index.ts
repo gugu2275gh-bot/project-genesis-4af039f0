@@ -476,7 +476,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-5-mini',
+        model: 'gpt-4o-mini',
         messages,
         max_completion_tokens: 1000,
       }),
