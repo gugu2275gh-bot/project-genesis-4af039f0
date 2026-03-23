@@ -449,7 +449,7 @@ export default function UsersManagement() {
               Usuários Sem Perfis ({usersWithoutRoles.length})
             </CardTitle>
             <CardDescription>
-              Atribua papéis rapidamente aos novos usuários de teste
+              Atribua perfis rapidamente aos novos usuários de teste
             </CardDescription>
           </CardHeader>
           <CardContent>
