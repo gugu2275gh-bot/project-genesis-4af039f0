@@ -1408,7 +1408,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
           messageForAI,
           contact.full_name,
           systemPrompt.replace('{nome}', contact.full_name),
-          openaiApiKey,
+          geminiApiKey,
           knowledgeContext
         )
 
