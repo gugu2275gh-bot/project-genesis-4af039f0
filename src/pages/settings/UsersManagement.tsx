@@ -112,6 +112,7 @@ export default function UsersManagement() {
   
   // Create user dialog state
   const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
+  const [createUserType, setCreateUserType] = useState<'admin' | 'comum'>('comum');
   const [createUserForm, setCreateUserForm] = useState({
     email: '',
     full_name: '',
