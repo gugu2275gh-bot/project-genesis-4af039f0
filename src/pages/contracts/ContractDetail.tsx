@@ -47,14 +47,14 @@ export default function ContractDetail() {
     },
   });
 
-  // Fetch all leads linked to this contract via contract_leads
+  // Fetch all leads linked to this contract via contract_leads (with service type names)
   const { data: contractLeadLinks } = useQuery({
     queryKey: ['contract-lead-links', id],
     queryFn: async () => {
       if (!id) return [];
       const { data, error } = await supabase
         .from('contract_leads')
-        .select('lead_id')
+        .select('lead_id, leads:lead_id(id, service_type_id, service_interest, service_types:service_type_id(name))')
         .eq('contract_id', id);
       if (error) throw error;
       return data || [];
