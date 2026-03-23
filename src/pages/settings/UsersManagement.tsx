@@ -663,7 +663,18 @@ export default function UsersManagement() {
                   <TableRow>
                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       Nenhum usuário encontrado
-                    </TableCell>
+                       </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={user.roles.includes('ADMIN')
+                            ? 'bg-destructive/10 text-destructive border-0'
+                            : 'bg-primary/10 text-primary border-0'
+                          }
+                        >
+                          {user.roles.includes('ADMIN') ? 'Administrador' : 'Comum'}
+                        </Badge>
+                      </TableCell>
                   </TableRow>
                 ) : (
                   filteredUsers.map((user) => (
