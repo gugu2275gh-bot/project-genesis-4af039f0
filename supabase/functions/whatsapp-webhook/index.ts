@@ -1243,6 +1243,37 @@ serve(async (req) => {
       console.error('Smart reactivation error (non-blocking):', reactivationError instanceof Error ? reactivationError.message : reactivationError)
     }
 
+    // ========== 5-SECOND BUFFER: wait and consolidate multiple client messages ==========
+    if (!skipAIAgent) {
+      console.log('Buffer: waiting 5 seconds for additional messages...')
+      await new Promise(resolve => setTimeout(resolve, 5000))
+
+      // Check if newer messages arrived from the same lead after our message was inserted
+      const { data: newerMessages } = await supabase
+        .from('mensagens_cliente')
+        .select('id')
+        .eq('id_lead', lead.id)
+        .not('mensagem_cliente', 'is', null)
+        .gt('id', insertedMsg?.id || 0)
+        .limit(1)
+
+      if (newerMessages && newerMessages.length > 0) {
+        console.log('Buffer: newer message detected, skipping AI response (will be handled by latest webhook)')
+        
+        // Mark webhook as processed and return early
+        if (webhookLog?.id) {
+          await supabase.from('webhook_logs').update({ processed: true }).eq('id', webhookLog.id)
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, message: 'Buffered: newer message will handle AI response' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      console.log('Buffer: no newer messages, proceeding with AI response')
+    }
+
     // ========== AI AGENT SECTION ==========
     // Check if a human agent has taken over this lead (last outgoing message is from SISTEMA)
     let aiPausedByHuman = false
@@ -1341,8 +1372,27 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
           }
         }
 
-        // For audio/media-only messages without text, use a placeholder for AI context
-        const messageForAI = message.body || (mediaType ? `[Cliente enviou um ${mediaType === 'ptt' ? 'áudio' : mediaType}]` : '')
+        // ========== CONSOLIDATE BUFFERED MESSAGES ==========
+        // Collect all unanswered client messages (no AI response yet) for this lead
+        const { data: unansweredMsgs } = await supabase
+          .from('mensagens_cliente')
+          .select('mensagem_cliente, media_type')
+          .eq('id_lead', lead.id)
+          .not('mensagem_cliente', 'is', null)
+          .is('mensagem_IA', null)
+          .order('created_at', { ascending: true })
+
+        // Build consolidated message from all unanswered messages
+        let messageForAI = ''
+        if (unansweredMsgs && unansweredMsgs.length > 1) {
+          console.log(`Buffer: consolidating ${unansweredMsgs.length} unanswered messages into one`)
+          messageForAI = unansweredMsgs
+            .map(m => m.mensagem_cliente || (m.media_type ? `[Cliente enviou um ${m.media_type === 'ptt' ? 'áudio' : m.media_type}]` : ''))
+            .filter(Boolean)
+            .join('\n')
+        } else {
+          messageForAI = message.body || (mediaType ? `[Cliente enviou um ${mediaType === 'ptt' ? 'áudio' : mediaType}]` : '')
+        }
         
         // Get conversation history and knowledge base context
         const [history, knowledgeContext] = await Promise.all([
@@ -1350,7 +1400,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e peça 
           messageForAI ? getKnowledgeBaseContext(supabase, messageForAI) : Promise.resolve(''),
         ])
 
-        console.log(`Knowledge base context: ${knowledgeContext.length} chars`)
+        console.log(`Knowledge base context: ${knowledgeContext.length} chars, consolidated message length: ${messageForAI.length}`)
 
         // Generate AI response
         const aiResponse = await generateAIResponse(
