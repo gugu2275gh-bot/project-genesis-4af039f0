@@ -761,13 +761,15 @@ serve(async (req) => {
 
     // Find existing contact by phone
     let contact: { id: string; full_name: string } | null = null
-    const { data: existingContact } = await supabase
+    // Use .limit(1) instead of .single() to avoid error when duplicate contacts exist for same phone
+    const { data: existingContacts } = await supabase
       .from('contacts')
       .select('id, full_name')
       .eq('phone', phoneNumber)
-      .single()
+      .order('created_at', { ascending: true })
+      .limit(1)
 
-    contact = existingContact
+    contact = existingContacts?.[0] || null
 
     // If no contact, create one
     if (!contact) {
@@ -790,16 +792,15 @@ serve(async (req) => {
 
     // Find or create lead for this contact
     let lead: { id: string; status: string | null; assigned_to_user_id: string | null } | null = null
-    const { data: existingLead } = await supabase
+    const { data: existingLeads } = await supabase
       .from('leads')
       .select('id, status, assigned_to_user_id')
       .eq('contact_id', contact.id)
       .not('status', 'eq', 'ARQUIVADO_SEM_RETORNO')
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
 
-    lead = existingLead
+    lead = existingLeads?.[0] || null
 
     if (!lead) {
       const assignedUserId = await getNextAttendant(supabase)
