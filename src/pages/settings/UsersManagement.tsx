@@ -386,6 +386,8 @@ export default function UsersManagement() {
   };
 
   const openEditDialog = (user: UserWithRoles) => {
+    const isUserAdmin = user.roles.includes('ADMIN');
+    setEditUserType(isUserAdmin ? 'admin' : 'comum');
     setEditUserForm({
       id: user.id,
       full_name: user.full_name,
