@@ -439,7 +439,7 @@ function extractTextFromOpenAIResponse(data: Record<string, unknown>): string {
   return ''
 }
 
-/** Call OpenAI Chat Completions API (GPT-5-mini) to generate an AI response */
+/** Call Google Gemini API (gemini-2.0-flash-lite) to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
   currentMessage: string,
@@ -457,58 +457,68 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
   }
 
-  const messages: Array<{ role: string; content: string }> = [
-    { role: 'system', content: fullSystemPrompt },
-    ...conversationHistory,
-    { role: 'user', content: currentMessage },
-  ]
+  // Convert conversation history to Gemini format
+  const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = []
+  
+  for (const msg of conversationHistory) {
+    geminiContents.push({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }],
+    })
+  }
+  
+  // Add current message
+  geminiContents.push({
+    role: 'user',
+    parts: [{ text: currentMessage }],
+  })
 
-  console.log('Calling OpenAI API with', messages.length, 'messages, system prompt length:', fullSystemPrompt.length)
+  console.log('Calling Gemini API with', geminiContents.length, 'messages, system prompt length:', fullSystemPrompt.length)
 
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 45000) // 45s timeout
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages,
-        max_completion_tokens: 1000,
-      }),
-      signal: controller.signal,
-    })
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: fullSystemPrompt }] },
+          contents: geminiContents,
+          generationConfig: {
+            maxOutputTokens: 1000,
+          },
+        }),
+        signal: controller.signal,
+      }
+    )
 
     clearTimeout(timeoutId)
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('OpenAI API error:', response.status, errorText)
-      throw new Error(`OpenAI API error: ${response.status}`)
+      console.error('Gemini API error:', response.status, errorText)
+      throw new Error(`Gemini API error: ${response.status}`)
     }
 
-    const data = await response.json() as Record<string, unknown>
-    const result = extractTextFromOpenAIResponse(data)
+    const data = await response.json()
+    const result = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
 
     if (!result) {
-      const finishReason = Array.isArray(data.choices) && data.choices[0] && typeof data.choices[0] === 'object'
-        ? (data.choices[0] as Record<string, unknown>).finish_reason
-        : 'unknown'
-      console.warn('OpenAI returned empty assistant content', { finishReason })
+      const finishReason = data?.candidates?.[0]?.finishReason || 'unknown'
+      console.warn('Gemini returned empty content', { finishReason })
       return 'Desculpe, tive uma instabilidade agora para responder. Pode me enviar novamente sua pergunta em texto?'
     }
 
-    console.log('OpenAI response received, length:', result.length)
+    console.log('Gemini response received, length:', result.length)
     return result
   } catch (err) {
     clearTimeout(timeoutId)
     if (err instanceof DOMException && err.name === 'AbortError') {
-      console.error('OpenAI API call timed out after 45s')
-      throw new Error('OpenAI API timeout')
+      console.error('Gemini API call timed out after 45s')
+      throw new Error('Gemini API timeout')
     }
     throw err
   }
