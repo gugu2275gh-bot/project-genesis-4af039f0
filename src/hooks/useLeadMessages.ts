@@ -104,6 +104,9 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
   const hasGlobalView = userInfo?.roles?.some((r: string) => GLOBAL_VIEW_ROLES.includes(r)) ?? false;
   const userSectorName = userInfo?.sector || '';
 
+  // Wait for userInfo to load before querying messages (ensures sector filter is applied)
+  const userInfoReady = !!userInfo;
+
   const { data: messages = [], isLoading } = useQuery({
     queryKey: [...cacheKey, userSectorName, hasGlobalView],
     queryFn: async () => {
@@ -126,7 +129,7 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
       if (error) throw error;
       return data as LeadMessage[];
     },
-    enabled: effectiveLeadIds.length > 0,
+    enabled: effectiveLeadIds.length > 0 && userInfoReady,
   });
 
   const sendMessage = useMutation({
