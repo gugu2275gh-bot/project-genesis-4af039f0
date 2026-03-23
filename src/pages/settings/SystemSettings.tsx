@@ -387,6 +387,18 @@ export default function SystemSettings() {
 
       {/* Knowledge Base */}
       <KnowledgeBaseManager />
+
+      {/* Bottom Save Button */}
+      <div className="flex justify-end pt-4">
+        <Button 
+          onClick={handleSave} 
+          disabled={!hasChanges || saveMutation.isPending}
+          size="lg"
+        >
+          <Save className="h-4 w-4 mr-2" />
+          Salvar Modificações
+        </Button>
+      </div>
     </div>
   );
 }
