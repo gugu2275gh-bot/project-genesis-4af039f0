@@ -174,7 +174,13 @@ export default function ContractDetail() {
     if (contract) {
       const c = contract as any;
       // For new contracts without installment_conditions, auto-populate from contact's payment_notes
-      const paymentNotes = c?.opportunities?.leads?.contacts?.payment_notes;
+      // Handle both object and array responses from Supabase nested selects
+      const opp = c?.opportunities;
+      const leads = opp?.leads;
+      const contact_data = leads?.contacts;
+      // Supabase may return nested relations as arrays depending on FK direction
+      const resolvedContact = Array.isArray(contact_data) ? contact_data[0] : contact_data;
+      const paymentNotes = resolvedContact?.payment_notes || '';
       const installmentConditions = contract.installment_conditions || paymentNotes || '';
       
       setFormData({
