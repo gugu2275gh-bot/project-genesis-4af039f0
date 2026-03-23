@@ -997,43 +997,34 @@ serve(async (req) => {
         else if (setoresAtivos.length > 1) {
           console.log('Multichat: multiple sectors, trying LLM classification')
 
-          const { data: aiConfig } = await supabase
-            .from('system_config')
-            .select('value')
-            .eq('key', 'openai_api_key')
-            .single()
+          const geminiKey = Deno.env.get('CBAsesoria_Key')
 
-          const openaiKey = aiConfig?.value
-
-          if (openaiKey && clientMessage) {
+          if (geminiKey && clientMessage) {
             try {
-              const classifyResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${openaiKey}`,
-                },
-                body: JSON.stringify({
-                  model: 'gpt-4o-mini',
-                  temperature: 0,
-                  max_tokens: 100,
-                  messages: [
-                    {
-                      role: 'system',
-                      content: `Classifique a mensagem do cliente entre APENAS estes setores: [${sectorNames.join(', ')}]. O último setor que interagiu foi "${chatCtx.ultimo_setor || 'desconhecido'}". Responda APENAS em JSON: {"sector":"...","confidence":0.0-1.0}. Se não conseguir determinar com segurança, use confidence baixa.`
-                    },
-                    { role: 'user', content: clientMessage }
-                  ],
-                }),
-              })
+              const classifyPrompt = `Classifique a mensagem do cliente entre APENAS estes setores: [${sectorNames.join(', ')}]. O último setor que interagiu foi "${chatCtx.ultimo_setor || 'desconhecido'}". Responda APENAS em JSON: {"sector":"...","confidence":0.0-1.0}. Se não conseguir determinar com segurança, use confidence baixa.`
+
+              const classifyResponse = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${geminiKey}`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    system_instruction: { parts: [{ text: classifyPrompt }] },
+                    contents: [{ role: 'user', parts: [{ text: clientMessage }] }],
+                    generationConfig: { maxOutputTokens: 100 },
+                  }),
+                }
+              )
 
               if (classifyResponse.ok) {
                 const classifyResult = await classifyResponse.json()
-                const content = classifyResult.choices?.[0]?.message?.content || ''
+                const content = classifyResult?.candidates?.[0]?.content?.parts?.[0]?.text || ''
                 console.log('LLM sector classification:', content)
 
                 try {
-                  const parsed = JSON.parse(content)
+                  // Extract JSON from response (may have markdown fences)
+                  const jsonMatch = content.match(/\{[^}]+\}/)
+                  const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : content)
                   let finalScore = parsed.confidence || 0
 
                   // Apply ultimo_setor bias: +0.10 bonus
