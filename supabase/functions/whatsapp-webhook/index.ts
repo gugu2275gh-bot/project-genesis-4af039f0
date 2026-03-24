@@ -485,8 +485,11 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          system_instruction: { parts: [{ text: fullSystemPrompt }] },
-          contents: geminiContents,
+          contents: [
+            { role: 'user', parts: [{ text: fullSystemPrompt }] },
+            { role: 'model', parts: [{ text: 'Entendido. Vou seguir todas as diretrizes.' }] },
+            ...geminiContents,
+          ],
           generationConfig: {
             maxOutputTokens: 1000,
           },
