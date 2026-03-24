@@ -480,7 +480,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1004,7 +1004,7 @@ serve(async (req) => {
               const classifyPrompt = `Classifique a mensagem do cliente entre APENAS estes setores: [${sectorNames.join(', ')}]. O último setor que interagiu foi "${chatCtx.ultimo_setor || 'desconhecido'}". Responda APENAS em JSON: {"sector":"...","confidence":0.0-1.0}. Se não conseguir determinar com segurança, use confidence baixa.`
 
               const classifyResponse = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+                `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
                 {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -1312,7 +1312,7 @@ serve(async (req) => {
     const geminiApiKey = Deno.env.get('CBAsesoria_Key')
 
     if (botEnabled && geminiApiKey && !aiPausedByHuman && !skipAIAgent) {
-      console.log('AI agent is enabled (Gemini 2.5 Flash-Lite), generating response...')
+      console.log('AI agent is enabled (Gemini 1.5 Flash), generating response...')
 
       try {
         // Check if this is the first interaction for this lead
