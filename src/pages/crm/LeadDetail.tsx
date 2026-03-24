@@ -617,7 +617,11 @@ export default function LeadDetail() {
               <p className="text-sm text-muted-foreground mb-2">Serviço de Interesse</p>
               <StatusBadge 
                 status={lead.service_interest || 'OUTRO'} 
-                label={serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro'} 
+                label={
+                  (lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) ||
+                  serviceTypeMap[lead.service_interest || 'OUTRO'] || 
+                  lead.service_interest || 'Outro'
+                } 
               />
             </div>
 
