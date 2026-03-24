@@ -79,6 +79,12 @@ export default function LeadDetail() {
     serviceTypes?.forEach(st => { map[st.code] = st.name; });
     return map;
   }, [serviceTypes]);
+
+  const serviceTypeIdMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    serviceTypes?.forEach(st => { map[st.id] = st.name; });
+    return map;
+  }, [serviceTypes]);
   
   const [newNote, setNewNote] = useState('');
   const [interactionChannel, setInteractionChannel] = useState<string>('WHATSAPP');
@@ -611,7 +617,11 @@ export default function LeadDetail() {
               <p className="text-sm text-muted-foreground mb-2">Serviço de Interesse</p>
               <StatusBadge 
                 status={lead.service_interest || 'OUTRO'} 
-                label={serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro'} 
+                label={
+                  (lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) ||
+                  serviceTypeMap[lead.service_interest || 'OUTRO'] || 
+                  lead.service_interest || 'Outro'
+                } 
               />
             </div>
 
