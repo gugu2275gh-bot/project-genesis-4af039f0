@@ -439,7 +439,7 @@ function extractTextFromOpenAIResponse(data: Record<string, unknown>): string {
   return ''
 }
 
-/** Call Google Gemini API (gemini-2.0-flash) to generate an AI response */
+/** Call Google Gemini API (gemini-2.5-flash-lite) to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
   currentMessage: string,
