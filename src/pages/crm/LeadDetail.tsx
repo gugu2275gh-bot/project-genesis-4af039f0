@@ -79,6 +79,12 @@ export default function LeadDetail() {
     serviceTypes?.forEach(st => { map[st.code] = st.name; });
     return map;
   }, [serviceTypes]);
+
+  const serviceTypeIdMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    serviceTypes?.forEach(st => { map[st.id] = st.name; });
+    return map;
+  }, [serviceTypes]);
   
   const [newNote, setNewNote] = useState('');
   const [interactionChannel, setInteractionChannel] = useState<string>('WHATSAPP');
