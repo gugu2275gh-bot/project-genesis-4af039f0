@@ -1312,7 +1312,7 @@ serve(async (req) => {
     const geminiApiKey = Deno.env.get('CBAsesoria_Key')
 
     if (botEnabled && geminiApiKey && !aiPausedByHuman && !skipAIAgent) {
-      console.log('AI agent is enabled (Gemini 1.5 Flash), generating response...')
+      console.log('AI agent is enabled (Gemini 2.0 Flash), generating response...')
 
       try {
         // Check if this is the first interaction for this lead
