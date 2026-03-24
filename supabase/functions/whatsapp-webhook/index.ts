@@ -1012,8 +1012,11 @@ serve(async (req) => {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    system_instruction: { parts: [{ text: classifyPrompt }] },
-                    contents: [{ role: 'user', parts: [{ text: clientMessage }] }],
+                    contents: [
+                      { role: 'user', parts: [{ text: classifyPrompt }] },
+                      { role: 'model', parts: [{ text: 'Entendido.' }] },
+                      { role: 'user', parts: [{ text: clientMessage }] },
+                    ],
                     generationConfig: { maxOutputTokens: 100 },
                   }),
                 }
