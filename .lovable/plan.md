@@ -1,30 +1,18 @@
 
 
-## Plano: Auto-preencher "Detalhes de Pagamento" com dados do acordo do contato
+## Plan: Trocar modelo para Gemini 1.5 Flash
 
-### Problema
+Alterar o modelo de IA no webhook de WhatsApp de `gemini-2.5-flash-lite` para `gemini-1.5-flash`.
 
-O campo "Detalhes de Pagamento" no contrato não está sendo preenchido com os dados do acordo de pagamento (imagem 1). A lógica atual tenta reconstruir o texto a partir dos registros de pagamento, mas perde informações como o nome do serviço específico por pagamento, taxas, IVA, etc.
+### Alterações
 
-### Solução
+**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts`
 
-Usar diretamente o `payment_notes` do contato (onde o `PaymentAgreementDialog` já salva o resumo formatado completo) como fonte para auto-preencher o campo `installment_conditions`.
+1. Substituir todas as referências ao modelo `gemini-2.5-flash-lite` por `gemini-1.5-flash` nas URLs da API do Gemini (tanto na função `generateAIResponse` quanto na classificação de setores).
 
-### Alterações em `src/pages/contracts/ContractDetail.tsx`
+2. Atualizar as mensagens de log que mencionam o nome do modelo para refletir "Gemini 1.5 Flash".
 
-1. **Buscar `payment_notes` do contato vinculado ao contrato**: Adicionar query para buscar o campo `payment_notes` do contato via `contract → opportunities → leads → contacts`
+3. Redesployer a Edge Function `whatsapp-webhook`.
 
-2. **Substituir a lógica de `formattedPaymentText`**: Em vez de reconstruir o texto a partir dos registros de pagamento individuais, usar diretamente o `payment_notes` do contato
-
-3. **Atualizar o `useEffect` de auto-populate**: Usar o `payment_notes` como fonte, mantendo a regra de só preencher quando o campo estiver vazio (editável após preenchido)
-
-### Fluxo
-
-```text
-PaymentAgreementDialog salva summary → contact.payment_notes
-                                            ↓
-ContractDetail lê contact.payment_notes → preenche installment_conditions
-                                            ↓
-Usuário pode editar livremente o campo
-```
+A chave `CBAsesoria_Key` continua sendo usada normalmente.
 
