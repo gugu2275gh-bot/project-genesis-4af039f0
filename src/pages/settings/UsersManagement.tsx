@@ -654,6 +654,7 @@ export default function UsersManagement() {
                       </div>
                         </>
                       )}
+                    </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setIsCreateUserOpen(false)}>
                         Cancelar
