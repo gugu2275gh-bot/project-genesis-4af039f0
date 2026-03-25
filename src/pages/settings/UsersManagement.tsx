@@ -595,39 +595,39 @@ export default function UsersManagement() {
                         )}
                       </div>
                       {createUserType === 'comum' && (
-                        <div className="space-y-2">
-                          <Label>Perfis de acesso *</Label>
-                          <div className={`space-y-2 border rounded-md p-3 ${createUserForm.roles.length === 0 ? 'border-destructive' : ''}`}>
-                            {availableRoles.filter(r => r !== 'ADMIN').map((role) => (
-                              <div key={role} className="flex items-center space-x-2">
-                                <Checkbox
-                                  id={`create-role-${role}`}
-                                  checked={createUserForm.roles.includes(role)}
-                                  onCheckedChange={() => {
-                                    setCreateUserForm(prev => ({
-                                      ...prev,
-                                      roles: prev.roles.includes(role)
-                                        ? prev.roles.filter(r => r !== role)
-                                        : [...prev.roles, role],
-                                    }));
-                                  }}
-                                />
-                                <label
-                                  htmlFor={`create-role-${role}`}
-                                  className="text-sm font-medium leading-none cursor-pointer"
-                                >
-                                  {ROLE_LABELS[role]}
-                                </label>
-                              </div>
-                            ))}
-                            {createUserForm.roles.length === 0 && (
-                              <p className="text-xs text-destructive mt-1">Selecione pelo menos um perfil</p>
-                            )}
+                        <>
+                          <div className="space-y-2">
+                            <Label className="text-sm font-semibold">Perfis de Acesso *</Label>
+                            <div className={`space-y-2 border rounded-md p-3 ${createUserForm.roles.length === 0 ? 'border-destructive' : ''}`}>
+                              {availableRoles.filter(r => r !== 'ADMIN' && r !== 'CLIENTE').map((role) => (
+                                <div key={role} className="flex items-center space-x-2">
+                                  <Checkbox
+                                    id={`create-role-${role}`}
+                                    checked={createUserForm.roles.includes(role)}
+                                    onCheckedChange={() => {
+                                      setCreateUserForm(prev => ({
+                                        ...prev,
+                                        roles: prev.roles.includes(role)
+                                          ? prev.roles.filter(r => r !== role)
+                                          : [...prev.roles, role],
+                                      }));
+                                    }}
+                                  />
+                                  <label
+                                    htmlFor={`create-role-${role}`}
+                                    className="text-sm font-medium leading-none cursor-pointer"
+                                  >
+                                    {ROLE_LABELS[role]}
+                                  </label>
+                                </div>
+                              ))}
+                              {createUserForm.roles.length === 0 && (
+                                <p className="text-xs text-destructive mt-1">Selecione pelo menos um perfil</p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                      <div className="space-y-2">
-                        <Label>Setores *</Label>
+                          <div className="space-y-2">
+                            <Label className="text-sm font-semibold">Setores *</Label>
                         <div className={`space-y-2 border rounded-md p-3 ${createUserForm.sectorIds.length === 0 ? 'border-destructive' : ''}`}>
                           {sectors.filter(s => s.is_active).map((sector) => (
                             <div key={sector.id} className="flex items-center space-x-2">
