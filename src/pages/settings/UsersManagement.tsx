@@ -345,7 +345,7 @@ export default function UsersManagement() {
       email: createUserForm.email,
       password: createUserForm.password,
       full_name: createUserForm.full_name,
-      role: createUserType === 'admin' ? 'ADMIN' : createUserForm.role as AppRole,
+      roles: createUserType === 'admin' ? ['ADMIN'] : createUserForm.roles,
       sector_ids: createUserForm.sectorIds,
     });
   };
