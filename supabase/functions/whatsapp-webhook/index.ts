@@ -475,53 +475,74 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 
   console.log('Calling Gemini API with', geminiContents.length, 'messages, system prompt length:', fullSystemPrompt.length)
 
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 45000) // 45s timeout
+  const MAX_RETRIES = 3
+  const RETRY_DELAYS = [2000, 4000, 8000] // exponential backoff
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: fullSystemPrompt }] },
-          contents: geminiContents,
-          generationConfig: {
-            maxOutputTokens: 1000,
-          },
-        }),
-        signal: controller.signal,
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 45000)
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: fullSystemPrompt }] },
+            contents: geminiContents,
+            generationConfig: {
+              maxOutputTokens: 1000,
+            },
+          }),
+          signal: controller.signal,
+        }
+      )
+
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Gemini API error:', response.status, errorText)
+        
+        // Retry on 503 (overloaded) and 429 (rate limit)
+        if ((response.status === 503 || response.status === 429) && attempt < MAX_RETRIES - 1) {
+          const delay = RETRY_DELAYS[attempt]
+          console.log(`Retrying Gemini API in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          continue
+        }
+        
+        throw new Error(`Gemini API error: ${response.status}`)
       }
-    )
 
-    clearTimeout(timeoutId)
+      const data = await response.json()
+      const result = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Gemini API error:', response.status, errorText)
-      throw new Error(`Gemini API error: ${response.status}`)
+      if (!result) {
+        const finishReason = data?.candidates?.[0]?.finishReason || 'unknown'
+        console.warn('Gemini returned empty content', { finishReason })
+        return 'Desculpe, tive uma instabilidade agora para responder. Pode me enviar novamente sua pergunta em texto?'
+      }
+
+      console.log('Gemini response received, length:', result.length)
+      return result
+    } catch (err) {
+      clearTimeout(timeoutId)
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        console.error('Gemini API call timed out after 45s')
+        if (attempt < MAX_RETRIES - 1) {
+          console.log(`Retrying after timeout (attempt ${attempt + 1}/${MAX_RETRIES})...`)
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]))
+          continue
+        }
+        throw new Error('Gemini API timeout')
+      }
+      throw err
     }
-
-    const data = await response.json()
-    const result = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
-
-    if (!result) {
-      const finishReason = data?.candidates?.[0]?.finishReason || 'unknown'
-      console.warn('Gemini returned empty content', { finishReason })
-      return 'Desculpe, tive uma instabilidade agora para responder. Pode me enviar novamente sua pergunta em texto?'
-    }
-
-    console.log('Gemini response received, length:', result.length)
-    return result
-  } catch (err) {
-    clearTimeout(timeoutId)
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      console.error('Gemini API call timed out after 45s')
-      throw new Error('Gemini API timeout')
-    }
-    throw err
   }
+
+  throw new Error('Gemini API failed after all retries')
 }
 
 /** Send WhatsApp message via API */
