@@ -117,7 +117,7 @@ export default function UsersManagement() {
     email: '',
     full_name: '',
     password: '',
-    role: '' as AppRole | '',
+    roles: [] as AppRole[],
     sectorIds: [] as string[],
   });
 
