@@ -327,9 +327,9 @@ export default function UsersManagement() {
       });
       return;
     }
-    if (createUserType === 'comum' && !createUserForm.role) {
+    if (createUserType === 'comum' && createUserForm.roles.length === 0) {
       toast({ 
-        title: 'Selecione pelo menos um papel para o usuário',
+        title: 'Selecione pelo menos um perfil para o usuário',
         variant: 'destructive' 
       });
       return;
