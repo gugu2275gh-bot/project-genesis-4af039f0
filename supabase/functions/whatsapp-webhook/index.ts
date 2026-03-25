@@ -604,42 +604,25 @@ serve(async (req) => {
       )
     }
 
-    // ========== DEDUPLICATION: prevent processing the same message twice ==========
+    // ========== ATOMIC DEDUPLICATION: prevent processing the same message twice ==========
     if (message.messageId) {
-      const { data: existingLog } = await supabase
-        .from('webhook_logs')
-        .select('id')
-        .eq('source', 'IA_WHATSAPP')
-        .filter('raw_payload->>messageId', 'eq', message.messageId)
-        .eq('processed', true)
-        .limit(1)
+      // Atomic INSERT — if messageId already exists, ON CONFLICT returns nothing (no rows inserted)
+      const { data: dedupInsert, error: dedupError } = await supabase
+        .from('message_dedup')
+        .insert({ message_id: message.messageId })
+        .select('message_id')
+        .single()
 
-      if (existingLog && existingLog.length > 0) {
-        console.log('Duplicate messageId detected, skipping:', message.messageId)
+      if (dedupError || !dedupInsert) {
+        console.log('Duplicate messageId detected (atomic), skipping:', message.messageId)
         return new Response(
           JSON.stringify({ success: true, message: 'Duplicate message, skipped' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
 
-      // Also check mensagens_cliente for the same message text from the same phone within last 30 seconds
-      const phoneNumber = message.from.replace(/\D/g, '')
-      const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString()
-      const { data: recentMsgs } = await supabase
-        .from('mensagens_cliente')
-        .select('id')
-        .eq('phone_id', parseInt(phoneNumber))
-        .eq('mensagem_cliente', message.body || `[${message.type}]`)
-        .gte('created_at', thirtySecondsAgo)
-        .limit(1)
-
-      if (recentMsgs && recentMsgs.length > 0) {
-        console.log('Duplicate message detected (same text within 30s), skipping')
-        return new Response(
-          JSON.stringify({ success: true, message: 'Duplicate message, skipped' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
+      // Cleanup old dedup entries periodically (fire-and-forget)
+      supabase.rpc('cleanup_old_dedup_entries').then(() => {}).catch(() => {})
     }
 
     // Download media if present and store in Supabase Storage

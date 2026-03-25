@@ -1553,6 +1553,21 @@ export type Database = {
         }
         Relationships: []
       }
+      message_dedup: {
+        Row: {
+          created_at: string
+          message_id: string
+        }
+        Insert: {
+          created_at?: string
+          message_id: string
+        }
+        Update: {
+          created_at?: string
+          message_id?: string
+        }
+        Relationships: []
+      }
       n8n_chat_histories: {
         Row: {
           id: number
@@ -2827,6 +2842,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_old_dedup_entries: { Args: never; Returns: undefined }
       get_user_roles: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"][]
