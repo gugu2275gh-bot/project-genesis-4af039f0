@@ -301,7 +301,7 @@ export default function UsersManagement() {
       toast({ title: 'Usuário criado com sucesso' });
       setIsCreateUserOpen(false);
       setCreateUserType('comum');
-      setCreateUserForm({ email: '', full_name: '', password: '', role: '', sectorIds: [] });
+      setCreateUserForm({ email: '', full_name: '', password: '', roles: [], sectorIds: [] });
     },
     onError: (error: Error) => {
       toast({ 
