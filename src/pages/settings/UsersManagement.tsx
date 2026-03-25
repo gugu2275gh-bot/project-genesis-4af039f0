@@ -286,7 +286,7 @@ export default function UsersManagement() {
 
   // Create user mutation
   const createUserMutation = useMutation({
-    mutationFn: async (data: { email: string; password: string; full_name: string; role?: AppRole; sector_ids?: string[] }) => {
+    mutationFn: async (data: { email: string; password: string; full_name: string; roles?: AppRole[]; sector_ids?: string[] }) => {
       const { data: result, error } = await supabase.functions.invoke('admin-create-user', {
         body: data,
       });
