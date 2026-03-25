@@ -460,6 +460,15 @@ export default function UsersManagement() {
     }));
   };
 
+  const toggleRoleInEdit = (role: AppRole) => {
+    setEditUserForm(prev => ({
+      ...prev,
+      roles: prev.roles.includes(role)
+        ? prev.roles.filter(r => r !== role)
+        : [...prev.roles, role],
+    }));
+  };
+
   const filteredUsers = usersWithSectors.filter(user =>
     user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.email.toLowerCase().includes(searchTerm.toLowerCase())
