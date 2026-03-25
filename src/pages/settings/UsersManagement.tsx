@@ -117,7 +117,7 @@ export default function UsersManagement() {
     email: '',
     full_name: '',
     password: '',
-    role: '' as AppRole | '',
+    roles: [] as AppRole[],
     sectorIds: [] as string[],
   });
 
@@ -286,7 +286,7 @@ export default function UsersManagement() {
 
   // Create user mutation
   const createUserMutation = useMutation({
-    mutationFn: async (data: { email: string; password: string; full_name: string; role?: AppRole; sector_ids?: string[] }) => {
+    mutationFn: async (data: { email: string; password: string; full_name: string; roles?: AppRole[]; sector_ids?: string[] }) => {
       const { data: result, error } = await supabase.functions.invoke('admin-create-user', {
         body: data,
       });
@@ -301,7 +301,7 @@ export default function UsersManagement() {
       toast({ title: 'Usuário criado com sucesso' });
       setIsCreateUserOpen(false);
       setCreateUserType('comum');
-      setCreateUserForm({ email: '', full_name: '', password: '', role: '', sectorIds: [] });
+      setCreateUserForm({ email: '', full_name: '', password: '', roles: [], sectorIds: [] });
     },
     onError: (error: Error) => {
       toast({ 
@@ -327,9 +327,9 @@ export default function UsersManagement() {
       });
       return;
     }
-    if (createUserType === 'comum' && !createUserForm.role) {
+    if (createUserType === 'comum' && createUserForm.roles.length === 0) {
       toast({ 
-        title: 'Selecione pelo menos um papel para o usuário',
+        title: 'Selecione pelo menos um perfil para o usuário',
         variant: 'destructive' 
       });
       return;
@@ -345,7 +345,7 @@ export default function UsersManagement() {
       email: createUserForm.email,
       password: createUserForm.password,
       full_name: createUserForm.full_name,
-      role: createUserType === 'admin' ? 'ADMIN' : createUserForm.role as AppRole,
+      roles: createUserType === 'admin' ? ['ADMIN'] : createUserForm.roles,
       sector_ids: createUserForm.sectorIds,
     });
   };
@@ -575,7 +575,7 @@ export default function UsersManagement() {
                           onValueChange={(value: 'admin' | 'comum') => {
                             setCreateUserType(value);
                             if (value === 'admin') {
-                              setCreateUserForm(prev => ({ ...prev, role: '' }));
+                              setCreateUserForm(prev => ({ ...prev, roles: [] }));
                             }
                           }}
                         >
@@ -590,22 +590,34 @@ export default function UsersManagement() {
                       </div>
                       {createUserType === 'comum' && (
                         <div className="space-y-2">
-                          <Label htmlFor="role">Papel inicial *</Label>
-                          <Select
-                            value={createUserForm.role}
-                            onValueChange={(value) => setCreateUserForm(prev => ({ ...prev, role: value as AppRole }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione um papel" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-popover">
-                              {availableRoles.filter(r => r !== 'ADMIN').map((role) => (
-                                <SelectItem key={role} value={role}>
+                          <Label>Perfis de acesso *</Label>
+                          <div className={`space-y-2 border rounded-md p-3 ${createUserForm.roles.length === 0 ? 'border-destructive' : ''}`}>
+                            {availableRoles.filter(r => r !== 'ADMIN').map((role) => (
+                              <div key={role} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`create-role-${role}`}
+                                  checked={createUserForm.roles.includes(role)}
+                                  onCheckedChange={() => {
+                                    setCreateUserForm(prev => ({
+                                      ...prev,
+                                      roles: prev.roles.includes(role)
+                                        ? prev.roles.filter(r => r !== role)
+                                        : [...prev.roles, role],
+                                    }));
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`create-role-${role}`}
+                                  className="text-sm font-medium leading-none cursor-pointer"
+                                >
                                   {ROLE_LABELS[role]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                                </label>
+                              </div>
+                            ))}
+                            {createUserForm.roles.length === 0 && (
+                              <p className="text-xs text-destructive mt-1">Selecione pelo menos um perfil</p>
+                            )}
+                          </div>
                         </div>
                       )}
                       <div className="space-y-2">

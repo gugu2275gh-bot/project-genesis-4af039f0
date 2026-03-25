@@ -28,7 +28,7 @@ serve(async (req) => {
       },
     });
 
-    const { email, password, full_name, role, sector_ids, admin_secret, bootstrap_key } = await req.json();
+    const { email, password, full_name, role, roles, sector_ids, admin_secret, bootstrap_key } = await req.json();
 
     // Check authorization: bootstrap key, admin secret, or JWT
     const authHeader = req.headers.get("authorization");
@@ -104,18 +104,23 @@ serve(async (req) => {
       // Don't throw - user was created, profile might exist from trigger
     }
 
-    // Assign role if provided
-    if (role) {
-      const { error: roleError } = await supabaseAdmin.from("user_roles").insert({
+    // Assign roles if provided (supports both single 'role' and array 'roles')
+    const rolesToAssign: string[] = roles && Array.isArray(roles) && roles.length > 0
+      ? roles
+      : role ? [role] : [];
+
+    if (rolesToAssign.length > 0) {
+      const roleInserts = rolesToAssign.map((r: string) => ({
         user_id: userId,
-        role,
-      });
+        role: r,
+      }));
+
+      const { error: roleError } = await supabaseAdmin.from("user_roles").insert(roleInserts);
 
       if (roleError) {
-        console.error("Error assigning role:", roleError);
-        // Don't throw - user was created
+        console.error("Error assigning roles:", roleError);
       } else {
-        console.log("Role assigned:", role);
+        console.log("Roles assigned:", rolesToAssign);
       }
     }
 
