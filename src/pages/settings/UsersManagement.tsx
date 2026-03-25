@@ -128,6 +128,7 @@ export default function UsersManagement() {
     id: '',
     full_name: '',
     phone: '',
+    roles: [] as AppRole[],
     sectorIds: [] as string[],
   });
 
