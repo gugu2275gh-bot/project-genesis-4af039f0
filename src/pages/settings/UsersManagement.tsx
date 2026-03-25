@@ -1027,6 +1027,33 @@ export default function UsersManagement() {
                 <p className="text-xs text-muted-foreground">O acesso será limitado aos perfis atribuídos ao usuário</p>
               )}
             </div>
+
+            {editUserType === 'comum' && (
+              <div className="space-y-2">
+                <Label>Perfis de acesso *</Label>
+                <div className={`space-y-2 border rounded-md p-3 ${editUserForm.roles.length === 0 ? 'border-destructive' : ''}`}>
+                  {availableRoles.filter(r => r !== 'ADMIN' && r !== 'CLIENTE').map((role) => (
+                    <div key={role} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`edit-role-${role}`}
+                        checked={editUserForm.roles.includes(role)}
+                        onCheckedChange={() => toggleRoleInEdit(role)}
+                      />
+                      <label
+                        htmlFor={`edit-role-${role}`}
+                        className="text-sm font-medium leading-none cursor-pointer"
+                      >
+                        {ROLE_LABELS[role]}
+                      </label>
+                    </div>
+                  ))}
+                  {editUserForm.roles.length === 0 && (
+                    <p className="text-xs text-destructive mt-1">Selecione pelo menos um perfil</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label>Setores *</Label>
               <div className={`space-y-2 border rounded-md p-3 ${editUserForm.sectorIds.length === 0 ? 'border-destructive' : ''}`}>
