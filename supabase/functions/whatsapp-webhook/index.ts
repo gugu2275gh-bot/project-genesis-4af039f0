@@ -1395,7 +1395,12 @@ Após coletar todas as informações:
 5. Nas etapas 6A e 6B, faça as perguntas uma de cada vez, NÃO todas juntas.
 6. Após completar a etapa 8 (Handoff), NÃO continue respondendo. O atendente humano assumirá.`
 
-        let systemPrompt = configMap['whatsapp_bot_system_prompt'] || defaultSystemPrompt
+        // Always use the structured flow as base prompt; custom prompt is appended as extra guidelines
+        let systemPrompt = defaultSystemPrompt
+        const customPrompt = configMap['whatsapp_bot_system_prompt']
+        if (customPrompt) {
+          systemPrompt += `\n\n## DIRETRIZES ADICIONAIS DA EMPRESA\n${customPrompt}`
+        }
 
         // First interaction: reinforce welcome behavior
         if (isFirstInteraction) {
