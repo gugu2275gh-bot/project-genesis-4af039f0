@@ -436,6 +436,7 @@ export default function UsersManagement() {
       id: user.id,
       full_name: user.full_name,
       phone: user.phone || '',
+      roles: user.roles.filter(role => role !== 'ADMIN'),
       sectorIds: user.sectors.map(s => s.id),
     });
     setIsEditUserOpen(true);
