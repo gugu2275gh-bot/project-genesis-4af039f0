@@ -575,7 +575,7 @@ export default function UsersManagement() {
                           onValueChange={(value: 'admin' | 'comum') => {
                             setCreateUserType(value);
                             if (value === 'admin') {
-                              setCreateUserForm(prev => ({ ...prev, role: '' }));
+                              setCreateUserForm(prev => ({ ...prev, roles: [] }));
                             }
                           }}
                         >
