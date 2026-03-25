@@ -473,11 +473,44 @@ function getTransientErrorReply(language: ChatLanguage): string {
   return 'Desculpe, tive uma instabilidade agora para responder. Pode me enviar novamente sua pergunta em texto?'
 }
 
+function normalizeForLanguageChecks(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function looksPortuguese(text: string): boolean {
-  const sample = text.toLowerCase().normalize('NFC')
-  const strongPtSignals = /\b(você|vocês|obrigad[oa]s?|olá|encaminhar|atendente|nome completo|qual é|seu nome|posso te ajudar|prazo|equipe)\b/g
-  const matches = sample.match(strongPtSignals) || []
-  return matches.length >= 2
+  const sample = normalizeForLanguageChecks(text)
+  if (!sample) return false
+
+  const strongSignals = [
+    'voce',
+    'voces',
+    'obrigado',
+    'obrigada',
+    'ola',
+    'encaminhar',
+    'atendente',
+    'nome completo',
+    'qual e',
+    'seu nome',
+    'posso te ajudar',
+    'prazo',
+    'equipe',
+    'vou te',
+  ]
+
+  const weakSignals = ['por favor', 'tudo bem', 'aqui na espanha', 'me conta', 'com calma']
+
+  const strongHits = strongSignals.filter((signal) => sample.includes(signal)).length
+  if (strongHits >= 1) return true
+
+  const weakHits = weakSignals.filter((signal) => sample.includes(signal)).length
+  return weakHits >= 2
 }
 
 function getLanguageName(language: ChatLanguage): string {
@@ -547,7 +580,11 @@ async function enforceResponseLanguage(
   if (!looksPortuguese(responseText)) return responseText
 
   console.warn('Response seems to be in Portuguese while forced language is', forcedLanguage, '- applying automatic rewrite')
-  return await rewriteResponseToLanguage(responseText, forcedLanguage, apiKey)
+  const rewritten = await rewriteResponseToLanguage(responseText, forcedLanguage, apiKey)
+  if (rewritten === responseText) {
+    console.warn('Language rewrite returned unchanged content; keeping original response')
+  }
+  return rewritten
 }
 
 /** Call Google Gemini API (gemini-2.5-flash-lite) to generate an AI response */
