@@ -439,16 +439,51 @@ function extractTextFromOpenAIResponse(data: Record<string, unknown>): string {
   return ''
 }
 
+type ChatLanguage = 'pt-BR' | 'es' | 'en' | 'fr'
+
+function detectChatLanguage(text: string): ChatLanguage {
+  const sample = text.toLowerCase().normalize('NFC')
+
+  if (/[¿¡ñ]/.test(sample) || /\b(hola|gracias|nombre|correo|quiero|necesito|estoy|españa|puedes|puede|ayuda|como|cu[aá]l)\b/.test(sample)) {
+    return 'es'
+  }
+
+  if (/[àâçéèêëîïôùûüÿœ]/.test(sample) || /\b(bonjour|merci|nom|courriel|email|besoin|aide|espagne|comment|quel)\b/.test(sample)) {
+    return 'fr'
+  }
+
+  if (/\b(hello|thanks|name|email|need|help|spain|how|what|can you|please)\b/.test(sample)) {
+    return 'en'
+  }
+
+  return 'pt-BR'
+}
+
+function getLanguageDirective(language: ChatLanguage): string {
+  if (language === 'es') return 'RESPONDA EXCLUSIVAMENTE EM ESPANHOL. NÃO use português.'
+  if (language === 'en') return 'RESPOND EXCLUSIVELY IN ENGLISH. DO NOT use Portuguese.'
+  if (language === 'fr') return 'RÉPONDEZ EXCLUSIVEMENT EN FRANÇAIS. N’utilisez pas le portugais.'
+  return 'RESPONDA EXCLUSIVAMENTE EM PORTUGUÊS DO BRASIL.'
+}
+
+function getTransientErrorReply(language: ChatLanguage): string {
+  if (language === 'es') return 'Perdón, tuve una inestabilidad para responder ahora. ¿Puedes enviarme tu pregunta nuevamente en texto?'
+  if (language === 'en') return 'Sorry, I had a temporary issue responding just now. Could you send your question again in text?'
+  if (language === 'fr') return 'Désolé, j’ai eu une instabilité temporaire pour répondre. Pouvez-vous renvoyer votre question en texte ?'
+  return 'Desculpe, tive uma instabilidade agora para responder. Pode me enviar novamente sua pergunta em texto?'
+}
+
 /** Call Google Gemini API (gemini-2.5-flash-lite) to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
   currentMessage: string,
-  contactName: string,
   systemPrompt: string,
   apiKey: string,
-  knowledgeContext: string
+  knowledgeContext: string,
+  forcedLanguage: ChatLanguage
 ): Promise<string> {
-  let fullSystemPrompt = systemPrompt
+  let fullSystemPrompt = `${systemPrompt}\n\n## IDIOMA OBRIGATÓRIO NESTA CONVERSA\n${getLanguageDirective(forcedLanguage)}`
+
   if (knowledgeContext) {
     fullSystemPrompt += `\n\n--- BASE DE CONHECIMENTO ---\nAs informações abaixo são sua ÚNICA fonte de verdade. Responda EXCLUSIVAMENTE com base neste conteúdo.
 Se a pergunta do cliente NÃO puder ser respondida com as informações abaixo, diga educadamente que não possui essa informação no momento e sugira que entre em contato diretamente com a equipe da CB Asesoria para mais detalhes.
@@ -457,23 +492,21 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
   }
 
-  // Convert conversation history to Gemini format
   const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = []
-  
+
   for (const msg of conversationHistory) {
     geminiContents.push({
       role: msg.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: msg.content }],
     })
   }
-  
-  // Add current message
+
   geminiContents.push({
     role: 'user',
     parts: [{ text: currentMessage }],
   })
 
-  console.log('Calling Gemini API with', geminiContents.length, 'messages, system prompt length:', fullSystemPrompt.length)
+  console.log('Calling Gemini API with', geminiContents.length, 'messages, system prompt length:', fullSystemPrompt.length, 'forced language:', forcedLanguage)
 
   const MAX_RETRIES = 3
   const RETRY_DELAYS = [2000, 4000, 8000] // exponential backoff
@@ -504,15 +537,14 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
       if (!response.ok) {
         const errorText = await response.text()
         console.error('Gemini API error:', response.status, errorText)
-        
-        // Retry on 503 (overloaded) and 429 (rate limit)
+
         if ((response.status === 503 || response.status === 429) && attempt < MAX_RETRIES - 1) {
           const delay = RETRY_DELAYS[attempt]
           console.log(`Retrying Gemini API in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`)
           await new Promise(resolve => setTimeout(resolve, delay))
           continue
         }
-        
+
         throw new Error(`Gemini API error: ${response.status}`)
       }
 
@@ -522,7 +554,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
       if (!result) {
         const finishReason = data?.candidates?.[0]?.finishReason || 'unknown'
         console.warn('Gemini returned empty content', { finishReason })
-        return 'Desculpe, tive uma instabilidade agora para responder. Pode me enviar novamente sua pergunta em texto?'
+        return getTransientErrorReply(forcedLanguage)
       }
 
       console.log('Gemini response received, length:', result.length)
@@ -1328,16 +1360,16 @@ serve(async (req) => {
         
         const isFirstInteraction = (messageCount || 0) <= 1 // 1 because we just inserted the current message
 
+        const currentCustomerMessage = String(message.body || '')
+        const detectedChatLanguage = detectChatLanguage(currentCustomerMessage)
+        console.log('Detected chat language:', detectedChatLanguage, 'message sample:', currentCustomerMessage.slice(0, 80))
+
         // Build system prompt with structured conversational flow
         const defaultSystemPrompt = `Você é a assistente virtual da CB Asesoría, uma empresa especializada em assessoria de imigração na Espanha.
 
 ## REGRA DE IDIOMA (PRIORIDADE MÁXIMA)
-Detecte o idioma da PRIMEIRA mensagem do cliente e responda EXCLUSIVAMENTE nesse idioma durante TODA a conversa.
-- Se o cliente escrever em espanhol → responda tudo em espanhol.
-- Se o cliente escrever em inglês → responda tudo em inglês.
-- Se o cliente escrever em português → responda tudo em português do Brasil.
-- Se o cliente escrever em francês → responda tudo em francês.
-As frases-exemplo abaixo estão em português apenas como referência de conteúdo. Você DEVE traduzi-las para o idioma do cliente. NUNCA copie as frases em português se o cliente falar outro idioma.
+${getLanguageDirective(detectedChatLanguage)}
+As frases-exemplo abaixo estão em português apenas como referência de conteúdo. Você DEVE traduzi-las para o idioma detectado do cliente e NUNCA copiar em português quando o cliente não estiver falando português.
 
 ## DIRETRIZES GERAIS
 - Seja cordial, empática e profissional
@@ -1475,10 +1507,10 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
         const aiResponse = await generateAIResponse(
           history,
           messageForAI,
-          contact.full_name,
           systemPrompt.replace('{nome}', contact.full_name),
           geminiApiKey,
-          knowledgeContext
+          knowledgeContext,
+          detectedChatLanguage
         )
 
         if (aiResponse) {
