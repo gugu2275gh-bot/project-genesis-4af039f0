@@ -1360,16 +1360,16 @@ serve(async (req) => {
         
         const isFirstInteraction = (messageCount || 0) <= 1 // 1 because we just inserted the current message
 
+        const currentCustomerMessage = String(message.body || '')
+        const detectedChatLanguage = detectChatLanguage(currentCustomerMessage)
+        console.log('Detected chat language:', detectedChatLanguage, 'message sample:', currentCustomerMessage.slice(0, 80))
+
         // Build system prompt with structured conversational flow
         const defaultSystemPrompt = `Você é a assistente virtual da CB Asesoría, uma empresa especializada em assessoria de imigração na Espanha.
 
 ## REGRA DE IDIOMA (PRIORIDADE MÁXIMA)
-Detecte o idioma da PRIMEIRA mensagem do cliente e responda EXCLUSIVAMENTE nesse idioma durante TODA a conversa.
-- Se o cliente escrever em espanhol → responda tudo em espanhol.
-- Se o cliente escrever em inglês → responda tudo em inglês.
-- Se o cliente escrever em português → responda tudo em português do Brasil.
-- Se o cliente escrever em francês → responda tudo em francês.
-As frases-exemplo abaixo estão em português apenas como referência de conteúdo. Você DEVE traduzi-las para o idioma do cliente. NUNCA copie as frases em português se o cliente falar outro idioma.
+${getLanguageDirective(detectedChatLanguage)}
+As frases-exemplo abaixo estão em português apenas como referência de conteúdo. Você DEVE traduzi-las para o idioma detectado do cliente e NUNCA copiar em português quando o cliente não estiver falando português.
 
 ## DIRETRIZES GERAIS
 - Seja cordial, empática e profissional
