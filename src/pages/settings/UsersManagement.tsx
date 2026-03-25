@@ -587,6 +587,12 @@ export default function UsersManagement() {
                             <SelectItem value="comum">Comum (acesso restrito)</SelectItem>
                           </SelectContent>
                         </Select>
+                        {createUserType === 'admin' && (
+                          <p className="text-xs text-muted-foreground">O usuário terá acesso total ao sistema</p>
+                        )}
+                        {createUserType === 'comum' && (
+                          <p className="text-xs text-muted-foreground">O acesso será limitado aos perfis selecionados abaixo</p>
+                        )}
                       </div>
                       {createUserType === 'comum' && (
                         <div className="space-y-2">
