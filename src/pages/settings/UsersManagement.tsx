@@ -590,22 +590,34 @@ export default function UsersManagement() {
                       </div>
                       {createUserType === 'comum' && (
                         <div className="space-y-2">
-                          <Label htmlFor="role">Papel inicial *</Label>
-                          <Select
-                            value={createUserForm.role}
-                            onValueChange={(value) => setCreateUserForm(prev => ({ ...prev, role: value as AppRole }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione um papel" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-popover">
-                              {availableRoles.filter(r => r !== 'ADMIN').map((role) => (
-                                <SelectItem key={role} value={role}>
+                          <Label>Perfis de acesso *</Label>
+                          <div className={`space-y-2 border rounded-md p-3 ${createUserForm.roles.length === 0 ? 'border-destructive' : ''}`}>
+                            {availableRoles.filter(r => r !== 'ADMIN').map((role) => (
+                              <div key={role} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`create-role-${role}`}
+                                  checked={createUserForm.roles.includes(role)}
+                                  onCheckedChange={() => {
+                                    setCreateUserForm(prev => ({
+                                      ...prev,
+                                      roles: prev.roles.includes(role)
+                                        ? prev.roles.filter(r => r !== role)
+                                        : [...prev.roles, role],
+                                    }));
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`create-role-${role}`}
+                                  className="text-sm font-medium leading-none cursor-pointer"
+                                >
                                   {ROLE_LABELS[role]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                                </label>
+                              </div>
+                            ))}
+                            {createUserForm.roles.length === 0 && (
+                              <p className="text-xs text-destructive mt-1">Selecione pelo menos um perfil</p>
+                            )}
+                          </div>
                         </div>
                       )}
                       <div className="space-y-2">
