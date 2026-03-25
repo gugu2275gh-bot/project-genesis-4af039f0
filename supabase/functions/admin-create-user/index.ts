@@ -28,7 +28,7 @@ serve(async (req) => {
       },
     });
 
-    const { email, password, full_name, role, sector_ids, admin_secret, bootstrap_key } = await req.json();
+    const { email, password, full_name, role, roles, sector_ids, admin_secret, bootstrap_key } = await req.json();
 
     // Check authorization: bootstrap key, admin secret, or JWT
     const authHeader = req.headers.get("authorization");
