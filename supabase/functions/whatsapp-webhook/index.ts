@@ -1507,10 +1507,10 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
         const aiResponse = await generateAIResponse(
           history,
           messageForAI,
-          contact.full_name,
           systemPrompt.replace('{nome}', contact.full_name),
           geminiApiKey,
-          knowledgeContext
+          knowledgeContext,
+          detectedChatLanguage
         )
 
         if (aiResponse) {
