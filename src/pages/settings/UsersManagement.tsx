@@ -359,6 +359,15 @@ export default function UsersManagement() {
       });
       return;
     }
+
+    if (editUserType === 'comum' && editUserForm.roles.length === 0) {
+      toast({
+        title: 'Selecione pelo menos um perfil para o usuário',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (editUserForm.sectorIds.length === 0) {
       toast({ 
         title: 'Selecione pelo menos um setor para o usuário',
@@ -379,30 +388,44 @@ export default function UsersManagement() {
         sectorIds: editUserForm.sectorIds,
       });
 
-      // Manage ADMIN role based on user type change
       const currentUser = usersWithSectors.find(u => u.id === editUserForm.id);
-      const wasAdmin = currentUser?.roles.includes('ADMIN') || false;
-      
-      if (editUserType === 'admin' && !wasAdmin) {
-        await addRoleMutation.mutateAsync({ userId: editUserForm.id, role: 'ADMIN' });
-      } else if (editUserType === 'comum' && wasAdmin) {
-        // Check user has at least one other role before removing ADMIN
-        const otherRoles = currentUser?.roles.filter(r => r !== 'ADMIN') || [];
-        if (otherRoles.length === 0) {
-          toast({ 
-            title: 'Adicione pelo menos um papel antes de remover o acesso de Administrador',
-            variant: 'destructive' 
-          });
-          return;
+      const currentRoles = currentUser?.roles || [];
+
+      if (editUserType === 'admin') {
+        if (!currentRoles.includes('ADMIN')) {
+          const { error } = await supabase
+            .from('user_roles')
+            .insert({ user_id: editUserForm.id, role: 'ADMIN' });
+          if (error) throw error;
         }
-        await removeRoleMutation.mutateAsync({ userId: editUserForm.id, role: 'ADMIN' });
+      } else {
+        const selectedRoles = editUserForm.roles;
+        const rolesToRemove = currentRoles.filter(role => role === 'ADMIN' || !selectedRoles.includes(role));
+        const rolesToAdd = selectedRoles.filter(role => !currentRoles.includes(role));
+
+        if (rolesToRemove.length > 0) {
+          const { error } = await supabase
+            .from('user_roles')
+            .delete()
+            .eq('user_id', editUserForm.id)
+            .in('role', rolesToRemove);
+          if (error) throw error;
+        }
+
+        if (rolesToAdd.length > 0) {
+          const { error } = await supabase
+            .from('user_roles')
+            .insert(rolesToAdd.map(role => ({ user_id: editUserForm.id, role })));
+          if (error) throw error;
+        }
       }
 
       setIsEditUserOpen(false);
       queryClient.invalidateQueries({ queryKey: ['users-with-roles'] });
       toast({ title: 'Usuário atualizado com sucesso' });
     } catch (error) {
-      // Error already handled by mutation
+      const message = error instanceof Error ? error.message : 'Erro ao atualizar usuário';
+      toast({ title: 'Erro ao atualizar usuário', description: message, variant: 'destructive' });
     }
   };
 
