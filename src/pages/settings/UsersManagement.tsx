@@ -128,6 +128,7 @@ export default function UsersManagement() {
     id: '',
     full_name: '',
     phone: '',
+    roles: [] as AppRole[],
     sectorIds: [] as string[],
   });
 
@@ -358,6 +359,15 @@ export default function UsersManagement() {
       });
       return;
     }
+
+    if (editUserType === 'comum' && editUserForm.roles.length === 0) {
+      toast({
+        title: 'Selecione pelo menos um perfil para o usuário',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (editUserForm.sectorIds.length === 0) {
       toast({ 
         title: 'Selecione pelo menos um setor para o usuário',
@@ -378,30 +388,44 @@ export default function UsersManagement() {
         sectorIds: editUserForm.sectorIds,
       });
 
-      // Manage ADMIN role based on user type change
       const currentUser = usersWithSectors.find(u => u.id === editUserForm.id);
-      const wasAdmin = currentUser?.roles.includes('ADMIN') || false;
-      
-      if (editUserType === 'admin' && !wasAdmin) {
-        await addRoleMutation.mutateAsync({ userId: editUserForm.id, role: 'ADMIN' });
-      } else if (editUserType === 'comum' && wasAdmin) {
-        // Check user has at least one other role before removing ADMIN
-        const otherRoles = currentUser?.roles.filter(r => r !== 'ADMIN') || [];
-        if (otherRoles.length === 0) {
-          toast({ 
-            title: 'Adicione pelo menos um papel antes de remover o acesso de Administrador',
-            variant: 'destructive' 
-          });
-          return;
+      const currentRoles = currentUser?.roles || [];
+
+      if (editUserType === 'admin') {
+        if (!currentRoles.includes('ADMIN')) {
+          const { error } = await supabase
+            .from('user_roles')
+            .insert({ user_id: editUserForm.id, role: 'ADMIN' });
+          if (error) throw error;
         }
-        await removeRoleMutation.mutateAsync({ userId: editUserForm.id, role: 'ADMIN' });
+      } else {
+        const selectedRoles = editUserForm.roles;
+        const rolesToRemove = currentRoles.filter(role => role === 'ADMIN' || !selectedRoles.includes(role));
+        const rolesToAdd = selectedRoles.filter(role => !currentRoles.includes(role));
+
+        if (rolesToRemove.length > 0) {
+          const { error } = await supabase
+            .from('user_roles')
+            .delete()
+            .eq('user_id', editUserForm.id)
+            .in('role', rolesToRemove);
+          if (error) throw error;
+        }
+
+        if (rolesToAdd.length > 0) {
+          const { error } = await supabase
+            .from('user_roles')
+            .insert(rolesToAdd.map(role => ({ user_id: editUserForm.id, role })));
+          if (error) throw error;
+        }
       }
 
       setIsEditUserOpen(false);
       queryClient.invalidateQueries({ queryKey: ['users-with-roles'] });
       toast({ title: 'Usuário atualizado com sucesso' });
     } catch (error) {
-      // Error already handled by mutation
+      const message = error instanceof Error ? error.message : 'Erro ao atualizar usuário';
+      toast({ title: 'Erro ao atualizar usuário', description: message, variant: 'destructive' });
     }
   };
 
@@ -412,6 +436,7 @@ export default function UsersManagement() {
       id: user.id,
       full_name: user.full_name,
       phone: user.phone || '',
+      roles: user.roles.filter(role => role !== 'ADMIN'),
       sectorIds: user.sectors.map(s => s.id),
     });
     setIsEditUserOpen(true);
@@ -432,6 +457,15 @@ export default function UsersManagement() {
       sectorIds: prev.sectorIds.includes(sectorId)
         ? prev.sectorIds.filter(id => id !== sectorId)
         : [...prev.sectorIds, sectorId],
+    }));
+  };
+
+  const toggleRoleInEdit = (role: AppRole) => {
+    setEditUserForm(prev => ({
+      ...prev,
+      roles: prev.roles.includes(role)
+        ? prev.roles.filter(r => r !== role)
+        : [...prev.roles, role],
     }));
   };
 
@@ -993,6 +1027,33 @@ export default function UsersManagement() {
                 <p className="text-xs text-muted-foreground">O acesso será limitado aos perfis atribuídos ao usuário</p>
               )}
             </div>
+
+            {editUserType === 'comum' && (
+              <div className="space-y-2">
+                <Label>Perfis de acesso *</Label>
+                <div className={`space-y-2 border rounded-md p-3 ${editUserForm.roles.length === 0 ? 'border-destructive' : ''}`}>
+                  {availableRoles.filter(r => r !== 'ADMIN' && r !== 'CLIENTE').map((role) => (
+                    <div key={role} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`edit-role-${role}`}
+                        checked={editUserForm.roles.includes(role)}
+                        onCheckedChange={() => toggleRoleInEdit(role)}
+                      />
+                      <label
+                        htmlFor={`edit-role-${role}`}
+                        className="text-sm font-medium leading-none cursor-pointer"
+                      >
+                        {ROLE_LABELS[role]}
+                      </label>
+                    </div>
+                  ))}
+                  {editUserForm.roles.length === 0 && (
+                    <p className="text-xs text-destructive mt-1">Selecione pelo menos um perfil</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label>Setores *</Label>
               <div className={`space-y-2 border rounded-md p-3 ${editUserForm.sectorIds.length === 0 ? 'border-destructive' : ''}`}>
