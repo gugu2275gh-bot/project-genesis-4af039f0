@@ -473,6 +473,83 @@ function getTransientErrorReply(language: ChatLanguage): string {
   return 'Desculpe, tive uma instabilidade agora para responder. Pode me enviar novamente sua pergunta em texto?'
 }
 
+function looksPortuguese(text: string): boolean {
+  const sample = text.toLowerCase().normalize('NFC')
+  const strongPtSignals = /\b(você|vocês|obrigad[oa]s?|olá|encaminhar|atendente|nome completo|qual é|seu nome|posso te ajudar|prazo|equipe)\b/g
+  const matches = sample.match(strongPtSignals) || []
+  return matches.length >= 2
+}
+
+function getLanguageName(language: ChatLanguage): string {
+  if (language === 'es') return 'espanhol'
+  if (language === 'en') return 'inglês'
+  if (language === 'fr') return 'francês'
+  return 'português do Brasil'
+}
+
+function getMediaPlaceholder(mediaType: string, language: ChatLanguage): string {
+  const mediaNames: Record<ChatLanguage, Record<string, string>> = {
+    'pt-BR': { ptt: 'áudio', image: 'imagem', video: 'vídeo', document: 'documento', sticker: 'figurinha' },
+    'es': { ptt: 'audio', image: 'imagen', video: 'video', document: 'documento', sticker: 'sticker' },
+    'en': { ptt: 'audio', image: 'image', video: 'video', document: 'document', sticker: 'sticker' },
+    'fr': { ptt: 'audio', image: 'image', video: 'vidéo', document: 'document', sticker: 'autocollant' },
+  }
+
+  const media = mediaNames[language][mediaType] || mediaType
+
+  if (language === 'es') return `[El cliente envió un ${media}]`
+  if (language === 'en') return `[Customer sent a ${media}]`
+  if (language === 'fr') return `[Le client a envoyé un ${media}]`
+  return `[Cliente enviou um ${media}]`
+}
+
+async function rewriteResponseToLanguage(
+  text: string,
+  targetLanguage: ChatLanguage,
+  apiKey: string
+): Promise<string> {
+  if (targetLanguage === 'pt-BR') return text
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{
+              text: `Reescreva EXCLUSIVAMENTE em ${getLanguageName(targetLanguage)} o texto recebido. Preserve significado, tom e estrutura. Não adicione conteúdo novo.`,
+            }],
+          },
+          contents: [{ role: 'user', parts: [{ text }] }],
+          generationConfig: { maxOutputTokens: 1000 },
+        }),
+      }
+    )
+
+    if (!response.ok) return text
+
+    const data = await response.json()
+    const rewritten = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+    return rewritten || text
+  } catch {
+    return text
+  }
+}
+
+async function enforceResponseLanguage(
+  responseText: string,
+  forcedLanguage: ChatLanguage,
+  apiKey: string
+): Promise<string> {
+  if (forcedLanguage === 'pt-BR') return responseText
+  if (!looksPortuguese(responseText)) return responseText
+
+  console.warn('Response seems to be in Portuguese while forced language is', forcedLanguage, '- applying automatic rewrite')
+  return await rewriteResponseToLanguage(responseText, forcedLanguage, apiKey)
+}
+
 /** Call Google Gemini API (gemini-2.5-flash-lite) to generate an AI response */
 async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
@@ -492,9 +569,13 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
   }
 
+  const effectiveHistory = forcedLanguage === 'pt-BR'
+    ? conversationHistory
+    : conversationHistory.filter((msg) => msg.role === 'user' || !looksPortuguese(msg.content))
+
   const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = []
 
-  for (const msg of conversationHistory) {
+  for (const msg of effectiveHistory) {
     geminiContents.push({
       role: msg.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: msg.content }],
@@ -558,7 +639,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
       }
 
       console.log('Gemini response received, length:', result.length)
-      return result
+      return await enforceResponseLanguage(result, forcedLanguage, apiKey)
     } catch (err) {
       clearTimeout(timeoutId)
       if (err instanceof DOMException && err.name === 'AbortError') {
@@ -1442,7 +1523,11 @@ Após coletar todas as informações:
         let systemPrompt = defaultSystemPrompt
         const customPrompt = configMap['whatsapp_bot_system_prompt']
         if (customPrompt) {
-          systemPrompt += `\n\n## DIRETRIZES ADICIONAIS DA EMPRESA\n${customPrompt}`
+          systemPrompt += `\n\n## DIRETRIZES ADICIONAIS DA EMPRESA
+As diretrizes abaixo podem estar em português, mas devem ser interpretadas apenas como referência de regras.
+${getLanguageDirective(detectedChatLanguage)}
+NUNCA copie frases literalmente em português quando o cliente estiver em outro idioma.
+\n${customPrompt}`
         }
 
         // First interaction: reinforce welcome behavior
@@ -1488,11 +1573,11 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
         if (unansweredMsgs && unansweredMsgs.length > 1) {
           console.log(`Buffer: consolidating ${unansweredMsgs.length} unanswered messages into one`)
           messageForAI = unansweredMsgs
-            .map(m => m.mensagem_cliente || (m.media_type ? `[Cliente enviou um ${m.media_type === 'ptt' ? 'áudio' : m.media_type}]` : ''))
+            .map(m => m.mensagem_cliente || (m.media_type ? getMediaPlaceholder(m.media_type, detectedChatLanguage) : ''))
             .filter(Boolean)
             .join('\n')
         } else {
-          messageForAI = message.body || (mediaType ? `[Cliente enviou um ${mediaType === 'ptt' ? 'áudio' : mediaType}]` : '')
+          messageForAI = message.body || (mediaType ? getMediaPlaceholder(mediaType, detectedChatLanguage) : '')
         }
         
         // Get conversation history and knowledge base context
