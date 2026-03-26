@@ -20,6 +20,15 @@ interface WhatsAppMessage {
 }
 
 interface WebhookPayload {
+  // Twilio format (form-encoded, converted to object)
+  MessageSid?: string;
+  From?: string;
+  Body?: string;
+  ProfileName?: string;
+  NumMedia?: string;
+  MediaUrl0?: string;
+  MediaContentType0?: string;
+  // Meta/Cloud API format
   entry?: Array<{
     changes?: Array<{
       value?: {
@@ -49,31 +58,9 @@ interface WebhookPayload {
     type?: string;
   }>;
   phone?: string;
-  message?: string | {
-    text?: string;
-    content?: string | Record<string, unknown>;
-    messageid?: string;
-    type?: string;
-    mediaType?: string;
-    sender?: string;
-    senderName?: string;
-    messageTimestamp?: number;
-    fromMe?: boolean;
-    mediaUrl?: string;
-    mimetype?: string;
-    filename?: string;
-    caption?: string;
-    base64?: string;
-  };
+  message?: string | Record<string, unknown>;
   name?: string;
   source?: string;
-  // UAZAPI format
-  chat?: {
-    phone?: string;
-    name?: string;
-    wa_chatid?: string;
-  };
-  EventType?: string;
 }
 
 /** Round-robin: pick the ATENDENTE_WHATSAPP user with the fewest recent lead assignments */
@@ -159,6 +146,31 @@ function getFileExtension(mimetype?: string, filename?: string, type?: string): 
 }
 
 function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
+  // Twilio format: MessageSid, From=whatsapp:+XXXXX, Body=...
+  if (payload.MessageSid && payload.From) {
+    const phone = payload.From.replace('whatsapp:', '').replace(/\D/g, '')
+    const numMedia = parseInt(payload.NumMedia || '0')
+    let mediaUrl: string | undefined
+    let mimetype: string | undefined
+    let type: string | undefined
+    if (numMedia > 0 && payload.MediaUrl0) {
+      mediaUrl = payload.MediaUrl0
+      mimetype = payload.MediaContentType0
+      if (mimetype?.startsWith('image')) type = 'image'
+      else if (mimetype?.startsWith('audio')) type = 'audio'
+      else if (mimetype?.startsWith('video')) type = 'video'
+      else type = 'document'
+    }
+    return {
+      from: phone,
+      body: payload.Body || '',
+      messageId: payload.MessageSid,
+      type: numMedia > 0 ? type : 'text',
+      name: payload.ProfileName,
+      mediaUrl,
+      mimetype,
+    }
+  }
   // Meta/Cloud API format
   if (payload.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
     const msg = payload.entry[0].changes[0].value.messages[0]
@@ -170,57 +182,6 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       messageId: msg.id,
       type: msg.type,
       name: contacts?.[0]?.profile?.name,
-    }
-  }
-  // UAZAPI format: message is an object with text/content, chat has phone/name
-  if (payload.message && typeof payload.message === 'object' && payload.chat) {
-    const msg = payload.message
-    // Ignore messages sent by us (fromMe)
-    if (msg.fromMe) {
-      console.log('Ignoring fromMe message')
-      return null
-    }
-    // Prefer chat.phone or wa_chatid for actual phone number.
-    // msg.sender may contain a WhatsApp LID (Linked ID) like "193171137020042@lid"
-    // which is NOT a phone number.
-    const chatPhone = payload.chat.phone?.replace(/\D/g, '') || ''
-    const waChatId = payload.chat.wa_chatid?.replace(/@.*$/, '').replace(/\D/g, '') || ''
-    const senderPhone = msg.sender && !msg.sender.includes('@lid')
-      ? msg.sender.replace(/@.*$/, '').replace(/\D/g, '')
-      : ''
-    const phone = chatPhone || waChatId || senderPhone || ''
-
-    // Map UAZAPI messageType to standard media types
-    const uazapiTypeMap: Record<string, string> = {
-      'AudioMessage': 'ptt',
-      'ImageMessage': 'image',
-      'VideoMessage': 'video',
-      'DocumentMessage': 'document',
-      'StickerMessage': 'sticker',
-    }
-    const standardTypes = ['image', 'document', 'audio', 'video', 'sticker', 'ptt']
-    const resolvedType = uazapiTypeMap[msg.type || ''] || msg.mediaType || msg.type || undefined
-    const isMedia = standardTypes.includes(resolvedType || '')
-
-    // For media messages, content may be an object with URL/mimetype — don't use as text
-    const contentObj = typeof msg.content === 'object' && msg.content !== null ? msg.content as Record<string, unknown> : null
-    const body = msg.text || msg.caption || (contentObj ? '' : (msg.content as string || ''))
-
-    // Extract media URL: direct field, or from content.URL
-    const mediaUrl = msg.mediaUrl || (contentObj && typeof contentObj.URL === 'string' ? contentObj.URL : undefined)
-    const mimetype = msg.mimetype || (contentObj && typeof contentObj.mimetype === 'string' ? contentObj.mimetype : undefined)
-
-    return {
-      from: phone,
-      body,
-      timestamp: msg.messageTimestamp ? String(msg.messageTimestamp) : undefined,
-      messageId: msg.messageid,
-      type: isMedia ? resolvedType : msg.type,
-      name: msg.senderName || payload.chat.name,
-      mediaUrl,
-      mimetype,
-      filename: msg.filename,
-      caption: msg.caption,
     }
   }
   // Array messages format
@@ -695,32 +656,44 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
   throw new Error('Gemini API failed after all retries')
 }
 
-/** Send WhatsApp message via API */
+/** Send WhatsApp message via Twilio Gateway */
 async function sendWhatsAppMessage(
   phone: string,
   message: string,
-  uazapiUrl: string,
-  uazapiToken: string
 ): Promise<void> {
-  const apiUrl = `${uazapiUrl.replace(/\/$/, '')}/send/text`
-  console.log('Sending AI response via WhatsApp API:', { phone, apiUrl })
+  const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio'
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
+  const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY')
 
-  const response = await fetch(apiUrl, {
+  if (!LOVABLE_API_KEY || !TWILIO_API_KEY) {
+    console.error('Twilio Gateway credentials not configured')
+    throw new Error('Twilio Gateway not configured')
+  }
+
+  const TWILIO_FROM_NUMBER = 'whatsapp:+14155238886'
+  console.log('Sending via Twilio Gateway:', { phone })
+
+  const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'token': uazapiToken,
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'X-Connection-Api-Key': TWILIO_API_KEY,
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: JSON.stringify({ number: phone, text: message }),
+    body: new URLSearchParams({
+      To: `whatsapp:+${phone}`,
+      From: TWILIO_FROM_NUMBER,
+      Body: message,
+    }),
   })
 
   if (!response.ok) {
     const errorText = await response.text()
-    console.error('WhatsApp API send error:', errorText)
-    throw new Error(`WhatsApp API error: ${response.status}`)
+    console.error('Twilio Gateway send error:', errorText)
+    throw new Error(`Twilio API error: ${response.status}`)
   }
 
-  console.log('AI response sent successfully')
+  console.log('Message sent successfully via Twilio')
 }
 
 serve(async (req) => {
@@ -751,7 +724,16 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const payload: WebhookPayload = await req.json()
+    // Parse request body - handle both JSON and form-encoded (Twilio)
+    const contentType = req.headers.get('content-type') || ''
+    let payload: WebhookPayload
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      const formData = await req.text()
+      const params = new URLSearchParams(formData)
+      payload = Object.fromEntries(params.entries()) as unknown as WebhookPayload
+    } else {
+      payload = await req.json()
+    }
     console.log('Received webhook:', JSON.stringify(payload))
 
     // Log the webhook (include messageId at top level for dedup queries)
@@ -808,127 +790,44 @@ serve(async (req) => {
       mediaFilename = message.filename || null
 
       try {
-        // First try UAZAPI /message/download endpoint (returns decrypted binary)
-        const { data: sysConfigs } = await supabase
-          .from('system_config')
-          .select('key, value')
-          .in('key', ['uazapi_url', 'uazapi_token'])
-        
-        const cfgMap: Record<string, string> = {}
-        sysConfigs?.forEach((c: { key: string; value: string }) => { cfgMap[c.key] = c.value })
-        const uazapiUrl = cfgMap['uazapi_url']
-        const uazapiToken = cfgMap['uazapi_token']
-
         let mediaBuffer: ArrayBuffer | null = null
         let downloadSource = 'none'
 
-        // Try UAZAPI download endpoint if we have messageId and credentials
-        if (message.messageId && uazapiUrl && uazapiToken) {
-          try {
-            const downloadUrl = `${uazapiUrl.replace(/\/$/, '')}/message/download`
-            console.log('Downloading media via UAZAPI:', { messageId: message.messageId, downloadUrl })
-            
-            const uazapiResponse = await fetch(downloadUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'token': uazapiToken,
-              },
-              body: JSON.stringify({ id: message.messageId }),
-            })
+        // Try downloading media from URL (Twilio provides direct URLs, or fallback for other sources)
+        if (message.mediaUrl) {
+          console.log('Downloading media from URL:', message.mediaUrl)
 
-            if (uazapiResponse.ok) {
-              const contentType = uazapiResponse.headers.get('content-type') || ''
-              // Some UAZAPI setups return JSON with fileURL instead of binary
-              if (contentType.includes('application/json')) {
-                const jsonData = await uazapiResponse.json().catch(() => null) as Record<string, unknown> | null
-                console.warn('UAZAPI download returned JSON:', JSON.stringify(jsonData))
+          // For Twilio media URLs, use the gateway for authenticated access
+          const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
+          const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY')
 
-                const fileUrlFromJson =
-                  (typeof jsonData?.fileURL === 'string' && jsonData.fileURL) ||
-                  (typeof jsonData?.fileUrl === 'string' && jsonData.fileUrl) ||
-                  (typeof jsonData?.url === 'string' && jsonData.url) ||
-                  null
-                const mimeFromJson = typeof jsonData?.mimetype === 'string' ? jsonData.mimetype : null
-
-                if (fileUrlFromJson) {
-                  try {
-                    console.log('Downloading media from UAZAPI fileURL:', fileUrlFromJson)
-                    const fileUrlResponse = await fetch(fileUrlFromJson)
-                    if (fileUrlResponse.ok) {
-                      mediaBuffer = await fileUrlResponse.arrayBuffer()
-                      const firstBytes = new Uint8Array(mediaBuffer.slice(0, 4))
-                      const isJpeg = firstBytes[0] === 0xFF && firstBytes[1] === 0xD8
-                      const isPng = firstBytes[0] === 0x89 && firstBytes[1] === 0x50 && firstBytes[2] === 0x4E && firstBytes[3] === 0x47
-                      const isOgg = firstBytes[0] === 0x4F && firstBytes[1] === 0x67 && firstBytes[2] === 0x67 && firstBytes[3] === 0x53
-                      const isPdf = firstBytes[0] === 0x25 && firstBytes[1] === 0x50 && firstBytes[2] === 0x44 && firstBytes[3] === 0x46
-                      const isWebp = firstBytes[0] === 0x52 && firstBytes[1] === 0x49 // RIFF
-
-                      if (isJpeg || isPng || isOgg || isPdf || isWebp || mediaBuffer.byteLength > 1000) {
-                        downloadSource = 'uazapi_fileURL'
-                        mediaMimetype = mimeFromJson || fileUrlResponse.headers.get('content-type')?.split(';')[0].trim() || mediaMimetype
-                        console.log('Media downloaded from UAZAPI fileURL, size:', mediaBuffer.byteLength, 'mimetype:', mediaMimetype)
-                      } else {
-                        console.warn('UAZAPI fileURL returned invalid/encrypted data, first bytes:', Array.from(firstBytes).map(b => b.toString(16)).join(' '))
-                        mediaBuffer = null
-                        storedMediaUrl = fileUrlFromJson // keep at least a clickable link
-                      }
-                    } else {
-                      console.warn('UAZAPI fileURL download failed:', fileUrlResponse.status)
-                      storedMediaUrl = fileUrlFromJson // fallback to external URL
-                    }
-                  } catch (fileUrlErr) {
-                    console.warn('UAZAPI fileURL fetch error:', fileUrlErr instanceof Error ? fileUrlErr.message : fileUrlErr)
-                    storedMediaUrl = fileUrlFromJson // fallback to external URL
-                  }
-                }
-              } else {
-                mediaBuffer = await uazapiResponse.arrayBuffer()
-                // Validate it's not encrypted/invalid (check first bytes)
-                const firstBytes = new Uint8Array(mediaBuffer.slice(0, 4))
-                const isJpeg = firstBytes[0] === 0xFF && firstBytes[1] === 0xD8
-                const isPng = firstBytes[0] === 0x89 && firstBytes[1] === 0x50 && firstBytes[2] === 0x4E && firstBytes[3] === 0x47
-                const isOgg = firstBytes[0] === 0x4F && firstBytes[1] === 0x67 && firstBytes[2] === 0x67 && firstBytes[3] === 0x53
-                const isPdf = firstBytes[0] === 0x25 && firstBytes[1] === 0x50 && firstBytes[2] === 0x44 && firstBytes[3] === 0x46
-                const isWebp = firstBytes[0] === 0x52 && firstBytes[1] === 0x49 // RIFF
-
-                if (isJpeg || isPng || isOgg || isPdf || isWebp || mediaBuffer.byteLength > 1000) {
-                  downloadSource = 'uazapi'
-                  // Update mimetype from response if available
-                  if (contentType && !contentType.includes('octet-stream')) {
-                    mediaMimetype = contentType.split(';')[0].trim()
-                  }
-                  console.log('Media downloaded via UAZAPI, size:', mediaBuffer.byteLength, 'mimetype:', mediaMimetype)
-                } else {
-                  console.warn('UAZAPI returned invalid/encrypted data, first bytes:', Array.from(firstBytes).map(b => b.toString(16)).join(' '))
-                  mediaBuffer = null
-                }
-              }
-            } else {
-              console.warn('UAZAPI download failed:', uazapiResponse.status)
+          let fetchHeaders: Record<string, string> = {}
+          // If it's a Twilio URL, use gateway auth
+          if (message.mediaUrl.includes('api.twilio.com') && LOVABLE_API_KEY && TWILIO_API_KEY) {
+            fetchHeaders = {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'X-Connection-Api-Key': TWILIO_API_KEY,
             }
-          } catch (uazErr) {
-            console.warn('UAZAPI download error:', uazErr instanceof Error ? uazErr.message : uazErr)
           }
-        }
 
-        // Fallback: try direct URL download (may return encrypted data for WhatsApp CDN)
-        if (!mediaBuffer && message.mediaUrl) {
-          console.log('Fallback: downloading media directly:', message.mediaUrl)
-          const directResponse = await fetch(message.mediaUrl)
-          if (directResponse.ok) {
-            const buf = await directResponse.arrayBuffer()
-            const firstBytes = new Uint8Array(buf.slice(0, 4))
-            const isJpeg = firstBytes[0] === 0xFF && firstBytes[1] === 0xD8
-            const isPng = firstBytes[0] === 0x89 && firstBytes[1] === 0x50
-            const isOgg = firstBytes[0] === 0x4F && firstBytes[1] === 0x67
-            if (isJpeg || isPng || isOgg || buf.byteLength > 100000) {
-              mediaBuffer = buf
-              downloadSource = 'direct'
-              console.log('Media downloaded directly, size:', buf.byteLength)
+          try {
+            const mediaResponse = await fetch(message.mediaUrl, { headers: fetchHeaders })
+            if (mediaResponse.ok) {
+              mediaBuffer = await mediaResponse.arrayBuffer()
+              downloadSource = 'url'
+              const responseContentType = mediaResponse.headers.get('content-type')?.split(';')[0].trim()
+              if (responseContentType) {
+                mediaMimetype = responseContentType
+              }
+              console.log('Media downloaded, size:', mediaBuffer.byteLength, 'mimetype:', mediaMimetype)
             } else {
-              console.warn('Direct download returned encrypted/invalid data')
+              console.warn('Media download failed:', mediaResponse.status)
+              // Store the URL as fallback
+              storedMediaUrl = message.mediaUrl
             }
+          } catch (downloadErr) {
+            console.warn('Media download error:', downloadErr instanceof Error ? downloadErr.message : downloadErr)
+            storedMediaUrl = message.mediaUrl
           }
         }
 
@@ -952,7 +851,7 @@ serve(async (req) => {
             storedMediaUrl = publicUrlData.publicUrl
             console.log('Media stored at:', storedMediaUrl, '(source:', downloadSource, ')')
           }
-        } else {
+        } else if (!storedMediaUrl) {
           console.warn('Could not download media from any source')
         }
       } catch (mediaErr) {
@@ -1197,16 +1096,8 @@ serve(async (req) => {
                     routingMethod = 'disambiguation'
                     routingScore = finalScore
 
-                    // Send improved disambiguation
-                    const { data: waConfig } = await supabase
-                      .from('system_config')
-                      .select('key, value')
-                      .in('key', ['uazapi_url', 'uazapi_token'])
-
-                    const waMap: Record<string, string> = {}
-                    waConfig?.forEach((c: { key: string; value: string }) => { waMap[c.key] = c.value })
-
-                    if (waMap['uazapi_url'] && waMap['uazapi_token']) {
+                    // Send improved disambiguation via Twilio
+                    try {
                       const sectorLabels: Record<string, string> = {
                         'Financeiro': '💰 Pagamentos e cobranças',
                         'Jurídico': '⚖️ Documentos e processos legais',
@@ -1216,11 +1107,7 @@ serve(async (req) => {
                       const options = sectorNames.map((s, i) => `*${i + 1}.* ${sectorLabels[s] || s}`).join('\n')
                       const disambigMsg = `Olá! Você está em contato com mais de um setor da nossa equipe.\n\nPara direcionar sua mensagem corretamente, responda apenas com o *número*:\n\n${options}\n\nOu descreva brevemente sobre qual assunto deseja tratar. 😊`
 
-                      await fetch(`${waMap['uazapi_url'].replace(/\/$/, '')}/send/text`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'token': waMap['uazapi_token'] },
-                        body: JSON.stringify({ number: phoneNumber, text: disambigMsg }),
-                      })
+                      await sendWhatsAppMessage(phoneNumber, disambigMsg)
 
                       await supabase.from('mensagens_cliente').insert({
                         id_lead: lead.id,
@@ -1229,6 +1116,8 @@ serve(async (req) => {
                         origem: 'ROUTING',
                       })
                       console.log('Multichat: disambiguation message sent')
+                    } catch (disambigErr) {
+                      console.error('Disambiguation send error:', disambigErr instanceof Error ? disambigErr.message : disambigErr)
                     }
                   }
                 } catch {
@@ -1453,8 +1342,6 @@ serve(async (req) => {
       .in('key', [
         'whatsapp_bot_enabled',
         'whatsapp_bot_system_prompt',
-        'uazapi_url',
-        'uazapi_token',
       ])
 
     const configMap: Record<string, string> = {}
@@ -1636,12 +1523,9 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
         )
 
         if (aiResponse) {
-          // Send AI response via WhatsApp
-          const uazapiUrl = configMap['uazapi_url']
-          const uazapiToken = configMap['uazapi_token']
-
-          if (uazapiUrl && uazapiToken) {
-            await sendWhatsAppMessage(phoneNumber, aiResponse, uazapiUrl, uazapiToken)
+          // Send AI response via Twilio
+          try {
+            await sendWhatsAppMessage(phoneNumber, aiResponse)
 
             // Store AI response in mensagens_cliente
             await supabase.from('mensagens_cliente').insert({
@@ -1662,8 +1546,8 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
             })
 
             console.log('AI response sent and stored successfully')
-          } else {
-            console.error('WhatsApp API not configured, cannot send AI response')
+          } catch (sendErr) {
+            console.error('Failed to send AI response via Twilio:', sendErr instanceof Error ? sendErr.message : sendErr)
           }
         }
       } catch (aiError) {
