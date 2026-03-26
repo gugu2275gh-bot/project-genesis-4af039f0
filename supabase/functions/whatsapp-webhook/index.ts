@@ -724,7 +724,16 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const payload: WebhookPayload = await req.json()
+    // Parse request body - handle both JSON and form-encoded (Twilio)
+    const contentType = req.headers.get('content-type') || ''
+    let payload: WebhookPayload
+    if (contentType.includes('application/x-www-form-urlencoded')) {
+      const formData = await req.text()
+      const params = new URLSearchParams(formData)
+      payload = Object.fromEntries(params.entries()) as unknown as WebhookPayload
+    } else {
+      payload = await req.json()
+    }
     console.log('Received webhook:', JSON.stringify(payload))
 
     // Log the webhook (include messageId at top level for dedup queries)
