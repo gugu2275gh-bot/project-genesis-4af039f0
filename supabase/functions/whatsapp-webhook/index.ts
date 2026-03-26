@@ -146,6 +146,31 @@ function getFileExtension(mimetype?: string, filename?: string, type?: string): 
 }
 
 function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
+  // Twilio format: MessageSid, From=whatsapp:+XXXXX, Body=...
+  if (payload.MessageSid && payload.From) {
+    const phone = payload.From.replace('whatsapp:', '').replace(/\D/g, '')
+    const numMedia = parseInt(payload.NumMedia || '0')
+    let mediaUrl: string | undefined
+    let mimetype: string | undefined
+    let type: string | undefined
+    if (numMedia > 0 && payload.MediaUrl0) {
+      mediaUrl = payload.MediaUrl0
+      mimetype = payload.MediaContentType0
+      if (mimetype?.startsWith('image')) type = 'image'
+      else if (mimetype?.startsWith('audio')) type = 'audio'
+      else if (mimetype?.startsWith('video')) type = 'video'
+      else type = 'document'
+    }
+    return {
+      from: phone,
+      body: payload.Body || '',
+      messageId: payload.MessageSid,
+      type: numMedia > 0 ? type : 'text',
+      name: payload.ProfileName,
+      mediaUrl,
+      mimetype,
+    }
+  }
   // Meta/Cloud API format
   if (payload.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
     const msg = payload.entry[0].changes[0].value.messages[0]
@@ -157,57 +182,6 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       messageId: msg.id,
       type: msg.type,
       name: contacts?.[0]?.profile?.name,
-    }
-  }
-  // UAZAPI format: message is an object with text/content, chat has phone/name
-  if (payload.message && typeof payload.message === 'object' && payload.chat) {
-    const msg = payload.message
-    // Ignore messages sent by us (fromMe)
-    if (msg.fromMe) {
-      console.log('Ignoring fromMe message')
-      return null
-    }
-    // Prefer chat.phone or wa_chatid for actual phone number.
-    // msg.sender may contain a WhatsApp LID (Linked ID) like "193171137020042@lid"
-    // which is NOT a phone number.
-    const chatPhone = payload.chat.phone?.replace(/\D/g, '') || ''
-    const waChatId = payload.chat.wa_chatid?.replace(/@.*$/, '').replace(/\D/g, '') || ''
-    const senderPhone = msg.sender && !msg.sender.includes('@lid')
-      ? msg.sender.replace(/@.*$/, '').replace(/\D/g, '')
-      : ''
-    const phone = chatPhone || waChatId || senderPhone || ''
-
-    // Map UAZAPI messageType to standard media types
-    const uazapiTypeMap: Record<string, string> = {
-      'AudioMessage': 'ptt',
-      'ImageMessage': 'image',
-      'VideoMessage': 'video',
-      'DocumentMessage': 'document',
-      'StickerMessage': 'sticker',
-    }
-    const standardTypes = ['image', 'document', 'audio', 'video', 'sticker', 'ptt']
-    const resolvedType = uazapiTypeMap[msg.type || ''] || msg.mediaType || msg.type || undefined
-    const isMedia = standardTypes.includes(resolvedType || '')
-
-    // For media messages, content may be an object with URL/mimetype — don't use as text
-    const contentObj = typeof msg.content === 'object' && msg.content !== null ? msg.content as Record<string, unknown> : null
-    const body = msg.text || msg.caption || (contentObj ? '' : (msg.content as string || ''))
-
-    // Extract media URL: direct field, or from content.URL
-    const mediaUrl = msg.mediaUrl || (contentObj && typeof contentObj.URL === 'string' ? contentObj.URL : undefined)
-    const mimetype = msg.mimetype || (contentObj && typeof contentObj.mimetype === 'string' ? contentObj.mimetype : undefined)
-
-    return {
-      from: phone,
-      body,
-      timestamp: msg.messageTimestamp ? String(msg.messageTimestamp) : undefined,
-      messageId: msg.messageid,
-      type: isMedia ? resolvedType : msg.type,
-      name: msg.senderName || payload.chat.name,
-      mediaUrl,
-      mimetype,
-      filename: msg.filename,
-      caption: msg.caption,
     }
   }
   // Array messages format
