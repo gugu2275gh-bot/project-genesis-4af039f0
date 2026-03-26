@@ -1523,12 +1523,9 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
         )
 
         if (aiResponse) {
-          // Send AI response via WhatsApp
-          const uazapiUrl = configMap['uazapi_url']
-          const uazapiToken = configMap['uazapi_token']
-
-          if (uazapiUrl && uazapiToken) {
-            await sendWhatsAppMessage(phoneNumber, aiResponse, uazapiUrl, uazapiToken)
+          // Send AI response via Twilio
+          try {
+            await sendWhatsAppMessage(phoneNumber, aiResponse)
 
             // Store AI response in mensagens_cliente
             await supabase.from('mensagens_cliente').insert({
@@ -1549,8 +1546,8 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
             })
 
             console.log('AI response sent and stored successfully')
-          } else {
-            console.error('WhatsApp API not configured, cannot send AI response')
+          } catch (sendErr) {
+            console.error('Failed to send AI response via Twilio:', sendErr instanceof Error ? sendErr.message : sendErr)
           }
         }
       } catch (aiError) {
