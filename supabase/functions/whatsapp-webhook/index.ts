@@ -20,6 +20,15 @@ interface WhatsAppMessage {
 }
 
 interface WebhookPayload {
+  // Twilio format (form-encoded, converted to object)
+  MessageSid?: string;
+  From?: string;
+  Body?: string;
+  ProfileName?: string;
+  NumMedia?: string;
+  MediaUrl0?: string;
+  MediaContentType0?: string;
+  // Meta/Cloud API format
   entry?: Array<{
     changes?: Array<{
       value?: {
@@ -49,31 +58,9 @@ interface WebhookPayload {
     type?: string;
   }>;
   phone?: string;
-  message?: string | {
-    text?: string;
-    content?: string | Record<string, unknown>;
-    messageid?: string;
-    type?: string;
-    mediaType?: string;
-    sender?: string;
-    senderName?: string;
-    messageTimestamp?: number;
-    fromMe?: boolean;
-    mediaUrl?: string;
-    mimetype?: string;
-    filename?: string;
-    caption?: string;
-    base64?: string;
-  };
+  message?: string | Record<string, unknown>;
   name?: string;
   source?: string;
-  // UAZAPI format
-  chat?: {
-    phone?: string;
-    name?: string;
-    wa_chatid?: string;
-  };
-  EventType?: string;
 }
 
 /** Round-robin: pick the ATENDENTE_WHATSAPP user with the fewest recent lead assignments */
