@@ -1096,16 +1096,8 @@ serve(async (req) => {
                     routingMethod = 'disambiguation'
                     routingScore = finalScore
 
-                    // Send improved disambiguation
-                    const { data: waConfig } = await supabase
-                      .from('system_config')
-                      .select('key, value')
-                      .in('key', ['uazapi_url', 'uazapi_token'])
-
-                    const waMap: Record<string, string> = {}
-                    waConfig?.forEach((c: { key: string; value: string }) => { waMap[c.key] = c.value })
-
-                    if (waMap['uazapi_url'] && waMap['uazapi_token']) {
+                    // Send improved disambiguation via Twilio
+                    try {
                       const sectorLabels: Record<string, string> = {
                         'Financeiro': '💰 Pagamentos e cobranças',
                         'Jurídico': '⚖️ Documentos e processos legais',
@@ -1115,11 +1107,7 @@ serve(async (req) => {
                       const options = sectorNames.map((s, i) => `*${i + 1}.* ${sectorLabels[s] || s}`).join('\n')
                       const disambigMsg = `Olá! Você está em contato com mais de um setor da nossa equipe.\n\nPara direcionar sua mensagem corretamente, responda apenas com o *número*:\n\n${options}\n\nOu descreva brevemente sobre qual assunto deseja tratar. 😊`
 
-                      await fetch(`${waMap['uazapi_url'].replace(/\/$/, '')}/send/text`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'token': waMap['uazapi_token'] },
-                        body: JSON.stringify({ number: phoneNumber, text: disambigMsg }),
-                      })
+                      await sendWhatsAppMessage(phoneNumber, disambigMsg)
 
                       await supabase.from('mensagens_cliente').insert({
                         id_lead: lead.id,
@@ -1128,6 +1116,8 @@ serve(async (req) => {
                         origem: 'ROUTING',
                       })
                       console.log('Multichat: disambiguation message sent')
+                    } catch (disambigErr) {
+                      console.error('Disambiguation send error:', disambigErr instanceof Error ? disambigErr.message : disambigErr)
                     }
                   }
                 } catch {
