@@ -1342,8 +1342,6 @@ serve(async (req) => {
       .in('key', [
         'whatsapp_bot_enabled',
         'whatsapp_bot_system_prompt',
-        'uazapi_url',
-        'uazapi_token',
       ])
 
     const configMap: Record<string, string> = {}
