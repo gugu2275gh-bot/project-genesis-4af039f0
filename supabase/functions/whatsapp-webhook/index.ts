@@ -790,127 +790,44 @@ serve(async (req) => {
       mediaFilename = message.filename || null
 
       try {
-        // First try UAZAPI /message/download endpoint (returns decrypted binary)
-        const { data: sysConfigs } = await supabase
-          .from('system_config')
-          .select('key, value')
-          .in('key', ['uazapi_url', 'uazapi_token'])
-        
-        const cfgMap: Record<string, string> = {}
-        sysConfigs?.forEach((c: { key: string; value: string }) => { cfgMap[c.key] = c.value })
-        const uazapiUrl = cfgMap['uazapi_url']
-        const uazapiToken = cfgMap['uazapi_token']
-
         let mediaBuffer: ArrayBuffer | null = null
         let downloadSource = 'none'
 
-        // Try UAZAPI download endpoint if we have messageId and credentials
-        if (message.messageId && uazapiUrl && uazapiToken) {
-          try {
-            const downloadUrl = `${uazapiUrl.replace(/\/$/, '')}/message/download`
-            console.log('Downloading media via UAZAPI:', { messageId: message.messageId, downloadUrl })
-            
-            const uazapiResponse = await fetch(downloadUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'token': uazapiToken,
-              },
-              body: JSON.stringify({ id: message.messageId }),
-            })
+        // Try downloading media from URL (Twilio provides direct URLs, or fallback for other sources)
+        if (message.mediaUrl) {
+          console.log('Downloading media from URL:', message.mediaUrl)
 
-            if (uazapiResponse.ok) {
-              const contentType = uazapiResponse.headers.get('content-type') || ''
-              // Some UAZAPI setups return JSON with fileURL instead of binary
-              if (contentType.includes('application/json')) {
-                const jsonData = await uazapiResponse.json().catch(() => null) as Record<string, unknown> | null
-                console.warn('UAZAPI download returned JSON:', JSON.stringify(jsonData))
+          // For Twilio media URLs, use the gateway for authenticated access
+          const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
+          const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY')
 
-                const fileUrlFromJson =
-                  (typeof jsonData?.fileURL === 'string' && jsonData.fileURL) ||
-                  (typeof jsonData?.fileUrl === 'string' && jsonData.fileUrl) ||
-                  (typeof jsonData?.url === 'string' && jsonData.url) ||
-                  null
-                const mimeFromJson = typeof jsonData?.mimetype === 'string' ? jsonData.mimetype : null
-
-                if (fileUrlFromJson) {
-                  try {
-                    console.log('Downloading media from UAZAPI fileURL:', fileUrlFromJson)
-                    const fileUrlResponse = await fetch(fileUrlFromJson)
-                    if (fileUrlResponse.ok) {
-                      mediaBuffer = await fileUrlResponse.arrayBuffer()
-                      const firstBytes = new Uint8Array(mediaBuffer.slice(0, 4))
-                      const isJpeg = firstBytes[0] === 0xFF && firstBytes[1] === 0xD8
-                      const isPng = firstBytes[0] === 0x89 && firstBytes[1] === 0x50 && firstBytes[2] === 0x4E && firstBytes[3] === 0x47
-                      const isOgg = firstBytes[0] === 0x4F && firstBytes[1] === 0x67 && firstBytes[2] === 0x67 && firstBytes[3] === 0x53
-                      const isPdf = firstBytes[0] === 0x25 && firstBytes[1] === 0x50 && firstBytes[2] === 0x44 && firstBytes[3] === 0x46
-                      const isWebp = firstBytes[0] === 0x52 && firstBytes[1] === 0x49 // RIFF
-
-                      if (isJpeg || isPng || isOgg || isPdf || isWebp || mediaBuffer.byteLength > 1000) {
-                        downloadSource = 'uazapi_fileURL'
-                        mediaMimetype = mimeFromJson || fileUrlResponse.headers.get('content-type')?.split(';')[0].trim() || mediaMimetype
-                        console.log('Media downloaded from UAZAPI fileURL, size:', mediaBuffer.byteLength, 'mimetype:', mediaMimetype)
-                      } else {
-                        console.warn('UAZAPI fileURL returned invalid/encrypted data, first bytes:', Array.from(firstBytes).map(b => b.toString(16)).join(' '))
-                        mediaBuffer = null
-                        storedMediaUrl = fileUrlFromJson // keep at least a clickable link
-                      }
-                    } else {
-                      console.warn('UAZAPI fileURL download failed:', fileUrlResponse.status)
-                      storedMediaUrl = fileUrlFromJson // fallback to external URL
-                    }
-                  } catch (fileUrlErr) {
-                    console.warn('UAZAPI fileURL fetch error:', fileUrlErr instanceof Error ? fileUrlErr.message : fileUrlErr)
-                    storedMediaUrl = fileUrlFromJson // fallback to external URL
-                  }
-                }
-              } else {
-                mediaBuffer = await uazapiResponse.arrayBuffer()
-                // Validate it's not encrypted/invalid (check first bytes)
-                const firstBytes = new Uint8Array(mediaBuffer.slice(0, 4))
-                const isJpeg = firstBytes[0] === 0xFF && firstBytes[1] === 0xD8
-                const isPng = firstBytes[0] === 0x89 && firstBytes[1] === 0x50 && firstBytes[2] === 0x4E && firstBytes[3] === 0x47
-                const isOgg = firstBytes[0] === 0x4F && firstBytes[1] === 0x67 && firstBytes[2] === 0x67 && firstBytes[3] === 0x53
-                const isPdf = firstBytes[0] === 0x25 && firstBytes[1] === 0x50 && firstBytes[2] === 0x44 && firstBytes[3] === 0x46
-                const isWebp = firstBytes[0] === 0x52 && firstBytes[1] === 0x49 // RIFF
-
-                if (isJpeg || isPng || isOgg || isPdf || isWebp || mediaBuffer.byteLength > 1000) {
-                  downloadSource = 'uazapi'
-                  // Update mimetype from response if available
-                  if (contentType && !contentType.includes('octet-stream')) {
-                    mediaMimetype = contentType.split(';')[0].trim()
-                  }
-                  console.log('Media downloaded via UAZAPI, size:', mediaBuffer.byteLength, 'mimetype:', mediaMimetype)
-                } else {
-                  console.warn('UAZAPI returned invalid/encrypted data, first bytes:', Array.from(firstBytes).map(b => b.toString(16)).join(' '))
-                  mediaBuffer = null
-                }
-              }
-            } else {
-              console.warn('UAZAPI download failed:', uazapiResponse.status)
+          let fetchHeaders: Record<string, string> = {}
+          // If it's a Twilio URL, use gateway auth
+          if (message.mediaUrl.includes('api.twilio.com') && LOVABLE_API_KEY && TWILIO_API_KEY) {
+            fetchHeaders = {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'X-Connection-Api-Key': TWILIO_API_KEY,
             }
-          } catch (uazErr) {
-            console.warn('UAZAPI download error:', uazErr instanceof Error ? uazErr.message : uazErr)
           }
-        }
 
-        // Fallback: try direct URL download (may return encrypted data for WhatsApp CDN)
-        if (!mediaBuffer && message.mediaUrl) {
-          console.log('Fallback: downloading media directly:', message.mediaUrl)
-          const directResponse = await fetch(message.mediaUrl)
-          if (directResponse.ok) {
-            const buf = await directResponse.arrayBuffer()
-            const firstBytes = new Uint8Array(buf.slice(0, 4))
-            const isJpeg = firstBytes[0] === 0xFF && firstBytes[1] === 0xD8
-            const isPng = firstBytes[0] === 0x89 && firstBytes[1] === 0x50
-            const isOgg = firstBytes[0] === 0x4F && firstBytes[1] === 0x67
-            if (isJpeg || isPng || isOgg || buf.byteLength > 100000) {
-              mediaBuffer = buf
-              downloadSource = 'direct'
-              console.log('Media downloaded directly, size:', buf.byteLength)
+          try {
+            const mediaResponse = await fetch(message.mediaUrl, { headers: fetchHeaders })
+            if (mediaResponse.ok) {
+              mediaBuffer = await mediaResponse.arrayBuffer()
+              downloadSource = 'url'
+              const responseContentType = mediaResponse.headers.get('content-type')?.split(';')[0].trim()
+              if (responseContentType) {
+                mediaMimetype = responseContentType
+              }
+              console.log('Media downloaded, size:', mediaBuffer.byteLength, 'mimetype:', mediaMimetype)
             } else {
-              console.warn('Direct download returned encrypted/invalid data')
+              console.warn('Media download failed:', mediaResponse.status)
+              // Store the URL as fallback
+              storedMediaUrl = message.mediaUrl
             }
+          } catch (downloadErr) {
+            console.warn('Media download error:', downloadErr instanceof Error ? downloadErr.message : downloadErr)
+            storedMediaUrl = message.mediaUrl
           }
         }
 
@@ -934,7 +851,7 @@ serve(async (req) => {
             storedMediaUrl = publicUrlData.publicUrl
             console.log('Media stored at:', storedMediaUrl, '(source:', downloadSource, ')')
           }
-        } else {
+        } else if (!storedMediaUrl) {
           console.warn('Could not download media from any source')
         }
       } catch (mediaErr) {
