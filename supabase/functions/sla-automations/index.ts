@@ -11,9 +11,9 @@ interface SLAConfig {
   value: string;
 }
 
-// WhatsApp API credentials (loaded from system_config at runtime)
-let whatsappApiUrl: string | null = null
-let whatsappApiToken: string | null = null
+// Twilio WhatsApp Gateway
+const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio'
+const TWILIO_FROM_NUMBER = 'whatsapp:+14155238886' // Sandbox number
 
 // Automation types available for filtering
 type AutomationType = 
