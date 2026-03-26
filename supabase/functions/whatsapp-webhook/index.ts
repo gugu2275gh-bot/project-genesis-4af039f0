@@ -656,32 +656,44 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
   throw new Error('Gemini API failed after all retries')
 }
 
-/** Send WhatsApp message via API */
+/** Send WhatsApp message via Twilio Gateway */
 async function sendWhatsAppMessage(
   phone: string,
   message: string,
-  uazapiUrl: string,
-  uazapiToken: string
 ): Promise<void> {
-  const apiUrl = `${uazapiUrl.replace(/\/$/, '')}/send/text`
-  console.log('Sending AI response via WhatsApp API:', { phone, apiUrl })
+  const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio'
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
+  const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY')
 
-  const response = await fetch(apiUrl, {
+  if (!LOVABLE_API_KEY || !TWILIO_API_KEY) {
+    console.error('Twilio Gateway credentials not configured')
+    throw new Error('Twilio Gateway not configured')
+  }
+
+  const TWILIO_FROM_NUMBER = 'whatsapp:+14155238886'
+  console.log('Sending via Twilio Gateway:', { phone })
+
+  const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'token': uazapiToken,
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'X-Connection-Api-Key': TWILIO_API_KEY,
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: JSON.stringify({ number: phone, text: message }),
+    body: new URLSearchParams({
+      To: `whatsapp:+${phone}`,
+      From: TWILIO_FROM_NUMBER,
+      Body: message,
+    }),
   })
 
   if (!response.ok) {
     const errorText = await response.text()
-    console.error('WhatsApp API send error:', errorText)
-    throw new Error(`WhatsApp API error: ${response.status}`)
+    console.error('Twilio Gateway send error:', errorText)
+    throw new Error(`Twilio API error: ${response.status}`)
   }
 
-  console.log('AI response sent successfully')
+  console.log('Message sent successfully via Twilio')
 }
 
 serve(async (req) => {
