@@ -6,6 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
+const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio'
+const TWILIO_FROM_NUMBER = 'whatsapp:+14155238886' // Sandbox number
+
 serve(async (req) => {
   console.log('send-whatsapp invoked, method:', req.method)
 
@@ -26,6 +29,25 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+    // Twilio gateway credentials
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
+    if (!LOVABLE_API_KEY) {
+      console.error('LOVABLE_API_KEY is not configured')
+      return new Response(
+        JSON.stringify({ error: 'LOVABLE_API_KEY não configurada' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY')
+    if (!TWILIO_API_KEY) {
+      console.error('TWILIO_API_KEY is not configured')
+      return new Response(
+        JSON.stringify({ error: 'TWILIO_API_KEY não configurada. Conecte o Twilio nas configurações.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
@@ -93,58 +115,35 @@ serve(async (req) => {
       )
     }
 
-    // Fetch WhatsApp API config from system_config using service role (reuse adminSupabase)
-    const { data: configs } = await adminSupabase
-      .from('system_config')
-      .select('key, value')
-      .in('key', ['uazapi_url', 'uazapi_token'])
+    // Send via Twilio WhatsApp Gateway
+    console.log('Sending via Twilio WhatsApp Gateway:', { phone: phoneStr })
 
-    const configMap: Record<string, string> = {}
-    configs?.forEach((c: { key: string; value: string }) => {
-      configMap[c.key] = c.value
-    })
-
-    const uazapiUrl = configMap['uazapi_url']
-    const uazapiToken = configMap['uazapi_token']
-
-    if (!uazapiUrl || !uazapiToken) {
-      console.error('WhatsApp API not configured in system_config')
-      return new Response(
-        JSON.stringify({ error: 'API WhatsApp não configurada. Acesse Configurações > Sistema para configurar.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Call WhatsApp API directly to send text message
-    const apiUrl = `${uazapiUrl.replace(/\/$/, '')}/send/text`
-    console.log('Sending via WhatsApp API:', { phone: phoneStr, apiUrl })
-
-    const response = await fetch(apiUrl, {
+    const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'token': uazapiToken,
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'X-Connection-Api-Key': TWILIO_API_KEY,
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: JSON.stringify({
-        number: phoneStr,
-        text: rawMessage,
+      body: new URLSearchParams({
+        To: `whatsapp:+${phoneStr}`,
+        From: TWILIO_FROM_NUMBER,
+        Body: rawMessage,
       }),
     })
 
     const responseData = await response.text()
-    console.log('WhatsApp API response:', response.status, responseData)
+    console.log('Twilio Gateway response:', response.status, responseData)
 
     if (!response.ok) {
-      console.error('WhatsApp API error:', responseData)
-      throw new Error(`WhatsApp API retornou status ${response.status}: ${responseData}`)
+      console.error('Twilio Gateway error:', responseData)
+      throw new Error(`Twilio API retornou status ${response.status}: ${responseData}`)
     }
 
     // ========== UPDATE CUSTOMER CHAT CONTEXT ==========
-    // Determine the sector of the sending user
     let effectiveSector = sector || null
 
     if (!effectiveSector) {
-      // Try to resolve sector from user_sectors table
       const { data: userSectorData } = await adminSupabase
         .from('user_sectors')
         .select('sector_id, service_sectors(name)')
@@ -156,7 +155,6 @@ serve(async (req) => {
         effectiveSector = sectorRow.service_sectors?.name || null
       }
 
-      // Fallback: derive from role
       if (!effectiveSector && userRoles?.length) {
         const roleToSector: Record<string, string> = {
           JURIDICO: 'Jurídico',
@@ -174,7 +172,6 @@ serve(async (req) => {
       }
     }
 
-    // Resolve contact_id if provided, otherwise try to find by phone
     let resolvedContactId = contact_id || null
     if (!resolvedContactId) {
       const { data: contactData } = await adminSupabase
@@ -192,7 +189,6 @@ serve(async (req) => {
 
       const now = new Date().toISOString()
 
-      // Get existing context
       const { data: existingCtx } = await adminSupabase
         .from('customer_chat_context')
         .select('*')
@@ -200,7 +196,6 @@ serve(async (req) => {
         .single()
 
       if (existingCtx) {
-        // Update existing: add/update sector in setores_ativos
         const setoresAtivos = (existingCtx.setores_ativos as Array<{ setor: string; user_id: string; last_sent_at: string }>) || []
         const existingIdx = setoresAtivos.findIndex(s => s.setor === effectiveSector)
 
@@ -211,7 +206,6 @@ serve(async (req) => {
           setoresAtivos.push({ setor: effectiveSector, user_id: user.id, last_sent_at: now })
         }
 
-        // Apply sector lock (10 min) when operator sends message
         const lockExpiry = new Date(Date.now() + 10 * 60 * 1000).toISOString()
 
         await adminSupabase
@@ -226,7 +220,6 @@ serve(async (req) => {
           })
           .eq('contact_id', resolvedContactId)
       } else {
-        // Create new context
         const newLockExpiry = new Date(Date.now() + 10 * 60 * 1000).toISOString()
         await adminSupabase
           .from('customer_chat_context')

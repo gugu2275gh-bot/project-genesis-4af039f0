@@ -11,9 +11,9 @@ interface SLAConfig {
   value: string;
 }
 
-// WhatsApp API credentials (loaded from system_config at runtime)
-let whatsappApiUrl: string | null = null
-let whatsappApiToken: string | null = null
+// Twilio WhatsApp Gateway
+const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio'
+const TWILIO_FROM_NUMBER = 'whatsapp:+14155238886' // Sandbox number
 
 // Automation types available for filtering
 type AutomationType = 
@@ -148,47 +148,44 @@ serve(async (req) => {
       if (t.value) templateMap[t.key] = t.value
     })
 
-    // Load WhatsApp API credentials from system_config
-    const { data: waConfigs } = await supabase
-      .from('system_config')
-      .select('key, value')
-      .in('key', ['uazapi_url', 'uazapi_token'])
+    // Load Twilio Gateway credentials
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
+    const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY')
 
-    waConfigs?.forEach((c: { key: string; value: string }) => {
-      if (c.key === 'uazapi_url') whatsappApiUrl = c.value
-      if (c.key === 'uazapi_token') whatsappApiToken = c.value
-    })
-
-    if (!whatsappApiUrl || !whatsappApiToken) {
-      console.warn('WhatsApp API not configured in system_config - messages will be skipped')
+    if (!LOVABLE_API_KEY || !TWILIO_API_KEY) {
+      console.warn('Twilio credentials not configured - WhatsApp messages will be skipped')
     }
 
-    // Helper to send WhatsApp via API directly
+    // Helper to send WhatsApp via Twilio Gateway
     async function sendWhatsApp(phone: string | number, message: string, leadId?: string) {
       try {
-        if (!whatsappApiUrl || !whatsappApiToken) {
-          console.warn('WhatsApp API not configured, skipping send')
+        if (!LOVABLE_API_KEY || !TWILIO_API_KEY) {
+          console.warn('Twilio credentials not configured, skipping send')
           return false
         }
 
         const phoneStr = String(phone).replace(/\D/g, '')
         
-        const apiUrl = `${whatsappApiUrl.replace(/\/$/, '')}/send/text`
-        const response = await fetch(apiUrl, {
+        const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'token': whatsappApiToken!,
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'X-Connection-Api-Key': TWILIO_API_KEY,
+            'Content-Type': 'application/x-www-form-urlencoded',
           },
-          body: JSON.stringify({ phone: phoneStr, message })
+          body: new URLSearchParams({
+            To: `whatsapp:+${phoneStr}`,
+            From: TWILIO_FROM_NUMBER,
+            Body: message,
+          }),
         })
         
         if (!response.ok) {
-          console.error('WhatsApp API error:', await response.text())
+          console.error('Twilio Gateway error:', await response.text())
           return false
         }
         
-        console.log('WhatsApp sent to:', phoneStr.slice(-4))
+        console.log('WhatsApp sent via Twilio to:', phoneStr.slice(-4))
         
         // Register message in mensagens_cliente for CRM chat history
         if (leadId) {
