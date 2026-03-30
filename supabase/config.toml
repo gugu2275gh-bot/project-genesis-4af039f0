@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.smart-reactivation]
 verify_jwt = false
+
+[functions.submit-whatsapp-templates]
+verify_jwt = false
