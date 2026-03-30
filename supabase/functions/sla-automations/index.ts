@@ -568,7 +568,7 @@ serve(async (req) => {
               const msg = templateMap.template_payment_reminder
                 .replace('{nome}', contact.full_name)
                 .replace('{valor}', String(payment.amount))
-              await sendWhatsApp(contact.phone, msg, leadId)
+              await sendWhatsApp(contact.phone, msg, leadId, 'payment_post_d3', { nome: contact.full_name, valor: String(payment.amount) })
             }
             // Alert managers
             const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
