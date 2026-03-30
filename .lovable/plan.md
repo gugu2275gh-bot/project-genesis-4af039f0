@@ -1,67 +1,32 @@
 
 
-## Log detalhado de envio de templates WhatsApp
+## Remover referências ao Lovable dos avisos visíveis ao usuário
 
-### O que será feito
+### Problema
 
-Criar uma tabela `whatsapp_template_logs` para registrar cada ação de submissão/verificação de templates, e exibir esses logs na UI da página de templates com detalhes completos para diagnóstico.
+Os diálogos de confirmação usam `window.confirm()` nativo, que exibe a URL do projeto Lovable no cabeçalho do browser. Isso expõe a marca "Lovable" ao usuário final.
 
-### Alterações
+### Solução
 
-#### 1. Nova tabela `whatsapp_template_logs` (migration)
+Substituir todos os `confirm()` nativos por `AlertDialog` do Radix UI (já disponível em `src/components/ui/alert-dialog.tsx`), que renderiza um modal customizado sem exibir a URL do domínio.
 
-```sql
-create table public.whatsapp_template_logs (
-  id uuid primary key default gen_random_uuid(),
-  template_id uuid references public.whatsapp_templates(id) on delete set null,
-  template_name text not null,
-  action text not null, -- 'submit', 'check_status', 'submit_approval'
-  status text not null, -- 'success', 'error', 'skipped'
-  request_payload jsonb,
-  response_payload jsonb,
-  error_message text,
-  twilio_status_code int,
-  content_sid text,
-  user_id uuid references auth.users(id),
-  created_at timestamptz default now()
-);
+### Arquivos a alterar
 
-alter table public.whatsapp_template_logs enable row level security;
+| Arquivo | Mudança |
+|---------|---------|
+| `src/pages/settings/WhatsAppTemplatesSettings.tsx` | Substituir `confirm()` por `AlertDialog` com estado para controlar qual template será excluído |
+| `src/components/contracts/ContractNotesSection.tsx` | Substituir `confirm()` por `AlertDialog` para exclusão de notas |
+| `src/pages/settings/DocumentTypesManagement.tsx` | Substituir `confirm()` por `AlertDialog` para exclusão de tipos de documento |
 
-create policy "Admins can view template logs"
-  on public.whatsapp_template_logs for select
-  to authenticated
-  using (public.has_any_role(auth.uid(), array['ADMIN','MANAGER']::app_role[]));
-```
+### Padrão de implementação
 
-#### 2. Atualizar `supabase/functions/submit-whatsapp-templates/index.ts`
+Em cada arquivo:
+1. Adicionar estado `deletingId` (`string | null`)
+2. O botão de excluir seta `deletingId` em vez de chamar `confirm()`
+3. Renderizar um `AlertDialog` controlado por `deletingId !== null`
+4. No botão "Confirmar" do AlertDialog, executar a mutation e limpar o estado
 
-Para cada template processado (submit e check_status), inserir um registro na tabela de logs com:
-- `request_payload`: o body enviado ao Twilio
-- `response_payload`: a resposta completa do Twilio
-- `twilio_status_code`: HTTP status code
-- `error_message`: mensagem de erro se houver
-- `user_id`: quem executou a ação
-- `content_sid`: SID retornado
+### Nota sobre referências internas
 
-#### 3. Atualizar `src/hooks/useWhatsAppTemplates.ts`
-
-- Adicionar query `templateLogs` para buscar logs da tabela ordenados por `created_at desc`
-
-#### 4. Atualizar `src/pages/settings/WhatsAppTemplatesSettings.tsx`
-
-- Adicionar seção "Logs de Envio" abaixo da tabela de templates
-- Tabela com colunas: Data/Hora, Template, Ação, Status, Status HTTP, Content SID, Erro
-- Expandir linha para ver payload completo (request + response) em JSON formatado
-- Filtro por status (todos/sucesso/erro)
-- Limite de 50 logs mais recentes
-
-### Arquivos afetados
-
-| Arquivo | Ação |
-|---------|------|
-| `supabase/migrations/xxx_whatsapp_template_logs.sql` | Nova tabela + RLS |
-| `supabase/functions/submit-whatsapp-templates/index.ts` | Inserir logs a cada operação |
-| `src/hooks/useWhatsAppTemplates.ts` | Nova query de logs |
-| `src/pages/settings/WhatsAppTemplatesSettings.tsx` | Seção de logs na UI |
+As referências em edge functions (`connector-gateway.lovable.dev`, `LOVABLE_API_KEY`) e comentários de código são infraestrutura interna, não visíveis ao usuário final — não serão alteradas.
 
