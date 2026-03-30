@@ -1963,6 +1963,41 @@ serve(async (req) => {
           continue
         }
 
+        // M4/R4: Calculate days overdue and apply frequency limits
+        const dueDate = new Date(payment.due_date!)
+        const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / (24 * 60 * 60 * 1000))
+
+        // After 30 days: stop WhatsApp, escalate to manager internally
+        if (daysOverdue > 30) {
+          const escalationKey = `DAILY_COLLECTION_ESCALATE_30_${payment.id}`
+          if (!(await reminderAlreadySent('payment_reminders', payment.id, escalationKey))) {
+            await supabase.from('payment_reminders').insert({ payment_id: payment.id, reminder_type: escalationKey })
+            const { data: managers } = await supabase
+              .from('user_roles')
+              .select('user_id')
+              .in('role', ['MANAGER', 'ADMIN'] as any)
+            for (const mgr of managers || []) {
+              await supabase.from('notifications').insert({
+                user_id: mgr.user_id,
+                type: 'payment_overdue_escalation',
+                title: '🚨 Pagamento 30+ dias em atraso',
+                message: `Pagamento de €${payment.amount} de ${contact.full_name} está ${daysOverdue} dias em atraso. Cobrança automática encerrada.`,
+              })
+            }
+            console.log(`Payment ${payment.id} - ${daysOverdue} days overdue, escalated to managers, no more WhatsApp`)
+          }
+          continue
+        }
+
+        // After 14 days: reduce to every 3 days
+        if (daysOverdue > 14) {
+          const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / (24 * 60 * 60 * 1000))
+          if (dayOfYear % 3 !== 0) {
+            console.log(`Skipping payment ${payment.id} - ${daysOverdue} days overdue, sending every 3 days`)
+            continue
+          }
+        }
+
         // Check if already sent today using reminder_type with date
         const dailyReminderType = `DAILY_COLLECTION_${today}`
         if (await reminderAlreadySent('payment_reminders', payment.id, dailyReminderType)) {
@@ -1981,7 +2016,7 @@ serve(async (req) => {
         
         const sent = await sendWhatsApp(contact.phone, message, leadId)
         if (sent) {
-          console.log(`Daily collection sent for payment ${payment.id} to ${String(contact.phone).slice(-4)}`)
+          console.log(`Daily collection sent for payment ${payment.id} (D+${daysOverdue}) to ${String(contact.phone).slice(-4)}`)
           results.dailyCollections++
         }
       }

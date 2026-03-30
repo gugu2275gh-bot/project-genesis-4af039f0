@@ -1210,8 +1210,22 @@ serve(async (req) => {
       console.error('Multichat routing error (non-blocking):', routingError instanceof Error ? routingError.message : routingError)
     }
 
+    // ========== R8: RATE LIMITING ==========
+    // Count recent messages from this lead in the last 60 seconds
+    const { count: recentMsgCount } = await supabase
+      .from('mensagens_cliente')
+      .select('id', { count: 'exact', head: true })
+      .eq('id_lead', lead.id)
+      .not('mensagem_cliente', 'is', null)
+      .gte('created_at', new Date(Date.now() - 60000).toISOString())
+
+    const rateLimited = (recentMsgCount || 0) > 10
+    if (rateLimited) {
+      console.warn(`Rate limit: ${recentMsgCount} messages in 60s for lead ${lead.id}, skipping AI agent`)
+    }
+
     // ========== SMART REACTIVATION CHECK ==========
-    let skipAIAgent = false
+    let skipAIAgent = rateLimited
     let reactivationLeadOverride: string | null = null
 
     try {
@@ -1551,6 +1565,28 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
             })
 
             console.log('AI response sent and stored successfully')
+
+            // M3/R5: Auto-pause after handoff detection (Stage 8)
+            const handoffPatterns = [
+              'encaminhar para um especialista',
+              'encaminhar para um atendente',
+              'vou te encaminhar',
+              'transfer you to',
+              'te voy a transferir',
+              'derivar tu caso',
+              'um especialista vai',
+              'a specialist will',
+              'un especialista va',
+            ]
+            const isHandoff = handoffPatterns.some(p => aiResponse.toLowerCase().includes(p))
+            if (isHandoff) {
+              await supabase.from('mensagens_cliente').insert({
+                id_lead: lead.id,
+                mensagem_IA: '🤖 Handoff automático — IA pausada após encaminhamento ao atendente.',
+                origem: 'SISTEMA',
+              })
+              console.log('Auto-pause: AI handoff detected, inserting SISTEMA marker to pause AI')
+            }
           } catch (sendErr) {
             console.error('Failed to send AI response via Twilio:', sendErr instanceof Error ? sendErr.message : sendErr)
           }
