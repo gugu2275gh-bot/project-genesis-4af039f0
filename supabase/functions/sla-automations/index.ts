@@ -1468,7 +1468,7 @@ serve(async (req) => {
           id, description, internal_deadline_date, official_deadline_date,
           service_cases!inner (assigned_to_user_id, client_user_id, opportunities!inner (leads!inner (id, contacts!inner (full_name, phone))))
         `)
-        .eq('status', 'PENDENTE')
+        .eq('status', 'ABERTA')
 
       for (const req of urgentRequirements || []) {
         const caseData = req.service_cases as unknown as { 

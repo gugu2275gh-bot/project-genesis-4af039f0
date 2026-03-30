@@ -1558,11 +1558,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
       console.log(`AI agent skipped: botEnabled=${botEnabled}, hasGeminiKey=${!!geminiApiKey}, pausedByHuman=${aiPausedByHuman}, skipReactivation=${skipAIAgent}`)
     }
 
-    // Update webhook log as processed
-    await supabase
-      .from('webhook_logs')
-      .update({ processed: true })
-      .eq('raw_payload', payload)
+    // Update webhook log as processed (using ID from insert, not JSONB comparison)
 
     // Notify assigned user about new message
     if (lead.assigned_to_user_id) {

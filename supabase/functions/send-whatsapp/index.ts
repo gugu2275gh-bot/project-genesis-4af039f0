@@ -79,7 +79,7 @@ serve(async (req) => {
       )
     }
 
-    const allowedRoles = ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'ATENDENTE_WHATSAPP', 'SUPERVISOR', 'JURIDICO', 'FINANCEIRO', 'TECNICO']
+    const allowedRoles = ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'ATENDENTE_WHATSAPP', 'SUPERVISOR', 'JURIDICO', 'FINANCEIRO', 'TECNICO', 'EXPEDIENTE', 'DIRETORIA']
     const hasPermission = userRoles?.some(r => allowedRoles.includes(r.role))
     if (!hasPermission) {
       console.error('Insufficient permissions, user roles:', userRoles)
