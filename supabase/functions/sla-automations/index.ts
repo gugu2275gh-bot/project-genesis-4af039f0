@@ -46,6 +46,15 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     const automationType: AutomationType = body.automation_type || 'ALL'
     
+    // R3: Health check endpoint — returns available automations and status
+    if (body.health_check === true) {
+      return new Response(JSON.stringify({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        available_automations: ['WELCOME', 'REENGAGEMENT', 'ARCHIVE', 'CONTRACT_REMINDERS', 'PAYMENT_PRE', 'PAYMENT_POST', 'DAILY_COLLECTION', 'DOCUMENT_REMINDERS', 'ONBOARDING', 'TIE_PICKUP', 'TECHNICAL', 'LEGAL', 'REQUIREMENTS', 'PROTOCOL', 'INITIAL_CONTACT', 'POST_PROTOCOL_DOCS', 'HUELLAS'],
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
     console.log(`SLA Automations starting with filter: ${automationType}`)
     
     // Helper to check if a specific automation should run
