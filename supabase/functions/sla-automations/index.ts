@@ -13,7 +13,7 @@ interface SLAConfig {
 
 // Twilio WhatsApp Gateway
 const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio'
-const TWILIO_FROM_NUMBER = 'whatsapp:+14155238886' // Sandbox number
+const TWILIO_FROM_NUMBER = 'whatsapp:+17622384371'
 
 // Automation types available for filtering
 type AutomationType = 
