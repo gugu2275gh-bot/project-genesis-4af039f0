@@ -192,6 +192,31 @@ export function ContractNotesSection({ contractId }: ContractNotesSectionProps) 
           </div>
         )}
       </CardContent>
+
+      <AlertDialog open={deletingNoteId !== null} onOpenChange={(open) => !open && setDeletingNoteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover nota</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja remover esta nota? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deletingNoteId) {
+                  deleteNote.mutate(deletingNoteId);
+                  setDeletingNoteId(null);
+                }
+              }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
