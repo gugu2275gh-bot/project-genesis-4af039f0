@@ -1,3 +1,19 @@
+/**
+ * SLA Automations — Monolithic Edge Function (M2 documented)
+ * 
+ * This function handles 18+ automation types, filtered via `automation_type` parameter.
+ * Use `{ "health_check": true }` to check status.
+ * 
+ * Available automation_type values:
+ *   ALL, WELCOME, REENGAGEMENT, ARCHIVE, CONTRACT_REMINDERS,
+ *   PAYMENT_PRE, PAYMENT_POST, DAILY_COLLECTION, DOCUMENT_REMINDERS,
+ *   ONBOARDING, TIE_PICKUP, TECHNICAL, LEGAL, REQUIREMENTS,
+ *   PROTOCOL, INITIAL_CONTACT, POST_PROTOCOL_DOCS, HUELLAS
+ * 
+ * Recommended pg_cron schedule:
+ *   - Every 15 min: { "automation_type": "ALL" }
+ *   - Or split by type for granular control (e.g., PAYMENT_PRE at 9h, WELCOME every 5 min)
+ */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
