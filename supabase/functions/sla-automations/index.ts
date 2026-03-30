@@ -385,7 +385,7 @@ serve(async (req) => {
             leads!inner (id, contacts!inner (full_name, phone))
           )
         `)
-        .eq('status', 'ENVIADO')
+        .eq('status', 'APROVADO')
 
       for (const contract of pendingContracts || []) {
         const createdAt = new Date(contract.created_at)
