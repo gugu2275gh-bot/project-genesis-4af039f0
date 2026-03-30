@@ -34,18 +34,18 @@ const navItems: NavItem[] = [
     label: 'CRM', 
     href: '/crm', 
     icon: Users, 
-    roles: ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'JURIDICO', 'EXPEDIENTE'],
+    roles: ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA', 'ATENCAO_CLIENTE', 'ATENDENTE_WHATSAPP', 'JURIDICO', 'EXPEDIENTE'],
     children: [
       { label: 'Leads', href: '/crm/leads' },
       { label: 'Oportunidades', href: '/crm/opportunities' },
     ]
   },
-  { label: 'Ficha do Cliente', href: '/crm/contacts', icon: FileText, roles: ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'EXPEDIENTE'] },
+  { label: 'Ficha do Cliente', href: '/crm/contacts', icon: FileText, roles: ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA', 'ATENCAO_CLIENTE', 'EXPEDIENTE'] },
   { 
     label: 'Financeiro', 
     href: '/finance', 
     icon: CreditCard, 
-    roles: ['ADMIN', 'MANAGER', 'FINANCEIRO', 'JURIDICO', 'ATENCAO_CLIENTE'],
+    roles: ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA', 'FINANCEIRO', 'JURIDICO', 'ATENCAO_CLIENTE'],
     children: [
       { label: 'Contratos', href: '/contracts' },
       { label: 'Pagamentos', href: '/finance' },
@@ -55,11 +55,11 @@ const navItems: NavItem[] = [
       { label: 'Relatórios', href: '/finance/reports' },
     ]
   },
-  { label: 'Casos Técnicos', href: '/cases', icon: Briefcase, roles: ['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'TECNICO'] },
-  { label: 'Jurídico', href: '/legal', icon: Scale, roles: ['ADMIN', 'MANAGER', 'JURIDICO'] },
+  { label: 'Casos Técnicos', href: '/cases', icon: Briefcase, roles: ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA', 'ATENCAO_CLIENTE', 'TECNICO'] },
+  { label: 'Jurídico', href: '/legal', icon: Scale, roles: ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA', 'JURIDICO'] },
   { label: 'Tarefas', href: '/tasks', icon: CheckSquare },
-  { label: 'Relatórios', href: '/reports', icon: BarChart3, roles: ['ADMIN', 'MANAGER'] },
-  { label: 'Configurações', href: '/settings', icon: Settings, roles: ['ADMIN', 'MANAGER'] },
+  { label: 'Relatórios', href: '/reports', icon: BarChart3, roles: ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA'] },
+  { label: 'Configurações', href: '/settings', icon: Settings, roles: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
 ];
 
 export function Sidebar() {

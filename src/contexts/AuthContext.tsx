@@ -139,13 +139,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
-    // When requesting password recovery from a Lovable preview domain, the email link can open
-    // an interstitial screen. Use the published URL so users land directly on /reset-password.
     const origin = window.location.origin;
-    const publishedOrigin = 'https://cbasesoria.lovable.app';
-    const isLovablePreview = origin.includes('lovableproject.com') || origin.includes('id-preview--');
+    const productionOrigin = 'https://cbasesoria.lovable.app';
+    const isPreviewDomain = origin.includes('lovableproject.com') || origin.includes('id-preview--');
 
-    const redirectBase = isLovablePreview ? publishedOrigin : origin;
+    const redirectBase = isPreviewDomain ? productionOrigin : origin;
     const redirectUrl = `${redirectBase}/reset-password`;
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -168,7 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const isStaff = (): boolean => {
-    return hasAnyRole(['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'JURIDICO', 'FINANCEIRO', 'TECNICO', 'EXPEDIENTE']);
+    return hasAnyRole(['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA', 'ATENCAO_CLIENTE', 'ATENDENTE_WHATSAPP', 'JURIDICO', 'FINANCEIRO', 'TECNICO', 'EXPEDIENTE']);
   };
 
   const isClient = (): boolean => {
