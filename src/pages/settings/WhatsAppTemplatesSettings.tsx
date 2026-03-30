@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Send, RefreshCw, Edit, AlertCircle, CheckCircle2, Clock, XCircle, FileText, Plus, X, ChevronDown, ChevronRight, ScrollText } from 'lucide-react';
+import { Send, RefreshCw, Edit, AlertCircle, CheckCircle2, Clock, XCircle, FileText, Plus, X, ChevronDown, ChevronRight, ScrollText, Trash2 } from 'lucide-react';
 import { useWhatsAppTemplates } from '@/hooks/useWhatsAppTemplates';
 
 const STATUS_CONFIG: Record<string, { label: string; badgeClass: string; dotClass: string; icon: typeof Clock }> = {
@@ -44,7 +44,7 @@ const LANGUAGE_OPTIONS = [
 ];
 
 export default function WhatsAppTemplatesSettings() {
-  const { templates, isLoading, submitTemplates, checkStatus, updateTemplate, createTemplate, templateLogs, logsLoading } = useWhatsAppTemplates();
+  const { templates, isLoading, submitTemplates, checkStatus, updateTemplate, createTemplate, deleteTemplate, templateLogs, logsLoading } = useWhatsAppTemplates();
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const [editBody, setEditBody] = useState('');
   const [showNewDialog, setShowNewDialog] = useState(false);
@@ -226,6 +226,19 @@ export default function WhatsAppTemplatesSettings() {
                             disabled={submitTemplates.isPending}
                           >
                             <Send className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (confirm('Tem certeza que deseja excluir este template?')) {
+                                deleteTemplate.mutate(template.id);
+                              }
+                            }}
+                            disabled={deleteTemplate.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
