@@ -122,7 +122,7 @@ export default function WhatsAppTemplatesSettings() {
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.badgeClass}`}>
                           <StatusIcon className="h-3 w-3" />
                           {statusConfig.label}
-                        </Badge>
+                        </span>
                         {template.rejection_reason && (
                           <p className="text-xs text-destructive mt-1">{template.rejection_reason}</p>
                         )}
