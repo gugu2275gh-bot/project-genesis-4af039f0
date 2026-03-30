@@ -199,10 +199,10 @@ export default function DocumentTypesManagement() {
     }
   };
 
+  const [deletingDocTypeId, setDeletingDocTypeId] = useState<string | null>(null);
+
   const handleDelete = (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este tipo de documento?")) {
-      deleteMutation.mutate(id);
-    }
+    setDeletingDocTypeId(id);
   };
 
   // Group documents by service type
