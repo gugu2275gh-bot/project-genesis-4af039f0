@@ -9,12 +9,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Send, RefreshCw, Edit, AlertCircle, CheckCircle2, Clock, XCircle, FileText } from 'lucide-react';
 import { useWhatsAppTemplates } from '@/hooks/useWhatsAppTemplates';
 
-const STATUS_CONFIG: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof Clock }> = {
-  draft: { label: 'Rascunho', variant: 'outline', icon: FileText },
-  pending: { label: 'Pendente', variant: 'secondary', icon: Clock },
-  approved: { label: 'Aprovado', variant: 'default', icon: CheckCircle2 },
-  rejected: { label: 'Rejeitado', variant: 'destructive', icon: XCircle },
-  error: { label: 'Erro', variant: 'destructive', icon: AlertCircle },
+const STATUS_CONFIG: Record<string, { label: string; badgeClass: string; dotClass: string; icon: typeof Clock }> = {
+  draft: { label: 'Rascunho', badgeClass: 'bg-blue-50 text-blue-600 border border-blue-200', dotClass: 'bg-blue-500', icon: FileText },
+  pending: { label: 'Pendente', badgeClass: 'bg-blue-100 text-blue-700 border border-blue-300', dotClass: 'bg-blue-500', icon: Clock },
+  approved: { label: 'Aprovado', badgeClass: 'bg-green-100 text-green-700 border border-green-300', dotClass: 'bg-green-500', icon: CheckCircle2 },
+  rejected: { label: 'Rejeitado', badgeClass: 'bg-red-100 text-red-700 border border-red-300', dotClass: 'bg-red-500', icon: XCircle },
+  error: { label: 'Erro', badgeClass: 'bg-red-100 text-red-700 border border-red-300', dotClass: 'bg-red-500', icon: AlertCircle },
 };
 
 const AUTOMATION_LABELS: Record<string, string> = {
@@ -110,16 +110,19 @@ export default function WhatsAppTemplatesSettings() {
                   return (
                     <TableRow key={template.id}>
                       <TableCell className="font-medium">
-                        {AUTOMATION_LABELS[template.automation_type] || template.automation_type}
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${statusConfig.dotClass}`} />
+                          {AUTOMATION_LABELS[template.automation_type] || template.automation_type}
+                        </div>
                       </TableCell>
                       <TableCell className="max-w-[300px] truncate text-muted-foreground text-xs">
                         {template.body_text}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={statusConfig.variant} className="gap-1">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.badgeClass}`}>
                           <StatusIcon className="h-3 w-3" />
                           {statusConfig.label}
-                        </Badge>
+                        </span>
                         {template.rejection_reason && (
                           <p className="text-xs text-destructive mt-1">{template.rejection_reason}</p>
                         )}
