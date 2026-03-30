@@ -124,7 +124,7 @@ serve(async (req) => {
       }
     })
 
-    // Fetch message templates
+    // Fetch message templates (system_config fallback text)
     const { data: templates } = await supabase
       .from('system_config')
       .select('key, value')
@@ -155,6 +155,21 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY || !TWILIO_API_KEY) {
       console.warn('Twilio credentials not configured - WhatsApp messages will be skipped')
     }
+
+    // Load approved WhatsApp Content Templates
+    const { data: whatsappTemplates } = await supabase
+      .from('whatsapp_templates')
+      .select('automation_type, content_sid, variables, is_active')
+      .eq('status', 'approved')
+      .eq('is_active', true)
+
+    const approvedTemplates: Record<string, { content_sid: string; variables: string[] }> = {}
+    whatsappTemplates?.forEach((t: { automation_type: string; content_sid: string; variables: string[] }) => {
+      if (t.content_sid) {
+        approvedTemplates[t.automation_type] = { content_sid: t.content_sid, variables: t.variables || [] }
+      }
+    })
+    console.log(`Loaded ${Object.keys(approvedTemplates).length} approved WhatsApp templates`)
 
     // Helper to send WhatsApp via Twilio Gateway
     async function sendWhatsApp(phone: string | number, message: string, leadId?: string) {
