@@ -1210,8 +1210,22 @@ serve(async (req) => {
       console.error('Multichat routing error (non-blocking):', routingError instanceof Error ? routingError.message : routingError)
     }
 
+    // ========== R8: RATE LIMITING ==========
+    // Count recent messages from this lead in the last 60 seconds
+    const { count: recentMsgCount } = await supabase
+      .from('mensagens_cliente')
+      .select('id', { count: 'exact', head: true })
+      .eq('id_lead', lead.id)
+      .not('mensagem_cliente', 'is', null)
+      .gte('created_at', new Date(Date.now() - 60000).toISOString())
+
+    const rateLimited = (recentMsgCount || 0) > 10
+    if (rateLimited) {
+      console.warn(`Rate limit: ${recentMsgCount} messages in 60s for lead ${lead.id}, skipping AI agent`)
+    }
+
     // ========== SMART REACTIVATION CHECK ==========
-    let skipAIAgent = false
+    let skipAIAgent = rateLimited
     let reactivationLeadOverride: string | null = null
 
     try {
