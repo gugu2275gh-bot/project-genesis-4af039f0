@@ -171,8 +171,8 @@ serve(async (req) => {
     })
     console.log(`Loaded ${Object.keys(approvedTemplates).length} approved WhatsApp templates`)
 
-    // Helper to send WhatsApp via Twilio Gateway
-    async function sendWhatsApp(phone: string | number, message: string, leadId?: string) {
+    // Helper to send WhatsApp via Twilio Gateway (with template support)
+    async function sendWhatsApp(phone: string | number, message: string, leadId?: string, templateType?: string, templateVars?: Record<string, string>) {
       try {
         if (!LOVABLE_API_KEY || !TWILIO_API_KEY) {
           console.warn('Twilio credentials not configured, skipping send')
@@ -181,6 +181,37 @@ serve(async (req) => {
 
         const phoneStr = String(phone).replace(/\D/g, '')
         
+        // Check if we have an approved template for this type
+        const approved = templateType ? approvedTemplates[templateType] : null
+        
+        let bodyParams: Record<string, string>
+        if (approved) {
+          // Use ContentSid + ContentVariables
+          const vars: Record<string, string> = {}
+          if (templateVars) {
+            approved.variables.forEach((varName: string, idx: number) => {
+              vars[String(idx + 1)] = templateVars[varName] || ''
+            })
+          }
+          bodyParams = {
+            To: `whatsapp:+${phoneStr}`,
+            From: TWILIO_FROM_NUMBER,
+            ContentSid: approved.content_sid,
+            ContentVariables: JSON.stringify(vars),
+          }
+          console.log(`Sending template ${templateType} to ${phoneStr.slice(-4)}`)
+        } else {
+          // Freeform fallback (only works within 24h window)
+          bodyParams = {
+            To: `whatsapp:+${phoneStr}`,
+            From: TWILIO_FROM_NUMBER,
+            Body: message,
+          }
+          if (templateType) {
+            console.log(`No approved template for ${templateType}, using freeform`)
+          }
+        }
+
         const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
           method: 'POST',
           headers: {
@@ -188,15 +219,12 @@ serve(async (req) => {
             'X-Connection-Api-Key': TWILIO_API_KEY,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
-          body: new URLSearchParams({
-            To: `whatsapp:+${phoneStr}`,
-            From: TWILIO_FROM_NUMBER,
-            Body: message,
-          }),
+          body: new URLSearchParams(bodyParams),
         })
         
         if (!response.ok) {
-          console.error('Twilio Gateway error:', await response.text())
+          const errText = await response.text()
+          console.error('Twilio Gateway error:', errText)
           return false
         }
         
@@ -209,7 +237,6 @@ serve(async (req) => {
             mensagem_IA: message,
             origem: 'SISTEMA',
           })
-          console.log('Message registered in mensagens_cliente for lead:', leadId)
         }
         
         return true
