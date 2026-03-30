@@ -7,7 +7,7 @@ const corsHeaders = {
 }
 
 const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio'
-const TWILIO_FROM_NUMBER = 'whatsapp:+14155238886' // Sandbox number
+const TWILIO_FROM_NUMBER = 'whatsapp:+17622384371'
 
 serve(async (req) => {
   console.log('send-whatsapp invoked, method:', req.method)
