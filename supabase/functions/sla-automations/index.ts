@@ -233,8 +233,24 @@ serve(async (req) => {
         
         if (!response.ok) {
           const errText = await response.text()
-          console.error('Twilio Gateway error:', errText)
-          return false
+          console.error('Twilio Gateway error (attempt 1):', errText)
+          
+          // R6: Retry with backoff (1 retry after 2s)
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          const retryResponse = await fetch(`${GATEWAY_URL}/Messages.json`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'X-Connection-Api-Key': TWILIO_API_KEY,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams(bodyParams),
+          })
+          if (!retryResponse.ok) {
+            const retryErr = await retryResponse.text()
+            console.error('Twilio Gateway error (attempt 2):', retryErr)
+            return false
+          }
         }
         
         console.log('WhatsApp sent via Twilio to:', phoneStr.slice(-4))
