@@ -79,7 +79,7 @@ export default function WhatsAppTemplatesSettings() {
               </Button>
               <Button
                 size="sm"
-                onClick={() => submitTemplates.mutate()}
+                onClick={() => submitTemplates.mutate('ALL')}
                 disabled={submitTemplates.isPending}
               >
                 <Send className="h-4 w-4 mr-2" />
