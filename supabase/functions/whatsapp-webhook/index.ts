@@ -863,11 +863,11 @@ serve(async (req) => {
     console.log('Processing message from:', phoneNumber)
 
     // Find existing contact by phone
-    let contact: { id: string; full_name: string } | null = null
+    let contact: { id: string; full_name: string; preferred_language: string | null } | null = null
     // Use .limit(1) instead of .single() to avoid error when duplicate contacts exist for same phone
     const { data: existingContacts } = await supabase
       .from('contacts')
-      .select('id, full_name')
+      .select('id, full_name, preferred_language')
       .eq('phone', phoneNumber)
       .order('created_at', { ascending: true })
       .limit(1)
