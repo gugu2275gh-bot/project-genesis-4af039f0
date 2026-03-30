@@ -44,10 +44,12 @@ const LANGUAGE_OPTIONS = [
 ];
 
 export default function WhatsAppTemplatesSettings() {
-  const { templates, isLoading, submitTemplates, checkStatus, updateTemplate, createTemplate } = useWhatsAppTemplates();
+  const { templates, isLoading, submitTemplates, checkStatus, updateTemplate, createTemplate, templateLogs, logsLoading } = useWhatsAppTemplates();
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const [editBody, setEditBody] = useState('');
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [logFilter, setLogFilter] = useState<string>('all');
 
   // New template form state
   const [newName, setNewName] = useState('');
