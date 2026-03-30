@@ -53,6 +53,7 @@ const noteTypeConfig = {
 export function ContractNotesSection({ contractId }: ContractNotesSectionProps) {
   const { notes, isLoading, addNote, deleteNote } = useContractNotes(contractId);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
   const [newNote, setNewNote] = useState("");
   const [noteType, setNoteType] = useState<'ACORDO' | 'OBSERVACAO' | 'HISTORICO'>('ACORDO');
 
