@@ -1366,8 +1366,13 @@ serve(async (req) => {
         const isFirstInteraction = (messageCount || 0) <= 1 // 1 because we just inserted the current message
 
         const currentCustomerMessage = String(message.body || '')
-        const detectedChatLanguage = detectChatLanguage(currentCustomerMessage)
-        console.log('Detected chat language:', detectedChatLanguage, 'message sample:', currentCustomerMessage.slice(0, 80))
+        // R5: Use preferred_language from contact as initial hint for language detection
+        const preferredLangMap: Record<string, ChatLanguage> = { 'pt': 'pt-BR', 'pt-BR': 'pt-BR', 'es': 'es', 'en': 'en', 'fr': 'fr' }
+        const langHint = contact.preferred_language ? preferredLangMap[contact.preferred_language] : null
+        const detectedFromText = detectChatLanguage(currentCustomerMessage)
+        // If text detection returns default (pt-BR) but contact has a different preferred language, use the hint
+        const detectedChatLanguage: ChatLanguage = (detectedFromText === 'pt-BR' && langHint && langHint !== 'pt-BR') ? langHint : detectedFromText
+        console.log('Detected chat language:', detectedChatLanguage, 'hint:', contact.preferred_language, 'message sample:', currentCustomerMessage.slice(0, 80))
 
         // Build system prompt with structured conversational flow
         const defaultSystemPrompt = `Você é a assistente virtual da CB Asesoría, uma empresa especializada em assessoria de imigração na Espanha.
