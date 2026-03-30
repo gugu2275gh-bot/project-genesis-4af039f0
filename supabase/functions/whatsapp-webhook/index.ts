@@ -883,7 +883,7 @@ serve(async (req) => {
           full_name: message.name || `WhatsApp ${phoneNumber.slice(-4)}`,
           origin_channel: 'WHATSAPP',
         })
-        .select('id, full_name')
+        .select('id, full_name, preferred_language')
         .single()
 
       if (contactError || !newContact) {

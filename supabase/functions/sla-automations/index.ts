@@ -477,7 +477,7 @@ serve(async (req) => {
       const { data: upcomingPayments } = await supabase
         .from('payments')
         .select(`
-          id, due_date, amount, currency,
+          id, due_date, amount, currency, contract_id,
           opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
         `)
         .eq('status', 'PENDENTE')
