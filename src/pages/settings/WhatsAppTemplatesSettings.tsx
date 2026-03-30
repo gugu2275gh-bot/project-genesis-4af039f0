@@ -9,12 +9,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Send, RefreshCw, Edit, AlertCircle, CheckCircle2, Clock, XCircle, FileText } from 'lucide-react';
 import { useWhatsAppTemplates } from '@/hooks/useWhatsAppTemplates';
 
-const STATUS_CONFIG: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof Clock }> = {
-  draft: { label: 'Rascunho', variant: 'outline', icon: FileText },
-  pending: { label: 'Pendente', variant: 'secondary', icon: Clock },
-  approved: { label: 'Aprovado', variant: 'default', icon: CheckCircle2 },
-  rejected: { label: 'Rejeitado', variant: 'destructive', icon: XCircle },
-  error: { label: 'Erro', variant: 'destructive', icon: AlertCircle },
+const STATUS_CONFIG: Record<string, { label: string; badgeClass: string; dotClass: string; icon: typeof Clock }> = {
+  draft: { label: 'Rascunho', badgeClass: 'bg-blue-50 text-blue-600 border border-blue-200', dotClass: 'bg-blue-500', icon: FileText },
+  pending: { label: 'Pendente', badgeClass: 'bg-blue-100 text-blue-700 border border-blue-300', dotClass: 'bg-blue-500', icon: Clock },
+  approved: { label: 'Aprovado', badgeClass: 'bg-green-100 text-green-700 border border-green-300', dotClass: 'bg-green-500', icon: CheckCircle2 },
+  rejected: { label: 'Rejeitado', badgeClass: 'bg-red-100 text-red-700 border border-red-300', dotClass: 'bg-red-500', icon: XCircle },
+  error: { label: 'Erro', badgeClass: 'bg-red-100 text-red-700 border border-red-300', dotClass: 'bg-red-500', icon: AlertCircle },
 };
 
 const AUTOMATION_LABELS: Record<string, string> = {
