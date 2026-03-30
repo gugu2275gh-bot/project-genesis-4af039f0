@@ -22,6 +22,7 @@ import ServiceTypesManagement from './ServiceTypesManagement';
 import UserProfilesManagement from './UserProfilesManagement';
 import DatabaseERD from './DatabaseERD';
 import PaymentSettings from './PaymentSettings';
+import WhatsAppTemplatesSettings from './WhatsAppTemplatesSettings';
 
 const TABLE_TABS = ['profiles', 'sectors', 'service-types', 'payment-settings'] as const;
 
