@@ -2053,6 +2053,22 @@ serve(async (req) => {
       }
     }
 
+    // =====================================================
+    // R7: CLEANUP — Remove old whatsapp_template_logs (>90 days)
+    // =====================================================
+    if (shouldRun('ALL')) {
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
+      const { error: cleanupError } = await supabase
+        .from('whatsapp_template_logs')
+        .delete()
+        .lt('created_at', ninetyDaysAgo)
+      if (cleanupError) {
+        console.warn('Template logs cleanup error:', cleanupError.message)
+      } else {
+        console.log('Template logs cleanup completed (>90 days)')
+      }
+    }
+
     console.log(`SLA Automations completed with filter '${automationType}':`, results)
 
     return new Response(JSON.stringify({
