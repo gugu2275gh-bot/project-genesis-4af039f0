@@ -670,7 +670,7 @@ async function sendWhatsAppMessage(
     throw new Error('Twilio Gateway not configured')
   }
 
-  const TWILIO_FROM_NUMBER = 'whatsapp:+17622384371'
+  const TWILIO_FROM_NUMBER = 'whatsapp:+553186262606'
   console.log('Sending via Twilio Gateway:', { phone })
 
   const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
