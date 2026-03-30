@@ -227,6 +227,19 @@ export default function WhatsAppTemplatesSettings() {
                           >
                             <Send className="h-4 w-4" />
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (confirm('Tem certeza que deseja excluir este template?')) {
+                                deleteTemplate.mutate(template.id);
+                              }
+                            }}
+                            disabled={deleteTemplate.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
