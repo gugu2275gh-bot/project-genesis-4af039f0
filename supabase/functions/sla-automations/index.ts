@@ -554,7 +554,7 @@ serve(async (req) => {
               const msg = templateMap.template_payment_reminder
                 .replace('{nome}', contact.full_name)
                 .replace('{valor}', String(payment.amount))
-              await sendWhatsApp(contact.phone, msg, leadId)
+              await sendWhatsApp(contact.phone, msg, leadId, 'payment_post_d1', { nome: contact.full_name, valor: String(payment.amount) })
             }
             results.paymentPostReminders++
           }
