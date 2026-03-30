@@ -1551,6 +1551,28 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
             })
 
             console.log('AI response sent and stored successfully')
+
+            // M3/R5: Auto-pause after handoff detection (Stage 8)
+            const handoffPatterns = [
+              'encaminhar para um especialista',
+              'encaminhar para um atendente',
+              'vou te encaminhar',
+              'transfer you to',
+              'te voy a transferir',
+              'derivar tu caso',
+              'um especialista vai',
+              'a specialist will',
+              'un especialista va',
+            ]
+            const isHandoff = handoffPatterns.some(p => aiResponse.toLowerCase().includes(p))
+            if (isHandoff) {
+              await supabase.from('mensagens_cliente').insert({
+                id_lead: lead.id,
+                mensagem_IA: '🤖 Handoff automático — IA pausada após encaminhamento ao atendente.',
+                origem: 'SISTEMA',
+              })
+              console.log('Auto-pause: AI handoff detected, inserting SISTEMA marker to pause AI')
+            }
           } catch (sendErr) {
             console.error('Failed to send AI response via Twilio:', sendErr instanceof Error ? sendErr.message : sendErr)
           }
