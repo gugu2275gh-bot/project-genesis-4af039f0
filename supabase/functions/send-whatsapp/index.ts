@@ -136,8 +136,51 @@ serve(async (req) => {
     console.log('Twilio Gateway response:', response.status, responseData)
 
     if (!response.ok) {
-      console.error('Twilio Gateway error:', responseData)
-      throw new Error(`Twilio API retornou status ${response.status}: ${responseData}`)
+      // Check for 63016 error (outside 24h window) - try template fallback
+      if (responseData.includes('63016')) {
+        console.log('Error 63016 detected, attempting template fallback...')
+        
+        // Look for a generic approved template
+        const { data: fallbackTemplate } = await adminSupabase
+          .from('whatsapp_templates')
+          .select('content_sid')
+          .eq('status', 'approved')
+          .eq('is_active', true)
+          .eq('automation_type', 'welcome')
+          .single()
+
+        if (fallbackTemplate?.content_sid) {
+          console.log('Using fallback template:', fallbackTemplate.content_sid)
+          const fallbackResponse = await fetch(`${GATEWAY_URL}/Messages.json`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'X-Connection-Api-Key': TWILIO_API_KEY,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              To: `whatsapp:+${phoneStr}`,
+              From: TWILIO_FROM_NUMBER,
+              ContentSid: fallbackTemplate.content_sid,
+              ContentVariables: JSON.stringify({ "1": "Cliente" }),
+            }),
+          })
+
+          const fallbackData = await fallbackResponse.text()
+          if (fallbackResponse.ok) {
+            console.log('Template fallback sent successfully')
+            // Continue to context update below
+          } else {
+            console.error('Template fallback also failed:', fallbackData)
+            throw new Error(`Fora da janela de 24h e template de fallback falhou: ${fallbackData}`)
+          }
+        } else {
+          throw new Error('Fora da janela de 24h do WhatsApp. Nenhum template aprovado disponível para fallback. Configure templates em Configurações > WhatsApp.')
+        }
+      } else {
+        console.error('Twilio Gateway error:', responseData)
+        throw new Error(`Twilio API retornou status ${response.status}: ${responseData}`)
+      }
     }
 
     // ========== UPDATE CUSTOMER CHAT CONTEXT ==========

@@ -2837,6 +2837,48 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_templates: {
+        Row: {
+          automation_type: string
+          body_text: string
+          content_sid: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          rejection_reason: string | null
+          status: string
+          template_name: string
+          updated_at: string | null
+          variables: Json | null
+        }
+        Insert: {
+          automation_type: string
+          body_text: string
+          content_sid?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          rejection_reason?: string | null
+          status?: string
+          template_name: string
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Update: {
+          automation_type?: string
+          body_text?: string
+          content_sid?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          rejection_reason?: string | null
+          status?: string
+          template_name?: string
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

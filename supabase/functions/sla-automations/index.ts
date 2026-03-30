@@ -124,7 +124,7 @@ serve(async (req) => {
       }
     })
 
-    // Fetch message templates
+    // Fetch message templates (system_config fallback text)
     const { data: templates } = await supabase
       .from('system_config')
       .select('key, value')
@@ -156,8 +156,23 @@ serve(async (req) => {
       console.warn('Twilio credentials not configured - WhatsApp messages will be skipped')
     }
 
-    // Helper to send WhatsApp via Twilio Gateway
-    async function sendWhatsApp(phone: string | number, message: string, leadId?: string) {
+    // Load approved WhatsApp Content Templates
+    const { data: whatsappTemplates } = await supabase
+      .from('whatsapp_templates')
+      .select('automation_type, content_sid, variables, is_active')
+      .eq('status', 'approved')
+      .eq('is_active', true)
+
+    const approvedTemplates: Record<string, { content_sid: string; variables: string[] }> = {}
+    whatsappTemplates?.forEach((t: { automation_type: string; content_sid: string; variables: string[] }) => {
+      if (t.content_sid) {
+        approvedTemplates[t.automation_type] = { content_sid: t.content_sid, variables: t.variables || [] }
+      }
+    })
+    console.log(`Loaded ${Object.keys(approvedTemplates).length} approved WhatsApp templates`)
+
+    // Helper to send WhatsApp via Twilio Gateway (with template support)
+    async function sendWhatsApp(phone: string | number, message: string, leadId?: string, templateType?: string, templateVars?: Record<string, string>) {
       try {
         if (!LOVABLE_API_KEY || !TWILIO_API_KEY) {
           console.warn('Twilio credentials not configured, skipping send')
@@ -166,6 +181,37 @@ serve(async (req) => {
 
         const phoneStr = String(phone).replace(/\D/g, '')
         
+        // Check if we have an approved template for this type
+        const approved = templateType ? approvedTemplates[templateType] : null
+        
+        let bodyParams: Record<string, string>
+        if (approved) {
+          // Use ContentSid + ContentVariables
+          const vars: Record<string, string> = {}
+          if (templateVars) {
+            approved.variables.forEach((varName: string, idx: number) => {
+              vars[String(idx + 1)] = templateVars[varName] || ''
+            })
+          }
+          bodyParams = {
+            To: `whatsapp:+${phoneStr}`,
+            From: TWILIO_FROM_NUMBER,
+            ContentSid: approved.content_sid,
+            ContentVariables: JSON.stringify(vars),
+          }
+          console.log(`Sending template ${templateType} to ${phoneStr.slice(-4)}`)
+        } else {
+          // Freeform fallback (only works within 24h window)
+          bodyParams = {
+            To: `whatsapp:+${phoneStr}`,
+            From: TWILIO_FROM_NUMBER,
+            Body: message,
+          }
+          if (templateType) {
+            console.log(`No approved template for ${templateType}, using freeform`)
+          }
+        }
+
         const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
           method: 'POST',
           headers: {
@@ -173,15 +219,12 @@ serve(async (req) => {
             'X-Connection-Api-Key': TWILIO_API_KEY,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
-          body: new URLSearchParams({
-            To: `whatsapp:+${phoneStr}`,
-            From: TWILIO_FROM_NUMBER,
-            Body: message,
-          }),
+          body: new URLSearchParams(bodyParams),
         })
         
         if (!response.ok) {
-          console.error('Twilio Gateway error:', await response.text())
+          const errText = await response.text()
+          console.error('Twilio Gateway error:', errText)
           return false
         }
         
@@ -194,7 +237,6 @@ serve(async (req) => {
             mensagem_IA: message,
             origem: 'SISTEMA',
           })
-          console.log('Message registered in mensagens_cliente for lead:', leadId)
         }
         
         return true
@@ -251,7 +293,7 @@ serve(async (req) => {
             origin_bot: true,
           })
 
-          await sendWhatsApp(contact.phone, message, lead.id)
+          await sendWhatsApp(contact.phone, message, lead.id, 'welcome', { nome: contact.full_name })
           results.welcomeMessages++
         }
       }
@@ -294,7 +336,7 @@ serve(async (req) => {
             origin_bot: true,
           })
 
-          await sendWhatsApp(contact.phone, message, lead.id)
+          await sendWhatsApp(contact.phone, message, lead.id, 'reengagement', { nome: contact.full_name })
           results.reengagements++
         }
       }
@@ -357,7 +399,7 @@ serve(async (req) => {
           if (!(await reminderAlreadySent('contract_reminders', contract.id, 'D1'))) {
             await supabase.from('contract_reminders').insert({ contract_id: contract.id, reminder_type: 'D1' })
             if (contact?.phone) {
-              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId)
+              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId, 'contract_reminder', { nome: contact.full_name })
             }
             results.contractReminders++
           }
@@ -368,7 +410,7 @@ serve(async (req) => {
           if (!(await reminderAlreadySent('contract_reminders', contract.id, 'D2'))) {
             await supabase.from('contract_reminders').insert({ contract_id: contract.id, reminder_type: 'D2' })
             if (contact?.phone) {
-              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId)
+              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId, 'contract_reminder', { nome: contact.full_name })
             }
             results.contractReminders++
           }
@@ -379,7 +421,7 @@ serve(async (req) => {
           if (!(await reminderAlreadySent('contract_reminders', contract.id, 'D3'))) {
             await supabase.from('contract_reminders').insert({ contract_id: contract.id, reminder_type: 'D3' })
             if (contact?.phone) {
-              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId)
+              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId, 'contract_reminder', { nome: contact.full_name })
             }
             results.contractReminders++
           }
@@ -434,7 +476,7 @@ serve(async (req) => {
               .replace('{nome}', contact.full_name)
               .replace('{valor}', String(payment.amount))
               .replace('{data}', payment.due_date)
-            await sendWhatsApp(contact.phone, msg, leadId)
+            await sendWhatsApp(contact.phone, msg, leadId, 'payment_pre_7d', { nome: contact.full_name, valor: String(payment.amount), data: payment.due_date })
             results.paymentPreReminders++
           }
         }
@@ -447,7 +489,7 @@ serve(async (req) => {
               .replace('{nome}', contact.full_name)
               .replace('{valor}', String(payment.amount))
               .replace('{data}', payment.due_date)
-            await sendWhatsApp(contact.phone, msg, leadId)
+            await sendWhatsApp(contact.phone, msg, leadId, 'payment_pre_48h', { nome: contact.full_name, valor: String(payment.amount), data: payment.due_date })
             
             // Notify FINANCEIRO team about upcoming payment
             const { data: financeUsers } = await supabase
@@ -475,7 +517,7 @@ serve(async (req) => {
             const msg = templateMap.template_payment_due_today
               .replace('{nome}', contact.full_name)
               .replace('{valor}', String(payment.amount))
-            await sendWhatsApp(contact.phone, msg, leadId)
+            await sendWhatsApp(contact.phone, msg, leadId, 'payment_due_today', { nome: contact.full_name, valor: String(payment.amount) })
             results.paymentPreReminders++
           }
         }
@@ -512,7 +554,7 @@ serve(async (req) => {
               const msg = templateMap.template_payment_reminder
                 .replace('{nome}', contact.full_name)
                 .replace('{valor}', String(payment.amount))
-              await sendWhatsApp(contact.phone, msg, leadId)
+              await sendWhatsApp(contact.phone, msg, leadId, 'payment_post_d1', { nome: contact.full_name, valor: String(payment.amount) })
             }
             results.paymentPostReminders++
           }
@@ -526,7 +568,7 @@ serve(async (req) => {
               const msg = templateMap.template_payment_reminder
                 .replace('{nome}', contact.full_name)
                 .replace('{valor}', String(payment.amount))
-              await sendWhatsApp(contact.phone, msg, leadId)
+              await sendWhatsApp(contact.phone, msg, leadId, 'payment_post_d3', { nome: contact.full_name, valor: String(payment.amount) })
             }
             // Alert managers
             const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
