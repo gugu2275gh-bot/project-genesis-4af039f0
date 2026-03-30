@@ -293,7 +293,7 @@ serve(async (req) => {
             origin_bot: true,
           })
 
-          await sendWhatsApp(contact.phone, message, lead.id)
+          await sendWhatsApp(contact.phone, message, lead.id, 'welcome', { nome: contact.full_name })
           results.welcomeMessages++
         }
       }
