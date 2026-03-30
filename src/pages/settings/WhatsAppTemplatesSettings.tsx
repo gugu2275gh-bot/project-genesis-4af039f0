@@ -110,7 +110,10 @@ export default function WhatsAppTemplatesSettings() {
                   return (
                     <TableRow key={template.id}>
                       <TableCell className="font-medium">
-                        {AUTOMATION_LABELS[template.automation_type] || template.automation_type}
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full shrink-0 ${statusConfig.dotClass}`} />
+                          {AUTOMATION_LABELS[template.automation_type] || template.automation_type}
+                        </div>
                       </TableCell>
                       <TableCell className="max-w-[300px] truncate text-muted-foreground text-xs">
                         {template.body_text}
