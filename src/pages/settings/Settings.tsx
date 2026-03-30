@@ -114,6 +114,10 @@ export default function Settings() {
             <Bell className="h-4 w-4" />
             <span className="hidden sm:inline">Notificações</span>
           </TabsTrigger>
+          <TabsTrigger value="whatsapp-templates" className="gap-2">
+            <MessageSquare className="h-4 w-4" />
+            <span className="hidden sm:inline">WhatsApp</span>
+          </TabsTrigger>
           <TabsTrigger value="system" className="gap-2">
             <SettingsIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Sistema</span>
