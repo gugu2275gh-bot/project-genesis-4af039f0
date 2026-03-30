@@ -60,6 +60,7 @@ export default function WhatsAppTemplatesSettings() {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [logFilter, setLogFilter] = useState<string>('all');
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
 
   // New template form state
   const [newName, setNewName] = useState('');
