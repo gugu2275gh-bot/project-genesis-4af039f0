@@ -414,6 +414,114 @@ export default function WhatsAppTemplatesSettings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Logs Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ScrollText className="h-5 w-5" />
+              Logs de Envio
+            </CardTitle>
+            <div className="flex gap-2">
+              <Select value={logFilter} onValueChange={setLogFilter}>
+                <SelectTrigger className="w-[140px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="success">Sucesso</SelectItem>
+                  <SelectItem value="error">Erro</SelectItem>
+                  <SelectItem value="skipped">Ignorado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {logsLoading ? (
+            <p className="text-muted-foreground text-sm">Carregando logs...</p>
+          ) : !templateLogs?.length ? (
+            <p className="text-muted-foreground text-sm">Nenhum log encontrado.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8"></TableHead>
+                  <TableHead>Data/Hora</TableHead>
+                  <TableHead>Template</TableHead>
+                  <TableHead>Ação</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>HTTP</TableHead>
+                  <TableHead>Content SID</TableHead>
+                  <TableHead>Erro</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {templateLogs
+                  .filter((log) => logFilter === 'all' || log.status === logFilter)
+                  .map((log) => {
+                    const isExpanded = expandedLogId === log.id;
+                    const statusColor = log.status === 'success'
+                      ? 'text-green-600'
+                      : log.status === 'error'
+                        ? 'text-red-600'
+                        : 'text-blue-600';
+                    return (
+                      <>
+                        <TableRow
+                          key={log.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                        >
+                          <TableCell className="p-2">
+                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </TableCell>
+                          <TableCell className="text-xs whitespace-nowrap">
+                            {new Date(log.created_at).toLocaleString('pt-BR')}
+                          </TableCell>
+                          <TableCell className="text-xs font-medium">{log.template_name}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">{log.action}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <span className={`text-xs font-semibold ${statusColor}`}>{log.status}</span>
+                          </TableCell>
+                          <TableCell className="text-xs font-mono">{log.twilio_status_code || '—'}</TableCell>
+                          <TableCell className="text-xs font-mono text-muted-foreground max-w-[120px] truncate">
+                            {log.content_sid || '—'}
+                          </TableCell>
+                          <TableCell className="text-xs text-destructive max-w-[200px] truncate">
+                            {log.error_message || '—'}
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded && (
+                          <TableRow key={`${log.id}-detail`}>
+                            <TableCell colSpan={8} className="bg-muted/30 p-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-xs font-semibold mb-1">Request Payload</p>
+                                  <pre className="text-xs bg-background p-3 rounded-md overflow-auto max-h-[200px] border">
+                                    {log.request_payload ? JSON.stringify(log.request_payload, null, 2) : 'N/A'}
+                                  </pre>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold mb-1">Response Payload</p>
+                                  <pre className="text-xs bg-background p-3 rounded-md overflow-auto max-h-[200px] border">
+                                    {log.response_payload ? JSON.stringify(log.response_payload, null, 2) : 'N/A'}
+                                  </pre>
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
+                    );
+                  })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
