@@ -2837,6 +2837,59 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_template_logs: {
+        Row: {
+          action: string
+          content_sid: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          request_payload: Json | null
+          response_payload: Json | null
+          status: string
+          template_id: string | null
+          template_name: string
+          twilio_status_code: number | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          content_sid?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status: string
+          template_id?: string | null
+          template_name: string
+          twilio_status_code?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          content_sid?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status?: string
+          template_id?: string | null
+          template_name?: string
+          twilio_status_code?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_template_logs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_templates: {
         Row: {
           automation_type: string
