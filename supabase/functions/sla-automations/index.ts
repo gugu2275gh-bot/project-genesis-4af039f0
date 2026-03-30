@@ -336,7 +336,7 @@ serve(async (req) => {
             origin_bot: true,
           })
 
-          await sendWhatsApp(contact.phone, message, lead.id)
+          await sendWhatsApp(contact.phone, message, lead.id, 'reengagement', { nome: contact.full_name })
           results.reengagements++
         }
       }
