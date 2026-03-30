@@ -476,7 +476,7 @@ serve(async (req) => {
               .replace('{nome}', contact.full_name)
               .replace('{valor}', String(payment.amount))
               .replace('{data}', payment.due_date)
-            await sendWhatsApp(contact.phone, msg, leadId)
+            await sendWhatsApp(contact.phone, msg, leadId, 'payment_pre_7d', { nome: contact.full_name, valor: String(payment.amount), data: payment.due_date })
             results.paymentPreReminders++
           }
         }
