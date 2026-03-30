@@ -113,6 +113,19 @@ export function useWhatsAppTemplates() {
     },
   });
 
+  const { data: templateLogs, isLoading: logsLoading } = useQuery({
+    queryKey: ['whatsapp-template-logs'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('whatsapp_template_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+
   return {
     templates,
     isLoading,
@@ -120,5 +133,7 @@ export function useWhatsAppTemplates() {
     checkStatus,
     updateTemplate,
     createTemplate,
+    templateLogs,
+    logsLoading,
   };
 }

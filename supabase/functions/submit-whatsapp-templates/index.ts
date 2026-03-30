@@ -52,7 +52,31 @@ serve(async (req) => {
     const body = await req.json()
     const { action, automation_type } = body
 
-    // ACTION: submit - Submit template(s) for approval via Twilio Content API
+    // Helper to insert log
+    async function insertLog(logData: {
+      template_id?: string | null,
+      template_name: string,
+      action: string,
+      status: string,
+      request_payload?: any,
+      response_payload?: any,
+      error_message?: string | null,
+      twilio_status_code?: number | null,
+      content_sid?: string | null,
+    }) {
+      try {
+        await adminSupabase.from('whatsapp_template_logs').insert({
+          ...logData,
+          user_id: user.id,
+          request_payload: logData.request_payload ? JSON.parse(JSON.stringify(logData.request_payload)) : null,
+          response_payload: logData.response_payload ? JSON.parse(JSON.stringify(logData.response_payload)) : null,
+        })
+      } catch (e) {
+        console.error('Failed to insert log:', e)
+      }
+    }
+
+    // ACTION: submit
     if (action === 'submit') {
       const query = adminSupabase.from('whatsapp_templates').select('*')
       if (automation_type && automation_type !== 'ALL') {
@@ -64,6 +88,17 @@ serve(async (req) => {
       const results = []
       for (const template of templates || []) {
         if (template.content_sid && template.status === 'approved') {
+          await insertLog({
+            template_id: template.id,
+            template_name: template.template_name,
+            action: 'submit',
+            status: 'skipped',
+            request_payload: null,
+            response_payload: null,
+            error_message: 'Template já aprovado',
+            twilio_status_code: null,
+            content_sid: template.content_sid,
+          })
           results.push({ automation_type: template.automation_type, status: 'already_approved', content_sid: template.content_sid })
           continue
         }
@@ -100,6 +135,17 @@ serve(async (req) => {
             updated_at: new Date().toISOString(),
           }).eq('id', template.id)
 
+          await insertLog({
+            template_id: template.id,
+            template_name: template.template_name,
+            action: 'submit',
+            status: 'success',
+            request_payload: contentBody,
+            response_payload: responseData,
+            twilio_status_code: response.status,
+            content_sid: responseData.sid,
+          })
+
           results.push({ automation_type: template.automation_type, status: 'submitted', content_sid: responseData.sid })
         } else {
           await adminSupabase.from('whatsapp_templates').update({
@@ -108,6 +154,17 @@ serve(async (req) => {
             updated_at: new Date().toISOString(),
           }).eq('id', template.id)
 
+          await insertLog({
+            template_id: template.id,
+            template_name: template.template_name,
+            action: 'submit',
+            status: 'error',
+            request_payload: contentBody,
+            response_payload: responseData,
+            error_message: responseData.message || JSON.stringify(responseData),
+            twilio_status_code: response.status,
+          })
+
           results.push({ automation_type: template.automation_type, status: 'error', error: responseData.message || 'Unknown error' })
         }
       }
@@ -115,7 +172,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: true, results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // ACTION: check_status - Check approval status via Twilio Content API
+    // ACTION: check_status
     if (action === 'check_status') {
       const { data: templates } = await adminSupabase
         .from('whatsapp_templates')
@@ -147,6 +204,18 @@ serve(async (req) => {
             rejectionReason = approval.rejection_reason || 'Rejected by Meta'
           }
         }
+
+        await insertLog({
+          template_id: template.id,
+          template_name: template.template_name,
+          action: 'check_status',
+          status: newStatus !== template.status ? 'success' : 'skipped',
+          request_payload: { url: `${CONTENT_API_URL}/${template.content_sid}`, method: 'GET' },
+          response_payload: data,
+          error_message: rejectionReason,
+          twilio_status_code: response.status,
+          content_sid: template.content_sid,
+        })
 
         if (newStatus !== template.status) {
           await adminSupabase.from('whatsapp_templates').update({
