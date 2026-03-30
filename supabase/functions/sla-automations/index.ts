@@ -1,3 +1,19 @@
+/**
+ * SLA Automations — Monolithic Edge Function (M2 documented)
+ * 
+ * This function handles 18+ automation types, filtered via `automation_type` parameter.
+ * Use `{ "health_check": true }` to check status.
+ * 
+ * Available automation_type values:
+ *   ALL, WELCOME, REENGAGEMENT, ARCHIVE, CONTRACT_REMINDERS,
+ *   PAYMENT_PRE, PAYMENT_POST, DAILY_COLLECTION, DOCUMENT_REMINDERS,
+ *   ONBOARDING, TIE_PICKUP, TECHNICAL, LEGAL, REQUIREMENTS,
+ *   PROTOCOL, INITIAL_CONTACT, POST_PROTOCOL_DOCS, HUELLAS
+ * 
+ * Recommended pg_cron schedule:
+ *   - Every 15 min: { "automation_type": "ALL" }
+ *   - Or split by type for granular control (e.g., PAYMENT_PRE at 9h, WELCOME every 5 min)
+ */
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -46,6 +62,15 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     const automationType: AutomationType = body.automation_type || 'ALL'
     
+    // R3: Health check endpoint — returns available automations and status
+    if (body.health_check === true) {
+      return new Response(JSON.stringify({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        available_automations: ['WELCOME', 'REENGAGEMENT', 'ARCHIVE', 'CONTRACT_REMINDERS', 'PAYMENT_PRE', 'PAYMENT_POST', 'DAILY_COLLECTION', 'DOCUMENT_REMINDERS', 'ONBOARDING', 'TIE_PICKUP', 'TECHNICAL', 'LEGAL', 'REQUIREMENTS', 'PROTOCOL', 'INITIAL_CONTACT', 'POST_PROTOCOL_DOCS', 'HUELLAS'],
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
     console.log(`SLA Automations starting with filter: ${automationType}`)
     
     // Helper to check if a specific automation should run
@@ -224,8 +249,24 @@ serve(async (req) => {
         
         if (!response.ok) {
           const errText = await response.text()
-          console.error('Twilio Gateway error:', errText)
-          return false
+          console.error('Twilio Gateway error (attempt 1):', errText)
+          
+          // R6: Retry with backoff (1 retry after 2s)
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          const retryResponse = await fetch(`${GATEWAY_URL}/Messages.json`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'X-Connection-Api-Key': TWILIO_API_KEY,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams(bodyParams),
+          })
+          if (!retryResponse.ok) {
+            const retryErr = await retryResponse.text()
+            console.error('Twilio Gateway error (attempt 2):', retryErr)
+            return false
+          }
         }
         
         console.log('WhatsApp sent via Twilio to:', phoneStr.slice(-4))
@@ -385,7 +426,7 @@ serve(async (req) => {
             leads!inner (id, contacts!inner (full_name, phone))
           )
         `)
-        .eq('status', 'ENVIADO')
+        .eq('status', 'APROVADO')
 
       for (const contract of pendingContracts || []) {
         const createdAt = new Date(contract.created_at)
@@ -452,7 +493,7 @@ serve(async (req) => {
       const { data: upcomingPayments } = await supabase
         .from('payments')
         .select(`
-          id, due_date, amount, currency,
+          id, due_date, amount, currency, contract_id,
           opportunities!inner (leads!inner (id, contacts!inner (full_name, phone)))
         `)
         .eq('status', 'PENDENTE')
@@ -1468,7 +1509,7 @@ serve(async (req) => {
           id, description, internal_deadline_date, official_deadline_date,
           service_cases!inner (assigned_to_user_id, client_user_id, opportunities!inner (leads!inner (id, contacts!inner (full_name, phone))))
         `)
-        .eq('status', 'PENDENTE')
+        .eq('status', 'ABERTA')
 
       for (const req of urgentRequirements || []) {
         const caseData = req.service_cases as unknown as { 
@@ -2025,6 +2066,22 @@ serve(async (req) => {
           await recordHuellasReminder(sc.id, 'D1_REMINDER', 'CLIENT')
           results.huellasPreCitaReminders++
         }
+      }
+    }
+
+    // =====================================================
+    // R7: CLEANUP — Remove old whatsapp_template_logs (>90 days)
+    // =====================================================
+    if (shouldRun('ALL')) {
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
+      const { error: cleanupError } = await supabase
+        .from('whatsapp_template_logs')
+        .delete()
+        .lt('created_at', ninetyDaysAgo)
+      if (cleanupError) {
+        console.warn('Template logs cleanup error:', cleanupError.message)
+      } else {
+        console.log('Template logs cleanup completed (>90 days)')
       }
     }
 

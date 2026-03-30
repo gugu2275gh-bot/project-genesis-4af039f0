@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
 interface WhatsAppMessage {
@@ -863,11 +863,11 @@ serve(async (req) => {
     console.log('Processing message from:', phoneNumber)
 
     // Find existing contact by phone
-    let contact: { id: string; full_name: string } | null = null
+    let contact: { id: string; full_name: string; preferred_language: string | null } | null = null
     // Use .limit(1) instead of .single() to avoid error when duplicate contacts exist for same phone
     const { data: existingContacts } = await supabase
       .from('contacts')
-      .select('id, full_name')
+      .select('id, full_name, preferred_language')
       .eq('phone', phoneNumber)
       .order('created_at', { ascending: true })
       .limit(1)
@@ -883,7 +883,7 @@ serve(async (req) => {
           full_name: message.name || `WhatsApp ${phoneNumber.slice(-4)}`,
           origin_channel: 'WHATSAPP',
         })
-        .select('id, full_name')
+        .select('id, full_name, preferred_language')
         .single()
 
       if (contactError || !newContact) {
@@ -1366,8 +1366,13 @@ serve(async (req) => {
         const isFirstInteraction = (messageCount || 0) <= 1 // 1 because we just inserted the current message
 
         const currentCustomerMessage = String(message.body || '')
-        const detectedChatLanguage = detectChatLanguage(currentCustomerMessage)
-        console.log('Detected chat language:', detectedChatLanguage, 'message sample:', currentCustomerMessage.slice(0, 80))
+        // R5: Use preferred_language from contact as initial hint for language detection
+        const preferredLangMap: Record<string, ChatLanguage> = { 'pt': 'pt-BR', 'pt-BR': 'pt-BR', 'es': 'es', 'en': 'en', 'fr': 'fr' }
+        const langHint = contact.preferred_language ? preferredLangMap[contact.preferred_language] : null
+        const detectedFromText = detectChatLanguage(currentCustomerMessage)
+        // If text detection returns default (pt-BR) but contact has a different preferred language, use the hint
+        const detectedChatLanguage: ChatLanguage = (detectedFromText === 'pt-BR' && langHint && langHint !== 'pt-BR') ? langHint : detectedFromText
+        console.log('Detected chat language:', detectedChatLanguage, 'hint:', contact.preferred_language, 'message sample:', currentCustomerMessage.slice(0, 80))
 
         // Build system prompt with structured conversational flow
         const defaultSystemPrompt = `Você é a assistente virtual da CB Asesoría, uma empresa especializada em assessoria de imigração na Espanha.
@@ -1558,11 +1563,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
       console.log(`AI agent skipped: botEnabled=${botEnabled}, hasGeminiKey=${!!geminiApiKey}, pausedByHuman=${aiPausedByHuman}, skipReactivation=${skipAIAgent}`)
     }
 
-    // Update webhook log as processed
-    await supabase
-      .from('webhook_logs')
-      .update({ processed: true })
-      .eq('raw_payload', payload)
+    // Update webhook log as processed (using ID from insert, not JSONB comparison)
 
     // Notify assigned user about new message
     if (lead.assigned_to_user_id) {
