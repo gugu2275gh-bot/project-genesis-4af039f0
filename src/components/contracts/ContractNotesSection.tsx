@@ -73,9 +73,7 @@ export function ContractNotesSection({ contractId }: ContractNotesSectionProps) 
   };
 
   const handleDeleteNote = (noteId: string) => {
-    if (confirm("Tem certeza que deseja remover esta nota?")) {
-      deleteNote.mutate(noteId);
-    }
+    setDeletingNoteId(noteId);
   };
 
   return (
