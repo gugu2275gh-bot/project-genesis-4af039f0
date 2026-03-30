@@ -166,7 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const isStaff = (): boolean => {
-    return hasAnyRole(['ADMIN', 'MANAGER', 'ATENCAO_CLIENTE', 'JURIDICO', 'FINANCEIRO', 'TECNICO', 'EXPEDIENTE']);
+    return hasAnyRole(['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA', 'ATENCAO_CLIENTE', 'ATENDENTE_WHATSAPP', 'JURIDICO', 'FINANCEIRO', 'TECNICO', 'EXPEDIENTE']);
   };
 
   const isClient = (): boolean => {
