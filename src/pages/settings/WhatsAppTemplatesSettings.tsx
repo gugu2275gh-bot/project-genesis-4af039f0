@@ -2,11 +2,14 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Send, RefreshCw, Edit, AlertCircle, CheckCircle2, Clock, XCircle, FileText } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Send, RefreshCw, Edit, AlertCircle, CheckCircle2, Clock, XCircle, FileText, Plus, X } from 'lucide-react';
 import { useWhatsAppTemplates } from '@/hooks/useWhatsAppTemplates';
 
 const STATUS_CONFIG: Record<string, { label: string; badgeClass: string; dotClass: string; icon: typeof Clock }> = {
@@ -32,10 +35,26 @@ const AUTOMATION_LABELS: Record<string, string> = {
   huellas_reminder: 'Huellas',
 };
 
+const LANGUAGE_OPTIONS = [
+  { value: 'pt_BR', label: 'Português (BR)' },
+  { value: 'es', label: 'Español' },
+  { value: 'en_US', label: 'English (US)' },
+  { value: 'fr', label: 'Français' },
+];
+
 export default function WhatsAppTemplatesSettings() {
-  const { templates, isLoading, submitTemplates, checkStatus, updateTemplate } = useWhatsAppTemplates();
+  const { templates, isLoading, submitTemplates, checkStatus, updateTemplate, createTemplate } = useWhatsAppTemplates();
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const [editBody, setEditBody] = useState('');
+  const [showNewDialog, setShowNewDialog] = useState(false);
+
+  // New template form state
+  const [newName, setNewName] = useState('');
+  const [newAutomationType, setNewAutomationType] = useState('');
+  const [newLanguage, setNewLanguage] = useState('pt_BR');
+  const [newBody, setNewBody] = useState('');
+  const [newVariable, setNewVariable] = useState('');
+  const [newVariables, setNewVariables] = useState<string[]>([]);
 
   const handleEdit = (template: any) => {
     setEditingTemplate(template);
@@ -53,6 +72,54 @@ export default function WhatsAppTemplatesSettings() {
     updateTemplate.mutate({ id, is_active: !currentActive });
   };
 
+  const resetNewForm = () => {
+    setNewName('');
+    setNewAutomationType('');
+    setNewLanguage('pt_BR');
+    setNewBody('');
+    setNewVariable('');
+    setNewVariables([]);
+  };
+
+  const handleCreateTemplate = () => {
+    if (!newName || !newAutomationType || !newBody) return;
+    createTemplate.mutate(
+      {
+        automation_type: newAutomationType,
+        template_name: newName,
+        body_text: newBody,
+        variables: newVariables,
+      },
+      {
+        onSuccess: () => {
+          setShowNewDialog(false);
+          resetNewForm();
+        },
+      }
+    );
+  };
+
+  const addVariable = () => {
+    const trimmed = newVariable.trim();
+    if (trimmed && !newVariables.includes(trimmed)) {
+      setNewVariables([...newVariables, trimmed]);
+      setNewVariable('');
+    }
+  };
+
+  const removeVariable = (v: string) => {
+    setNewVariables(newVariables.filter((x) => x !== v));
+  };
+
+  const isValidName = /^[a-z0-9_]+$/.test(newName);
+  const bodyCharCount = newBody.length;
+
+  // Build preview text
+  const previewText = newBody.replace(/\{\{(\d+)\}\}/g, (_, idx) => {
+    const i = parseInt(idx) - 1;
+    return newVariables[i] ? `[${newVariables[i]}]` : `{{${idx}}}`;
+  });
+
   return (
     <div className="space-y-6">
       <Card>
@@ -68,6 +135,14 @@ export default function WhatsAppTemplatesSettings() {
               </CardDescription>
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowNewDialog(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Novo Template
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -173,6 +248,7 @@ export default function WhatsAppTemplatesSettings() {
         </CardContent>
       </Card>
 
+      {/* Edit Dialog */}
       <Dialog open={!!editingTemplate} onOpenChange={(open) => !open && setEditingTemplate(null)}>
         <DialogContent>
           <DialogHeader>
@@ -200,6 +276,138 @@ export default function WhatsAppTemplatesSettings() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingTemplate(null)}>Cancelar</Button>
             <Button onClick={handleSaveEdit} disabled={updateTemplate.isPending}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Template Dialog */}
+      <Dialog open={showNewDialog} onOpenChange={(open) => { if (!open) { setShowNewDialog(false); resetNewForm(); } }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Novo Template de WhatsApp</DialogTitle>
+            <DialogDescription>Preencha os campos abaixo seguindo as normas da Meta para aprovação.</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Form */}
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="tpl-name">Nome do Template *</Label>
+                <Input
+                  id="tpl-name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  placeholder="ex: payment_reminder_7d"
+                  className="mt-1"
+                />
+                {newName && !isValidName && (
+                  <p className="text-xs text-destructive mt-1">Apenas letras minúsculas, números e underscore</p>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">snake_case, sem espaços ou caracteres especiais</p>
+              </div>
+
+              <div>
+                <Label htmlFor="tpl-automation">Tipo de Automação *</Label>
+                <Input
+                  id="tpl-automation"
+                  value={newAutomationType}
+                  onChange={(e) => setNewAutomationType(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  placeholder="ex: payment_pre_7d"
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Identificador interno da automação</p>
+              </div>
+
+              <div>
+                <Label>Idioma</Label>
+                <Select value={newLanguage} onValueChange={setNewLanguage}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LANGUAGE_OPTIONS.map((l) => (
+                      <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="tpl-body">Corpo da Mensagem *</Label>
+                <Textarea
+                  id="tpl-body"
+                  value={newBody}
+                  onChange={(e) => setNewBody(e.target.value.slice(0, 1024))}
+                  rows={5}
+                  placeholder="Olá {{1}}, seu pagamento de {{2}} vence em {{3}}."
+                  className="mt-1"
+                />
+                <div className="flex justify-between mt-1">
+                  <p className="text-xs text-muted-foreground">Use {'{{1}}'}, {'{{2}}'} para variáveis</p>
+                  <p className={`text-xs ${bodyCharCount > 1000 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    {bodyCharCount}/1024
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <Label>Variáveis</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    value={newVariable}
+                    onChange={(e) => setNewVariable(e.target.value)}
+                    placeholder="Nome da variável (ex: nome_cliente)"
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addVariable())}
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={addVariable}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex gap-1 mt-2 flex-wrap">
+                  {newVariables.map((v, i) => (
+                    <Badge key={v} variant="secondary" className="gap-1">
+                      {`{{${i + 1}}} = ${v}`}
+                      <button onClick={() => removeVariable(v)} className="hover:text-destructive">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Preview */}
+            <div className="space-y-2">
+              <Label>Preview</Label>
+              <div className="bg-[#e5ddd5] rounded-lg p-4 min-h-[200px]">
+                <div className="bg-white rounded-lg p-3 shadow-sm max-w-[280px]">
+                  <p className="text-sm whitespace-pre-wrap">{previewText || 'Escreva o corpo da mensagem...'}</p>
+                  <p className="text-[10px] text-muted-foreground text-right mt-1">
+                    {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground space-y-1 mt-3">
+                <p className="font-medium">Dicas para aprovação Meta:</p>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>Não inclua URLs encurtadas</li>
+                  <li>Evite linguagem agressiva de cobrança</li>
+                  <li>Inclua opt-out quando obrigatório</li>
+                  <li>Use variáveis para dados pessoais</li>
+                  <li>Máximo 1024 caracteres no corpo</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => { setShowNewDialog(false); resetNewForm(); }}>Cancelar</Button>
+            <Button
+              onClick={handleCreateTemplate}
+              disabled={!newName || !isValidName || !newAutomationType || !newBody || createTemplate.isPending}
+            >
+              {createTemplate.isPending ? 'Criando...' : 'Criar Template'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
-const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio'
+const CONTENT_API_URL = 'https://content.twilio.com/v1/Content'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -23,12 +23,14 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
-    const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY')
+    const TWILIO_ACCOUNT_SID = Deno.env.get('TWILIO_ACCOUNT_SID')
+    const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN')
 
-    if (!LOVABLE_API_KEY || !TWILIO_API_KEY) {
-      return new Response(JSON.stringify({ error: 'Twilio credentials not configured' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
+      return new Response(JSON.stringify({ error: 'TWILIO_ACCOUNT_SID e TWILIO_AUTH_TOKEN não configurados. Adicione-os como secrets do Supabase.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
+
+    const basicAuth = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)
 
     // Auth check
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -50,7 +52,7 @@ serve(async (req) => {
     const body = await req.json()
     const { action, automation_type } = body
 
-    // ACTION: submit - Submit template(s) for approval
+    // ACTION: submit - Submit template(s) for approval via Twilio Content API
     if (action === 'submit') {
       const query = adminSupabase.from('whatsapp_templates').select('*')
       if (automation_type && automation_type !== 'ALL') {
@@ -66,7 +68,6 @@ serve(async (req) => {
           continue
         }
 
-        // Create content via Twilio Content API
         const contentBody = {
           friendly_name: template.template_name,
           language: 'pt_BR',
@@ -80,11 +81,10 @@ serve(async (req) => {
 
         console.log(`Submitting template: ${template.template_name}`)
 
-        const response = await fetch(`${GATEWAY_URL}/Content`, {
+        const response = await fetch(CONTENT_API_URL, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'X-Connection-Api-Key': TWILIO_API_KEY,
+            'Authorization': `Basic ${basicAuth}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(contentBody),
@@ -115,7 +115,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: true, results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // ACTION: check_status - Check approval status
+    // ACTION: check_status - Check approval status via Twilio Content API
     if (action === 'check_status') {
       const { data: templates } = await adminSupabase
         .from('whatsapp_templates')
@@ -125,11 +125,10 @@ serve(async (req) => {
 
       const results = []
       for (const template of templates || []) {
-        const response = await fetch(`${GATEWAY_URL}/Content/${template.content_sid}`, {
+        const response = await fetch(`${CONTENT_API_URL}/${template.content_sid}`, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'X-Connection-Api-Key': TWILIO_API_KEY,
+            'Authorization': `Basic ${basicAuth}`,
           },
         })
 

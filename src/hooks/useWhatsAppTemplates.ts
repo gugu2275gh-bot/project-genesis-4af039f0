@@ -88,11 +88,37 @@ export function useWhatsAppTemplates() {
     },
   });
 
+  const createTemplate = useMutation({
+    mutationFn: async (newTemplate: {
+      automation_type: string;
+      template_name: string;
+      body_text: string;
+      variables: string[];
+    }) => {
+      const { error } = await supabase
+        .from('whatsapp_templates')
+        .insert({
+          ...newTemplate,
+          status: 'draft',
+          is_active: false,
+        } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
+      toast.success('Template criado com sucesso');
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao criar template: ' + error.message);
+    },
+  });
+
   return {
     templates,
     isLoading,
     submitTemplates,
     checkStatus,
     updateTemplate,
+    createTemplate,
   };
 }
