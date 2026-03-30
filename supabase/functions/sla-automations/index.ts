@@ -399,7 +399,7 @@ serve(async (req) => {
           if (!(await reminderAlreadySent('contract_reminders', contract.id, 'D1'))) {
             await supabase.from('contract_reminders').insert({ contract_id: contract.id, reminder_type: 'D1' })
             if (contact?.phone) {
-              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId)
+              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId, 'contract_reminder', { nome: contact.full_name })
             }
             results.contractReminders++
           }
