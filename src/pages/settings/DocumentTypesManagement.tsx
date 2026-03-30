@@ -33,6 +33,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -189,10 +199,10 @@ export default function DocumentTypesManagement() {
     }
   };
 
+  const [deletingDocTypeId, setDeletingDocTypeId] = useState<string | null>(null);
+
   const handleDelete = (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este tipo de documento?")) {
-      deleteMutation.mutate(id);
-    }
+    setDeletingDocTypeId(id);
   };
 
   // Group documents by service type
@@ -494,6 +504,30 @@ export default function DocumentTypesManagement() {
           );
         })}
       </Accordion>
+      <AlertDialog open={deletingDocTypeId !== null} onOpenChange={(open) => !open && setDeletingDocTypeId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir tipo de documento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este tipo de documento? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deletingDocTypeId) {
+                  deleteMutation.mutate(deletingDocTypeId);
+                  setDeletingDocTypeId(null);
+                }
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

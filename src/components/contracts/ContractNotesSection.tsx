@@ -1,4 +1,14 @@
 import { useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useContractNotes } from "@/hooks/useContractNotes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +53,7 @@ const noteTypeConfig = {
 export function ContractNotesSection({ contractId }: ContractNotesSectionProps) {
   const { notes, isLoading, addNote, deleteNote } = useContractNotes(contractId);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
   const [newNote, setNewNote] = useState("");
   const [noteType, setNoteType] = useState<'ACORDO' | 'OBSERVACAO' | 'HISTORICO'>('ACORDO');
 
@@ -62,9 +73,7 @@ export function ContractNotesSection({ contractId }: ContractNotesSectionProps) 
   };
 
   const handleDeleteNote = (noteId: string) => {
-    if (confirm("Tem certeza que deseja remover esta nota?")) {
-      deleteNote.mutate(noteId);
-    }
+    setDeletingNoteId(noteId);
   };
 
   return (
@@ -183,6 +192,31 @@ export function ContractNotesSection({ contractId }: ContractNotesSectionProps) 
           </div>
         )}
       </CardContent>
+
+      <AlertDialog open={deletingNoteId !== null} onOpenChange={(open) => !open && setDeletingNoteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover nota</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja remover esta nota? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deletingNoteId) {
+                  deleteNote.mutate(deletingNoteId);
+                  setDeletingNoteId(null);
+                }
+              }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

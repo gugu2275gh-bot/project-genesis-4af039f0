@@ -1,4 +1,14 @@
 import { useState } from 'react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +60,7 @@ export default function WhatsAppTemplatesSettings() {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [logFilter, setLogFilter] = useState<string>('all');
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
 
   // New template form state
   const [newName, setNewName] = useState('');
@@ -231,11 +242,7 @@ export default function WhatsAppTemplatesSettings() {
                             variant="ghost"
                             size="icon"
                             className="text-destructive hover:text-destructive"
-                            onClick={() => {
-                              if (confirm('Tem certeza que deseja excluir este template?')) {
-                                deleteTemplate.mutate(template.id);
-                              }
-                            }}
+                            onClick={() => setDeletingTemplateId(template.id)}
                             disabled={deleteTemplate.isPending}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -535,6 +542,30 @@ export default function WhatsAppTemplatesSettings() {
           )}
         </CardContent>
       </Card>
+      <AlertDialog open={deletingTemplateId !== null} onOpenChange={(open) => !open && setDeletingTemplateId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir template</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este template? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deletingTemplateId) {
+                  deleteTemplate.mutate(deletingTemplateId);
+                  setDeletingTemplateId(null);
+                }
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
