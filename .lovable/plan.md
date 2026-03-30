@@ -1,27 +1,51 @@
 
 
-## Adicionar indicadores coloridos por status nos templates
+## Correção do erro na submissão de templates WhatsApp
 
-Alterar o `STATUS_CONFIG` para usar cores explícitas (verde/azul/vermelho) em vez dos variants genéricos do Badge, e adicionar um indicador visual circular colorido ao lado de cada template.
+### Problema identificado
 
-### Alteração em `src/pages/settings/WhatsAppTemplatesSettings.tsx`
+O gateway do Twilio (`connector-gateway.lovable.dev/twilio`) **adiciona automaticamente** o prefixo `/2010-04-01/Accounts/{AccountSid}` a todos os paths. Porém, a **Content API** do Twilio (usada para criar templates) fica em `content.twilio.com/v1/Content` — um serviço completamente diferente que **não é acessível** pelo gateway.
 
-1. **Atualizar `STATUS_CONFIG`** — adicionar classes de cor customizadas:
-   - `approved` → fundo verde (`bg-green-100 text-green-700 border-green-300`)
-   - `pending` → fundo azul (`bg-blue-100 text-blue-700 border-blue-300`)
-   - `draft` → fundo azul claro (`bg-blue-50 text-blue-600 border-blue-200`)
-   - `rejected` → fundo vermelho (`bg-red-100 text-red-700 border-red-300`)
-   - `error` → fundo vermelho (`bg-red-100 text-red-700 border-red-300`)
+O resultado: a chamada `POST /Content` vira `POST /2010-04-01/Accounts/{sid}/Content`, que não existe, retornando XML de erro (daí o `"Unexpected token '<'"`).
 
-2. **Adicionar bolinha colorida na linha** — um `div` circular (8x8px) com cor sólida à esquerda do nome do tipo:
-   - Verde (`bg-green-500`) para aprovado
-   - Azul (`bg-blue-500`) para pendente/rascunho
-   - Vermelho (`bg-red-500`) para rejeitado/erro
+### Solução
 
-3. **Substituir `<Badge variant={...}>`** por `<span className={customClasses}>` com as cores definidas acima para o badge de status.
+A Content API do Twilio requer autenticação direta (Account SID + Auth Token como Basic Auth), não suportada pelo gateway do conector. A solução é **chamar a Content API diretamente** usando credenciais armazenadas como secrets do Supabase.
 
-### Arquivo afetado
-| Arquivo | Mudança |
-|---------|---------|
-| `src/pages/settings/WhatsAppTemplatesSettings.tsx` | Cores customizadas no STATUS_CONFIG, bolinha indicadora na coluna Tipo, badge com classes de cor |
+### Alterações
+
+#### 1. Adicionar secrets necessários
+- Adicionar `TWILIO_ACCOUNT_SID` e `TWILIO_AUTH_TOKEN` como secrets do Supabase (o usuário precisará fornecer esses valores do Console Twilio)
+
+#### 2. Atualizar `supabase/functions/submit-whatsapp-templates/index.ts`
+- Substituir chamadas ao gateway pela **API direta** do Twilio Content:
+  - URL: `https://content.twilio.com/v1/Content`
+  - Auth: Basic Auth com `TWILIO_ACCOUNT_SID:TWILIO_AUTH_TOKEN`
+  - Content-Type: `application/json`
+- Manter a mesma estrutura de payload (já está correta para a Content API)
+- Atualizar o check de status para `GET https://content.twilio.com/v1/Content/{sid}`
+- Adicionar validação das novas env vars com mensagem de erro clara
+
+#### 3. Adicionar funcionalidade "Novo Template" na UI
+- Botão "Novo Template" no header da página
+- Dialog com campos necessários para aprovação Meta:
+  - **Nome** (snake_case, obrigatório)
+  - **Tipo de automação** (select com opções ou input livre)
+  - **Idioma** (select: pt_BR, es, en_US, fr)
+  - **Corpo da mensagem** (textarea, máx 1024 chars, com variáveis `{{1}}`, `{{2}}`)
+  - **Variáveis** (input para adicionar nomes das variáveis usadas)
+- Validações inline: nome em snake_case, limite de caracteres
+- Preview em tempo real do template
+- Salva como `draft` na tabela `whatsapp_templates`
+
+#### 4. Atualizar `src/hooks/useWhatsAppTemplates.ts`
+- Adicionar mutation `createTemplate` para INSERT na tabela
+
+### Arquivos afetados
+
+| Arquivo | Ação |
+|---------|------|
+| `supabase/functions/submit-whatsapp-templates/index.ts` | Chamar Content API diretamente |
+| `src/pages/settings/WhatsAppTemplatesSettings.tsx` | Adicionar botão + dialog "Novo Template" |
+| `src/hooks/useWhatsAppTemplates.ts` | Adicionar mutation createTemplate |
 
