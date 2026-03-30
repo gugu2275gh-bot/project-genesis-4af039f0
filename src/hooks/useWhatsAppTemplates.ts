@@ -113,6 +113,23 @@ export function useWhatsAppTemplates() {
     },
   });
 
+  const deleteTemplate = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('whatsapp_templates')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
+      toast.success('Template excluído');
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao excluir: ' + error.message);
+    },
+  });
+
   const { data: templateLogs, isLoading: logsLoading } = useQuery({
     queryKey: ['whatsapp-template-logs'],
     queryFn: async () => {
@@ -133,6 +150,7 @@ export function useWhatsAppTemplates() {
     checkStatus,
     updateTemplate,
     createTemplate,
+    deleteTemplate,
     templateLogs,
     logsLoading,
   };
