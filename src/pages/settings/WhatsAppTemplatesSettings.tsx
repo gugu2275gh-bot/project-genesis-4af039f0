@@ -384,16 +384,51 @@ export default function WhatsAppTemplatesSettings() {
               </div>
 
               <div>
-                <Label htmlFor="tpl-automation">Tipo de Automação *</Label>
-                <Input
-                  id="tpl-automation"
-                  value={newAutomationType}
-                  onChange={(e) => setNewAutomationType(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                  placeholder="ex: payment_pre_7d"
-                  className="mt-1"
-                />
-                <p className="text-xs text-muted-foreground mt-1">Identificador interno da automação</p>
+                <Label>Categoria *</Label>
+                <Select value={newCategory} onValueChange={(v: 'sla' | 'operational') => setNewCategory(v)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sla">SLA — Automação vinculada a regra</SelectItem>
+                    <SelectItem value="operational">Operacional — Disponível no chat</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {newCategory === 'sla' 
+                    ? 'Templates SLA são usados automaticamente pelas automações' 
+                    : 'Templates operacionais ficam disponíveis no chat para envio manual fora da janela de 24h'}
+                </p>
               </div>
+
+              {newCategory === 'sla' ? (
+                <div>
+                  <Label>Tipo de Automação (Regra SLA) *</Label>
+                  <Select value={newAutomationType} onValueChange={setNewAutomationType}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Selecione a regra..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(AUTOMATION_LABELS).map(([key, label]) => (
+                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">Regra SLA vinculada a este template</p>
+                </div>
+              ) : (
+                <div>
+                  <Label htmlFor="tpl-automation-op">Identificador (opcional)</Label>
+                  <Input
+                    id="tpl-automation-op"
+                    value={newAutomationType}
+                    onChange={(e) => setNewAutomationType(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    placeholder="ex: contato_geral"
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Identificador livre para organização interna</p>
+                </div>
+              )}
 
               <div>
                 <Label>Idioma</Label>
