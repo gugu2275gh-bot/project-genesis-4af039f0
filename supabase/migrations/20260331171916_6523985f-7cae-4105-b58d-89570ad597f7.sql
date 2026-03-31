@@ -1,0 +1,1 @@
+ALTER TABLE whatsapp_templates ADD COLUMN language text NOT NULL DEFAULT 'pt_BR';
