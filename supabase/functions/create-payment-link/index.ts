@@ -71,7 +71,7 @@ serve(async (req) => {
     
     if (!stripeSecretKey) {
       // Fallback: Generate internal payment link without Stripe
-      const internalLink = `${Deno.env.get('SITE_URL') || 'https://cb-asesoria.lovable.app'}/portal/payments?pay=${paymentId}`
+      const internalLink = `${Deno.env.get('SITE_URL') || 'https://cb.innovatia.com.br'}/portal/payments?pay=${paymentId}`
       
       // Update payment with internal link
       const { error: updateError } = await supabase
