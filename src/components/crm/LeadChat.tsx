@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff, ExternalLink } from 'lucide-react';
+import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff, ExternalLink, FileTemplate } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,9 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/integrations/supabase/client';
+import { useWhatsAppTemplates } from '@/hooks/useWhatsAppTemplates';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { toast } from 'sonner';
 
 interface LeadChatProps {
   leadId: string;
