@@ -516,7 +516,7 @@ export default function WhatsAppTemplatesSettings() {
             <Button variant="outline" onClick={() => { setShowNewDialog(false); resetNewForm(); }}>Cancelar</Button>
             <Button
               onClick={handleCreateTemplate}
-              disabled={!newName || !isValidName || !newAutomationType || !newBody || createTemplate.isPending}
+              disabled={!newName || !isValidName || !newBody || (newCategory === 'sla' && !newAutomationType) || createTemplate.isPending}
             >
               {createTemplate.isPending ? 'Criando...' : 'Criar Template'}
             </Button>
