@@ -146,6 +146,15 @@ export default function WhatsAppTemplatesSettings() {
   const isValidName = /^[a-z0-9_]+$/.test(newName);
   const bodyCharCount = newBody.length;
 
+  // Duplicate validation
+  const automationTypeToCheck = newCategory === 'sla' ? newAutomationType : (newAutomationType || newName);
+  const duplicateTemplate = automationTypeToCheck
+    ? templates?.find(t => t.automation_type === automationTypeToCheck && t.language === newLanguage)
+    : null;
+  const duplicateNameTemplate = newName
+    ? templates?.find(t => t.template_name === newName)
+    : null;
+
   // Build preview text
   const previewText = newBody.replace(/\{\{(\d+)\}\}/g, (_, idx) => {
     const i = parseInt(idx) - 1;
@@ -382,6 +391,12 @@ export default function WhatsAppTemplatesSettings() {
                   <p className="text-xs text-destructive mt-1">Apenas letras minúsculas, números e underscore</p>
                 )}
                 <p className="text-xs text-muted-foreground mt-1">snake_case, sem espaços ou caracteres especiais</p>
+                {duplicateNameTemplate && (
+                  <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    Já existe um template com o nome "{newName}"
+                  </p>
+                )}
               </div>
 
               <div>
@@ -416,6 +431,12 @@ export default function WhatsAppTemplatesSettings() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground mt-1">Regra SLA vinculada a este template</p>
+                  {duplicateTemplate && (
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      Já existe um template para "{AUTOMATION_LABELS[newAutomationType] || newAutomationType}" no idioma {newLanguage}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div>
@@ -517,7 +538,7 @@ export default function WhatsAppTemplatesSettings() {
             <Button variant="outline" onClick={() => { setShowNewDialog(false); resetNewForm(); }}>Cancelar</Button>
             <Button
               onClick={handleCreateTemplate}
-              disabled={!newName || !isValidName || !newBody || (newCategory === 'sla' && !newAutomationType) || createTemplate.isPending}
+              disabled={!newName || !isValidName || !newBody || (newCategory === 'sla' && !newAutomationType) || !!duplicateNameTemplate || createTemplate.isPending}
             >
               {createTemplate.isPending ? 'Criando...' : 'Criar Template'}
             </Button>
