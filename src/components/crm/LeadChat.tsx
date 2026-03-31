@@ -152,7 +152,9 @@ function parseWhatsAppFlowMessage(content: string) {
 
 export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
   const { messages, isLoading, sendMessage, resumeAI, userSectorName, hasGlobalView } = useLeadMessages(leadId, contactPhone, contactId);
+  const { operationalTemplates } = useWhatsAppTemplates();
   const [newMessage, setNewMessage] = useState('');
+  const [sendingTemplate, setSendingTemplate] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
