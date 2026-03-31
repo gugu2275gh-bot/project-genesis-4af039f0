@@ -1,0 +1,1 @@
+ALTER TABLE whatsapp_templates ADD COLUMN template_category text NOT NULL DEFAULT 'sla' CHECK (template_category IN ('sla', 'operational'));
