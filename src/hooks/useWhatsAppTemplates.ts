@@ -13,6 +13,7 @@ interface WhatsAppTemplate {
   status: string;
   rejection_reason: string | null;
   is_active: boolean;
+  template_category: 'sla' | 'operational';
   created_at: string;
   updated_at: string;
 }
