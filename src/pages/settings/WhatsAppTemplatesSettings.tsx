@@ -191,6 +191,18 @@ export default function WhatsAppTemplatesSettings() {
                 <Send className="h-4 w-4 mr-2" />
                 Submeter Todos
               </Button>
+              {hasPendingChanges && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="bg-green-600 hover:bg-green-700"
+                  onClick={handleSaveCategoryChanges}
+                  disabled={updateTemplate.isPending}
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Salvar Alterações
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
