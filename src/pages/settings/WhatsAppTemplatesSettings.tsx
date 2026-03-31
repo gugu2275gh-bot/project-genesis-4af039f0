@@ -92,6 +92,7 @@ export default function WhatsAppTemplatesSettings() {
 
   const resetNewForm = () => {
     setNewName('');
+    setNewCategory('sla');
     setNewAutomationType('');
     setNewLanguage('pt_BR');
     setNewBody('');
