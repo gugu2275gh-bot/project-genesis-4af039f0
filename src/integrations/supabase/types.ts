@@ -2898,6 +2898,7 @@ export type Database = {
           created_at: string | null
           id: string
           is_active: boolean | null
+          language: string
           rejection_reason: string | null
           status: string
           template_category: string
@@ -2912,6 +2913,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          language?: string
           rejection_reason?: string | null
           status?: string
           template_category?: string
@@ -2926,6 +2928,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          language?: string
           rejection_reason?: string | null
           status?: string
           template_category?: string
