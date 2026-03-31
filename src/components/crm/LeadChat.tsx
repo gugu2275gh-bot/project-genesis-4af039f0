@@ -216,6 +216,30 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
     setNewMessage('');
   };
 
+  const handleSendTemplate = async (template: { id: string; template_name: string; content_sid: string | null; body_text: string; variables: string[] }) => {
+    if (!contactPhone || !template.content_sid) {
+      toast.error('Template sem Content SID aprovado ou telefone não disponível');
+      return;
+    }
+    setSendingTemplate(true);
+    try {
+      const { error } = await supabase.functions.invoke('send-whatsapp', {
+        body: {
+          to: String(contactPhone),
+          contentSid: template.content_sid,
+          leadId,
+        },
+      });
+      if (error) throw error;
+      toast.success(`Template "${template.template_name}" enviado`);
+      queryClient.invalidateQueries({ queryKey: cacheKey });
+    } catch (err: any) {
+      toast.error('Erro ao enviar template: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setSendingTemplate(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
