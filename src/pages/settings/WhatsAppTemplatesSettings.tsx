@@ -425,6 +425,12 @@ export default function WhatsAppTemplatesSettings() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground mt-1">Regra SLA vinculada a este template</p>
+                  {duplicateTemplate && (
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      Já existe um template para "{AUTOMATION_LABELS[newAutomationType] || newAutomationType}" no idioma {newLanguage}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div>
