@@ -96,6 +96,7 @@ export function useWhatsAppTemplates() {
       template_name: string;
       body_text: string;
       variables: string[];
+      template_category?: 'sla' | 'operational';
     }) => {
       const { error } = await supabase
         .from('whatsapp_templates')
@@ -103,6 +104,7 @@ export function useWhatsAppTemplates() {
           ...newTemplate,
           status: 'draft',
           is_active: false,
+          template_category: newTemplate.template_category || 'sla',
         } as any);
       if (error) throw error;
     },
