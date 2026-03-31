@@ -1,48 +1,57 @@
 
 
-## Configurar domínio customizado `cb.innovatia.com.br`
+## Classificação de Templates: SLA vs Operacional
 
-### 1. Configuração DNS (no registrador do domínio innovatia.com.br)
+### Objetivo
+Adicionar campo `template_category` (`sla` | `operational`) à tabela `whatsapp_templates`. Templates SLA ficam vinculados a automações. Templates operacionais ficam disponíveis como dropdown no chat para envio manual quando a janela de 24h expirar.
 
-Como `cb.innovatia.com.br` é um **subdomínio**, adicionar:
+### Alterações
 
-| Tipo | Nome | Valor |
-|------|------|-------|
-| A | cb | 185.158.133.1 |
-| TXT | _lovable.cb | (valor fornecido pelo Lovable no setup) |
-
-### 2. Conectar domínio no Lovable
-
-- Ir em **Project Settings → Domains → Connect Domain**
-- Inserir `cb.innovatia.com.br`
-- Aguardar verificação DNS e provisão SSL
-
-### 3. Atualizar referências hardcoded no código (3 arquivos)
-
-**`src/contexts/AuthContext.tsx`** — Trocar `productionOrigin`:
-```
-'https://cbasesoria.lovable.app' → 'https://cb.innovatia.com.br'
+#### 1. Migração SQL
+Adicionar coluna `template_category` com default `sla` (todos existentes viram SLA automaticamente):
+```sql
+ALTER TABLE whatsapp_templates 
+ADD COLUMN template_category text NOT NULL DEFAULT 'sla' 
+CHECK (template_category IN ('sla', 'operational'));
 ```
 
-**`supabase/functions/create-payment-link/index.ts`** — Trocar fallback URLs (3 ocorrências):
+#### 2. Hook `useWhatsAppTemplates.ts`
+- Adicionar `template_category` à interface `WhatsAppTemplate`
+- Adicionar `template_category` ao `createTemplate` mutation
+- Aceitar `template_category` no `updateTemplate` mutation
+- Exportar query filtrada para templates operacionais aprovados: `useOperationalTemplates()`
+
+#### 3. Tela de Settings (`WhatsAppTemplatesSettings.tsx`)
+- Adicionar campo **Categoria** (SLA / Operacional) no diálogo de criação
+- Quando SLA: mostrar campo "Tipo de Automação" (dropdown com `AUTOMATION_LABELS`)
+- Quando Operacional: ocultar campo de automação (usar `template_name` como identificador)
+- Na tabela principal: mostrar badge "SLA" ou "Operacional" na coluna Tipo
+- Adicionar botao **Salvar Alterações** para edição inline da categoria na tabela
+
+#### 4. Chat (`LeadChat.tsx`)
+- Buscar templates operacionais aprovados via `useOperationalTemplates()`
+- Adicionar botao/dropdown ao lado do input de mensagem para selecionar template operacional
+- Ao selecionar, preencher variáveis e enviar via `send-whatsapp` usando `ContentSid`
+
+### Fluxo do usuário
+
+```text
+Criar Template
+  ├─ Categoria: SLA
+  │   └─ Tipo de Automação: [dropdown com AUTOMATION_LABELS]
+  │   └─ Usado automaticamente pelas automações
+  │
+  └─ Categoria: Operacional
+      └─ Tipo de Automação: livre (identificador)
+      └─ Disponível no dropdown do chat dos setores
+      └─ Usado para recontactar cliente fora da janela 24h
 ```
-'https://cb-asesoria.lovable.app' → 'https://cb.innovatia.com.br'
-```
 
-### 4. Configurar Supabase Dashboard
+### Detalhes técnicos
 
-No painel do Supabase (Authentication → URL Configuration):
-- **Site URL**: `https://cb.innovatia.com.br`
-- **Redirect URLs**: adicionar `https://cb.innovatia.com.br/**`
+**Migração**: Uma coluna `template_category` com check constraint. Default `sla` garante que os 13 templates existentes sejam marcados como SLA.
 
-Isso garante que e-mails de reset de senha e confirmação redirecionem para o domínio correto.
+**Botão Salvar Alterações**: Na tabela de templates, a categoria será editável inline (dropdown). Um estado local rastreia alterações pendentes e o botão "Salvar Alterações" aparece quando há mudanças, fazendo batch update.
 
-### 5. Secret SITE_URL
-
-Adicionar/atualizar o secret `SITE_URL` no Lovable Cloud (Settings → Secrets):
-```
-SITE_URL=https://cb.innovatia.com.br
-```
-
-Isso faz com que as Edge Functions usem o domínio correto automaticamente via `Deno.env.get('SITE_URL')`.
+**Chat - dropdown operacional**: Novo componente dropdown no input area do chat que lista templates operacionais aprovados. Ao selecionar, substitui variáveis (nome do cliente, etc.) e envia via `supabase.functions.invoke('send-whatsapp')` com o `ContentSid` do template.
 
