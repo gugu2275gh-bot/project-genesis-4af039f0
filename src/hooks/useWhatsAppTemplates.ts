@@ -74,7 +74,7 @@ export function useWhatsAppTemplates() {
   });
 
   const updateTemplate = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; body_text?: string; is_active?: boolean; template_name?: string }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; body_text?: string; is_active?: boolean; template_name?: string; template_category?: 'sla' | 'operational' }) => {
       const { error } = await supabase
         .from('whatsapp_templates')
         .update({ ...updates, updated_at: new Date().toISOString() } as any)
