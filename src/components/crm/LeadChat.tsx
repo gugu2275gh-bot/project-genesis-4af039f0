@@ -192,7 +192,7 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
 
   // Detect 24h window status based on last client message
   const windowStatus = useMemo(() => {
-    const clientMessages = messages.filter(m => m.mensagem_cliente && m.origem === 'cliente');
+    const clientMessages = messages.filter(m => m.mensagem_cliente && ['cliente', 'CLIENTE', 'Cliente'].includes(m.origem || ''));
     if (clientMessages.length === 0) return { isOutside: true, hoursAgo: null };
     const lastClientMsg = clientMessages[clientMessages.length - 1];
     const hoursAgo = Math.round((Date.now() - new Date(lastClientMsg.created_at).getTime()) / (1000 * 60 * 60));
