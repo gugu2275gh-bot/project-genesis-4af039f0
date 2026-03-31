@@ -147,6 +147,10 @@ export function useWhatsAppTemplates() {
     },
   });
 
+  const operationalTemplates = templates?.filter(
+    (t) => t.template_category === 'operational' && t.status === 'approved' && t.is_active
+  ) || [];
+
   return {
     templates,
     isLoading,
@@ -157,5 +161,6 @@ export function useWhatsAppTemplates() {
     deleteTemplate,
     templateLogs,
     logsLoading,
+    operationalTemplates,
   };
 }
