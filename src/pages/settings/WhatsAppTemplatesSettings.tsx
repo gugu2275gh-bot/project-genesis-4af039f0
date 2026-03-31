@@ -62,8 +62,12 @@ export default function WhatsAppTemplatesSettings() {
   const [logFilter, setLogFilter] = useState<string>('all');
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
 
+  // Pending category changes for batch save
+  const [pendingCategoryChanges, setPendingCategoryChanges] = useState<Record<string, 'sla' | 'operational'>>({});
+
   // New template form state
   const [newName, setNewName] = useState('');
+  const [newCategory, setNewCategory] = useState<'sla' | 'operational'>('sla');
   const [newAutomationType, setNewAutomationType] = useState('');
   const [newLanguage, setNewLanguage] = useState('pt_BR');
   const [newBody, setNewBody] = useState('');
