@@ -105,7 +105,7 @@ serve(async (req) => {
 
         const contentBody = {
           friendly_name: template.template_name,
-          language: 'pt_BR',
+          language: template.language || 'pt_BR',
           types: {
             'twilio/text': {
               body: template.body_text,

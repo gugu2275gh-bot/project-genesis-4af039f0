@@ -14,6 +14,7 @@ interface WhatsAppTemplate {
   rejection_reason: string | null;
   is_active: boolean;
   template_category: 'sla' | 'operational';
+  language: string;
   created_at: string;
   updated_at: string;
 }
