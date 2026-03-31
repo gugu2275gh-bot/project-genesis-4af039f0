@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff, ExternalLink, LayoutTemplate } from 'lucide-react';
+import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff, ExternalLink, LayoutTemplate, Clock, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -190,6 +190,15 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
     return outgoing[outgoing.length - 1].origem === 'SISTEMA';
   }, [messages]);
 
+  // Detect 24h window status based on last client message
+  const windowStatus = useMemo(() => {
+    const clientMessages = messages.filter(m => m.mensagem_cliente && m.origem === 'cliente');
+    if (clientMessages.length === 0) return { isOutside: true, hoursAgo: null };
+    const lastClientMsg = clientMessages[clientMessages.length - 1];
+    const hoursAgo = Math.round((Date.now() - new Date(lastClientMsg.created_at).getTime()) / (1000 * 60 * 60));
+    return { isOutside: hoursAgo >= 24, hoursAgo };
+  }, [messages]);
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -328,6 +337,33 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                 IA Ativa
               </Badge>
             )}
+            {windowStatus.isOutside ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="text-destructive border-destructive/30 bg-destructive/10 gap-1 cursor-help">
+                    <AlertTriangle className="h-3 w-3" />
+                    Fora da janela 24h
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {windowStatus.hoursAgo !== null 
+                    ? `Última mensagem do cliente há ${windowStatus.hoursAgo}h. Use um template para reabrir a conversa.`
+                    : 'Nenhuma mensagem do cliente encontrada. Use um template para iniciar.'}
+                </TooltipContent>
+              </Tooltip>
+            ) : windowStatus.hoursAgo !== null && windowStatus.hoursAgo >= 20 ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="text-warning border-warning/30 bg-warning/10 gap-1 cursor-help">
+                    <Clock className="h-3 w-3" />
+                    Janela fecha em {24 - windowStatus.hoursAgo}h
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  A janela de 24h está prestes a expirar. Após isso, apenas templates poderão ser enviados.
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
           </div>
           {activeSetores.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap">
