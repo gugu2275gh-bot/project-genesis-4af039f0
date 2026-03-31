@@ -391,6 +391,12 @@ export default function WhatsAppTemplatesSettings() {
                   <p className="text-xs text-destructive mt-1">Apenas letras minúsculas, números e underscore</p>
                 )}
                 <p className="text-xs text-muted-foreground mt-1">snake_case, sem espaços ou caracteres especiais</p>
+                {duplicateNameTemplate && (
+                  <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    Já existe um template com o nome "{newName}"
+                  </p>
+                )}
               </div>
 
               <div>
