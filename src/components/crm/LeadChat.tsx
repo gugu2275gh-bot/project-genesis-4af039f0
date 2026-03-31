@@ -326,11 +326,33 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                 👁 Todos os setores
               </Badge>
             )}
-            {isAIPaused ? (
-              <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-50 dark:bg-orange-900/20 gap-1">
-                <BotOff className="h-3 w-3" />
-                IA Pausada
-              </Badge>
+            {windowStatus.isOutside ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="text-destructive border-destructive/30 bg-destructive/10 gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Fora da janela 24h
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {windowStatus.hoursAgo !== null 
+                    ? `Última mensagem do cliente há ${windowStatus.hoursAgo}h. Use um template para reabrir a conversa.`
+                    : 'Nenhuma mensagem do cliente encontrada. Use um template para iniciar.'}
+                </TooltipContent>
+              </Tooltip>
+            ) : windowStatus.hoursAgo !== null && windowStatus.hoursAgo >= 20 ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="text-warning border-warning/30 bg-warning/10 gap-1">
+                    <Clock className="h-3 w-3" />
+                    Janela fecha em {24 - windowStatus.hoursAgo}h
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  A janela de 24h está prestes a expirar. Após isso, apenas templates poderão ser enviados.
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
             ) : (
               <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50 dark:bg-green-900/20 gap-1">
                 <Bot className="h-3 w-3" />
