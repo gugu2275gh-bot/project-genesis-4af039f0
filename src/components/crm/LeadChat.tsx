@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff, ExternalLink } from 'lucide-react';
+import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff, ExternalLink, LayoutTemplate } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,9 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/integrations/supabase/client';
+import { useWhatsAppTemplates } from '@/hooks/useWhatsAppTemplates';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { toast } from 'sonner';
 
 interface LeadChatProps {
   leadId: string;
@@ -149,7 +152,9 @@ function parseWhatsAppFlowMessage(content: string) {
 
 export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
   const { messages, isLoading, sendMessage, resumeAI, userSectorName, hasGlobalView } = useLeadMessages(leadId, contactPhone, contactId);
+  const { operationalTemplates } = useWhatsAppTemplates();
   const [newMessage, setNewMessage] = useState('');
+  const [sendingTemplate, setSendingTemplate] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -209,6 +214,30 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
     
     await sendMessage.mutateAsync({ leadId, message: newMessage });
     setNewMessage('');
+  };
+
+  const handleSendTemplate = async (template: { id: string; template_name: string; content_sid: string | null; body_text: string; variables: string[] }) => {
+    if (!contactPhone || !template.content_sid) {
+      toast.error('Template sem Content SID aprovado ou telefone não disponível');
+      return;
+    }
+    setSendingTemplate(true);
+    try {
+      const { error } = await supabase.functions.invoke('send-whatsapp', {
+        body: {
+          to: String(contactPhone),
+          contentSid: template.content_sid,
+          leadId,
+        },
+      });
+      if (error) throw error;
+      toast.success(`Template "${template.template_name}" enviado`);
+      queryClient.invalidateQueries({ queryKey: cacheKey });
+    } catch (err: any) {
+      toast.error('Erro ao enviar template: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setSendingTemplate(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -484,6 +513,41 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
         {/* Input Area */}
         <div className="p-4 border-t bg-muted/30 flex-shrink-0">
           <div className="flex gap-2">
+            {operationalTemplates.length > 0 && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        disabled={sendingTemplate}
+                        className="shrink-0"
+                      >
+                        <LayoutTemplate className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Enviar template (fora janela 24h)</TooltipContent>
+                  </Tooltip>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-2" align="start">
+                  <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Templates Operacionais</p>
+                  <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                    {operationalTemplates.map((tpl) => (
+                      <button
+                        key={tpl.id}
+                        className="w-full text-left px-2 py-1.5 rounded-md hover:bg-accent text-sm transition-colors"
+                        onClick={() => handleSendTemplate(tpl as any)}
+                        disabled={sendingTemplate}
+                      >
+                        <p className="font-medium text-xs">{tpl.template_name}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">{tpl.body_text}</p>
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
             <Input
               placeholder="Digite sua mensagem..."
               value={newMessage}

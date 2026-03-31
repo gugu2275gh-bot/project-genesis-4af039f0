@@ -2900,6 +2900,7 @@ export type Database = {
           is_active: boolean | null
           rejection_reason: string | null
           status: string
+          template_category: string
           template_name: string
           updated_at: string | null
           variables: Json | null
@@ -2913,6 +2914,7 @@ export type Database = {
           is_active?: boolean | null
           rejection_reason?: string | null
           status?: string
+          template_category?: string
           template_name: string
           updated_at?: string | null
           variables?: Json | null
@@ -2926,6 +2928,7 @@ export type Database = {
           is_active?: boolean | null
           rejection_reason?: string | null
           status?: string
+          template_category?: string
           template_name?: string
           updated_at?: string | null
           variables?: Json | null

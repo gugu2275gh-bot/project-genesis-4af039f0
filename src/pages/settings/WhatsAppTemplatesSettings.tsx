@@ -20,7 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Send, RefreshCw, Edit, AlertCircle, CheckCircle2, Clock, XCircle, FileText, Plus, X, ChevronDown, ChevronRight, ScrollText, Trash2 } from 'lucide-react';
+import { Send, RefreshCw, Edit, AlertCircle, CheckCircle2, Clock, XCircle, FileText, Plus, X, ChevronDown, ChevronRight, ScrollText, Trash2, Save } from 'lucide-react';
 import { useWhatsAppTemplates } from '@/hooks/useWhatsAppTemplates';
 
 const STATUS_CONFIG: Record<string, { label: string; badgeClass: string; dotClass: string; icon: typeof Clock }> = {
@@ -62,8 +62,12 @@ export default function WhatsAppTemplatesSettings() {
   const [logFilter, setLogFilter] = useState<string>('all');
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
 
+  // Pending category changes for batch save
+  const [pendingCategoryChanges, setPendingCategoryChanges] = useState<Record<string, 'sla' | 'operational'>>({});
+
   // New template form state
   const [newName, setNewName] = useState('');
+  const [newCategory, setNewCategory] = useState<'sla' | 'operational'>('sla');
   const [newAutomationType, setNewAutomationType] = useState('');
   const [newLanguage, setNewLanguage] = useState('pt_BR');
   const [newBody, setNewBody] = useState('');
@@ -88,6 +92,7 @@ export default function WhatsAppTemplatesSettings() {
 
   const resetNewForm = () => {
     setNewName('');
+    setNewCategory('sla');
     setNewAutomationType('');
     setNewLanguage('pt_BR');
     setNewBody('');
@@ -96,13 +101,15 @@ export default function WhatsAppTemplatesSettings() {
   };
 
   const handleCreateTemplate = () => {
-    if (!newName || !newAutomationType || !newBody) return;
+    if (!newName || !newBody) return;
+    if (newCategory === 'sla' && !newAutomationType) return;
     createTemplate.mutate(
       {
-        automation_type: newAutomationType,
+        automation_type: newAutomationType || newName,
         template_name: newName,
         body_text: newBody,
         variables: newVariables,
+        template_category: newCategory,
       },
       {
         onSuccess: () => {
@@ -111,6 +118,16 @@ export default function WhatsAppTemplatesSettings() {
         },
       }
     );
+  };
+
+  const hasPendingChanges = Object.keys(pendingCategoryChanges).length > 0;
+
+  const handleSaveCategoryChanges = async () => {
+    const promises = Object.entries(pendingCategoryChanges).map(([id, category]) =>
+      updateTemplate.mutateAsync({ id, template_category: category })
+    );
+    await Promise.all(promises);
+    setPendingCategoryChanges({});
   };
 
   const addVariable = () => {
@@ -174,6 +191,18 @@ export default function WhatsAppTemplatesSettings() {
                 <Send className="h-4 w-4 mr-2" />
                 Submeter Todos
               </Button>
+              {hasPendingChanges && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="bg-green-600 hover:bg-green-700"
+                  onClick={handleSaveCategoryChanges}
+                  disabled={updateTemplate.isPending}
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Salvar Alterações
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -184,6 +213,7 @@ export default function WhatsAppTemplatesSettings() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Categoria</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Template</TableHead>
                   <TableHead>Status</TableHead>
@@ -198,6 +228,30 @@ export default function WhatsAppTemplatesSettings() {
                   const StatusIcon = statusConfig.icon;
                   return (
                     <TableRow key={template.id}>
+                      <TableCell>
+                        <Select
+                          value={pendingCategoryChanges[template.id] || template.template_category || 'sla'}
+                          onValueChange={(val: 'sla' | 'operational') => {
+                            if (val === (template.template_category || 'sla')) {
+                              setPendingCategoryChanges(prev => {
+                                const next = { ...prev };
+                                delete next[template.id];
+                                return next;
+                              });
+                            } else {
+                              setPendingCategoryChanges(prev => ({ ...prev, [template.id]: val }));
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-[120px] h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sla">SLA</SelectItem>
+                            <SelectItem value="operational">Operacional</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <div className={`w-2 h-2 rounded-full shrink-0 ${statusConfig.dotClass}`} />
@@ -330,16 +384,51 @@ export default function WhatsAppTemplatesSettings() {
               </div>
 
               <div>
-                <Label htmlFor="tpl-automation">Tipo de Automação *</Label>
-                <Input
-                  id="tpl-automation"
-                  value={newAutomationType}
-                  onChange={(e) => setNewAutomationType(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                  placeholder="ex: payment_pre_7d"
-                  className="mt-1"
-                />
-                <p className="text-xs text-muted-foreground mt-1">Identificador interno da automação</p>
+                <Label>Categoria *</Label>
+                <Select value={newCategory} onValueChange={(v: 'sla' | 'operational') => setNewCategory(v)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sla">SLA — Automação vinculada a regra</SelectItem>
+                    <SelectItem value="operational">Operacional — Disponível no chat</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {newCategory === 'sla' 
+                    ? 'Templates SLA são usados automaticamente pelas automações' 
+                    : 'Templates operacionais ficam disponíveis no chat para envio manual fora da janela de 24h'}
+                </p>
               </div>
+
+              {newCategory === 'sla' ? (
+                <div>
+                  <Label>Tipo de Automação (Regra SLA) *</Label>
+                  <Select value={newAutomationType} onValueChange={setNewAutomationType}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Selecione a regra..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(AUTOMATION_LABELS).map(([key, label]) => (
+                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">Regra SLA vinculada a este template</p>
+                </div>
+              ) : (
+                <div>
+                  <Label htmlFor="tpl-automation-op">Identificador (opcional)</Label>
+                  <Input
+                    id="tpl-automation-op"
+                    value={newAutomationType}
+                    onChange={(e) => setNewAutomationType(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    placeholder="ex: contato_geral"
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Identificador livre para organização interna</p>
+                </div>
+              )}
 
               <div>
                 <Label>Idioma</Label>
@@ -427,7 +516,7 @@ export default function WhatsAppTemplatesSettings() {
             <Button variant="outline" onClick={() => { setShowNewDialog(false); resetNewForm(); }}>Cancelar</Button>
             <Button
               onClick={handleCreateTemplate}
-              disabled={!newName || !isValidName || !newAutomationType || !newBody || createTemplate.isPending}
+              disabled={!newName || !isValidName || !newBody || (newCategory === 'sla' && !newAutomationType) || createTemplate.isPending}
             >
               {createTemplate.isPending ? 'Criando...' : 'Criar Template'}
             </Button>

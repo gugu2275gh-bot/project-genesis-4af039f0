@@ -13,6 +13,7 @@ interface WhatsAppTemplate {
   status: string;
   rejection_reason: string | null;
   is_active: boolean;
+  template_category: 'sla' | 'operational';
   created_at: string;
   updated_at: string;
 }
@@ -73,7 +74,7 @@ export function useWhatsAppTemplates() {
   });
 
   const updateTemplate = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; body_text?: string; is_active?: boolean; template_name?: string }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; body_text?: string; is_active?: boolean; template_name?: string; template_category?: 'sla' | 'operational' }) => {
       const { error } = await supabase
         .from('whatsapp_templates')
         .update({ ...updates, updated_at: new Date().toISOString() } as any)
@@ -95,6 +96,7 @@ export function useWhatsAppTemplates() {
       template_name: string;
       body_text: string;
       variables: string[];
+      template_category?: 'sla' | 'operational';
     }) => {
       const { error } = await supabase
         .from('whatsapp_templates')
@@ -102,6 +104,7 @@ export function useWhatsAppTemplates() {
           ...newTemplate,
           status: 'draft',
           is_active: false,
+          template_category: newTemplate.template_category || 'sla',
         } as any);
       if (error) throw error;
     },
@@ -144,6 +147,10 @@ export function useWhatsAppTemplates() {
     },
   });
 
+  const operationalTemplates = templates?.filter(
+    (t) => t.template_category === 'operational' && t.status === 'approved' && t.is_active
+  ) || [];
+
   return {
     templates,
     isLoading,
@@ -154,5 +161,6 @@ export function useWhatsAppTemplates() {
     deleteTemplate,
     templateLogs,
     logsLoading,
+    operationalTemplates,
   };
 }
