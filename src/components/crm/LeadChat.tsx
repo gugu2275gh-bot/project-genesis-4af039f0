@@ -513,6 +513,41 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
         {/* Input Area */}
         <div className="p-4 border-t bg-muted/30 flex-shrink-0">
           <div className="flex gap-2">
+            {operationalTemplates.length > 0 && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        disabled={sendingTemplate}
+                        className="shrink-0"
+                      >
+                        <LayoutTemplate className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Enviar template (fora janela 24h)</TooltipContent>
+                  </Tooltip>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-2" align="start">
+                  <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Templates Operacionais</p>
+                  <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                    {operationalTemplates.map((tpl) => (
+                      <button
+                        key={tpl.id}
+                        className="w-full text-left px-2 py-1.5 rounded-md hover:bg-accent text-sm transition-colors"
+                        onClick={() => handleSendTemplate(tpl as any)}
+                        disabled={sendingTemplate}
+                      >
+                        <p className="font-medium text-xs">{tpl.template_name}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">{tpl.body_text}</p>
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
             <Input
               placeholder="Digite sua mensagem..."
               value={newMessage}
