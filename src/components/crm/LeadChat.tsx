@@ -326,10 +326,21 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                 👁 Todos os setores
               </Badge>
             )}
+            {isAIPaused ? (
+              <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-50 dark:bg-orange-900/20 gap-1">
+                <BotOff className="h-3 w-3" />
+                IA Pausada
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50 dark:bg-green-900/20 gap-1">
+                <Bot className="h-3 w-3" />
+                IA Ativa
+              </Badge>
+            )}
             {windowStatus.isOutside ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant="outline" className="text-destructive border-destructive/30 bg-destructive/10 gap-1">
+                  <Badge variant="outline" className="text-destructive border-destructive/30 bg-destructive/10 gap-1 cursor-help">
                     <AlertTriangle className="h-3 w-3" />
                     Fora da janela 24h
                   </Badge>
@@ -343,7 +354,7 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
             ) : windowStatus.hoursAgo !== null && windowStatus.hoursAgo >= 20 ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant="outline" className="text-warning border-warning/30 bg-warning/10 gap-1">
+                  <Badge variant="outline" className="text-warning border-warning/30 bg-warning/10 gap-1 cursor-help">
                     <Clock className="h-3 w-3" />
                     Janela fecha em {24 - windowStatus.hoursAgo}h
                   </Badge>
@@ -353,12 +364,6 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                 </TooltipContent>
               </Tooltip>
             ) : null}
-            ) : (
-              <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50 dark:bg-green-900/20 gap-1">
-                <Bot className="h-3 w-3" />
-                IA Ativa
-              </Badge>
-            )}
           </div>
           {activeSetores.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap">
