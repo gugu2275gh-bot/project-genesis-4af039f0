@@ -146,6 +146,15 @@ export default function WhatsAppTemplatesSettings() {
   const isValidName = /^[a-z0-9_]+$/.test(newName);
   const bodyCharCount = newBody.length;
 
+  // Duplicate validation
+  const automationTypeToCheck = newCategory === 'sla' ? newAutomationType : (newAutomationType || newName);
+  const duplicateTemplate = automationTypeToCheck
+    ? templates?.find(t => t.automation_type === automationTypeToCheck && t.language === newLanguage)
+    : null;
+  const duplicateNameTemplate = newName
+    ? templates?.find(t => t.template_name === newName)
+    : null;
+
   // Build preview text
   const previewText = newBody.replace(/\{\{(\d+)\}\}/g, (_, idx) => {
     const i = parseInt(idx) - 1;
