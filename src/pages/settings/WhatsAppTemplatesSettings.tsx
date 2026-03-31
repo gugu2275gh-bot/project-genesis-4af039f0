@@ -101,13 +101,15 @@ export default function WhatsAppTemplatesSettings() {
   };
 
   const handleCreateTemplate = () => {
-    if (!newName || !newAutomationType || !newBody) return;
+    if (!newName || !newBody) return;
+    if (newCategory === 'sla' && !newAutomationType) return;
     createTemplate.mutate(
       {
-        automation_type: newAutomationType,
+        automation_type: newAutomationType || newName,
         template_name: newName,
         body_text: newBody,
         variables: newVariables,
+        template_category: newCategory,
       },
       {
         onSuccess: () => {
@@ -116,6 +118,16 @@ export default function WhatsAppTemplatesSettings() {
         },
       }
     );
+  };
+
+  const hasPendingChanges = Object.keys(pendingCategoryChanges).length > 0;
+
+  const handleSaveCategoryChanges = async () => {
+    const promises = Object.entries(pendingCategoryChanges).map(([id, category]) =>
+      updateTemplate.mutateAsync({ id, template_category: category })
+    );
+    await Promise.all(promises);
+    setPendingCategoryChanges({});
   };
 
   const addVariable = () => {
