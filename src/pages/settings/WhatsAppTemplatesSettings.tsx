@@ -228,6 +228,30 @@ export default function WhatsAppTemplatesSettings() {
                   const StatusIcon = statusConfig.icon;
                   return (
                     <TableRow key={template.id}>
+                      <TableCell>
+                        <Select
+                          value={pendingCategoryChanges[template.id] || template.template_category || 'sla'}
+                          onValueChange={(val: 'sla' | 'operational') => {
+                            if (val === (template.template_category || 'sla')) {
+                              setPendingCategoryChanges(prev => {
+                                const next = { ...prev };
+                                delete next[template.id];
+                                return next;
+                              });
+                            } else {
+                              setPendingCategoryChanges(prev => ({ ...prev, [template.id]: val }));
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-[120px] h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sla">SLA</SelectItem>
+                            <SelectItem value="operational">Operacional</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <div className={`w-2 h-2 rounded-full shrink-0 ${statusConfig.dotClass}`} />
