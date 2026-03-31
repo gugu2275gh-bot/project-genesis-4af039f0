@@ -213,6 +213,7 @@ export default function WhatsAppTemplatesSettings() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Categoria</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Template</TableHead>
                   <TableHead>Status</TableHead>
