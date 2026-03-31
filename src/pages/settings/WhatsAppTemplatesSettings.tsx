@@ -110,6 +110,7 @@ export default function WhatsAppTemplatesSettings() {
         body_text: newBody,
         variables: newVariables,
         template_category: newCategory,
+        language: newLanguage,
       },
       {
         onSuccess: () => {
