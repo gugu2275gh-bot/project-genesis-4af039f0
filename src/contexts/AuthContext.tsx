@@ -140,7 +140,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resetPassword = async (email: string) => {
     const origin = window.location.origin;
-    const productionOrigin = 'https://cbasesoria.lovable.app';
+    const productionOrigin = 'https://cb.innovatia.com.br';
     const isPreviewDomain = origin.includes('lovableproject.com') || origin.includes('id-preview--');
 
     const redirectBase = isPreviewDomain ? productionOrigin : origin;

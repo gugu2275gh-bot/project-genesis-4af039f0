@@ -100,8 +100,8 @@ serve(async (req) => {
       },
       body: new URLSearchParams({
         'mode': 'payment',
-        'success_url': `${Deno.env.get('SITE_URL') || 'https://cb-asesoria.lovable.app'}/portal/payments?success=true&payment_id=${paymentId}`,
-        'cancel_url': `${Deno.env.get('SITE_URL') || 'https://cb-asesoria.lovable.app'}/portal/payments?canceled=true`,
+        'success_url': `${Deno.env.get('SITE_URL') || 'https://cb.innovatia.com.br'}/portal/payments?success=true&payment_id=${paymentId}`,
+        'cancel_url': `${Deno.env.get('SITE_URL') || 'https://cb.innovatia.com.br'}/portal/payments?canceled=true`,
         'line_items[0][price_data][currency]': currency.toLowerCase(),
         'line_items[0][price_data][product_data][name]': description || 'Serviço CB Asesoría',
         'line_items[0][price_data][unit_amount]': String(Math.round(amount * 100)),
