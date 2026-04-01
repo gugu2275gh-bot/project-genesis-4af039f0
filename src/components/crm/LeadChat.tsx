@@ -548,58 +548,101 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
 
         {/* Input Area */}
         <div className="p-4 border-t bg-muted/30 flex-shrink-0">
-          <div className="flex gap-2">
-            {operationalTemplates.length > 0 && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        disabled={sendingTemplate}
-                        className="shrink-0"
-                      >
-                        <LayoutTemplate className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Enviar template (fora janela 24h)</TooltipContent>
-                  </Tooltip>
-                </PopoverTrigger>
-                <PopoverContent className="w-72 p-2" align="start">
-                  <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Templates Operacionais</p>
-                  <div className="space-y-1 max-h-[200px] overflow-y-auto">
-                    {operationalTemplates.map((tpl) => (
-                      <button
-                        key={tpl.id}
-                        className="w-full text-left px-2 py-1.5 rounded-md hover:bg-accent text-sm transition-colors"
-                        onClick={() => handleSendTemplate(tpl as any)}
-                        disabled={sendingTemplate}
-                      >
-                        <p className="font-medium text-xs">{tpl.template_name}</p>
-                        <p className="text-[11px] text-muted-foreground truncate">{tpl.body_text}</p>
-                      </button>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
-            )}
-            <Input
-              placeholder="Digite sua mensagem..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="flex-1"
-              disabled={sendMessage.isPending}
-            />
-            <Button
-              onClick={handleSend}
-              disabled={!newMessage.trim() || sendMessage.isPending}
-              size="icon"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
+          {windowStatus.isOutside ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs text-destructive">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                <span>Janela de 24h expirada. Envie um template aprovado para reabrir a conversa.</span>
+              </div>
+              {operationalTemplates.length > 0 ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2 border-destructive/30 text-destructive hover:bg-destructive/10"
+                      disabled={sendingTemplate}
+                    >
+                      <LayoutTemplate className="h-4 w-4" />
+                      Selecionar Template Aprovado
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 p-2" align="start">
+                    <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Templates Operacionais Aprovados</p>
+                    <div className="space-y-1 max-h-[250px] overflow-y-auto">
+                      {operationalTemplates.map((tpl) => (
+                        <button
+                          key={tpl.id}
+                          className="w-full text-left px-3 py-2 rounded-md hover:bg-accent text-sm transition-colors"
+                          onClick={() => handleSendTemplate(tpl as any)}
+                          disabled={sendingTemplate}
+                        >
+                          <p className="font-medium text-xs">{tpl.template_name}</p>
+                          <p className="text-[11px] text-muted-foreground line-clamp-2">{tpl.body_text}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-1">
+                  Nenhum template operacional aprovado disponível. Crie e submeta templates em Configurações.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              {operationalTemplates.length > 0 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          disabled={sendingTemplate}
+                          className="shrink-0"
+                        >
+                          <LayoutTemplate className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Enviar template operacional</TooltipContent>
+                    </Tooltip>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72 p-2" align="start">
+                    <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Templates Operacionais</p>
+                    <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                      {operationalTemplates.map((tpl) => (
+                        <button
+                          key={tpl.id}
+                          className="w-full text-left px-2 py-1.5 rounded-md hover:bg-accent text-sm transition-colors"
+                          onClick={() => handleSendTemplate(tpl as any)}
+                          disabled={sendingTemplate}
+                        >
+                          <p className="font-medium text-xs">{tpl.template_name}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">{tpl.body_text}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+              <Input
+                placeholder="Digite sua mensagem..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="flex-1"
+                disabled={sendMessage.isPending}
+              />
+              <Button
+                onClick={handleSend}
+                disabled={!newMessage.trim() || sendMessage.isPending}
+                size="icon"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
