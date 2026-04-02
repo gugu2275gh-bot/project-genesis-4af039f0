@@ -63,8 +63,17 @@ export function useContracts() {
               )
             )
           ),
+          contract_leads (
+            id, lead_id,
+            leads (
+              id, service_interest, service_type_id,
+              service_types (
+                id, name
+              )
+            )
+          ),
           payments (
-            id, amount, status, paid_at, installment_number, due_date
+            id, amount, status, paid_at, installment_number, due_date, opportunity_id
           )
         `)
         .order('created_at', { ascending: false });
