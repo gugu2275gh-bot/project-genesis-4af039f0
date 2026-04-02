@@ -399,7 +399,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>Forma de Pagamento — {contactName}</DialogTitle>
         </DialogHeader>
