@@ -25,9 +25,13 @@ import { useWhatsAppTemplates } from '@/hooks/useWhatsAppTemplates';
 
 const STATUS_CONFIG: Record<string, { label: string; badgeClass: string; dotClass: string; icon: typeof Clock }> = {
   draft: { label: 'Rascunho', badgeClass: 'bg-blue-50 text-blue-600 border border-blue-200', dotClass: 'bg-blue-500', icon: FileText },
-  pending: { label: 'Pendente', badgeClass: 'bg-blue-100 text-blue-700 border border-blue-300', dotClass: 'bg-blue-500', icon: Clock },
+  pending: { label: 'Pendente', badgeClass: 'bg-yellow-100 text-yellow-700 border border-yellow-300', dotClass: 'bg-yellow-500', icon: Clock },
   approved: { label: 'Aprovado', badgeClass: 'bg-green-100 text-green-700 border border-green-300', dotClass: 'bg-green-500', icon: CheckCircle2 },
   rejected: { label: 'Rejeitado', badgeClass: 'bg-red-100 text-red-700 border border-red-300', dotClass: 'bg-red-500', icon: XCircle },
+  paused: { label: 'Pausado', badgeClass: 'bg-orange-100 text-orange-700 border border-orange-300', dotClass: 'bg-orange-500', icon: Clock },
+  disabled: { label: 'Desabilitado', badgeClass: 'bg-gray-100 text-gray-500 border border-gray-300', dotClass: 'bg-gray-400', icon: XCircle },
+  unsubmitted: { label: 'Não Submetido', badgeClass: 'bg-gray-50 text-gray-500 border border-gray-200', dotClass: 'bg-gray-300', icon: FileText },
+  received: { label: 'Recebido', badgeClass: 'bg-blue-100 text-blue-700 border border-blue-300', dotClass: 'bg-blue-500', icon: Clock },
   error: { label: 'Erro', badgeClass: 'bg-red-100 text-red-700 border border-red-300', dotClass: 'bg-red-500', icon: AlertCircle },
 };
 
