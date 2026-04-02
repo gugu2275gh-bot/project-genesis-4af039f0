@@ -181,6 +181,7 @@ export function useWhatsAppTemplates() {
     isLoading,
     submitTemplates,
     checkStatus,
+    syncFromTwilio,
     updateTemplate,
     createTemplate,
     deleteTemplate,
