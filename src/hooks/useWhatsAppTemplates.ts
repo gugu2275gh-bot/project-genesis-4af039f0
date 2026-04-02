@@ -152,6 +152,11 @@ export function useWhatsAppTemplates() {
       template_category?: 'sla' | 'operational';
       meta_category?: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
       language?: string;
+      content_type?: string;
+      header_text?: string | null;
+      footer_text?: string | null;
+      media_url?: string | null;
+      buttons?: TemplateButton[];
     }) => {
       const { error } = await supabase
         .from('whatsapp_templates')
