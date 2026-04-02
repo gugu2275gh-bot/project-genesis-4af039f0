@@ -58,7 +58,8 @@ const LANGUAGE_OPTIONS = [
 ];
 
 export default function WhatsAppTemplatesSettings() {
-  const { templates, isLoading, submitTemplates, checkStatus, syncFromTwilio, updateTemplate, createTemplate, deleteTemplate, templateLogs, logsLoading } = useWhatsAppTemplates();
+  const { templates, isLoading, submitTemplates, checkStatus, syncFromTwilio, forceResubmit, updateTemplate, createTemplate, deleteTemplate, templateLogs, logsLoading } = useWhatsAppTemplates();
+  const [showForceResubmitConfirm, setShowForceResubmitConfirm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const [editBody, setEditBody] = useState('');
   const [editCategory, setEditCategory] = useState<'sla' | 'operational'>('sla');
