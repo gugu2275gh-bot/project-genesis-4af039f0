@@ -222,10 +222,75 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
   }, [newMessage, cacheKey, queryClient]);
 
   const handleSend = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() && !attachedFile) return;
     
-    await sendMessage.mutateAsync({ leadId, message: newMessage });
+    let mediaUrl: string | undefined;
+    let mediaType: string | undefined;
+    let mediaFilename: string | undefined;
+    let mediaMimetype: string | undefined;
+
+    if (attachedFile) {
+      setIsUploading(true);
+      try {
+        const fileExt = attachedFile.name.split('.').pop();
+        const filePath = `agent-uploads/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('whatsapp-media')
+          .upload(filePath, attachedFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('whatsapp-media')
+          .getPublicUrl(filePath);
+
+        mediaUrl = publicUrlData.publicUrl;
+        mediaMimetype = attachedFile.type;
+        mediaFilename = attachedFile.name;
+        
+        if (attachedFile.type.startsWith('image/')) {
+          mediaType = 'image';
+        } else if (attachedFile.type.startsWith('video/')) {
+          mediaType = 'video';
+        } else if (attachedFile.type.startsWith('audio/')) {
+          mediaType = 'audio';
+        } else {
+          mediaType = 'document';
+        }
+      } catch (err: any) {
+        toast.error('Erro ao fazer upload: ' + err.message);
+        setIsUploading(false);
+        return;
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
+    await sendMessage.mutateAsync({ 
+      leadId, 
+      message: newMessage || (attachedFile ? `📎 ${attachedFile.name}` : ''),
+      mediaUrl,
+      mediaType,
+      mediaFilename,
+      mediaMimetype,
+    });
     setNewMessage('');
+    setAttachedFile(null);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Max 16MB for WhatsApp
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 16MB.');
+      return;
+    }
+    setAttachedFile(file);
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
   };
 
   const handleSendTemplate = async (template: { id: string; template_name: string; content_sid: string | null; body_text: string; variables: string[] }) => {
