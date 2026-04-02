@@ -94,6 +94,24 @@ export function useWhatsAppTemplates() {
     },
   });
 
+  const forceResubmit = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('submit-whatsapp-templates', {
+        body: { action: 'force_resubmit' },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
+      const summary = data?.summary || {};
+      toast.success(`Resubmissão concluída: ${summary.submitted || 0} submetido(s), ${summary.errors || 0} erro(s)`);
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao resubmeter templates: ' + error.message);
+    },
+  });
+
   const updateTemplate = useMutation({
     mutationFn: async ({ id, ...updates }: { id: string; body_text?: string; is_active?: boolean; template_name?: string; template_category?: 'sla' | 'operational'; meta_category?: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION'; automation_type?: string; language?: string; variables?: string[]; status?: string }) => {
       const { error } = await supabase
@@ -182,6 +200,7 @@ export function useWhatsAppTemplates() {
     submitTemplates,
     checkStatus,
     syncFromTwilio,
+    forceResubmit,
     updateTemplate,
     createTemplate,
     deleteTemplate,

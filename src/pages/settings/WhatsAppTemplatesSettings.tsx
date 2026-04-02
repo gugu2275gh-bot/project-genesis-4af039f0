@@ -58,7 +58,8 @@ const LANGUAGE_OPTIONS = [
 ];
 
 export default function WhatsAppTemplatesSettings() {
-  const { templates, isLoading, submitTemplates, checkStatus, syncFromTwilio, updateTemplate, createTemplate, deleteTemplate, templateLogs, logsLoading } = useWhatsAppTemplates();
+  const { templates, isLoading, submitTemplates, checkStatus, syncFromTwilio, forceResubmit, updateTemplate, createTemplate, deleteTemplate, templateLogs, logsLoading } = useWhatsAppTemplates();
+  const [showForceResubmitConfirm, setShowForceResubmitConfirm] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const [editBody, setEditBody] = useState('');
   const [editCategory, setEditCategory] = useState<'sla' | 'operational'>('sla');
@@ -264,6 +265,15 @@ export default function WhatsAppTemplatesSettings() {
               >
                 <Send className="h-4 w-4 mr-2" />
                 Submeter Todos
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setShowForceResubmitConfirm(true)}
+                disabled={forceResubmit.isPending}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${forceResubmit.isPending ? 'animate-spin' : ''}`} />
+                Resubmeter Todos
               </Button>
               {hasPendingChanges && (
                 <Button
@@ -998,6 +1008,34 @@ export default function WhatsAppTemplatesSettings() {
               }}
             >
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Force Resubmit Confirmation */}
+      <AlertDialog open={showForceResubmitConfirm} onOpenChange={setShowForceResubmitConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resubmeter Todos os Templates</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação irá <strong>deletar todos os templates existentes no Twilio</strong>, recriá-los com os dados de teste corretos e resubmetê-los para aprovação da Meta.
+              <br /><br />
+              ⚠️ Todos os templates ficarão inativos até serem aprovados novamente (prazo de até 48h).
+              <br /><br />
+              Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                forceResubmit.mutate();
+                setShowForceResubmitConfirm(false);
+              }}
+            >
+              Sim, Resubmeter Todos
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
