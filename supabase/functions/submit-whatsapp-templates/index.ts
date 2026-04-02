@@ -146,7 +146,17 @@ serve(async (req) => {
 
         // Step 1: Create Content Template (only if no SID yet)
         if (!contentSid) {
-          const contentBody = {
+          // Detect placeholders and generate sample values
+          const placeholderRegex = /\{\{(\d+)\}\}/g
+          const sampleDefaults: Record<string, string> = { '1': 'Jorge', '2': '9,99', '3': '31/12/2050' }
+          const variables: Record<string, string> = {}
+          let match
+          while ((match = placeholderRegex.exec(template.body_text)) !== null) {
+            const idx = match[1]
+            variables[idx] = sampleDefaults[idx] || `exemplo_${idx}`
+          }
+
+          const contentBody: any = {
             friendly_name: template.template_name,
             language: template.language || 'pt_BR',
             types: {
@@ -155,6 +165,10 @@ serve(async (req) => {
               },
             },
             content_type: 'twilio/text',
+          }
+
+          if (Object.keys(variables).length > 0) {
+            contentBody.variables = variables
           }
 
           console.log(`Step 1: Creating content template: ${template.template_name}`)
