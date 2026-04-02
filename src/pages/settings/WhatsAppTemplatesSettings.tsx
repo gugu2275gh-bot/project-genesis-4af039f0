@@ -355,6 +355,70 @@ export default function WhatsAppTemplatesSettings() {
         </CardContent>
       </Card>
 
+      {/* Variables Reference */}
+      <Collapsible open={variablesOpen} onOpenChange={setVariablesOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <CardTitle className="flex items-center gap-2 text-base">
+                {variablesOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                📋 Variáveis Disponíveis por Tipo de Automação
+              </CardTitle>
+              <CardDescription>Referência rápida dos campos disponíveis para cada template</CardDescription>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              <p className="text-xs text-muted-foreground mb-3">
+                Use <code className="bg-muted px-1 rounded">{'{{1}}'}</code> para a 1ª variável, <code className="bg-muted px-1 rounded">{'{{2}}'}</code> para a 2ª, e assim por diante. A ordem segue o array de variáveis cadastrado no template.
+              </p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tipo de Automação</TableHead>
+                    <TableHead>Variáveis</TableHead>
+                    <TableHead>Placeholders</TableHead>
+                    <TableHead>Descrição</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[
+                    { type: 'welcome', vars: ['nombre'], desc: 'Nome do cliente' },
+                    { type: 'reengagement', vars: ['nombre'], desc: 'Nome do cliente' },
+                    { type: 'contract_reminder', vars: ['nombre'], desc: 'Nome do cliente' },
+                    { type: 'onboarding_reminder', vars: ['nombre'], desc: 'Nome do cliente' },
+                    { type: 'payment_pre_7d', vars: ['nombre', 'valor', 'fecha'], desc: 'Nome, valor da parcela, data de vencimento' },
+                    { type: 'payment_pre_48h', vars: ['nombre', 'valor', 'fecha'], desc: 'Nome, valor da parcela, data de vencimento' },
+                    { type: 'payment_due_today', vars: ['nombre', 'valor'], desc: 'Nome, valor da parcela' },
+                    { type: 'payment_post_d1', vars: ['nombre', 'valor'], desc: 'Nome, valor em atraso' },
+                    { type: 'payment_post_d3', vars: ['nombre', 'valor'], desc: 'Nome, valor em atraso' },
+                    { type: 'document_reminder', vars: ['nombre', 'documento'], desc: 'Nome, nome do documento pendente' },
+                    { type: 'tie_pickup', vars: ['nombre', 'fecha'], desc: 'Nome, prazo de retirada' },
+                    { type: 'huellas_reminder', vars: ['nombre', 'fecha'], desc: 'Nome, data da cita' },
+                  ].map((row) => (
+                    <TableRow key={row.type}>
+                      <TableCell className="font-medium text-xs">
+                        <Badge variant="outline" className="text-xs">{AUTOMATION_LABELS[row.type] || row.type}</Badge>
+                        <span className="text-muted-foreground ml-1 text-[10px]">({row.type})</span>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {row.vars.map((v, i) => (
+                          <Badge key={v} variant="secondary" className="mr-1 text-xs">{v}</Badge>
+                        ))}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono">
+                        {row.vars.map((_, i) => `{{${i + 1}}}`).join(', ')}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{row.desc}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
       {/* Edit Dialog */}
       <Dialog open={!!editingTemplate} onOpenChange={(open) => !open && setEditingTemplate(null)}>
         <DialogContent>
