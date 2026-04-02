@@ -156,7 +156,18 @@ export default function LeadDetail() {
 
     // Update service_interest on the lead if changed
     if (editForm.service_interest && editForm.service_interest !== lead.service_interest) {
-      await updateLead.mutateAsync({ id: lead.id, service_interest: editForm.service_interest as any });
+      const VALID_SERVICE_INTERESTS = [
+        'VISTO_ESTUDANTE', 'VISTO_TRABALHO', 'REAGRUPAMENTO',
+        'RENOVACAO_RESIDENCIA', 'NACIONALIDADE_RESIDENCIA',
+        'NACIONALIDADE_CASAMENTO', 'OUTRO', 'RESIDENCIA_PARENTE_COMUNITARIO'
+      ];
+      const selectedST = serviceTypes?.find(st => st.code === editForm.service_interest);
+      const isValidEnum = VALID_SERVICE_INTERESTS.includes(editForm.service_interest);
+      await updateLead.mutateAsync({
+        id: lead.id,
+        service_interest: (isValidEnum ? editForm.service_interest : 'OUTRO') as any,
+        service_type_id: selectedST?.id || null,
+      });
     }
     
     // Invalidate lead query to refresh data
