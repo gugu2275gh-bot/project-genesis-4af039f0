@@ -112,6 +112,7 @@ export default function WhatsAppTemplatesSettings() {
         body_text: newBody,
         variables: newVariables,
         template_category: newCategory,
+        meta_category: newMetaCategory,
         language: newLanguage,
       },
       {
