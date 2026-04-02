@@ -42,7 +42,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full max-w-full justify-between font-normal overflow-hidden min-w-0"
+          className="w-full max-w-full justify-between font-normal overflow-hidden min-w-0 whitespace-normal"
         >
           <span className="truncate min-w-0 flex-1 text-left">
             {displaySelectedLabel || placeholder}
