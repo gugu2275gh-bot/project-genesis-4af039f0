@@ -308,6 +308,23 @@ export function ContractGroupsSection({
         return;
       }
 
+      // Check if there's already an active contract linked to any of the selected leads
+      const selectedIds = Array.from(selectedLeadIds);
+      const { data: existingLinks } = await supabase
+        .from('contract_leads')
+        .select('contract_id, contracts:contract_id(id, status)')
+        .in('lead_id', selectedIds);
+      
+      const hasActiveContract = existingLinks?.some((link: any) => 
+        link.contracts && link.contracts.status !== 'CANCELADO'
+      );
+      
+      if (hasActiveContract) {
+        toast({ title: 'Contrato já existe', description: 'Um dos serviços selecionados já está vinculado a um contrato ativo.', variant: 'destructive' });
+        setIsCreatingContract(false);
+        return;
+      }
+
       const firstLead = contactLeads.find(l => l.id === firstLeadId);
       
       // Create draft contract
