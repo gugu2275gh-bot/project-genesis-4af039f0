@@ -617,7 +617,13 @@ export function ContractGroupsSection({
           <div className="flex items-center gap-2">
             {isServiceCompleted && <StatusBadge variant="success" label="Concluído" />}
             {allPaymentsPaid && leadPayments.length > 0 && <StatusBadge variant="success" label="Quitado" />}
-            {!isServiceCompleted && (
+            {lead.status === 'STANDBY' && (
+              <Badge variant="outline" className="text-amber-700 border-amber-400 bg-amber-100">
+                <Clock className="h-3 w-3 mr-1" />
+                Serviço Futuro
+              </Badge>
+            )}
+            {!isServiceCompleted && lead.status !== 'STANDBY' && (
               isConfirmed ? (
                 <StatusBadge status={lead.status || 'NOVO'} label={LEAD_STATUS_LABELS[lead.status || 'NOVO']} />
               ) : (
