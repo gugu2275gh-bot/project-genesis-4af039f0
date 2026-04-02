@@ -276,6 +276,11 @@ export default function WhatsAppTemplatesSettings() {
                         {template.body_text}
                       </TableCell>
                       <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {(template as any).meta_category || 'UTILITY'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.badgeClass}`}>
                           <StatusIcon className="h-3 w-3" />
                           {statusConfig.label}
