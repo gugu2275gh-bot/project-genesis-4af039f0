@@ -467,35 +467,182 @@ export default function WhatsAppTemplatesSettings() {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingTemplate} onOpenChange={(open) => !open && setEditingTemplate(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Editar Template: {editingTemplate && (AUTOMATION_LABELS[editingTemplate.automation_type] || editingTemplate.automation_type)}</DialogTitle>
+            <DialogTitle>Editar Template: {editingTemplate?.template_name}</DialogTitle>
+            <DialogDescription>Edite os campos abaixo. Alterações exigirão nova aprovação da Meta.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Variáveis disponíveis:</label>
-              <div className="flex gap-1 mt-1 flex-wrap">
-                {editingTemplate?.variables?.map((v: string, i: number) => (
-                  <Badge key={v} variant="outline">{`{{${i + 1}}} = ${v}`}</Badge>
-                ))}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Form */}
+            <div className="space-y-4">
+              <div>
+                <Label>Nome do Template</Label>
+                <Input value={editingTemplate?.template_name || ''} disabled className="mt-1 bg-muted" />
+                <p className="text-xs text-muted-foreground mt-1">O nome não pode ser alterado</p>
+              </div>
+
+              <div>
+                <Label>Categoria *</Label>
+                <Select value={editCategory} onValueChange={(v: 'sla' | 'operational') => setEditCategory(v)}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sla">SLA — Automação vinculada a regra</SelectItem>
+                    <SelectItem value="operational">Operacional — Disponível no chat</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {editCategory === 'sla' ? (
+                <div>
+                  <Label>Tipo de Automação (Regra SLA) *</Label>
+                  <Select value={editAutomationType} onValueChange={setEditAutomationType}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a regra..." /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(AUTOMATION_LABELS).map(([key, label]) => (
+                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div>
+                  <Label>Identificador (opcional)</Label>
+                  <Input
+                    value={editAutomationType}
+                    onChange={(e) => setEditAutomationType(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    placeholder="ex: contato_geral"
+                    className="mt-1"
+                  />
+                </div>
+              )}
+
+              <div>
+                <Label>Idioma</Label>
+                <Select value={editLanguage} onValueChange={setEditLanguage}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {LANGUAGE_OPTIONS.map((l) => (
+                      <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Categoria Meta *</Label>
+                <Select value={editMetaCategory} onValueChange={(v: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION') => setEditMetaCategory(v)}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="UTILITY">UTILITY — Transacional</SelectItem>
+                    <SelectItem value="MARKETING">MARKETING — Promoções</SelectItem>
+                    <SelectItem value="AUTHENTICATION">AUTHENTICATION — Verificação</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Corpo da Mensagem *</Label>
+                <Textarea
+                  value={editBody}
+                  onChange={(e) => setEditBody(e.target.value.slice(0, 1024))}
+                  rows={5}
+                  placeholder="Olá {{1}}, seu pagamento de {{2}} vence em {{3}}."
+                  className="mt-1"
+                />
+                <div className="flex justify-between mt-1">
+                  <p className="text-xs text-muted-foreground">Use {'{{1}}'}, {'{{2}}'} para variáveis</p>
+                  <p className={`text-xs ${editBodyCharCount > 1000 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    {editBodyCharCount}/1024
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <Label>Variáveis</Label>
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    value={editVariable}
+                    onChange={(e) => setEditVariable(e.target.value)}
+                    placeholder="Nome da variável"
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addEditVariable())}
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={addEditVariable}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex gap-1 mt-2 flex-wrap">
+                  {editVariables.map((v, i) => (
+                    <Badge key={v} variant="secondary" className="gap-1">
+                      {`{{${i + 1}}} = ${v}`}
+                      <button onClick={() => removeEditVariable(v)} className="hover:text-destructive">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
               </div>
             </div>
-            <Textarea
-              value={editBody}
-              onChange={(e) => setEditBody(e.target.value)}
-              rows={4}
-              placeholder="Texto do template..."
-            />
-            <p className="text-xs text-muted-foreground">
-              Nota: Alterar o texto após aprovação requer nova submissão.
-            </p>
+
+            {/* Preview */}
+            <div className="space-y-2">
+              <Label>Preview</Label>
+              <div className="bg-[#e5ddd5] rounded-lg p-4 min-h-[200px]">
+                <div className="bg-white rounded-lg p-3 shadow-sm max-w-[280px]">
+                  <p className="text-sm whitespace-pre-wrap">{editPreviewText || 'Escreva o corpo da mensagem...'}</p>
+                  <p className="text-[10px] text-muted-foreground text-right mt-1">
+                    {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground space-y-1 mt-3">
+                <p className="font-medium">Dicas para aprovação Meta:</p>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>Não inclua URLs encurtadas</li>
+                  <li>Evite linguagem agressiva de cobrança</li>
+                  <li>Inclua opt-out quando obrigatório</li>
+                  <li>Use variáveis para dados pessoais</li>
+                  <li>Máximo 1024 caracteres no corpo</li>
+                </ul>
+              </div>
+            </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setEditingTemplate(null)}>Cancelar</Button>
-            <Button onClick={handleSaveEdit} disabled={updateTemplate.isPending}>Salvar</Button>
+            <Button onClick={handleSaveEdit} disabled={!editBody || updateTemplate.isPending}>
+              Salvar Alterações
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Confirmation Alert */}
+      <AlertDialog open={showEditConfirm} onOpenChange={setShowEditConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              Atenção — Re-submissão Obrigatória
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm space-y-2">
+              <p>
+                Ao alterar este template, ele deverá ser <strong>submetido novamente para aprovação da Meta</strong>.
+              </p>
+              <p>
+                O prazo de retorno é de <strong>até 48 horas</strong>. Durante esse período, o template anterior deixará de funcionar e as automações associadas usarão mensagem livre (válida apenas na janela de 24h).
+              </p>
+              <p className="font-medium">Deseja continuar?</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmSaveEdit}>
+              Sim, salvar e re-submeter
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* New Template Dialog */}
       <Dialog open={showNewDialog} onOpenChange={(open) => { if (!open) { setShowNewDialog(false); resetNewForm(); } }}>
