@@ -1,0 +1,1 @@
+ALTER TABLE public.interactions ADD COLUMN sector text NULL;

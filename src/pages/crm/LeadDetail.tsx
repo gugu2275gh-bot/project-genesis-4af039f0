@@ -88,6 +88,7 @@ export default function LeadDetail() {
   
   const [newNote, setNewNote] = useState('');
   const [interactionChannel, setInteractionChannel] = useState<string>('WHATSAPP');
+  const [interactionSector, setInteractionSector] = useState<string>('atendimento');
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingInteractionId, setEditingInteractionId] = useState<string | null>(null);
   const [editingInteractionContent, setEditingInteractionContent] = useState('');

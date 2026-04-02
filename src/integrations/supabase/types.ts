@@ -1161,6 +1161,7 @@ export type Database = {
           id: string
           lead_id: string | null
           origin_bot: boolean | null
+          sector: string | null
         }
         Insert: {
           channel?: Database["public"]["Enums"]["interaction_channel"] | null
@@ -1174,6 +1175,7 @@ export type Database = {
           id?: string
           lead_id?: string | null
           origin_bot?: boolean | null
+          sector?: string | null
         }
         Update: {
           channel?: Database["public"]["Enums"]["interaction_channel"] | null
@@ -1187,6 +1189,7 @@ export type Database = {
           id?: string
           lead_id?: string | null
           origin_bot?: boolean | null
+          sector?: string | null
         }
         Relationships: [
           {
