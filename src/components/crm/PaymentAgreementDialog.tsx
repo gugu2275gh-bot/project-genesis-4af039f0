@@ -164,7 +164,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     if (form.fees.length > 0) {
       form.fees.forEach(fee => {
         if (parseFloat(fee.amount) > 0) {
-          summary += `Taxa (${fee.description || 'Sem descrição'}): + € ${parseFloat(fee.amount).toFixed(2)}\n`;
+          summary += `${fee.description || 'Custo'}: + € ${parseFloat(fee.amount).toFixed(2)}\n`;
         }
       });
     }
@@ -653,14 +653,14 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
           {/* Taxas / Fees */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-semibold">Taxas</Label>
+              <Label className="text-sm font-semibold">Outros Custos</Label>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setForm({ ...form, fees: [...form.fees, { description: '', amount: '' }] })}
               >
-                <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar taxa
+                <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar custo
               </Button>
             </div>
             {form.fees.map((fee, idx) => (
@@ -674,7 +674,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                       updated[idx] = { ...updated[idx], description: e.target.value };
                       setForm({ ...form, fees: updated });
                     }}
-                    placeholder="Taxa de tradução juramentada, Taxa 790, etc."
+                    placeholder="Tradução juramentada, Taxa 790, CCSE, etc."
                   />
                 </div>
                 <div>
@@ -722,7 +722,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               )}
               {form.fees.filter(f => parseFloat(f.amount) > 0).map((fee, idx) => (
                 <div key={idx} className="flex justify-between">
-                  <span className="text-muted-foreground">{fee.description || 'Taxa'}</span>
+                  <span className="text-muted-foreground">{fee.description || 'Custo'}</span>
                   <span>+ € {parseFloat(fee.amount).toFixed(2)}</span>
                 </div>
               ))}
