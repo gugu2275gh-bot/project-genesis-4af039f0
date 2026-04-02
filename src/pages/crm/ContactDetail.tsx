@@ -1200,14 +1200,16 @@ export default function ContactDetail() {
             />
           )}
 
-          {/* Serviços como Beneficiário */}
+          {/* Serviços como Beneficiário — usa a mesma seção unificada */}
           {contact.is_beneficiary && (
-            <BeneficiaryServicesSection
+            <ContractGroupsSection
               contactId={id!}
-              contact={contact}
-              beneficiaryServiceCases={beneficiaryServiceCases}
-              benefCasesLoading={benefCasesLoading}
+              contactName={contact.full_name}
+              contactLeads={allServiceLeads}
+              paymentNotes={paymentNotes}
+              confirmedLeadIds={confirmedLeadIds}
               navigate={navigate}
+              beneficiaryContacts={[]}
             />
           )}
 
