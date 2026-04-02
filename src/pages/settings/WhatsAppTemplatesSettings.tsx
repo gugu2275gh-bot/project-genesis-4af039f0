@@ -61,6 +61,8 @@ export default function WhatsAppTemplatesSettings() {
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [logFilter, setLogFilter] = useState<string>('all');
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
+  const [variablesOpen, setVariablesOpen] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(false);
 
   // Pending category changes for batch save
   const [pendingCategoryChanges, setPendingCategoryChanges] = useState<Record<string, 'sla' | 'operational'>>({});
@@ -353,6 +355,70 @@ export default function WhatsAppTemplatesSettings() {
         </CardContent>
       </Card>
 
+      {/* Variables Reference */}
+      <Collapsible open={variablesOpen} onOpenChange={setVariablesOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <CardTitle className="flex items-center gap-2 text-base">
+                {variablesOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                📋 Variáveis Disponíveis por Tipo de Automação
+              </CardTitle>
+              <CardDescription>Referência rápida dos campos disponíveis para cada template</CardDescription>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              <p className="text-xs text-muted-foreground mb-3">
+                Use <code className="bg-muted px-1 rounded">{'{{1}}'}</code> para a 1ª variável, <code className="bg-muted px-1 rounded">{'{{2}}'}</code> para a 2ª, e assim por diante. A ordem segue o array de variáveis cadastrado no template.
+              </p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tipo de Automação</TableHead>
+                    <TableHead>Variáveis</TableHead>
+                    <TableHead>Placeholders</TableHead>
+                    <TableHead>Descrição</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[
+                    { type: 'welcome', vars: ['nombre'], desc: 'Nome do cliente' },
+                    { type: 'reengagement', vars: ['nombre'], desc: 'Nome do cliente' },
+                    { type: 'contract_reminder', vars: ['nombre'], desc: 'Nome do cliente' },
+                    { type: 'onboarding_reminder', vars: ['nombre'], desc: 'Nome do cliente' },
+                    { type: 'payment_pre_7d', vars: ['nombre', 'valor', 'fecha'], desc: 'Nome, valor da parcela, data de vencimento' },
+                    { type: 'payment_pre_48h', vars: ['nombre', 'valor', 'fecha'], desc: 'Nome, valor da parcela, data de vencimento' },
+                    { type: 'payment_due_today', vars: ['nombre', 'valor'], desc: 'Nome, valor da parcela' },
+                    { type: 'payment_post_d1', vars: ['nombre', 'valor'], desc: 'Nome, valor em atraso' },
+                    { type: 'payment_post_d3', vars: ['nombre', 'valor'], desc: 'Nome, valor em atraso' },
+                    { type: 'document_reminder', vars: ['nombre', 'documento'], desc: 'Nome, nome do documento pendente' },
+                    { type: 'tie_pickup', vars: ['nombre', 'fecha'], desc: 'Nome, prazo de retirada' },
+                    { type: 'huellas_reminder', vars: ['nombre', 'fecha'], desc: 'Nome, data da cita' },
+                  ].map((row) => (
+                    <TableRow key={row.type}>
+                      <TableCell className="font-medium text-xs">
+                        <Badge variant="outline" className="text-xs">{AUTOMATION_LABELS[row.type] || row.type}</Badge>
+                        <span className="text-muted-foreground ml-1 text-[10px]">({row.type})</span>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {row.vars.map((v, i) => (
+                          <Badge key={v} variant="secondary" className="mr-1 text-xs">{v}</Badge>
+                        ))}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono">
+                        {row.vars.map((_, i) => `{{${i + 1}}}`).join(', ')}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{row.desc}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
       {/* Edit Dialog */}
       <Dialog open={!!editingTemplate} onOpenChange={(open) => !open && setEditingTemplate(null)}>
         <DialogContent>
@@ -579,14 +645,21 @@ export default function WhatsAppTemplatesSettings() {
         </DialogContent>
       </Dialog>
       {/* Logs Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ScrollText className="h-5 w-5" />
-              Logs de Envio
-            </CardTitle>
-            <div className="flex gap-2">
+      <Collapsible open={logsOpen} onOpenChange={setLogsOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  {logsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  <ScrollText className="h-5 w-5" />
+                  Logs de Envio
+                </CardTitle>
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="px-6 pb-2">
               <Select value={logFilter} onValueChange={setLogFilter}>
                 <SelectTrigger className="w-[140px] h-8 text-xs">
                   <SelectValue />
@@ -599,93 +672,93 @@ export default function WhatsAppTemplatesSettings() {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {logsLoading ? (
-            <p className="text-muted-foreground text-sm">Carregando logs...</p>
-          ) : !templateLogs?.length ? (
-            <p className="text-muted-foreground text-sm">Nenhum log encontrado.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8"></TableHead>
-                  <TableHead>Data/Hora</TableHead>
-                  <TableHead>Template</TableHead>
-                  <TableHead>Ação</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>HTTP</TableHead>
-                  <TableHead>Content SID</TableHead>
-                  <TableHead>Erro</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {templateLogs
-                  .filter((log) => logFilter === 'all' || log.status === logFilter)
-                  .map((log) => {
-                    const isExpanded = expandedLogId === log.id;
-                    const statusColor = log.status === 'success'
-                      ? 'text-green-600'
-                      : log.status === 'error'
-                        ? 'text-red-600'
-                        : 'text-blue-600';
-                    return (
-                      <>
-                        <TableRow
-                          key={log.id}
-                          className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
-                        >
-                          <TableCell className="p-2">
-                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          </TableCell>
-                          <TableCell className="text-xs whitespace-nowrap">
-                            {new Date(log.created_at).toLocaleString('pt-BR')}
-                          </TableCell>
-                          <TableCell className="text-xs font-medium">{log.template_name}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs">{log.action}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <span className={`text-xs font-semibold ${statusColor}`}>{log.status}</span>
-                          </TableCell>
-                          <TableCell className="text-xs font-mono">{log.twilio_status_code || '—'}</TableCell>
-                          <TableCell className="text-xs font-mono text-muted-foreground max-w-[120px] truncate">
-                            {log.content_sid || '—'}
-                          </TableCell>
-                          <TableCell className="text-xs text-destructive max-w-[200px] truncate">
-                            {log.error_message || '—'}
-                          </TableCell>
-                        </TableRow>
-                        {isExpanded && (
-                          <TableRow key={`${log.id}-detail`}>
-                            <TableCell colSpan={8} className="bg-muted/30 p-4">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                  <p className="text-xs font-semibold mb-1">Request Payload</p>
-                                  <pre className="text-xs bg-background p-3 rounded-md overflow-auto max-h-[200px] border">
-                                    {log.request_payload ? JSON.stringify(log.request_payload, null, 2) : 'N/A'}
-                                  </pre>
-                                </div>
-                                <div>
-                                  <p className="text-xs font-semibold mb-1">Response Payload</p>
-                                  <pre className="text-xs bg-background p-3 rounded-md overflow-auto max-h-[200px] border">
-                                    {log.response_payload ? JSON.stringify(log.response_payload, null, 2) : 'N/A'}
-                                  </pre>
-                                </div>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </>
-                    );
-                  })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+            <CardContent>
+              {logsLoading ? (
+                <p className="text-muted-foreground text-sm">Carregando logs...</p>
+              ) : !templateLogs?.length ? (
+                <p className="text-muted-foreground text-sm">Nenhum log encontrado.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-8"></TableHead>
+                      <TableHead>Data/Hora</TableHead>
+                      <TableHead>Template</TableHead>
+                      <TableHead>Ação</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>HTTP</TableHead>
+                      <TableHead>Content SID</TableHead>
+                      <TableHead>Erro</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {templateLogs
+                      .filter((log) => logFilter === 'all' || log.status === logFilter)
+                      .map((log) => {
+                        const isExpanded = expandedLogId === log.id;
+                        const statusColor = log.status === 'success'
+                          ? 'text-green-600'
+                          : log.status === 'error'
+                            ? 'text-red-600'
+                            : 'text-blue-600';
+                        return (
+                          <>
+                            <TableRow
+                              key={log.id}
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                            >
+                              <TableCell className="p-2">
+                                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              </TableCell>
+                              <TableCell className="text-xs whitespace-nowrap">
+                                {new Date(log.created_at).toLocaleString('pt-BR')}
+                              </TableCell>
+                              <TableCell className="text-xs font-medium">{log.template_name}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-xs">{log.action}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <span className={`text-xs font-semibold ${statusColor}`}>{log.status}</span>
+                              </TableCell>
+                              <TableCell className="text-xs font-mono">{log.twilio_status_code || '—'}</TableCell>
+                              <TableCell className="text-xs font-mono text-muted-foreground max-w-[120px] truncate">
+                                {log.content_sid || '—'}
+                              </TableCell>
+                              <TableCell className="text-xs text-destructive max-w-[200px] truncate">
+                                {log.error_message || '—'}
+                              </TableCell>
+                            </TableRow>
+                            {isExpanded && (
+                              <TableRow key={`${log.id}-detail`}>
+                                <TableCell colSpan={8} className="bg-muted/30 p-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                      <p className="text-xs font-semibold mb-1">Request Payload</p>
+                                      <pre className="text-xs bg-background p-3 rounded-md overflow-auto max-h-[200px] border">
+                                        {log.request_payload ? JSON.stringify(log.request_payload, null, 2) : 'N/A'}
+                                      </pre>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-semibold mb-1">Response Payload</p>
+                                      <pre className="text-xs bg-background p-3 rounded-md overflow-auto max-h-[200px] border">
+                                        {log.response_payload ? JSON.stringify(log.response_payload, null, 2) : 'N/A'}
+                                      </pre>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </>
+                        );
+                      })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
       <AlertDialog open={deletingTemplateId !== null} onOpenChange={(open) => !open && setDeletingTemplateId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
