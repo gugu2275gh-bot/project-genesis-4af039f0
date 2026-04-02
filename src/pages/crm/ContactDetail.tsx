@@ -1550,16 +1550,23 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
   const extractFeesFromNotes = (serviceTypeId: string): { description: string; amount: string }[] => {
     const notes = contact?.payment_notes || '';
     if (!notes) return [];
+    
+    // Look up service name to find the right block
+    const serviceName = pendingServiceTypes?.find(st => st.id === serviceTypeId)?.name || '';
+    
     const blocks = notes.split('---');
-    // Find the last block that matches this service
+    // Find the block that matches this service (by name), searching from the end
     for (let i = blocks.length - 1; i >= 0; i--) {
-      const block = blocks[i];
-      // Check if this block matches the service by looking for the service name or just use the last block
+      const block = blocks[i].trim();
+      // If we have a service name, only parse blocks that contain it
+      if (serviceName && !block.includes(serviceName)) continue;
+      
       const feeLines: { description: string; amount: string }[] = [];
       const lines = block.split('\n');
       for (const line of lines) {
+        const trimmedLine = line.trim();
         // Match pattern: "description: + € amount"
-        const feeMatch = line.match(/^(.+?):\s*\+\s*€\s*([\d.,]+)\s*$/);
+        const feeMatch = trimmedLine.match(/^(.+?):\s*\+\s*€\s*([\d.,]+)\s*$/);
         if (feeMatch) {
           const desc = feeMatch[1].trim();
           // Skip known non-fee lines
@@ -1569,6 +1576,26 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
       }
       if (feeLines.length > 0) return feeLines;
     }
+    
+    // Fallback: if no service-specific block found, try any block
+    if (serviceName) {
+      for (let i = blocks.length - 1; i >= 0; i--) {
+        const block = blocks[i].trim();
+        const feeLines: { description: string; amount: string }[] = [];
+        const lines = block.split('\n');
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          const feeMatch = trimmedLine.match(/^(.+?):\s*\+\s*€\s*([\d.,]+)\s*$/);
+          if (feeMatch) {
+            const desc = feeMatch[1].trim();
+            if (['Acordo de Pagamento', 'Serviço', 'Valor Bruto', 'IVA', 'Total', 'Total Final', 'Método', 'Forma', 'Parcelas', 'Origem', 'Conta', 'Detalhe', 'Observações', 'Desconto'].some(k => desc.startsWith(k))) continue;
+            feeLines.push({ description: desc, amount: feeMatch[2].replace(',', '.') });
+          }
+        }
+        if (feeLines.length > 0) return feeLines;
+      }
+    }
+    
     return [];
   };
 
