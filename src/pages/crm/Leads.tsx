@@ -197,7 +197,7 @@ export default function Leads() {
               <DialogHeader>
                 <DialogTitle>Novo Lead</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
+              <div className="space-y-4 overflow-hidden">
                 <div className="flex gap-2">
                   <Button
                     type="button"
