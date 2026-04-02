@@ -1526,6 +1526,16 @@ export default function ContactDetail() {
                 rows={3}
               />
             </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="standby-checkbox"
+                checked={newServiceStandby}
+                onCheckedChange={(checked) => setNewServiceStandby(checked === true)}
+              />
+              <Label htmlFor="standby-checkbox" className="text-sm font-normal cursor-pointer">
+                Serviço Futuro (Standby) — não gerar contrato até ativação
+              </Label>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNewServiceDialog(false)}>
