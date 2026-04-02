@@ -33,6 +33,61 @@ export default function ContractsList() {
   const [selectedOpportunity, setSelectedOpportunity] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('DOCUMENTOS');
 
+  // Fetch payment totals per contract via contract_leads -> leads -> opportunities -> payments
+  const { data: contractPaymentTotals } = useQuery({
+    queryKey: ['contract-payment-totals'],
+    queryFn: async () => {
+      // Get all contract_leads with their lead's opportunity payments
+      const { data: clData, error: clError } = await supabase
+        .from('contract_leads')
+        .select('contract_id, lead_id');
+      if (clError) throw clError;
+
+      // Get all leads' opportunity IDs
+      const leadIds = [...new Set(clData?.map(cl => cl.lead_id) || [])];
+      if (leadIds.length === 0) return {};
+
+      const { data: opps, error: oppsError } = await supabase
+        .from('opportunities')
+        .select('id, lead_id')
+        .in('lead_id', leadIds);
+      if (oppsError) throw oppsError;
+
+      const oppIds = opps?.map(o => o.id) || [];
+      if (oppIds.length === 0) return {};
+
+      const { data: payments, error: pError } = await supabase
+        .from('payments')
+        .select('opportunity_id, amount, status')
+        .in('opportunity_id', oppIds);
+      if (pError) throw pError;
+
+      // Build lead -> opp mapping
+      const leadToOpps = new Map<string, string[]>();
+      for (const o of opps || []) {
+        const arr = leadToOpps.get(o.lead_id) || [];
+        arr.push(o.id);
+        leadToOpps.set(o.lead_id, arr);
+      }
+
+      // Build contract totals
+      const totals: Record<string, { total: number; paid: number }> = {};
+      for (const cl of clData || []) {
+        if (!totals[cl.contract_id]) totals[cl.contract_id] = { total: 0, paid: 0 };
+        const oppIdsForLead = leadToOpps.get(cl.lead_id) || [];
+        for (const p of payments || []) {
+          if (oppIdsForLead.includes(p.opportunity_id!)) {
+            totals[cl.contract_id].total += p.amount || 0;
+            if (p.status === 'CONFIRMADO') {
+              totals[cl.contract_id].paid += p.amount || 0;
+            }
+          }
+        }
+      }
+      return totals;
+    },
+  });
+
   // Fetch opportunity IDs that have at least one payment
   const { data: opportunitiesWithPayments } = useQuery({
     queryKey: ['opportunities-with-payments'],
@@ -42,7 +97,6 @@ export default function ContractsList() {
         .select('opportunity_id')
         .not('opportunity_id', 'is', null);
       if (error) throw error;
-      // Return unique opportunity IDs
       return [...new Set(data?.map(p => p.opportunity_id) || [])];
     },
   });
