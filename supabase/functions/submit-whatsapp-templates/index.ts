@@ -260,20 +260,19 @@ serve(async (req) => {
           let newStatus = template.status
           let rejectionReason = null
 
-          // Response format: { data: [{ status: "approved"|"rejected"|"pending", rejection_reason: "..." }] }
+          // Response format: { data: [{ status: "approved"|"rejected"|"pending"|"paused"|"disabled"|"received"|"unsubmitted", rejection_reason: "..." }] }
           if (data.data && Array.isArray(data.data) && data.data.length > 0) {
             const approval = data.data[0]
-            if (approval.status === 'approved') {
-              newStatus = 'approved'
-            } else if (approval.status === 'rejected') {
-              newStatus = 'rejected'
+            const mappedStatus = approval.status || 'unknown'
+            if (['approved', 'rejected', 'pending', 'paused', 'disabled', 'received', 'unsubmitted'].includes(mappedStatus)) {
+              newStatus = mappedStatus
+            }
+            if (mappedStatus === 'rejected') {
               rejectionReason = approval.rejection_reason || 'Rejected by Meta'
-            } else if (approval.status === 'pending') {
-              newStatus = 'pending'
             }
           } else if (response.ok && (!data.data || data.data.length === 0)) {
             // No approval request found — template was never submitted for approval
-            newStatus = 'draft'
+            newStatus = 'unsubmitted'
           }
 
           await insertLog({
