@@ -109,6 +109,7 @@ export function useWhatsAppTemplates() {
           status: 'draft',
           is_active: false,
           template_category: newTemplate.template_category || 'sla',
+          meta_category: newTemplate.meta_category || 'UTILITY',
           language: newTemplate.language || 'pt_BR',
         } as any);
       if (error) throw error;
