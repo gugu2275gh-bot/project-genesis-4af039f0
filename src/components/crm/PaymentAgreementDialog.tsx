@@ -55,7 +55,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
   const defaultForm = {
     amount: '',
-    payment_method: 'PIX' as string,
+    payment_method: 'TRANSFERENCIA' as string,
     payment_form: 'UNICO' as string,
     custom_payment_method: '',
     transfer_origin: '' as '' | 'BRASIL' | 'ESPANHA',
@@ -77,7 +77,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       setForm({
         ...defaultForm,
         amount: initialData.gross_amount?.toString() || initialData.amount?.toString() || '',
-        payment_method: initialData.payment_method || 'PIX',
+        payment_method: initialData.payment_method || 'TRANSFERENCIA',
         payment_form: initialData.payment_form || 'UNICO',
         apply_vat: initialData.apply_vat || false,
         discount_type: (initialData.discount_type || '') as '' | 'PERCENTUAL' | 'VALOR',
@@ -406,7 +406,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     toast({ title: 'Acordo de pagamento salvo na ficha do cliente' });
 
     const resetForm = () => setForm({
-      amount: '', payment_method: 'PIX', payment_form: 'UNICO',
+      amount: '', payment_method: 'TRANSFERENCIA', payment_form: 'UNICO',
       custom_payment_method: '', transfer_origin: '', payment_account_id: '',
       discount_type: '', discount_value: '', apply_vat: false, notes: '',
       installment_count: 2, installments: [], fees: [],
