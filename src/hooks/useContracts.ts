@@ -9,6 +9,17 @@ export type Contract = Tables<'contracts'>;
 export type ContractInsert = TablesInsert<'contracts'>;
 export type ContractUpdate = TablesUpdate<'contracts'>;
 
+export type ContractLeadService = {
+  id: string;
+  lead_id: string;
+  leads: {
+    id: string;
+    service_interest: string | null;
+    service_type_id: string | null;
+    service_types: { id: string; name: string } | null;
+  };
+};
+
 export type ContractWithOpportunity = Contract & {
   opportunities: Tables<'opportunities'> & {
     leads: Tables<'leads'> & {
@@ -16,6 +27,7 @@ export type ContractWithOpportunity = Contract & {
       service_types: { id: string; name: string } | null;
     };
   };
+  contract_leads?: ContractLeadService[];
   payments?: Array<{
     id: string;
     amount: number;
@@ -23,6 +35,7 @@ export type ContractWithOpportunity = Contract & {
     paid_at: string | null;
     installment_number: number | null;
     due_date: string | null;
+    opportunity_id: string | null;
   }>;
 };
 
