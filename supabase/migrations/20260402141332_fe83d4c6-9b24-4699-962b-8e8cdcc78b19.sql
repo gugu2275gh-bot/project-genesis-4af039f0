@@ -1,0 +1,1 @@
+UPDATE public.whatsapp_templates SET status = 'approved', is_active = true, updated_at = now() WHERE content_sid IS NOT NULL AND status IN ('not_submitted', 'draft');
