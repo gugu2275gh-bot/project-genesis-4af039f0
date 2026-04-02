@@ -206,6 +206,12 @@ export default function WhatsAppTemplatesSettings() {
     return newVariables[i] ? `[${newVariables[i]}]` : `{{${idx}}}`;
   });
 
+  const editPreviewText = editBody.replace(/\{\{(\d+)\}\}/g, (_, idx) => {
+    const i = parseInt(idx) - 1;
+    return editVariables[i] ? `[${editVariables[i]}]` : `{{${idx}}}`;
+  });
+  const editBodyCharCount = editBody.length;
+
   return (
     <div className="space-y-6">
       <Card>
