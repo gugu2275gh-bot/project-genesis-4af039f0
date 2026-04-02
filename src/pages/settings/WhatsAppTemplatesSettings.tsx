@@ -61,6 +61,8 @@ export default function WhatsAppTemplatesSettings() {
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [logFilter, setLogFilter] = useState<string>('all');
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
+  const [variablesOpen, setVariablesOpen] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(false);
 
   // Pending category changes for batch save
   const [pendingCategoryChanges, setPendingCategoryChanges] = useState<Record<string, 'sla' | 'operational'>>({});
