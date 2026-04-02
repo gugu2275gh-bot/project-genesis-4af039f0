@@ -330,7 +330,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
           if (form.payment_form === 'PARCELADO' && form.installments.length > 0) {
             const paymentInserts = form.installments.map((inst, idx) => ({
               opportunity_id: opportunityId!,
-              amount: parseFloat(inst.amount) || 0,
+              amount: Math.round((parseFloat(inst.amount) || 0) * 100) / 100,
               due_date: inst.due_date || null,
               installment_number: idx + 1,
               payment_method: paymentMethod,
