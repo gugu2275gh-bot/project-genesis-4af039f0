@@ -1,74 +1,30 @@
 
 
-## Limpar Dados de Clientes para Testes
+## Re-inserir Templates WhatsApp em Espanhol
 
-### Dados encontrados no banco
-- 3 contatos, 3 leads, 54 interacoes, 3 tarefas, 118 mensagens, 2 notificacoes
-- 0 oportunidades, contratos, pagamentos e service_cases
+### O que será feito
+Executar uma migração SQL para re-inserir os 12 templates em espanhol que foram perdidos na limpeza do banco, com as colunas adicionais `language`, `template_category` e `meta_category`.
 
-### Plano
-
-Executar uma migracao SQL que deleta dados em ordem de dependencia (tabelas filhas primeiro):
+### SQL a executar
 
 ```sql
--- 1. Tabelas sem dependentes / folhas
-DELETE FROM mensagens_cliente;
-DELETE FROM interactions;
-DELETE FROM tasks;
-DELETE FROM notifications;
-DELETE FROM case_notes;
-DELETE FROM portal_messages;
-DELETE FROM nps_surveys;
-DELETE FROM audit_logs;
-DELETE FROM n8n_chat_histories;
-DELETE FROM customer_chat_context;
-DELETE FROM chat_routing_logs;
-DELETE FROM whatsapp_template_logs;
-DELETE FROM message_dedup;
-DELETE FROM customer_sector_pending_items;
-DELETE FROM reactivation_resolutions;
-
--- 2. Documentos e lembretes
-DELETE FROM service_documents;
-DELETE FROM generated_documents;
-DELETE FROM document_reminders;
-DELETE FROM huellas_reminders;
-DELETE FROM initial_contact_reminders;
-DELETE FROM tie_pickup_reminders;
-DELETE FROM payment_reminders;
-DELETE FROM requirement_reminders;
-DELETE FROM contract_reminders;
-
--- 3. Contratos e pagamentos
-DELETE FROM contract_beneficiaries;
-DELETE FROM contract_costs;
-DELETE FROM contract_notes;
-DELETE FROM contract_leads;
-DELETE FROM commissions;
-DELETE FROM payments;
-DELETE FROM contracts;
-
--- 4. Service cases e requirements
-DELETE FROM requirements_from_authority;
-DELETE FROM service_cases;
-
--- 5. Oportunidades
-DELETE FROM opportunities;
-
--- 6. Leads
-DELETE FROM lead_intake;
-DELETE FROM leads;
-
--- 7. Contatos
-DELETE FROM contacts;
-
--- 8. Invoices e cash flow
-DELETE FROM invoices;
-DELETE FROM cash_flow;
+INSERT INTO public.whatsapp_templates 
+  (automation_type, template_name, body_text, variables, status, is_active, language, template_category, meta_category) 
+VALUES
+  ('welcome', 'cb_welcome_es', 'Hola {{1}}! Gracias por contactar con CB Asesoría. En breve uno de nuestros especialistas le atenderá.', '["nombre"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
+  ('reengagement', 'cb_reengagement_es', 'Hola {{1}}! Hemos notado que su registro está incompleto. ¿Podemos ayudarle a completar su información?', '["nombre"]'::jsonb, 'draft', false, 'es', 'sla', 'MARKETING'),
+  ('contract_reminder', 'cb_contract_reminder_es', 'Hola {{1}}! Su contrato está pendiente de firma. Acceda al portal para finalizarlo.', '["nombre"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
+  ('payment_pre_7d', 'cb_payment_pre_7d_es', 'Hola {{1}}! 📅 Su cuota de €{{2}} vence en 7 días ({{3}}). Recuerde realizar el pago.', '["nombre","valor","fecha"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
+  ('payment_pre_48h', 'cb_payment_pre_48h_es', 'Hola {{1}}! ⏰ Su cuota de €{{2}} vence en 2 días ({{3}}). Por favor, realice el pago.', '["nombre","valor","fecha"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
+  ('payment_due_today', 'cb_payment_due_today_es', 'Hola {{1}}! 🔔 Hoy vence su cuota de €{{2}}. Realice el pago antes del final del día.', '["nombre","valor"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
+  ('payment_post_d1', 'cb_payment_post_d1_es', 'Hola {{1}}! Tiene un pago de €{{2}} pendiente. Regularice su situación para evitar la cancelación.', '["nombre","valor"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
+  ('payment_post_d3', 'cb_payment_post_d3_es', 'Hola {{1}}! ⚠️ Su pago de €{{2}} lleva 3 días de retraso. Regularice urgentemente.', '["nombre","valor"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
+  ('document_reminder', 'cb_document_reminder_es', 'Hola {{1}}! 📄 Estamos esperando el documento: {{2}}. Por favor, envíelo a través del portal.', '["nombre","documento"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
+  ('onboarding_reminder', 'cb_onboarding_reminder_es', 'Hola {{1}}! 📝 Complete su registro en el portal para iniciar su trámite.', '["nombre"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
+  ('tie_pickup', 'cb_tie_pickup_es', 'Hola {{1}}! 🎊 Su TIE está disponible para recoger. Plazo: {{2}}.', '["nombre","fecha"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
+  ('huellas_reminder', 'cb_huellas_reminder_es', 'Hola {{1}}! 🔔 Recordatorio sobre su cita de huellas: {{2}}.', '["nombre","fecha"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY');
 ```
 
-Isso remove **todos os dados de clientes** mantendo tabelas de configuracao intactas (service_types, service_sectors, profiles, user_roles, system_config, whatsapp_templates, etc.).
-
 ### Arquivos modificados
-- Nova migracao SQL (apenas DELETE statements, sem alteracao de schema)
+- Nova migração SQL (apenas INSERT dos 12 templates ES)
 
