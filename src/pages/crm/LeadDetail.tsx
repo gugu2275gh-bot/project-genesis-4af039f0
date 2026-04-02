@@ -853,11 +853,18 @@ export default function LeadDetail() {
                             key={interaction.id}
                             className="p-4 rounded-lg bg-muted/50 space-y-2"
                           >
-                            <div className="flex items-center justify-between">
-                              <StatusBadge 
-                                status={interaction.channel || 'OUTRO'} 
-                                label={INTERACTION_CHANNEL_LABELS[interaction.channel || 'OUTRO']}
-                              />
+                            <div className="flex items-center gap-2 justify-between">
+                              <div className="flex items-center gap-2">
+                                <StatusBadge 
+                                  status={interaction.channel || 'OUTRO'} 
+                                  label={INTERACTION_CHANNEL_LABELS[interaction.channel || 'OUTRO']}
+                                />
+                                {(interaction as any).sector && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-accent text-accent-foreground">
+                                    {{atendimento: 'Atendimento', juridico: 'Jurídico', financeiro: 'Financeiro', caso_tecnico: 'Caso Técnico'}[(interaction as any).sector] || (interaction as any).sector}
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Calendar className="h-3 w-3" />
                                 {format(new Date(interaction.created_at!), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
