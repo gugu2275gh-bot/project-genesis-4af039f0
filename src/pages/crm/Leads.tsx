@@ -57,6 +57,8 @@ export default function Leads() {
     origin_channel: 'WHATSAPP' as OriginChannel,
     referral_name: '',
   });
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [pendingCreate, setPendingCreate] = useState(false);
 
   const filteredContacts = useMemo(() => {
     if (!contactSearch) return contacts?.slice(0, 20) || [];
