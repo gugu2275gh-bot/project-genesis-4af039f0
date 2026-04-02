@@ -470,6 +470,21 @@ export default function WhatsAppTemplatesSettings() {
               </div>
 
               <div>
+                <Label>Categoria Meta *</Label>
+                <Select value={newMetaCategory} onValueChange={(v: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION') => setNewMetaCategory(v)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="UTILITY">UTILITY — Transacional (aprovação mais rápida)</SelectItem>
+                    <SelectItem value="MARKETING">MARKETING — Promoções e ofertas</SelectItem>
+                    <SelectItem value="AUTHENTICATION">AUTHENTICATION — Códigos de verificação</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Categoria exigida pela Meta para aprovação do template</p>
+              </div>
+
+              <div>
                 <Label htmlFor="tpl-body">Corpo da Mensagem *</Label>
                 <Textarea
                   id="tpl-body"
