@@ -99,6 +99,7 @@ export function useWhatsAppTemplates() {
       body_text: string;
       variables: string[];
       template_category?: 'sla' | 'operational';
+      meta_category?: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
       language?: string;
     }) => {
       const { error } = await supabase
