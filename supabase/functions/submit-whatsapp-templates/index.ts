@@ -27,7 +27,7 @@ serve(async (req) => {
     const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN')
 
     if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
-      return new Response(JSON.stringify({ error: 'TWILIO_ACCOUNT_SID e TWILIO_AUTH_TOKEN não configurados. Adicione-os como secrets do Supabase.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ error: 'TWILIO_ACCOUNT_SID e TWILIO_AUTH_TOKEN não configurados.' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     const basicAuth = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`)
@@ -76,6 +76,47 @@ serve(async (req) => {
       }
     }
 
+    // Helper to submit approval request to Meta
+    async function submitApprovalRequest(template: any, contentSid: string): Promise<{ success: boolean; error?: string; statusCode?: number; responseData?: any }> {
+      const metaCategory = template.meta_category || 'UTILITY'
+      const approvalBody = {
+        name: template.template_name,
+        category: metaCategory,
+      }
+
+      console.log(`Submitting approval request for ${template.template_name} (SID: ${contentSid}, category: ${metaCategory})`)
+
+      const approvalResponse = await fetch(`${CONTENT_API_URL}/${contentSid}/ApprovalRequests/whatsapp`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${basicAuth}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(approvalBody),
+      })
+
+      const approvalData = await approvalResponse.json()
+      console.log(`Approval response for ${template.template_name}:`, approvalResponse.status, JSON.stringify(approvalData))
+
+      await insertLog({
+        template_id: template.id,
+        template_name: template.template_name,
+        action: 'approval_request',
+        status: approvalResponse.ok ? 'success' : 'error',
+        request_payload: { url: `${CONTENT_API_URL}/${contentSid}/ApprovalRequests/whatsapp`, body: approvalBody },
+        response_payload: approvalData,
+        error_message: approvalResponse.ok ? null : (approvalData.message || JSON.stringify(approvalData)),
+        twilio_status_code: approvalResponse.status,
+        content_sid: contentSid,
+      })
+
+      if (approvalResponse.ok) {
+        return { success: true, statusCode: approvalResponse.status, responseData: approvalData }
+      } else {
+        return { success: false, error: approvalData.message || JSON.stringify(approvalData), statusCode: approvalResponse.status, responseData: approvalData }
+      }
+    }
+
     // ACTION: submit
     if (action === 'submit') {
       const query = adminSupabase.from('whatsapp_templates').select('*')
@@ -87,85 +128,104 @@ serve(async (req) => {
 
       const results = []
       for (const template of templates || []) {
+        // Skip already approved templates
         if (template.content_sid && template.status === 'approved') {
           await insertLog({
             template_id: template.id,
             template_name: template.template_name,
             action: 'submit',
             status: 'skipped',
-            request_payload: null,
-            response_payload: null,
             error_message: 'Template já aprovado',
-            twilio_status_code: null,
             content_sid: template.content_sid,
           })
           results.push({ automation_type: template.automation_type, status: 'already_approved', content_sid: template.content_sid })
           continue
         }
 
-        const contentBody = {
-          friendly_name: template.template_name,
-          language: template.language || 'pt_BR',
-          types: {
-            'twilio/text': {
-              body: template.body_text,
+        let contentSid = template.content_sid
+
+        // Step 1: Create Content Template (only if no SID yet)
+        if (!contentSid) {
+          const contentBody = {
+            friendly_name: template.template_name,
+            language: template.language || 'pt_BR',
+            types: {
+              'twilio/text': {
+                body: template.body_text,
+              },
             },
-          },
-          content_type: 'twilio/text',
+            content_type: 'twilio/text',
+          }
+
+          console.log(`Step 1: Creating content template: ${template.template_name}`)
+
+          const response = await fetch(CONTENT_API_URL, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${basicAuth}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(contentBody),
+          })
+
+          const responseData = await response.json()
+          console.log(`Content creation response for ${template.template_name}:`, response.status, JSON.stringify(responseData))
+
+          await insertLog({
+            template_id: template.id,
+            template_name: template.template_name,
+            action: 'create_content',
+            status: response.ok ? 'success' : 'error',
+            request_payload: contentBody,
+            response_payload: responseData,
+            error_message: response.ok ? null : (responseData.message || JSON.stringify(responseData)),
+            twilio_status_code: response.status,
+            content_sid: responseData.sid || null,
+          })
+
+          if (!response.ok || !responseData.sid) {
+            // Content creation failed
+            await adminSupabase.from('whatsapp_templates').update({
+              status: 'error',
+              rejection_reason: responseData.message || JSON.stringify(responseData),
+              updated_at: new Date().toISOString(),
+            }).eq('id', template.id)
+
+            results.push({ automation_type: template.automation_type, status: 'error', error: responseData.message || 'Content creation failed' })
+            continue
+          }
+
+          contentSid = responseData.sid
+
+          // Save the content_sid immediately
+          await adminSupabase.from('whatsapp_templates').update({
+            content_sid: contentSid,
+            updated_at: new Date().toISOString(),
+          }).eq('id', template.id)
+        } else {
+          console.log(`Step 1 skipped: ${template.template_name} already has SID ${contentSid}, proceeding to approval`)
         }
 
-        console.log(`Submitting template: ${template.template_name}`)
+        // Step 2: Submit for Meta approval
+        const approvalResult = await submitApprovalRequest(template, contentSid)
 
-        const response = await fetch(CONTENT_API_URL, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Basic ${basicAuth}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(contentBody),
-        })
-
-        const responseData = await response.json()
-        console.log(`Template ${template.template_name} response:`, response.status, JSON.stringify(responseData))
-
-        if (response.ok && responseData.sid) {
+        if (approvalResult.success) {
           await adminSupabase.from('whatsapp_templates').update({
-            content_sid: responseData.sid,
             status: 'pending',
+            rejection_reason: null,
             updated_at: new Date().toISOString(),
           }).eq('id', template.id)
 
-          await insertLog({
-            template_id: template.id,
-            template_name: template.template_name,
-            action: 'submit',
-            status: 'success',
-            request_payload: contentBody,
-            response_payload: responseData,
-            twilio_status_code: response.status,
-            content_sid: responseData.sid,
-          })
-
-          results.push({ automation_type: template.automation_type, status: 'submitted', content_sid: responseData.sid })
+          results.push({ automation_type: template.automation_type, status: 'submitted', content_sid: contentSid })
         } else {
+          // Approval request failed — mark as draft so it can be resubmitted
           await adminSupabase.from('whatsapp_templates').update({
-            status: 'error',
-            rejection_reason: responseData.message || JSON.stringify(responseData),
+            status: 'draft',
+            rejection_reason: `Aprovação falhou: ${approvalResult.error}`,
             updated_at: new Date().toISOString(),
           }).eq('id', template.id)
 
-          await insertLog({
-            template_id: template.id,
-            template_name: template.template_name,
-            action: 'submit',
-            status: 'error',
-            request_payload: contentBody,
-            response_payload: responseData,
-            error_message: responseData.message || JSON.stringify(responseData),
-            twilio_status_code: response.status,
-          })
-
-          results.push({ automation_type: template.automation_type, status: 'error', error: responseData.message || 'Unknown error' })
+          results.push({ automation_type: template.automation_type, status: 'error', error: approvalResult.error })
         }
       }
 
@@ -182,7 +242,8 @@ serve(async (req) => {
 
       const results = []
       for (const template of templates || []) {
-        const response = await fetch(`${CONTENT_API_URL}/${template.content_sid}`, {
+        // Correct endpoint: GET /v1/Content/{SID}/ApprovalRequests
+        const response = await fetch(`${CONTENT_API_URL}/${template.content_sid}/ApprovalRequests`, {
           method: 'GET',
           headers: {
             'Authorization': `Basic ${basicAuth}`,
@@ -190,18 +251,21 @@ serve(async (req) => {
         })
 
         const data = await response.json()
-        console.log(`Status check for ${template.template_name}:`, JSON.stringify(data))
+        console.log(`Approval status for ${template.template_name}:`, JSON.stringify(data))
 
         let newStatus = template.status
         let rejectionReason = null
 
-        if (data.approval_requests) {
-          const approval = data.approval_requests
+        // Response format: { data: [{ status: "approved"|"rejected"|"pending", rejection_reason: "..." }] }
+        if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+          const approval = data.data[0]
           if (approval.status === 'approved') {
             newStatus = 'approved'
           } else if (approval.status === 'rejected') {
             newStatus = 'rejected'
             rejectionReason = approval.rejection_reason || 'Rejected by Meta'
+          } else if (approval.status === 'pending') {
+            newStatus = 'pending'
           }
         }
 
@@ -210,7 +274,7 @@ serve(async (req) => {
           template_name: template.template_name,
           action: 'check_status',
           status: newStatus !== template.status ? 'success' : 'skipped',
-          request_payload: { url: `${CONTENT_API_URL}/${template.content_sid}`, method: 'GET' },
+          request_payload: { url: `${CONTENT_API_URL}/${template.content_sid}/ApprovalRequests`, method: 'GET' },
           response_payload: data,
           error_message: rejectionReason,
           twilio_status_code: response.status,

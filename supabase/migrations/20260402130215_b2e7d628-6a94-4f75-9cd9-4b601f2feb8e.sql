@@ -1,0 +1,1 @@
+ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS meta_category text NOT NULL DEFAULT 'UTILITY' CHECK (meta_category IN ('UTILITY', 'MARKETING', 'AUTHENTICATION'));
