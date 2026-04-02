@@ -68,6 +68,7 @@ export default function WhatsAppTemplatesSettings() {
   // New template form state
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState<'sla' | 'operational'>('sla');
+  const [newMetaCategory, setNewMetaCategory] = useState<'UTILITY' | 'MARKETING' | 'AUTHENTICATION'>('UTILITY');
   const [newAutomationType, setNewAutomationType] = useState('');
   const [newLanguage, setNewLanguage] = useState('pt_BR');
   const [newBody, setNewBody] = useState('');
