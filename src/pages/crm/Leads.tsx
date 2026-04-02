@@ -133,9 +133,55 @@ export default function Leads() {
     });
   };
 
-  const handleCreate = async () => {
+  const checkDuplicateContact = async (phone?: string, email?: string) => {
+    if (!phone && !email) return null;
+    let query = supabase.from('contacts').select('id, full_name, phone, email');
+    if (phone) {
+      const cleanPhone = phone.replace(/\D/g, '');
+      if (cleanPhone.length >= 8) {
+        const { data } = await query.eq('phone', cleanPhone).limit(1);
+        if (data?.length) return data[0];
+      }
+    }
+    if (email) {
+      const { data } = await supabase.from('contacts').select('id, full_name, phone, email').eq('email', email).limit(1);
+      if (data?.length) return data[0];
+    }
+    return null;
+  };
+
+  const checkDuplicateLead = async (contactId: string, serviceInterest: string) => {
+    const { data } = await supabase
+      .from('leads')
+      .select('id, service_interest, service_type_id, status')
+      .eq('contact_id', contactId)
+      .not('status', 'in', '("ARQUIVADO_SEM_RETORNO","MESCLADO")')
+      .limit(10);
+    if (!data?.length) return null;
+    // Check for same service
+    const match = data.find(l => l.service_interest === serviceInterest || l.service_type_id === serviceInterest);
+    if (match) return { exact: true, count: data.length };
+    if (data.length > 0) return { exact: false, count: data.length };
+    return null;
+  };
+
+  const handleCreate = async (forceCreate = false) => {
+    setDuplicateWarning(null);
+
     if (leadMode === 'existing') {
       if (!selectedContactId) return;
+      
+      if (!forceCreate) {
+        const dup = await checkDuplicateLead(selectedContactId, newLead.service_interest);
+        if (dup?.exact) {
+          setDuplicateWarning('Este contato já possui um lead ativo com o mesmo serviço de interesse. Deseja criar mesmo assim?');
+          return;
+        } else if (dup) {
+          setDuplicateWarning(`Este contato já possui ${dup.count} lead(s) ativo(s). Deseja criar mais um?`);
+          return;
+        }
+      }
+
       const createdLead = await createLead.mutateAsync({
         contact_id: selectedContactId,
         service_interest: newLead.service_interest,
@@ -150,6 +196,18 @@ export default function Leads() {
     } else {
       if (!newLead.full_name) return;
       const phoneStr = newLead.phone ? newLead.phone.replace(/\D/g, '') : undefined;
+
+      if (!forceCreate) {
+        // Check duplicate contact
+        const existingContact = await checkDuplicateContact(newLead.phone, newLead.email);
+        if (existingContact) {
+          setDuplicateWarning(
+            `Já existe um contato "${existingContact.full_name}" com ${existingContact.phone === phoneStr ? 'o mesmo telefone' : 'o mesmo e-mail'}. Use a aba "Contato Existente" para adicionar um lead a este contato.`
+          );
+          return;
+        }
+      }
+
       const contact = await createContact.mutateAsync({
         full_name: newLead.full_name,
         email: newLead.email || undefined,
@@ -170,19 +228,6 @@ export default function Leads() {
       navigate(`/crm/leads/${createdLead.id}`);
       return;
     }
-
-    setLeadMode('new');
-    setSelectedContactId('');
-    setContactSearch('');
-    setNewLead({
-      full_name: '',
-      email: '',
-      phone: '',
-      service_interest: 'VISTO_ESTUDANTE',
-      service_interest_other: '',
-      origin_channel: 'WHATSAPP',
-      referral_name: '',
-    });
   };
 
   return (
