@@ -156,7 +156,7 @@ export default function ContactDetail() {
   const confirmedLeads = contactLeads.filter(l => confirmedLeadIds.includes(l.id));
   const pendingPaymentLeads = contactLeads.filter(l => l.service_type_id && !confirmedLeadIds.includes(l.id));
   const { data: serviceTypes } = useServiceTypes();
-  const allServiceLeads = [...confirmedLeads, ...pendingPaymentLeads];
+  const allServiceLeads = contactLeads.filter(l => l.service_type_id || confirmedLeadIds.includes(l.id));
   const { data: contactDocuments = [], isLoading: docsLoading } = useContactDocuments(id);
   const { beneficiaries: contactBeneficiaries, titular: contactTitular, isLoading: benefLoading } = useContactBeneficiaries(id);
   const { interactions } = useInteractions(id);
@@ -1200,14 +1200,16 @@ export default function ContactDetail() {
             />
           )}
 
-          {/* Serviços como Beneficiário */}
+          {/* Serviços como Beneficiário — usa a mesma seção unificada */}
           {contact.is_beneficiary && (
-            <BeneficiaryServicesSection
+            <ContractGroupsSection
               contactId={id!}
-              contact={contact}
-              beneficiaryServiceCases={beneficiaryServiceCases}
-              benefCasesLoading={benefCasesLoading}
+              contactName={contact.full_name}
+              contactLeads={allServiceLeads}
+              paymentNotes={paymentNotes}
+              confirmedLeadIds={confirmedLeadIds}
               navigate={navigate}
+              beneficiaryContacts={[]}
             />
           )}
 
