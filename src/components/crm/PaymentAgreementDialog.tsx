@@ -29,6 +29,7 @@ export interface PaymentAgreementInitialData {
   serviceTypeId?: string;
   installments?: { amount: string; due_date: string }[];
   notes?: string;
+  fees?: { description: string; amount: string }[];
 }
 
 interface PaymentAgreementDialogProps {
@@ -85,6 +86,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
         installment_count: initialData.installments?.length || 2,
         installments: initialData.installments || [],
         notes: initialData.notes || '',
+        fees: initialData.fees || [],
       });
       if (initialData.serviceTypeId) {
         setSelectedServiceTypeId(initialData.serviceTypeId);
