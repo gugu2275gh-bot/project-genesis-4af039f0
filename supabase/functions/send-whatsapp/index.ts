@@ -89,9 +89,17 @@ serve(async (req) => {
       )
     }
 
-    const { mensagem, numero, sector, contact_id } = await req.json()
+    const { mensagem, numero, sector, contact_id, mediaUrl, contentSid } = await req.json()
 
-    if (!mensagem || !numero) {
+    // If it's a template send (contentSid), only require numero
+    if (contentSid) {
+      if (!numero) {
+        return new Response(
+          JSON.stringify({ error: 'Parâmetro numero é obrigatório' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    } else if (!mensagem || !numero) {
       return new Response(
         JSON.stringify({ error: 'Parâmetros mensagem e numero são obrigatórios' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
