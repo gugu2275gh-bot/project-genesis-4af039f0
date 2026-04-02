@@ -409,7 +409,7 @@ serve(async (req) => {
           sid,
           db_status: dbMatch.status,
           twilio_status: approvalStatus,
-          updated: needsUpdate && ['approved', 'rejected', 'pending'].includes(approvalStatus),
+          updated: needsUpdate && approvalStatus !== 'unknown' && approvalStatus !== 'error',
         })
 
         await insertLog({
