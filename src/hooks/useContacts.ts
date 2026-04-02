@@ -56,8 +56,9 @@ export function useContacts() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts', variables.id] });
       toast({ title: 'Contato atualizado com sucesso' });
     },
     onError: (error) => {

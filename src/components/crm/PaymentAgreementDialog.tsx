@@ -95,7 +95,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       setForm(defaultForm);
       setSelectedServiceTypeId(serviceTypeId || '');
     }
-  }, [open, initialData]);
+  }, [open, initialData, serviceTypeId]);
 
   const { data: paymentAccounts = [] } = useQuery({
     queryKey: ['payment-accounts'],
