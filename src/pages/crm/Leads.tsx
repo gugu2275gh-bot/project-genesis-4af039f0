@@ -482,8 +482,23 @@ export default function Leads() {
                       {client.contactPhone}
                     </div>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    title="Adicionar novo serviço"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLeadMode('existing');
+                      setSelectedContactId(client.contactId);
+                      setContactSearch(client.contactName);
+                      setIsDialogOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
                   <Badge variant="secondary" className="shrink-0">
-                    {client.leads.length} {client.leads.length === 1 ? 'lead' : 'leads'}
+                    {client.leads.length} {client.leads.length === 1 ? 'serviço' : 'serviços'}
                   </Badge>
                 </button>
 
