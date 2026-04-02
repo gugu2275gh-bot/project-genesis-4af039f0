@@ -160,8 +160,19 @@ export default function Leads() {
     return null;
   };
 
+  const VALID_SERVICE_INTERESTS = [
+    'VISTO_ESTUDANTE', 'VISTO_TRABALHO', 'REAGRUPAMENTO',
+    'RENOVACAO_RESIDENCIA', 'NACIONALIDADE_RESIDENCIA',
+    'NACIONALIDADE_CASAMENTO', 'OUTRO', 'RESIDENCIA_PARENTE_COMUNITARIO',
+  ];
+
   const handleCreate = async (forceCreate = false) => {
     setDuplicateWarning(null);
+
+    const selectedST = serviceTypes?.find(st => st.code === newLead.service_interest);
+    const isValidEnum = VALID_SERVICE_INTERESTS.includes(newLead.service_interest);
+    const resolvedServiceInterest = isValidEnum ? newLead.service_interest : 'OUTRO';
+    const resolvedServiceTypeId = selectedST?.id || null;
 
     if (leadMode === 'existing') {
       if (!selectedContactId) return;
@@ -179,9 +190,10 @@ export default function Leads() {
 
       const createdLead = await createLead.mutateAsync({
         contact_id: selectedContactId,
-        service_interest: newLead.service_interest,
+        service_interest: resolvedServiceInterest as any,
+        service_type_id: resolvedServiceTypeId,
         status: 'NOVO',
-        notes: newLead.service_interest === 'OUTRO' && newLead.service_interest_other
+        notes: resolvedServiceInterest === 'OUTRO' && newLead.service_interest_other
           ? `Serviço: ${newLead.service_interest_other}`
           : undefined,
       });
@@ -193,7 +205,6 @@ export default function Leads() {
       const phoneStr = newLead.phone ? newLead.phone.replace(/\D/g, '') : undefined;
 
       if (!forceCreate) {
-        // Check duplicate contact
         const existingContact = await checkDuplicateContact(newLead.phone, newLead.email);
         if (existingContact) {
           setDuplicateWarning(
@@ -213,9 +224,10 @@ export default function Leads() {
       });
       const createdLead = await createLead.mutateAsync({
         contact_id: contact.id,
-        service_interest: newLead.service_interest,
+        service_interest: resolvedServiceInterest as any,
+        service_type_id: resolvedServiceTypeId,
         status: 'NOVO',
-        notes: newLead.service_interest === 'OUTRO' && newLead.service_interest_other
+        notes: resolvedServiceInterest === 'OUTRO' && newLead.service_interest_other
           ? `Serviço: ${newLead.service_interest_other}`
           : undefined,
       });
