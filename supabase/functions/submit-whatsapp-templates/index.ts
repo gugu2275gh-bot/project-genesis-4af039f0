@@ -390,7 +390,7 @@ serve(async (req) => {
 
         // Update DB if needed
         const needsUpdate = dbMatch.content_sid !== sid || dbMatch.status !== approvalStatus
-        if (needsUpdate && ['approved', 'rejected', 'pending'].includes(approvalStatus)) {
+        if (needsUpdate && approvalStatus !== 'unknown' && approvalStatus !== 'error') {
           const updateData: any = {
             content_sid: sid,
             status: approvalStatus,
