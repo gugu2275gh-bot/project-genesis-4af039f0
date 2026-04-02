@@ -1872,6 +1872,7 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
                                         serviceTypeId,
                                         installments,
                                         notes: extractLastNotes(),
+                                        fees: extractFeesFromNotes(serviceTypeId),
                                       });
                                       setShowPaymentAgreement(true);
                                     }}
