@@ -443,7 +443,137 @@ serve(async (req) => {
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    return new Response(JSON.stringify({ error: 'Invalid action. Use "submit", "check_status", or "sync_from_twilio"' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    // ACTION: force_resubmit — Delete old content, recreate with samples, resubmit all
+    if (action === 'force_resubmit') {
+      console.log('Starting force_resubmit...')
+      const { data: templates, error: fetchError } = await adminSupabase.from('whatsapp_templates').select('*')
+      if (fetchError) throw fetchError
+
+      const results = []
+      for (const template of templates || []) {
+        try {
+          // Step 1: Delete old content from Twilio if exists
+          if (template.content_sid) {
+            console.log(`Deleting old content ${template.content_sid} for ${template.template_name}`)
+            const deleteResponse = await fetch(`${CONTENT_API_URL}/${template.content_sid}`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Basic ${basicAuth}` },
+            })
+            console.log(`Delete response for ${template.template_name}: ${deleteResponse.status}`)
+
+            await insertLog({
+              template_id: template.id,
+              template_name: template.template_name,
+              action: 'force_delete',
+              status: deleteResponse.ok || deleteResponse.status === 404 ? 'success' : 'error',
+              request_payload: { url: `${CONTENT_API_URL}/${template.content_sid}`, method: 'DELETE' },
+              twilio_status_code: deleteResponse.status,
+              content_sid: template.content_sid,
+            })
+
+            // Clear content_sid in DB
+            await adminSupabase.from('whatsapp_templates').update({
+              content_sid: null,
+              updated_at: new Date().toISOString(),
+            }).eq('id', template.id)
+          }
+
+          // Step 2: Create new Content Template with sample values
+          const placeholderRegex = /\{\{(\d+)\}\}/g
+          const sampleDefaults: Record<string, string> = { '1': 'Jorge', '2': '9,99', '3': '31/12/2050' }
+          const variables: Record<string, string> = {}
+          let match
+          while ((match = placeholderRegex.exec(template.body_text)) !== null) {
+            const idx = match[1]
+            variables[idx] = sampleDefaults[idx] || `exemplo_${idx}`
+          }
+
+          const contentBody: any = {
+            friendly_name: template.template_name,
+            language: template.language || 'pt_BR',
+            types: {
+              'twilio/text': {
+                body: template.body_text,
+              },
+            },
+            content_type: 'twilio/text',
+          }
+
+          if (Object.keys(variables).length > 0) {
+            contentBody.variables = variables
+          }
+
+          console.log(`Creating new content for ${template.template_name}`)
+          const createResponse = await fetch(CONTENT_API_URL, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${basicAuth}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(contentBody),
+          })
+
+          const createData = await createResponse.json()
+          console.log(`Create response for ${template.template_name}: ${createResponse.status}`, JSON.stringify(createData))
+
+          await insertLog({
+            template_id: template.id,
+            template_name: template.template_name,
+            action: 'force_create',
+            status: createResponse.ok ? 'success' : 'error',
+            request_payload: contentBody,
+            response_payload: createData,
+            error_message: createResponse.ok ? null : (createData.message || JSON.stringify(createData)),
+            twilio_status_code: createResponse.status,
+            content_sid: createData.sid || null,
+          })
+
+          if (!createResponse.ok || !createData.sid) {
+            await adminSupabase.from('whatsapp_templates').update({
+              status: 'error',
+              rejection_reason: createData.message || JSON.stringify(createData),
+              updated_at: new Date().toISOString(),
+            }).eq('id', template.id)
+            results.push({ template_name: template.template_name, status: 'error', error: createData.message || 'Creation failed' })
+            continue
+          }
+
+          const newSid = createData.sid
+
+          // Step 3: Submit for Meta approval
+          const approvalResult = await submitApprovalRequest(template, newSid)
+
+          const finalStatus = approvalResult.success ? 'pending' : 'error'
+          await adminSupabase.from('whatsapp_templates').update({
+            content_sid: newSid,
+            status: finalStatus,
+            rejection_reason: approvalResult.success ? null : `Aprovação falhou: ${approvalResult.error}`,
+            is_active: false,
+            updated_at: new Date().toISOString(),
+          }).eq('id', template.id)
+
+          results.push({
+            template_name: template.template_name,
+            status: approvalResult.success ? 'submitted' : 'error',
+            content_sid: newSid,
+            error: approvalResult.success ? undefined : approvalResult.error,
+          })
+        } catch (err) {
+          console.error(`Error force_resubmit for ${template.template_name}:`, err)
+          results.push({
+            template_name: template.template_name,
+            status: 'error',
+            error: err instanceof Error ? err.message : 'Unknown error',
+          })
+        }
+      }
+
+      const submitted = results.filter(r => r.status === 'submitted').length
+      const errors = results.filter(r => r.status === 'error').length
+      return new Response(JSON.stringify({ success: true, summary: { total: results.length, submitted, errors }, results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    return new Response(JSON.stringify({ error: 'Invalid action. Use "submit", "check_status", "sync_from_twilio", or "force_resubmit"' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error'
