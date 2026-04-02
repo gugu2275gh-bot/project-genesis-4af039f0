@@ -89,9 +89,17 @@ serve(async (req) => {
       )
     }
 
-    const { mensagem, numero, sector, contact_id } = await req.json()
+    const { mensagem, numero, sector, contact_id, mediaUrl, contentSid } = await req.json()
 
-    if (!mensagem || !numero) {
+    // If it's a template send (contentSid), only require numero
+    if (contentSid) {
+      if (!numero) {
+        return new Response(
+          JSON.stringify({ error: 'Parâmetro numero é obrigatório' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    } else if (!mensagem || !numero) {
       return new Response(
         JSON.stringify({ error: 'Parâmetros mensagem e numero são obrigatórios' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -118,6 +126,18 @@ serve(async (req) => {
     // Send via Twilio WhatsApp Gateway
     console.log('Sending via Twilio WhatsApp Gateway:', { phone: phoneStr })
 
+    const twilioParams: Record<string, string> = {
+      To: `whatsapp:+${phoneStr}`,
+      From: TWILIO_FROM_NUMBER,
+      Body: rawMessage,
+    }
+
+    // Add media URL if provided
+    if (mediaUrl) {
+      twilioParams.MediaUrl = mediaUrl
+      console.log('Sending with media:', mediaUrl)
+    }
+
     const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
       method: 'POST',
       headers: {
@@ -125,11 +145,7 @@ serve(async (req) => {
         'X-Connection-Api-Key': TWILIO_API_KEY,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams({
-        To: `whatsapp:+${phoneStr}`,
-        From: TWILIO_FROM_NUMBER,
-        Body: rawMessage,
-      }),
+      body: new URLSearchParams(twilioParams),
     })
 
     const responseData = await response.text()

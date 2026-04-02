@@ -135,14 +135,21 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
   });
 
   const sendMessage = useMutation({
-    mutationFn: async ({ leadId, message }: { leadId: string; message: string }) => {
+    mutationFn: async ({ leadId, message, mediaUrl, mediaType, mediaFilename, mediaMimetype }: { 
+      leadId: string; 
+      message: string; 
+      mediaUrl?: string;
+      mediaType?: string;
+      mediaFilename?: string;
+      mediaMimetype?: string;
+    }) => {
       // Build prefixed message for WhatsApp delivery
       const prefix = userInfo ? `*${userInfo.name} - ${userInfo.role}*` : '';
       const prefixedMessage = prefix ? `${prefix}\n${message}` : message;
 
       // First, call the webhook via Edge Function if we have a phone number
       if (contactPhone) {
-        console.log('Sending WhatsApp via Edge Function:', { message: prefixedMessage, phone: contactPhone, sector: userInfo?.sector });
+        console.log('Sending WhatsApp via Edge Function:', { message: prefixedMessage, phone: contactPhone, sector: userInfo?.sector, mediaUrl });
         
         const { data: webhookData, error: webhookError } = await supabase.functions.invoke('send-whatsapp', {
           body: { 
@@ -150,13 +157,13 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
             numero: String(contactPhone),
             sector: userInfo?.sector || undefined,
             contact_id: contactId || undefined,
+            mediaUrl: mediaUrl || undefined,
           }
         });
 
         if (webhookError) {
           console.error('Webhook error:', webhookError);
           toast.error('Erro ao enviar WhatsApp: ' + webhookError.message);
-          // Continue to save the message even if webhook fails
         } else {
           console.log('Webhook response:', webhookData);
         }
@@ -172,12 +179,16 @@ export function useLeadMessages(leadId: string | undefined, contactPhone: string
           mensagem_IA: prefixedMessage,
           origem: 'SISTEMA',
           setor: userInfo?.sector || null,
+          media_url: mediaUrl || null,
+          media_type: mediaType || null,
+          media_filename: mediaFilename || null,
+          media_mimetype: mediaMimetype || null,
         })
         .select()
         .single();
 
       if (error) throw error;
-      return { data, leadId }; // Return leadId for consistent invalidation
+      return { data, leadId };
     },
     onMutate: async ({ leadId, message }) => {
       await queryClient.cancelQueries({ queryKey: cacheKey });

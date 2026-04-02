@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff, ExternalLink, LayoutTemplate, Clock, AlertTriangle } from 'lucide-react';
+import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff, ExternalLink, LayoutTemplate, Clock, AlertTriangle, Paperclip, X, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -155,6 +155,9 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
   const { operationalTemplates } = useWhatsAppTemplates();
   const [newMessage, setNewMessage] = useState('');
   const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -219,10 +222,75 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
   }, [newMessage, cacheKey, queryClient]);
 
   const handleSend = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() && !attachedFile) return;
     
-    await sendMessage.mutateAsync({ leadId, message: newMessage });
+    let mediaUrl: string | undefined;
+    let mediaType: string | undefined;
+    let mediaFilename: string | undefined;
+    let mediaMimetype: string | undefined;
+
+    if (attachedFile) {
+      setIsUploading(true);
+      try {
+        const fileExt = attachedFile.name.split('.').pop();
+        const filePath = `agent-uploads/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('whatsapp-media')
+          .upload(filePath, attachedFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('whatsapp-media')
+          .getPublicUrl(filePath);
+
+        mediaUrl = publicUrlData.publicUrl;
+        mediaMimetype = attachedFile.type;
+        mediaFilename = attachedFile.name;
+        
+        if (attachedFile.type.startsWith('image/')) {
+          mediaType = 'image';
+        } else if (attachedFile.type.startsWith('video/')) {
+          mediaType = 'video';
+        } else if (attachedFile.type.startsWith('audio/')) {
+          mediaType = 'audio';
+        } else {
+          mediaType = 'document';
+        }
+      } catch (err: any) {
+        toast.error('Erro ao fazer upload: ' + err.message);
+        setIsUploading(false);
+        return;
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
+    await sendMessage.mutateAsync({ 
+      leadId, 
+      message: newMessage || (attachedFile ? `📎 ${attachedFile.name}` : ''),
+      mediaUrl,
+      mediaType,
+      mediaFilename,
+      mediaMimetype,
+    });
     setNewMessage('');
+    setAttachedFile(null);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Max 16MB for WhatsApp
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 16MB.');
+      return;
+    }
+    setAttachedFile(file);
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
   };
 
   const handleSendTemplate = async (template: { id: string; template_name: string; content_sid: string | null; body_text: string; variables: string[] }) => {
@@ -590,57 +658,102 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
               )}
             </div>
           ) : (
-            <div className="flex gap-2">
-              {operationalTemplates.length > 0 && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          disabled={sendingTemplate}
-                          className="shrink-0"
-                        >
-                          <LayoutTemplate className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Enviar template operacional</TooltipContent>
-                    </Tooltip>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-72 p-2" align="start">
-                    <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Templates Operacionais</p>
-                    <div className="space-y-1 max-h-[200px] overflow-y-auto">
-                      {operationalTemplates.map((tpl) => (
-                        <button
-                          key={tpl.id}
-                          className="w-full text-left px-2 py-1.5 rounded-md hover:bg-accent text-sm transition-colors"
-                          onClick={() => handleSendTemplate(tpl as any)}
-                          disabled={sendingTemplate}
-                        >
-                          <p className="font-medium text-xs">{tpl.template_name}</p>
-                          <p className="text-[11px] text-muted-foreground truncate">{tpl.body_text}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+            <div className="space-y-2">
+              {/* Attached file preview */}
+              {attachedFile && (
+                <div className="flex items-center gap-2 bg-accent/50 rounded-md px-3 py-2 text-sm">
+                  {attachedFile.type.startsWith('image/') ? (
+                    <Image className="h-4 w-4 text-muted-foreground shrink-0" />
+                  ) : (
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                  <span className="truncate flex-1">{attachedFile.name}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {(attachedFile.size / 1024).toFixed(0)}KB
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0"
+                    onClick={() => setAttachedFile(null)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
               )}
-              <Input
-                placeholder="Digite sua mensagem..."
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="flex-1"
-                disabled={sendMessage.isPending}
-              />
-              <Button
-                onClick={handleSend}
-                disabled={!newMessage.trim() || sendMessage.isPending}
-                size="icon"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
+              <div className="flex gap-2">
+                {operationalTemplates.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            disabled={sendingTemplate}
+                            className="shrink-0"
+                          >
+                            <LayoutTemplate className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Enviar template operacional</TooltipContent>
+                      </Tooltip>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72 p-2" align="start">
+                      <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Templates Operacionais</p>
+                      <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                        {operationalTemplates.map((tpl) => (
+                          <button
+                            key={tpl.id}
+                            className="w-full text-left px-2 py-1.5 rounded-md hover:bg-accent text-sm transition-colors"
+                            onClick={() => handleSendTemplate(tpl as any)}
+                            disabled={sendingTemplate}
+                          >
+                            <p className="font-medium text-xs">{tpl.template_name}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">{tpl.body_text}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                  className="hidden"
+                />
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading || sendMessage.isPending}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Anexar imagem ou documento</TooltipContent>
+                </Tooltip>
+                <Input
+                  placeholder={attachedFile ? "Legenda (opcional)..." : "Digite sua mensagem..."}
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="flex-1"
+                  disabled={sendMessage.isPending || isUploading}
+                />
+                <Button
+                  onClick={handleSend}
+                  disabled={(!newMessage.trim() && !attachedFile) || sendMessage.isPending || isUploading}
+                  size="icon"
+                >
+                  {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           )}
         </div>
