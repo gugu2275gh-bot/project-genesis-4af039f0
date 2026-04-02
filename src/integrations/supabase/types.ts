@@ -2894,11 +2894,16 @@ export type Database = {
         Row: {
           automation_type: string
           body_text: string
+          buttons: Json | null
           content_sid: string | null
+          content_type: string | null
           created_at: string | null
+          footer_text: string | null
+          header_text: string | null
           id: string
           is_active: boolean | null
           language: string
+          media_url: string | null
           meta_category: string
           rejection_reason: string | null
           status: string
@@ -2910,11 +2915,16 @@ export type Database = {
         Insert: {
           automation_type: string
           body_text: string
+          buttons?: Json | null
           content_sid?: string | null
+          content_type?: string | null
           created_at?: string | null
+          footer_text?: string | null
+          header_text?: string | null
           id?: string
           is_active?: boolean | null
           language?: string
+          media_url?: string | null
           meta_category?: string
           rejection_reason?: string | null
           status?: string
@@ -2926,11 +2936,16 @@ export type Database = {
         Update: {
           automation_type?: string
           body_text?: string
+          buttons?: Json | null
           content_sid?: string | null
+          content_type?: string | null
           created_at?: string | null
+          footer_text?: string | null
+          header_text?: string | null
           id?: string
           is_active?: boolean | null
           language?: string
+          media_url?: string | null
           meta_category?: string
           rejection_reason?: string | null
           status?: string
