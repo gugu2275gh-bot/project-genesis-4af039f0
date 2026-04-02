@@ -403,9 +403,9 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
         <DialogHeader>
           <DialogTitle>Forma de Pagamento — {contactName}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           {/* Service Type Selection */}
-          <div>
+          <div className="min-w-0">
             <Label>Serviço de Interesse</Label>
             <ServiceTypeCombobox
               value={selectedServiceTypeId}
