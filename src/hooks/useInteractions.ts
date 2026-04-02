@@ -36,13 +36,16 @@ export function useInteractions(contactId?: string, leadId?: string) {
   });
 
   const createInteraction = useMutation({
-    mutationFn: async (interaction: InteractionInsert) => {
+    mutationFn: async (interaction: InteractionInsert & { sector?: string }) => {
+      const { sector, ...rest } = interaction;
+      const insertData: any = {
+        ...rest,
+        created_by_user_id: user?.id,
+      };
+      if (sector) insertData.sector = sector;
       const { data, error } = await supabase
         .from('interactions')
-        .insert({
-          ...interaction,
-          created_by_user_id: user?.id,
-        })
+        .insert(insertData)
         .select()
         .single();
       
