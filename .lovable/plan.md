@@ -1,28 +1,47 @@
 
 
-## Corrigir Sincronização de Status — Forçar Verificação Real no Twilio
+## Adicionar Valores de Exemplo para Variáveis nos Templates
 
 ### Problema
-A migração anterior fez `UPDATE SET status = 'approved'` para TODOS os templates com `content_sid`, sem consultar o Twilio. Resultado: templates rejeitados (como `cb_huellas_reminder_es`) aparecem como "Aprovado" no sistema.
+A Twilio/Meta exige valores de exemplo (sample values) para cada variável ao criar um Content Template. Sem eles, o template pode ser rejeitado ou não pode ser submetido para aprovação do WhatsApp.
 
-### Plano
+### O que será feito
 
-#### 1. SQL — Reverter todos os status para `pending` (forçar re-verificação)
-Resetar o status de todos os templates que foram forçados a `approved` pela migração, para que a verificação real os atualize:
+#### 1. Edge Function — Incluir `variables` com samples no payload de criação
+No `submit-whatsapp-templates`, ao criar o Content Template (Step 1), gerar automaticamente os sample values baseados no índice da variável:
+- `{{1}}` → `"Jorge"`
+- `{{2}}` → `"9,99"` (decimal com vírgula, padrão do projeto)
+- `{{3}}` → `"31/12/2050"`
 
-```sql
-UPDATE public.whatsapp_templates
-SET status = 'pending', updated_at = now()
-WHERE content_sid IS NOT NULL;
+O payload passará a incluir o campo `variables` exigido pela Twilio Content API:
+```json
+{
+  "friendly_name": "cb_welcome_es",
+  "language": "es",
+  "types": {
+    "twilio/text": {
+      "body": "Hola {{1}}! Bienvenido..."
+    }
+  },
+  "variables": {
+    "1": "Jorge",
+    "2": "9,99",
+    "3": "31/12/2050"
+  }
+}
 ```
 
-#### 2. UI — Botão "Verificar Status" deve usar `force: true`
-Alterar a chamada `checkStatus.mutate(false)` para `checkStatus.mutate(true)` para que SEMPRE verifique todos os templates (incluindo os já marcados como approved), garantindo sincronização real.
+A lógica detectará quantas variáveis (`{{N}}`) existem no `body_text` e gerará os samples automaticamente, usando a lista ordenada de nomes das variáveis do template como fallback descritivo nos logs.
 
-#### 3. Executar verificação automática após migração
-Após a migração rodar, o usuário clica em "Verificar Status" e a edge function consulta `GET /v1/Content/{SID}/ApprovalRequests` para CADA template, atualizando o status com o valor real retornado pelo Twilio (approved, rejected, pending, etc.).
+#### 2. UI — Mostrar os sample values no formulário de criação e edição
+Adicionar uma nota informativa nos dialogs de criação e edição, abaixo do campo de variáveis, explicando os valores de exemplo que serão enviados automaticamente:
+
+```
+ℹ️ Valores de exemplo enviados ao WhatsApp:
+  {{1}} → Jorge  |  {{2}} → 9,99  |  {{3}} → 31/12/2050
+```
 
 ### Arquivos modificados
-- Nova migração SQL (reset status para pending)
-- `src/pages/settings/WhatsAppTemplatesSettings.tsx` (force: true no botão)
+- `supabase/functions/submit-whatsapp-templates/index.ts` (adicionar `variables` no payload)
+- `src/pages/settings/WhatsAppTemplatesSettings.tsx` (nota informativa nos dialogs)
 
