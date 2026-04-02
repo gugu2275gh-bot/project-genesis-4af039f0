@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLeads } from '@/hooks/useLeads';
+import { supabase } from '@/integrations/supabase/client';
 import { useContacts } from '@/hooks/useContacts';
 import { useLeadSLAAlerts } from '@/hooks/useLeadSLAAlerts';
 import { useServiceTypes } from '@/hooks/useServiceTypes';
