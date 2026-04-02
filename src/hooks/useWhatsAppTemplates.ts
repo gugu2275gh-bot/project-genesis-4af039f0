@@ -167,6 +167,11 @@ export function useWhatsAppTemplates() {
           template_category: newTemplate.template_category || 'sla',
           meta_category: newTemplate.meta_category || 'UTILITY',
           language: newTemplate.language || 'pt_BR',
+          content_type: newTemplate.content_type || 'twilio/text',
+          header_text: newTemplate.header_text || null,
+          footer_text: newTemplate.footer_text || null,
+          media_url: newTemplate.media_url || null,
+          buttons: newTemplate.buttons || [],
         } as any);
       if (error) throw error;
     },
