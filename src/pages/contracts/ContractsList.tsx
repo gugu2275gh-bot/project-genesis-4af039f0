@@ -79,6 +79,20 @@ export default function ContractsList() {
 
   const handleCreate = async () => {
     if (!selectedOpportunity) return;
+
+    // Check for existing active contract for this opportunity
+    const { data: existingContracts } = await supabase
+      .from('contracts')
+      .select('id, status')
+      .eq('opportunity_id', selectedOpportunity)
+      .not('status', 'eq', 'CANCELADO')
+      .limit(1);
+    
+    if (existingContracts?.length) {
+      toast({ title: 'Contrato já existe', description: 'Já existe um contrato ativo para esta oportunidade.', variant: 'destructive' });
+      return;
+    }
+
     const opp = opportunities.find(o => o.id === selectedOpportunity);
     const serviceInterest = opp?.leads?.service_interest || 'OUTRO';
     const template = getTemplateForService(serviceInterest);
