@@ -126,6 +126,18 @@ serve(async (req) => {
     // Send via Twilio WhatsApp Gateway
     console.log('Sending via Twilio WhatsApp Gateway:', { phone: phoneStr })
 
+    const twilioParams: Record<string, string> = {
+      To: `whatsapp:+${phoneStr}`,
+      From: TWILIO_FROM_NUMBER,
+      Body: rawMessage,
+    }
+
+    // Add media URL if provided
+    if (mediaUrl) {
+      twilioParams.MediaUrl = mediaUrl
+      console.log('Sending with media:', mediaUrl)
+    }
+
     const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
       method: 'POST',
       headers: {
@@ -133,11 +145,7 @@ serve(async (req) => {
         'X-Connection-Api-Key': TWILIO_API_KEY,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams({
-        To: `whatsapp:+${phoneStr}`,
-        From: TWILIO_FROM_NUMBER,
-        Body: rawMessage,
-      }),
+      body: new URLSearchParams(twilioParams),
     })
 
     const responseData = await response.text()
