@@ -1,0 +1,1 @@
+UPDATE public.whatsapp_templates SET status = 'pending', updated_at = now() WHERE content_sid IS NOT NULL;
