@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLeads } from '@/hooks/useLeads';
+import { supabase } from '@/integrations/supabase/client';
 import { useContacts } from '@/hooks/useContacts';
 import { useLeadSLAAlerts } from '@/hooks/useLeadSLAAlerts';
 import { useServiceTypes } from '@/hooks/useServiceTypes';
@@ -11,13 +12,15 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Eye, UserPlus, Users, ChevronRight, ChevronDown, User } from 'lucide-react';
+import { Plus, Search, Eye, UserPlus, Users, ChevronRight, ChevronDown, User, AlertTriangle } from 'lucide-react';
 import { LEAD_STATUS_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 
 export default function Leads() {
   const navigate = useNavigate();
@@ -54,6 +57,8 @@ export default function Leads() {
     origin_channel: 'WHATSAPP' as OriginChannel,
     referral_name: '',
   });
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [pendingCreate, setPendingCreate] = useState(false);
 
   const filteredContacts = useMemo(() => {
     if (!contactSearch) return contacts?.slice(0, 20) || [];
@@ -128,9 +133,55 @@ export default function Leads() {
     });
   };
 
-  const handleCreate = async () => {
+  const checkDuplicateContact = async (phone?: string, email?: string) => {
+    if (!phone && !email) return null;
+    let query = supabase.from('contacts').select('id, full_name, phone, email');
+    if (phone) {
+      const cleanPhone = phone.replace(/\D/g, '');
+      if (cleanPhone.length >= 8) {
+        const { data } = await query.eq('phone', cleanPhone).limit(1);
+        if (data?.length) return data[0];
+      }
+    }
+    if (email) {
+      const { data } = await supabase.from('contacts').select('id, full_name, phone, email').eq('email', email).limit(1);
+      if (data?.length) return data[0];
+    }
+    return null;
+  };
+
+  const checkDuplicateLead = async (contactId: string, serviceInterest: string) => {
+    const { data } = await supabase
+      .from('leads')
+      .select('id, service_interest, service_type_id, status')
+      .eq('contact_id', contactId)
+      .not('status', 'in', '("ARQUIVADO_SEM_RETORNO","MESCLADO")')
+      .limit(10);
+    if (!data?.length) return null;
+    // Check for same service
+    const match = data.find(l => l.service_interest === serviceInterest || l.service_type_id === serviceInterest);
+    if (match) return { exact: true, count: data.length };
+    if (data.length > 0) return { exact: false, count: data.length };
+    return null;
+  };
+
+  const handleCreate = async (forceCreate = false) => {
+    setDuplicateWarning(null);
+
     if (leadMode === 'existing') {
       if (!selectedContactId) return;
+      
+      if (!forceCreate) {
+        const dup = await checkDuplicateLead(selectedContactId, newLead.service_interest);
+        if (dup?.exact) {
+          setDuplicateWarning('Este contato já possui um lead ativo com o mesmo serviço de interesse. Deseja criar mesmo assim?');
+          return;
+        } else if (dup) {
+          setDuplicateWarning(`Este contato já possui ${dup.count} lead(s) ativo(s). Deseja criar mais um?`);
+          return;
+        }
+      }
+
       const createdLead = await createLead.mutateAsync({
         contact_id: selectedContactId,
         service_interest: newLead.service_interest,
@@ -145,6 +196,18 @@ export default function Leads() {
     } else {
       if (!newLead.full_name) return;
       const phoneStr = newLead.phone ? newLead.phone.replace(/\D/g, '') : undefined;
+
+      if (!forceCreate) {
+        // Check duplicate contact
+        const existingContact = await checkDuplicateContact(newLead.phone, newLead.email);
+        if (existingContact) {
+          setDuplicateWarning(
+            `Já existe um contato "${existingContact.full_name}" com ${existingContact.phone === phoneStr ? 'o mesmo telefone' : 'o mesmo e-mail'}. Use a aba "Contato Existente" para adicionar um lead a este contato.`
+          );
+          return;
+        }
+      }
+
       const contact = await createContact.mutateAsync({
         full_name: newLead.full_name,
         email: newLead.email || undefined,
@@ -165,19 +228,6 @@ export default function Leads() {
       navigate(`/crm/leads/${createdLead.id}`);
       return;
     }
-
-    setLeadMode('new');
-    setSelectedContactId('');
-    setContactSearch('');
-    setNewLead({
-      full_name: '',
-      email: '',
-      phone: '',
-      service_interest: 'VISTO_ESTUDANTE',
-      service_interest_other: '',
-      origin_channel: 'WHATSAPP',
-      referral_name: '',
-    });
   };
 
   return (
@@ -327,16 +377,34 @@ export default function Leads() {
                     />
                   </div>
                 )}
+                {duplicateWarning && (
+                  <Alert className="border-warning/30 bg-warning/5">
+                    <AlertTriangle className="h-4 w-4 text-warning" />
+                    <AlertDescription className="text-sm">
+                      {duplicateWarning}
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  <Button variant="outline" onClick={() => { setIsDialogOpen(false); setDuplicateWarning(null); }}>
                     Cancelar
                   </Button>
-                  <Button
-                    onClick={handleCreate}
-                    disabled={createLead.isPending || (leadMode === 'new' && !newLead.full_name) || (leadMode === 'existing' && !selectedContactId)}
-                  >
-                    {createLead.isPending ? 'Criando...' : 'Criar Lead'}
-                  </Button>
+                  {duplicateWarning ? (
+                    <Button
+                      variant="destructive"
+                      onClick={() => handleCreate(true)}
+                      disabled={createLead.isPending}
+                    >
+                      {createLead.isPending ? 'Criando...' : 'Criar Mesmo Assim'}
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => handleCreate(false)}
+                      disabled={createLead.isPending || (leadMode === 'new' && !newLead.full_name) || (leadMode === 'existing' && !selectedContactId)}
+                    >
+                      {createLead.isPending ? 'Criando...' : 'Criar Lead'}
+                    </Button>
+                  )}
                 </div>
               </div>
             </DialogContent>

@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, CONTRACT_TEMPLATE_LABELS } from '@/types/database';
+import { toast } from 'sonner';
 
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format } from 'date-fns';
@@ -79,6 +80,20 @@ export default function ContractsList() {
 
   const handleCreate = async () => {
     if (!selectedOpportunity) return;
+
+    // Check for existing active contract for this opportunity
+    const { data: existingContracts } = await supabase
+      .from('contracts')
+      .select('id, status')
+      .eq('opportunity_id', selectedOpportunity)
+      .not('status', 'eq', 'CANCELADO')
+      .limit(1);
+    
+    if (existingContracts?.length) {
+      toast.error('Já existe um contrato ativo para esta oportunidade.');
+      return;
+    }
+
     const opp = opportunities.find(o => o.id === selectedOpportunity);
     const serviceInterest = opp?.leads?.service_interest || 'OUTRO';
     const template = getTemplateForService(serviceInterest);
