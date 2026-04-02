@@ -901,6 +901,18 @@ export function ContractGroupsSection({
                                 <Play className="h-3.5 w-3.5 mr-1" />
                                 Ativar
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteServiceLead(lead);
+                                }}
+                                title="Excluir serviço"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
                             </div>
                           </div>
                         </div>
