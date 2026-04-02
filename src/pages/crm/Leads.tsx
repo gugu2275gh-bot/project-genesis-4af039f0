@@ -377,16 +377,34 @@ export default function Leads() {
                     />
                   </div>
                 )}
+                {duplicateWarning && (
+                  <Alert className="border-warning/30 bg-warning/5">
+                    <AlertTriangle className="h-4 w-4 text-warning" />
+                    <AlertDescription className="text-sm">
+                      {duplicateWarning}
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  <Button variant="outline" onClick={() => { setIsDialogOpen(false); setDuplicateWarning(null); }}>
                     Cancelar
                   </Button>
-                  <Button
-                    onClick={handleCreate}
-                    disabled={createLead.isPending || (leadMode === 'new' && !newLead.full_name) || (leadMode === 'existing' && !selectedContactId)}
-                  >
-                    {createLead.isPending ? 'Criando...' : 'Criar Lead'}
-                  </Button>
+                  {duplicateWarning ? (
+                    <Button
+                      variant="destructive"
+                      onClick={() => handleCreate(true)}
+                      disabled={createLead.isPending}
+                    >
+                      {createLead.isPending ? 'Criando...' : 'Criar Mesmo Assim'}
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => handleCreate(false)}
+                      disabled={createLead.isPending || (leadMode === 'new' && !newLead.full_name) || (leadMode === 'existing' && !selectedContactId)}
+                    >
+                      {createLead.isPending ? 'Criando...' : 'Criar Lead'}
+                    </Button>
+                  )}
                 </div>
               </div>
             </DialogContent>
