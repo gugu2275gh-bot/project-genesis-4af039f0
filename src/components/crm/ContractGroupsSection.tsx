@@ -13,7 +13,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { 
-  Briefcase, CreditCard, DollarSign, Loader2, Plus, Pencil, Trash2, CheckCircle2, FileText, Package, ChevronRight, ChevronDown, User, Users
+  Briefcase, CreditCard, DollarSign, Loader2, Plus, Pencil, Trash2, CheckCircle2, FileText, Package, ChevronRight, ChevronDown, User, Users, Clock, Play
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -264,7 +264,9 @@ export function ContractGroupsSection({
 
   // Ungrouped leads (not linked to any contract)
   const groupedLeadIds = new Set(contractGroups.flatMap(g => g.leads.map(l => l.id)));
-  const ungroupedLeads = allLeads.filter(l => !groupedLeadIds.has(l.id));
+  const allUngroupedLeads = allLeads.filter(l => !groupedLeadIds.has(l.id));
+  const ungroupedLeads = allUngroupedLeads.filter(l => l.status !== 'STANDBY');
+  const standbyLeads = allUngroupedLeads.filter(l => l.status === 'STANDBY');
 
   // Ungrouped payments
   const groupedPaymentIds = new Set(contractGroups.flatMap(g => g.payments.map(p => p.id)));
@@ -830,6 +832,74 @@ export function ContractGroupsSection({
                       showDelete: true,
                       editable: true,
                     }))}
+                  </div>
+                </div>
+              )}
+
+              {/* Standby Services */}
+              {standbyLeads.length > 0 && (
+                <div className="rounded-xl border-2 border-dashed border-amber-300 overflow-hidden bg-amber-50/50">
+                  <div className="flex items-center justify-between p-3 bg-amber-100/50">
+                    <div className="flex items-center gap-3">
+                      <Clock className="h-5 w-5 text-amber-600" />
+                      <div>
+                        <p className="font-semibold text-amber-800">
+                          Serviços Futuros (Standby)
+                        </p>
+                        <p className="text-sm text-amber-600">
+                          {standbyLeads.length} serviço{standbyLeads.length !== 1 ? 's' : ''} aguardando ativação
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-3 space-y-3">
+                    {standbyLeads.map(lead => {
+                      const displayName = getLeadDisplayName(lead);
+                      return (
+                        <div key={lead.id} className="rounded-lg border border-amber-200 bg-background overflow-hidden">
+                          <div className="flex items-center justify-between p-3">
+                            <div
+                              className="cursor-pointer flex-1"
+                              onClick={() => navigate(`/crm/leads/${lead.id}`)}
+                            >
+                              <p className="font-medium">{displayName}
+                                {(lead as any)._isBeneficiary && (
+                                  <Badge variant="outline" className="ml-2 text-xs border-primary/30 text-primary bg-primary/5">
+                                    {(lead as any)._beneficiaryName}
+                                  </Badge>
+                                )}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                Criado em {format(new Date(lead.created_at!), "dd/MM/yyyy", { locale: ptBR })}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-amber-100 text-amber-800 border-amber-300">
+                                Serviço Futuro
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-primary"
+                                onClick={async () => {
+                                  try {
+                                    await supabase.from('leads').update({ status: 'INTERESSE_PENDENTE' }).eq('id', lead.id);
+                                    queryClient.invalidateQueries({ queryKey: ['leads'] });
+                                    queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', contactId] });
+                                    toast({ title: 'Serviço ativado com sucesso' });
+                                  } catch (error: any) {
+                                    toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+                                  }
+                                }}
+                              >
+                                <Play className="h-3.5 w-3.5 mr-1" />
+                                Ativar
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

@@ -96,6 +96,7 @@ export default function ContactDetail() {
   const [showNewServiceDialog, setShowNewServiceDialog] = useState(false);
   const [newServiceInterest, setNewServiceInterest] = useState<string>('OUTRO');
   const [newServiceNotes, setNewServiceNotes] = useState('');
+  const [newServiceStandby, setNewServiceStandby] = useState(false);
   const [paymentNotes, setPaymentNotes] = useState<string | null>(null);
   const [isSavingPaymentNotes, setIsSavingPaymentNotes] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
@@ -252,7 +253,6 @@ export default function ContactDetail() {
   const handleCreateNewService = async () => {
     if (!id) return;
     try {
-      // Find the selected service type to get the service_interest enum
       const selectedST = serviceTypes?.find(st => st.code === newServiceInterest);
       const newLead = await createLeadForContact.mutateAsync({
         contact_id: id,
@@ -260,10 +260,18 @@ export default function ContactDetail() {
         service_type_id: selectedST?.id,
         notes: newServiceNotes || undefined,
       });
+      // If standby checkbox is checked, update the lead status to STANDBY
+      if (newServiceStandby) {
+        await supabase.from('leads').update({ status: 'STANDBY' }).eq('id', newLead.id);
+        queryClient.invalidateQueries({ queryKey: ['leads'] });
+      }
       setShowNewServiceDialog(false);
       setNewServiceInterest('OUTRO');
       setNewServiceNotes('');
-      navigate(`/crm/leads/${newLead.id}`);
+      setNewServiceStandby(false);
+      if (!newServiceStandby) {
+        navigate(`/crm/leads/${newLead.id}`);
+      }
     } catch (error) {
       // toast handled by hook
     }
@@ -1517,6 +1525,16 @@ export default function ContactDetail() {
                 placeholder="Observações sobre o novo serviço..."
                 rows={3}
               />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="standby-checkbox"
+                checked={newServiceStandby}
+                onCheckedChange={(checked) => setNewServiceStandby(checked === true)}
+              />
+              <Label htmlFor="standby-checkbox" className="text-sm font-normal cursor-pointer">
+                Serviço Futuro (Standby) — não gerar contrato até ativação
+              </Label>
             </div>
           </div>
           <DialogFooter>

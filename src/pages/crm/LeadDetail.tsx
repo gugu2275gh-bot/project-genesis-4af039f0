@@ -276,6 +276,19 @@ export default function LeadDetail() {
         description={`Lead criado em ${format(new Date(lead.created_at!), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}`}
         actions={
           <div className="flex items-center gap-2">
+            {lead.status === 'STANDBY' ? (
+              <Button onClick={() => updateLead.mutateAsync({ id: lead.id, status: 'INTERESSE_PENDENTE' as any })} disabled={updateLead.isPending} variant="default">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                {updateLead.isPending ? 'Ativando...' : 'Ativar Serviço'}
+              </Button>
+            ) : (
+              ['NOVO', 'DADOS_INCOMPLETOS', 'INTERESSE_PENDENTE'].includes(lead.status || 'NOVO') && (
+                <Button onClick={() => updateLead.mutateAsync({ id: lead.id, status: 'STANDBY' as any })} disabled={updateLead.isPending} variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50">
+                  <Pause className="h-4 w-4 mr-2" />
+                  Serviço Futuro
+                </Button>
+              )
+            )}
             {hasCancelledContract && (
               <Button onClick={handleNewService} disabled={createLeadForContact.isPending} variant="outline">
                 <RefreshCw className="h-4 w-4 mr-2" />
