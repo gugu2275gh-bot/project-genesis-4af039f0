@@ -1,46 +1,75 @@
 
 
-## Recriar e Resubmeter Todos os Templates no Twilio
+## Expandir Formulário de Criação para Espelhar o Twilio Console
 
 ### Problema
-Os templates existentes no Twilio foram criados sem os sample values corretos e alguns têm status desatualizado. Precisamos deletar os content templates antigos, recriar com os dados de teste (`{{1}}=Jorge`, `{{2}}=9,99`, `{{3}}=31/12/2050`) e resubmeter todos para aprovação da Meta.
+O formulário atual de criação/edição de templates só suporta o tipo `twilio/text` (corpo de texto simples). O Twilio Console permite configurar cabeçalho (header), rodapé (footer), botões de ação (quick reply, call-to-action com URL/telefone), e mídia — campos que a Meta exige para aprovação de templates mais ricos.
 
-### Plano
+### O que será feito
 
-#### 1. Edge Function — Nova action `force_resubmit`
-Adicionar action `force_resubmit` em `submit-whatsapp-templates/index.ts` que para cada template:
-1. Se tem `content_sid`, faz `DELETE /v1/Content/{SID}` no Twilio para remover o antigo
-2. Limpa `content_sid` no banco
-3. Cria novo Content Template com sample values corretos
-4. Submete para aprovação da Meta (`POST /ApprovalRequests/whatsapp`)
+#### 1. UI — Campos adicionais nos dialogs de criação e edição (`WhatsAppTemplatesSettings.tsx`)
 
-Isso garante que todos passem pelo ciclo completo e apareçam como "under review" no Twilio (imagem 3).
+Adicionar os seguintes campos ao formulário, organizados em seções:
 
-#### 2. UI — Botão "Resubmeter Todos"
-Adicionar botão na tela de templates que chama `force_resubmit`. O hook `useWhatsAppTemplates` ganha uma nova mutation `forceResubmit`.
+**Tipo de Conteúdo** (novo select):
+- `twilio/text` (padrão) — Texto simples
+- `twilio/media` — Texto + imagem/vídeo/documento
+- `twilio/call-to-action` — Texto + botões URL/telefone
+- `twilio/quick-reply` — Texto + respostas rápidas (até 3)
+- `twilio/card` — Card com título, subtítulo, mídia e botões
 
-### Detalhes Técnicos
+**Header / Cabeçalho** (opcional, max 60 chars):
+- Input de texto para cabeçalho (visível quando tipo suporta)
 
-**Edge Function — action `force_resubmit`:**
-```text
-Para cada template no banco:
-  1. DELETE /v1/Content/{content_sid} (se existir)
-  2. UPDATE whatsapp_templates SET content_sid = NULL
-  3. POST /v1/Content (criar com body + variables com samples)
-  4. POST /v1/Content/{newSID}/ApprovalRequests/whatsapp
-  5. UPDATE whatsapp_templates SET content_sid = newSID, status = 'pending'
+**Footer / Rodapé** (opcional, max 60 chars):
+- Input de texto para rodapé
+
+**Media URL** (condicional):
+- Input para URL de mídia (visível em `twilio/media` e `twilio/card`)
+
+**Botões** (condicional, até 3):
+- Tipo: `QUICK_REPLY`, `URL`, `PHONE_NUMBER`
+- Título (max 25 chars)
+- URL ou Telefone (conforme o tipo)
+- Adicionar/remover botões dinamicamente
+
+**Novos state variables**:
+- `newContentType`, `newHeader`, `newFooter`, `newMediaUrl`, `newButtons[]`
+- Equivalentes `edit*` para o dialog de edição
+
+**Preview atualizado**: O preview WhatsApp mostrará header, corpo, footer e botões renderizados visualmente.
+
+#### 2. Banco de dados — Novos campos na tabela `whatsapp_templates`
+
+Migração SQL para adicionar:
+```sql
+ALTER TABLE public.whatsapp_templates
+  ADD COLUMN IF NOT EXISTS content_type text DEFAULT 'twilio/text',
+  ADD COLUMN IF NOT EXISTS header_text text,
+  ADD COLUMN IF NOT EXISTS footer_text text,
+  ADD COLUMN IF NOT EXISTS media_url text,
+  ADD COLUMN IF NOT EXISTS buttons jsonb DEFAULT '[]'::jsonb;
 ```
 
-**Hook — nova mutation:**
-- `forceResubmit`: invoca `submit-whatsapp-templates` com `{ action: 'force_resubmit' }`
-- Invalida query de templates no sucesso
+#### 3. Edge Function — Construir payload correto por tipo de conteúdo
 
-**UI — botão na página:**
-- Botão "Resubmeter Todos" com confirmação (AlertDialog) avisando que todos os templates serão recriados
-- Loading state durante a operação
+Atualizar `submit-whatsapp-templates/index.ts` para montar o payload `types` conforme o `content_type` do template:
+
+- **twilio/text**: `{ body }` (atual)
+- **twilio/media**: `{ body, media: [url] }`
+- **twilio/quick-reply**: `{ body, actions: [{ type: 'QUICK_REPLY', title, id }] }`
+- **twilio/call-to-action**: `{ body, actions: [{ type: 'URL'|'PHONE_NUMBER', title, url|phone }] }`
+- **twilio/card**: `{ title, subtitle, body, media: [url], actions: [...] }`
+
+Incluir `header_text` e `footer_text` quando presentes (o Twilio aceita via corpo com formatação ou via tipo card).
+
+#### 4. Hook — Atualizar interface `WhatsAppTemplate`
+
+Adicionar os novos campos à interface em `useWhatsAppTemplates.ts`.
 
 ### Arquivos modificados
-- `supabase/functions/submit-whatsapp-templates/index.ts` (nova action)
-- `src/hooks/useWhatsAppTemplates.ts` (nova mutation)
-- `src/pages/settings/WhatsAppTemplatesSettings.tsx` (botão)
+- `src/pages/settings/WhatsAppTemplatesSettings.tsx` (campos no formulário + preview)
+- `src/hooks/useWhatsAppTemplates.ts` (interface + mutations)
+- `supabase/functions/submit-whatsapp-templates/index.ts` (payload dinâmico)
+- Nova migração SQL (novos campos)
 
