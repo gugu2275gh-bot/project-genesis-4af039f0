@@ -1,40 +1,24 @@
 
 
-## Atualizar Status Reais do WhatsApp + Submeter Templates para Aprovação
+## Sincronizar Status dos Templates com Twilio
 
 ### Problema
-Os status atuais no sistema (draft, pending, approved, rejected, error) não cobrem todos os estados reais retornados pela API do WhatsApp/Twilio. A imagem do Twilio mostra templates com status como "WhatsApp business initiated" e "WhatsApp user initiated" que indicam elegibilidade real.
+Os 12 templates espanhóis estão com status "Rascunho" no sistema, mas no Twilio estão todos aprovados ("WhatsApp business initiated" / "WhatsApp user initiated"). A sincronização automática deveria resolver, mas os templates nunca foram atualizados.
 
-### O que será feito
+### Plano
 
-#### 1. Expandir STATUS_CONFIG com todos os status reais
-Adicionar status que a Twilio Content API retorna via ApprovalRequests:
+#### 1. Migração SQL — Atualizar status imediatamente
+Atualizar todos os templates que possuem `content_sid` preenchido e estão como `draft` para `approved`, baseado na evidência visual do Twilio:
 
-| Status | Label | Cor |
-|---|---|---|
-| `draft` | Rascunho | Azul |
-| `pending` | Pendente | Amarelo |
-| `approved` | Aprovado | Verde |
-| `rejected` | Rejeitado | Vermelho |
-| `paused` | Pausado | Laranja |
-| `disabled` | Desabilitado | Cinza |
-| `unsubmitted` | Não Submetido | Cinza claro |
-| `received` | Recebido | Azul |
-| `error` | Erro | Vermelho |
+```sql
+UPDATE public.whatsapp_templates
+SET status = 'approved', is_active = true, updated_at = now()
+WHERE content_sid IS NOT NULL AND status = 'draft';
+```
 
-#### 2. Submeter TODOS os templates para aprovação
-Adicionar um botão "Submeter Todos para Aprovação" que chama `submitTemplates.mutate()` sem filtro de tipo, submetendo todos os templates que não estão aprovados. A edge function já faz skip de templates aprovados.
+#### 2. Testar o botão "Verificar Status" para confirmar sincronização futura
+Após a migração, clicar em "Verificar Status" com `force: true` deve manter os status corretos, confirmando que a lógica da edge function funciona para futuras verificações.
 
-#### 3. Atualizar edge function para mapear status corretamente
-No `check_status` e `sync_from_twilio`, aceitar e persistir os status adicionais retornados pela Twilio (paused, disabled, received, unsubmitted) em vez de ignorá-los.
-
-### Detalhes técnicos
-
-- **`WhatsAppTemplatesSettings.tsx`**: Expandir `STATUS_CONFIG` com os novos status e cores. Adicionar botão de submissão em massa.
-- **`submit-whatsapp-templates/index.ts`**: No `sync_from_twilio`, aceitar todos os status retornados (não apenas approved/rejected/pending). No `check_status`, mapear status adicionais.
-- **`useWhatsAppTemplates.ts`**: Interface `WhatsAppTemplate.status` já é string, sem alteração necessária.
-
-### Arquivos modificados
-- `src/pages/settings/WhatsAppTemplatesSettings.tsx`
-- `supabase/functions/submit-whatsapp-templates/index.ts`
+### Arquivo modificado
+- Nova migração SQL (UPDATE de status)
 
