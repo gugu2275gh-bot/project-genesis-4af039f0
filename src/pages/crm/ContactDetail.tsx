@@ -1531,6 +1531,82 @@ export default function ContactDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Dialog Adicionar Beneficiário */}
+      <Dialog open={showAddBeneficiaryDialog} onOpenChange={setShowAddBeneficiaryDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar Beneficiário</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Nome Completo *</Label>
+              <Input
+                value={newBeneficiaryName}
+                onChange={(e) => setNewBeneficiaryName(e.target.value)}
+                placeholder="Nome do beneficiário"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Telefone</Label>
+                <Input
+                  value={newBeneficiaryPhone}
+                  onChange={(e) => setNewBeneficiaryPhone(e.target.value)}
+                  placeholder="+34 600 000 000"
+                />
+              </div>
+              <div>
+                <Label>E-mail</Label>
+                <Input
+                  value={newBeneficiaryEmail}
+                  onChange={(e) => setNewBeneficiaryEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddBeneficiaryDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!newBeneficiaryName.trim() || isCreatingBeneficiary}
+              onClick={async () => {
+                if (!id || !newBeneficiaryName.trim()) return;
+                setIsCreatingBeneficiary(true);
+                try {
+                  const { data: newContact, error } = await supabase
+                    .from('contacts')
+                    .insert({
+                      full_name: newBeneficiaryName.trim(),
+                      phone: newBeneficiaryPhone || null,
+                      email: newBeneficiaryEmail || null,
+                      is_beneficiary: true,
+                      linked_principal_contact_id: id,
+                    })
+                    .select()
+                    .single();
+                  if (error) throw error;
+                  toast({ title: 'Beneficiário adicionado com sucesso' });
+                  queryClient.invalidateQueries({ queryKey: ['contact-beneficiaries', id] });
+                  setShowAddBeneficiaryDialog(false);
+                  setNewBeneficiaryName('');
+                  setNewBeneficiaryPhone('');
+                  setNewBeneficiaryEmail('');
+                } catch (err: any) {
+                  toast({ title: 'Erro ao criar beneficiário', description: err.message, variant: 'destructive' });
+                } finally {
+                  setIsCreatingBeneficiary(false);
+                }
+              }}
+            >
+              {isCreatingBeneficiary && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Adicionar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </>
   );
 }
@@ -2170,82 +2246,6 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
             >
               {createServiceMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Criar Serviço
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog Adicionar Beneficiário */}
-      <Dialog open={showAddBeneficiaryDialog} onOpenChange={setShowAddBeneficiaryDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Adicionar Beneficiário</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Nome Completo *</Label>
-              <Input
-                value={newBeneficiaryName}
-                onChange={(e) => setNewBeneficiaryName(e.target.value)}
-                placeholder="Nome do beneficiário"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Telefone</Label>
-                <Input
-                  value={newBeneficiaryPhone}
-                  onChange={(e) => setNewBeneficiaryPhone(e.target.value)}
-                  placeholder="+34 600 000 000"
-                />
-              </div>
-              <div>
-                <Label>E-mail</Label>
-                <Input
-                  value={newBeneficiaryEmail}
-                  onChange={(e) => setNewBeneficiaryEmail(e.target.value)}
-                  placeholder="email@exemplo.com"
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddBeneficiaryDialog(false)}>
-              Cancelar
-            </Button>
-            <Button
-              disabled={!newBeneficiaryName.trim() || isCreatingBeneficiary}
-              onClick={async () => {
-                if (!id || !newBeneficiaryName.trim()) return;
-                setIsCreatingBeneficiary(true);
-                try {
-                  const { data: newContact, error } = await supabase
-                    .from('contacts')
-                    .insert({
-                      full_name: newBeneficiaryName.trim(),
-                      phone: newBeneficiaryPhone || null,
-                      email: newBeneficiaryEmail || null,
-                      is_beneficiary: true,
-                      linked_principal_contact_id: id,
-                    })
-                    .select()
-                    .single();
-                  if (error) throw error;
-                  toast({ title: 'Beneficiário adicionado com sucesso' });
-                  queryClient.invalidateQueries({ queryKey: ['contact-beneficiaries', id] });
-                  setShowAddBeneficiaryDialog(false);
-                  setNewBeneficiaryName('');
-                  setNewBeneficiaryPhone('');
-                  setNewBeneficiaryEmail('');
-                } catch (err: any) {
-                  toast({ title: 'Erro ao criar beneficiário', description: err.message, variant: 'destructive' });
-                } finally {
-                  setIsCreatingBeneficiary(false);
-                }
-              }}
-            >
-              {isCreatingBeneficiary && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Adicionar
             </Button>
           </DialogFooter>
         </DialogContent>
