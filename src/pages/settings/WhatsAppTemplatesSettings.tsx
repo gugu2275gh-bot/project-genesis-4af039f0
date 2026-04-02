@@ -266,6 +266,15 @@ export default function WhatsAppTemplatesSettings() {
                 <Send className="h-4 w-4 mr-2" />
                 Submeter Todos
               </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => setShowForceResubmitConfirm(true)}
+                disabled={forceResubmit.isPending}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${forceResubmit.isPending ? 'animate-spin' : ''}`} />
+                Resubmeter Todos
+              </Button>
               {hasPendingChanges && (
                 <Button
                   size="sm"
