@@ -211,6 +211,7 @@ export default function LeadDetail() {
       channel: interactionChannel as any,
       direction: 'OUTBOUND',
       content: newNote,
+      sector: interactionSector,
     });
     setNewNote('');
   };
