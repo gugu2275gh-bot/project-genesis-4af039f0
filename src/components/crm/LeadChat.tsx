@@ -155,6 +155,9 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
   const { operationalTemplates } = useWhatsAppTemplates();
   const [newMessage, setNewMessage] = useState('');
   const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
