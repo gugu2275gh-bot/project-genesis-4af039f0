@@ -808,38 +808,42 @@ export default function LeadDetail() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    <div className="flex gap-2">
-                      <Select value={interactionChannel} onValueChange={setInteractionChannel}>
-                        <SelectTrigger className="w-[140px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(INTERACTION_CHANNEL_LABELS).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select value={interactionSector} onValueChange={setInteractionSector}>
-                        <SelectTrigger className="w-[160px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="atendimento">Atendimento</SelectItem>
-                          <SelectItem value="juridico">Jurídico</SelectItem>
-                          <SelectItem value="financeiro">Financeiro</SelectItem>
-                          <SelectItem value="caso_tecnico">Caso Técnico</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Textarea
-                        placeholder="Descreva a interação..."
-                        value={newNote}
-                        onChange={(e) => setNewNote(e.target.value)}
-                        className="flex-1"
-                        rows={2}
-                      />
-                      <Button onClick={handleAddInteraction} disabled={createInteraction.isPending}>
-                        <MessageSquare className="h-4 w-4" />
-                      </Button>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <Select value={interactionChannel} onValueChange={setInteractionChannel}>
+                          <SelectTrigger className="w-[140px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(INTERACTION_CHANNEL_LABELS).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>{label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select value={interactionSector} onValueChange={setInteractionSector}>
+                          <SelectTrigger className="w-[160px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="atendimento">Atendimento</SelectItem>
+                            <SelectItem value="juridico">Jurídico</SelectItem>
+                            <SelectItem value="financeiro">Financeiro</SelectItem>
+                            <SelectItem value="caso_tecnico">Caso Técnico</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex gap-2">
+                        <Textarea
+                          placeholder="Descreva a interação..."
+                          value={newNote}
+                          onChange={(e) => setNewNote(e.target.value)}
+                          className="flex-1"
+                          rows={2}
+                        />
+                        <Button onClick={handleAddInteraction} disabled={createInteraction.isPending}>
+                          <MessageSquare className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="space-y-3 max-h-[400px] overflow-y-auto">
