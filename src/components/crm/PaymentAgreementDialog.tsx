@@ -405,6 +405,14 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     queryClient.invalidateQueries({ queryKey: ['confirmed-lead-ids', contactId] });
     queryClient.invalidateQueries({ queryKey: ['payments'] });
     queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+    queryClient.invalidateQueries({ queryKey: ['contact-payments', contactId] });
+    queryClient.invalidateQueries({ queryKey: ['contact-contracts', contactId] });
+    queryClient.invalidateQueries({ queryKey: ['contract-leads', contactId] });
+    queryClient.invalidateQueries({ queryKey: ['beneficiary-payments', contactId] });
+    queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', contactId] });
+    queryClient.invalidateQueries({ queryKey: ['beneficiary-contract-leads', contactId] });
+    queryClient.invalidateQueries({ queryKey: ['beneficiary-payments-in-groups', contactId] });
+    queryClient.invalidateQueries({ queryKey: ['contact-service-cases', contactId] });
 
     toast({ title: 'Acordo de pagamento salvo na ficha do cliente' });
 
