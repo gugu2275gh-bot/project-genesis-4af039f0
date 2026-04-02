@@ -1,30 +1,34 @@
 
 
-## Adicionar Guia de Variáveis + Logs Colapsável
+## Reformular Dialog de Edição para Espelhar o de Criação
+
+### Problema
+O dialog de edição atual (linhas 422-452) é minimalista — mostra apenas as variáveis e um textarea para o corpo. Precisa ter todos os campos do dialog de criação (linhas 454-646), com alerta de re-submissão obrigatória.
 
 ### O que será feito
 
-Duas alterações em `src/pages/settings/WhatsAppTemplatesSettings.tsx`:
+Substituir o dialog de edição simples por um completo, igual ao de criação, com:
 
-1. **Seção "Variáveis Disponíveis"** — Card colapsável (fechado por padrão) entre os templates e os logs, com tabela mostrando cada `automation_type`, suas variáveis e placeholders Twilio correspondentes.
+- **Nome do Template** (readonly, não editável)
+- **Categoria** (SLA / Operacional)
+- **Tipo de Automação** (dropdown ou input conforme categoria)
+- **Idioma** (dropdown)
+- **Categoria Meta** (UTILITY / MARKETING / AUTHENTICATION)
+- **Corpo da Mensagem** (textarea com contador 0/1024)
+- **Variáveis** (adicionar/remover com badges)
+- **Preview** em tempo real (lado direito)
+- **Dicas de aprovação Meta**
 
-2. **Logs colapsável** — Envolver o card de "Logs de Envio" (linhas 581-688) num `Collapsible`, fechado por padrão, com trigger clicável no header.
+Ao clicar "Salvar", exibir um **AlertDialog de confirmação** com:
+> "⚠️ Atenção: Ao alterar este template, ele deverá ser submetido novamente para aprovação da Meta. O prazo de retorno é de até 48 horas. Durante esse período, o template anterior deixará de funcionar. Deseja continuar?"
 
 ### Detalhes técnicos
 
-- Adicionar dois estados: `variablesOpen` e `logsOpen` (ambos `false` por padrão)
-- Dados de variáveis como constante estática `VARIABLE_REFERENCE` com a estrutura:
-
-```text
-Tipo              | Variáveis                  | Placeholders
-welcome           | nombre                     | {{1}}
-payment_pre_7d    | nombre, valor, fecha       | {{1}}, {{2}}, {{3}}
-document_reminder | nombre, documento          | {{1}}, {{2}}
-...etc
-```
-
-- Usar `Collapsible` + `CollapsibleTrigger` + `CollapsibleContent` (já importados)
-- Ícones `ChevronDown`/`ChevronRight` como indicador visual (já importados)
+- Adicionar estados de edição para todos os campos: `editCategory`, `editMetaCategory`, `editAutomationType`, `editLanguage`, `editVariables`, `editVariable`
+- No `handleEdit`, popular todos os estados a partir do template selecionado
+- No `handleSaveEdit`, mostrar AlertDialog antes de salvar; ao confirmar, chamar `updateTemplate.mutate` com todos os campos alterados e definir `status: 'draft'` para forçar re-submissão
+- Reutilizar a mesma lógica de preview do dialog de criação
+- Dialog de confirmação usa o `AlertDialog` já importado
 
 ### Arquivo modificado
 - `src/pages/settings/WhatsAppTemplatesSettings.tsx`
