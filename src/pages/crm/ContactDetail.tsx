@@ -1547,6 +1547,31 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
     return match ? match[1].trim() : '';
   };
 
+  const extractFeesFromNotes = (serviceTypeId: string): { description: string; amount: string }[] => {
+    const notes = contact?.payment_notes || '';
+    if (!notes) return [];
+    const blocks = notes.split('---');
+    // Find the last block that matches this service
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const block = blocks[i];
+      // Check if this block matches the service by looking for the service name or just use the last block
+      const feeLines: { description: string; amount: string }[] = [];
+      const lines = block.split('\n');
+      for (const line of lines) {
+        // Match pattern: "description: + € amount"
+        const feeMatch = line.match(/^(.+?):\s*\+\s*€\s*([\d.,]+)\s*$/);
+        if (feeMatch) {
+          const desc = feeMatch[1].trim();
+          // Skip known non-fee lines
+          if (['Acordo de Pagamento', 'Serviço', 'Valor Bruto', 'IVA', 'Total', 'Total Final', 'Método', 'Forma', 'Parcelas', 'Origem', 'Conta', 'Detalhe', 'Observações', 'Desconto'].some(k => desc.startsWith(k))) continue;
+          feeLines.push({ description: desc, amount: feeMatch[2].replace(',', '.') });
+        }
+      }
+      if (feeLines.length > 0) return feeLines;
+    }
+    return [];
+  };
+
   // Fetch leads for this beneficiary that have service_type_id but no service_case yet
   const { data: pendingBeneficiaryLeads = [] } = useQuery({
     queryKey: ['beneficiary-pending-leads', contactId],
