@@ -819,6 +819,17 @@ export default function LeadDetail() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <Select value={interactionSector} onValueChange={setInteractionSector}>
+                        <SelectTrigger className="w-[160px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="atendimento">Atendimento</SelectItem>
+                          <SelectItem value="juridico">Jurídico</SelectItem>
+                          <SelectItem value="financeiro">Financeiro</SelectItem>
+                          <SelectItem value="caso_tecnico">Caso Técnico</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Textarea
                         placeholder="Descreva a interação..."
                         value={newNote}
