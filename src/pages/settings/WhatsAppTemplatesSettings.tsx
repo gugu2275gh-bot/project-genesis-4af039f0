@@ -20,8 +20,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Send, RefreshCw, Edit, AlertCircle, CheckCircle2, Clock, XCircle, FileText, Plus, X, ChevronDown, ChevronRight, ScrollText, Trash2, Save } from 'lucide-react';
+import { Send, RefreshCw, Edit, AlertCircle, CheckCircle2, Clock, XCircle, FileText, Plus, X, ChevronDown, ChevronRight, ScrollText, Trash2, Save, Image, MessageSquare, Phone, Link } from 'lucide-react';
 import { useWhatsAppTemplates } from '@/hooks/useWhatsAppTemplates';
+import type { TemplateButton } from '@/hooks/useWhatsAppTemplates';
 
 const STATUS_CONFIG: Record<string, { label: string; badgeClass: string; dotClass: string; icon: typeof Clock }> = {
   draft: { label: 'Rascunho', badgeClass: 'bg-blue-50 text-blue-600 border border-blue-200', dotClass: 'bg-blue-500', icon: FileText },
@@ -57,6 +58,154 @@ const LANGUAGE_OPTIONS = [
   { value: 'fr', label: 'Français' },
 ];
 
+const CONTENT_TYPE_OPTIONS = [
+  { value: 'twilio/text', label: 'Texto Simples', icon: MessageSquare },
+  { value: 'twilio/media', label: 'Texto + Mídia', icon: Image },
+  { value: 'twilio/call-to-action', label: 'Call-to-Action (URL/Telefone)', icon: Link },
+  { value: 'twilio/quick-reply', label: 'Quick Reply', icon: MessageSquare },
+  { value: 'twilio/card', label: 'Card (Título + Mídia + Botões)', icon: FileText },
+];
+
+const BUTTON_TYPE_OPTIONS = [
+  { value: 'QUICK_REPLY', label: 'Resposta Rápida' },
+  { value: 'URL', label: 'URL' },
+  { value: 'PHONE_NUMBER', label: 'Telefone' },
+];
+
+// Shared preview component
+function WhatsAppPreview({ header, body, footer, buttons, mediaUrl }: {
+  header?: string | null;
+  body: string;
+  footer?: string | null;
+  buttons?: TemplateButton[];
+  mediaUrl?: string | null;
+}) {
+  return (
+    <div className="bg-[#e5ddd5] rounded-lg p-4 min-h-[200px]">
+      <div className="bg-white rounded-lg shadow-sm max-w-[280px] overflow-hidden">
+        {mediaUrl && (
+          <div className="bg-muted h-32 flex items-center justify-center text-muted-foreground text-xs border-b">
+            <Image className="h-8 w-8 opacity-40" />
+            <span className="ml-2">Mídia</span>
+          </div>
+        )}
+        <div className="p-3">
+          {header && <p className="text-sm font-bold mb-1">{header}</p>}
+          <p className="text-sm whitespace-pre-wrap">{body || 'Escreva o corpo da mensagem...'}</p>
+          {footer && <p className="text-xs text-muted-foreground mt-2">{footer}</p>}
+          <p className="text-[10px] text-muted-foreground text-right mt-1">
+            {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+          </p>
+        </div>
+        {buttons && buttons.length > 0 && (
+          <div className="border-t divide-y">
+            {buttons.map((btn, i) => (
+              <div key={i} className="text-center py-2 text-xs text-blue-600 font-medium flex items-center justify-center gap-1">
+                {btn.type === 'URL' && <Link className="h-3 w-3" />}
+                {btn.type === 'PHONE_NUMBER' && <Phone className="h-3 w-3" />}
+                {btn.type === 'QUICK_REPLY' && <MessageSquare className="h-3 w-3" />}
+                {btn.title || `Botão ${i + 1}`}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Shared buttons editor
+function ButtonsEditor({ buttons, onChange, contentType }: {
+  buttons: TemplateButton[];
+  onChange: (buttons: TemplateButton[]) => void;
+  contentType: string;
+}) {
+  const maxButtons = 3;
+  const allowedTypes = contentType === 'twilio/quick-reply'
+    ? ['QUICK_REPLY']
+    : contentType === 'twilio/call-to-action'
+      ? ['URL', 'PHONE_NUMBER']
+      : ['QUICK_REPLY', 'URL', 'PHONE_NUMBER'];
+
+  const addButton = () => {
+    if (buttons.length >= maxButtons) return;
+    const defaultType = allowedTypes[0] as TemplateButton['type'];
+    onChange([...buttons, { type: defaultType, title: '' }]);
+  };
+
+  const updateButton = (index: number, updates: Partial<TemplateButton>) => {
+    const updated = buttons.map((b, i) => i === index ? { ...b, ...updates } : b);
+    onChange(updated);
+  };
+
+  const removeButton = (index: number) => {
+    onChange(buttons.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Botões (máx. {maxButtons})</Label>
+        {buttons.length < maxButtons && (
+          <Button type="button" variant="outline" size="sm" onClick={addButton}>
+            <Plus className="h-3 w-3 mr-1" /> Botão
+          </Button>
+        )}
+      </div>
+      {buttons.map((btn, i) => (
+        <div key={i} className="border rounded-md p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <Select
+              value={btn.type}
+              onValueChange={(v: TemplateButton['type']) => updateButton(i, { type: v, url: undefined, phone: undefined })}
+            >
+              <SelectTrigger className="w-[160px] h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {BUTTON_TYPE_OPTIONS.filter(o => allowedTypes.includes(o.value)).map(o => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              value={btn.title}
+              onChange={(e) => updateButton(i, { title: e.target.value.slice(0, 25) })}
+              placeholder="Título do botão"
+              className="h-8 text-xs flex-1"
+              maxLength={25}
+            />
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeButton(i)}>
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+          {btn.type === 'URL' && (
+            <Input
+              value={btn.url || ''}
+              onChange={(e) => updateButton(i, { url: e.target.value })}
+              placeholder="https://exemplo.com"
+              className="h-8 text-xs"
+            />
+          )}
+          {btn.type === 'PHONE_NUMBER' && (
+            <Input
+              value={btn.phone || ''}
+              onChange={(e) => updateButton(i, { phone: e.target.value })}
+              placeholder="+5511999999999"
+              className="h-8 text-xs"
+            />
+          )}
+          <p className="text-[10px] text-muted-foreground text-right">{btn.title.length}/25</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Content type supports header/footer/media/buttons
+function supportsHeader(ct: string) { return ['twilio/text', 'twilio/card'].includes(ct); }
+function supportsFooter(ct: string) { return ['twilio/text', 'twilio/card', 'twilio/quick-reply', 'twilio/call-to-action'].includes(ct); }
+function supportsMedia(ct: string) { return ['twilio/media', 'twilio/card'].includes(ct); }
+function supportsButtons(ct: string) { return ['twilio/quick-reply', 'twilio/call-to-action', 'twilio/card'].includes(ct); }
+
 export default function WhatsAppTemplatesSettings() {
   const { templates, isLoading, submitTemplates, checkStatus, syncFromTwilio, forceResubmit, updateTemplate, createTemplate, deleteTemplate, templateLogs, logsLoading } = useWhatsAppTemplates();
   const [showForceResubmitConfirm, setShowForceResubmitConfirm] = useState(false);
@@ -68,6 +217,11 @@ export default function WhatsAppTemplatesSettings() {
   const [editLanguage, setEditLanguage] = useState('pt_BR');
   const [editVariable, setEditVariable] = useState('');
   const [editVariables, setEditVariables] = useState<string[]>([]);
+  const [editContentType, setEditContentType] = useState('twilio/text');
+  const [editHeader, setEditHeader] = useState('');
+  const [editFooter, setEditFooter] = useState('');
+  const [editMediaUrl, setEditMediaUrl] = useState('');
+  const [editButtons, setEditButtons] = useState<TemplateButton[]>([]);
   const [showEditConfirm, setShowEditConfirm] = useState(false);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
@@ -88,16 +242,26 @@ export default function WhatsAppTemplatesSettings() {
   const [newBody, setNewBody] = useState('');
   const [newVariable, setNewVariable] = useState('');
   const [newVariables, setNewVariables] = useState<string[]>([]);
+  const [newContentType, setNewContentType] = useState('twilio/text');
+  const [newHeader, setNewHeader] = useState('');
+  const [newFooter, setNewFooter] = useState('');
+  const [newMediaUrl, setNewMediaUrl] = useState('');
+  const [newButtons, setNewButtons] = useState<TemplateButton[]>([]);
 
   const handleEdit = (template: any) => {
     setEditingTemplate(template);
     setEditBody(template.body_text);
     setEditCategory(template.template_category || 'sla');
-    setEditMetaCategory((template as any).meta_category || 'UTILITY');
+    setEditMetaCategory(template.meta_category || 'UTILITY');
     setEditAutomationType(template.automation_type || '');
-    setEditLanguage((template as any).language || 'pt_BR');
+    setEditLanguage(template.language || 'pt_BR');
     setEditVariables(template.variables || []);
     setEditVariable('');
+    setEditContentType(template.content_type || 'twilio/text');
+    setEditHeader(template.header_text || '');
+    setEditFooter(template.footer_text || '');
+    setEditMediaUrl(template.media_url || '');
+    setEditButtons(template.buttons || []);
   };
 
   const handleSaveEdit = () => {
@@ -114,6 +278,11 @@ export default function WhatsAppTemplatesSettings() {
         automation_type: editAutomationType || editingTemplate.automation_type,
         language: editLanguage,
         variables: editVariables,
+        content_type: editContentType,
+        header_text: editHeader || null,
+        footer_text: editFooter || null,
+        media_url: editMediaUrl || null,
+        buttons: editButtons,
         status: 'draft',
         is_active: false,
       });
@@ -147,6 +316,11 @@ export default function WhatsAppTemplatesSettings() {
     setNewBody('');
     setNewVariable('');
     setNewVariables([]);
+    setNewContentType('twilio/text');
+    setNewHeader('');
+    setNewFooter('');
+    setNewMediaUrl('');
+    setNewButtons([]);
   };
 
   const handleCreateTemplate = () => {
@@ -161,6 +335,11 @@ export default function WhatsAppTemplatesSettings() {
         template_category: newCategory,
         meta_category: newMetaCategory,
         language: newLanguage,
+        content_type: newContentType,
+        header_text: newHeader || null,
+        footer_text: newFooter || null,
+        media_url: newMediaUrl || null,
+        buttons: newButtons,
       },
       {
         onSuccess: () => {
@@ -206,16 +385,71 @@ export default function WhatsAppTemplatesSettings() {
     : null;
 
   // Build preview text
-  const previewText = newBody.replace(/\{\{(\d+)\}\}/g, (_, idx) => {
-    const i = parseInt(idx) - 1;
-    return newVariables[i] ? `[${newVariables[i]}]` : `{{${idx}}}`;
-  });
+  const buildPreview = (body: string, vars: string[]) =>
+    body.replace(/\{\{(\d+)\}\}/g, (_, idx) => {
+      const i = parseInt(idx) - 1;
+      return vars[i] ? `[${vars[i]}]` : `{{${idx}}}`;
+    });
 
-  const editPreviewText = editBody.replace(/\{\{(\d+)\}\}/g, (_, idx) => {
-    const i = parseInt(idx) - 1;
-    return editVariables[i] ? `[${editVariables[i]}]` : `{{${idx}}}`;
-  });
+  const previewText = buildPreview(newBody, newVariables);
+  const editPreviewText = buildPreview(editBody, editVariables);
   const editBodyCharCount = editBody.length;
+
+  // Shared form fields for content type extras
+  const renderContentTypeFields = (
+    contentType: string,
+    header: string, setHeaderFn: (v: string) => void,
+    footer: string, setFooterFn: (v: string) => void,
+    mediaUrl: string, setMediaUrlFn: (v: string) => void,
+    buttons: TemplateButton[], setButtonsFn: (v: TemplateButton[]) => void,
+  ) => (
+    <>
+      {supportsHeader(contentType) && (
+        <div>
+          <Label>Cabeçalho (opcional, máx. 60)</Label>
+          <Input
+            value={header}
+            onChange={(e) => setHeaderFn(e.target.value.slice(0, 60))}
+            placeholder="Texto do cabeçalho"
+            className="mt-1"
+            maxLength={60}
+          />
+          <p className="text-xs text-muted-foreground text-right mt-0.5">{header.length}/60</p>
+        </div>
+      )}
+
+      {supportsMedia(contentType) && (
+        <div>
+          <Label>URL da Mídia *</Label>
+          <Input
+            value={mediaUrl}
+            onChange={(e) => setMediaUrlFn(e.target.value)}
+            placeholder="https://exemplo.com/imagem.jpg"
+            className="mt-1"
+          />
+          <p className="text-xs text-muted-foreground mt-1">URL pública da imagem, vídeo ou documento</p>
+        </div>
+      )}
+
+      {supportsFooter(contentType) && (
+        <div>
+          <Label>Rodapé (opcional, máx. 60)</Label>
+          <Input
+            value={footer}
+            onChange={(e) => setFooterFn(e.target.value.slice(0, 60))}
+            placeholder="Texto do rodapé"
+            className="mt-1"
+            maxLength={60}
+          />
+          <p className="text-xs text-muted-foreground text-right mt-0.5">{footer.length}/60</p>
+        </div>
+      )}
+
+      {supportsButtons(contentType) && (
+        <ButtonsEditor buttons={buttons} onChange={setButtonsFn} contentType={contentType} />
+      )}
+    </>
+  );
 
   return (
     <div className="space-y-6">
@@ -232,57 +466,28 @@ export default function WhatsAppTemplatesSettings() {
               </CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowNewDialog(true)}
-              >
+              <Button variant="outline" size="sm" onClick={() => setShowNewDialog(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Novo Template
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => checkStatus.mutate(true)}
-                disabled={checkStatus.isPending}
-              >
+              <Button variant="outline" size="sm" onClick={() => checkStatus.mutate(true)} disabled={checkStatus.isPending}>
                 <RefreshCw className={`h-4 w-4 mr-2 ${checkStatus.isPending ? 'animate-spin' : ''}`} />
                 Verificar Status
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => syncFromTwilio.mutate()}
-                disabled={syncFromTwilio.isPending}
-              >
+              <Button variant="outline" size="sm" onClick={() => syncFromTwilio.mutate()} disabled={syncFromTwilio.isPending}>
                 <RefreshCw className={`h-4 w-4 mr-2 ${syncFromTwilio.isPending ? 'animate-spin' : ''}`} />
                 Sincronizar Twilio
               </Button>
-              <Button
-                size="sm"
-                onClick={() => submitTemplates.mutate('ALL')}
-                disabled={submitTemplates.isPending}
-              >
+              <Button size="sm" onClick={() => submitTemplates.mutate('ALL')} disabled={submitTemplates.isPending}>
                 <Send className="h-4 w-4 mr-2" />
                 Submeter Todos
               </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => setShowForceResubmitConfirm(true)}
-                disabled={forceResubmit.isPending}
-              >
+              <Button size="sm" variant="destructive" onClick={() => setShowForceResubmitConfirm(true)} disabled={forceResubmit.isPending}>
                 <RefreshCw className={`h-4 w-4 mr-2 ${forceResubmit.isPending ? 'animate-spin' : ''}`} />
                 Resubmeter Todos
               </Button>
               {hasPendingChanges && (
-                <Button
-                  size="sm"
-                  variant="default"
-                  className="bg-green-600 hover:bg-green-700"
-                  onClick={handleSaveCategoryChanges}
-                  disabled={updateTemplate.isPending}
-                >
+                <Button size="sm" variant="default" className="bg-green-600 hover:bg-green-700" onClick={handleSaveCategoryChanges} disabled={updateTemplate.isPending}>
                   <Save className="h-4 w-4 mr-2" />
                   Salvar Alterações
                 </Button>
@@ -297,9 +502,10 @@ export default function WhatsAppTemplatesSettings() {
             <Table>
               <TableHeader>
                 <TableRow>
-                 <TableHead>Categoria</TableHead>
+                  <TableHead>Categoria</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Template</TableHead>
+                  <TableHead>Formato</TableHead>
                   <TableHead>Meta</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Content SID</TableHead>
@@ -311,6 +517,7 @@ export default function WhatsAppTemplatesSettings() {
                 {templates?.map((template) => {
                   const statusConfig = STATUS_CONFIG[template.status] || STATUS_CONFIG.draft;
                   const StatusIcon = statusConfig.icon;
+                  const ctOption = CONTENT_TYPE_OPTIONS.find(o => o.value === (template as any).content_type);
                   return (
                     <TableRow key={template.id}>
                       <TableCell>
@@ -318,19 +525,13 @@ export default function WhatsAppTemplatesSettings() {
                           value={pendingCategoryChanges[template.id] || template.template_category || 'sla'}
                           onValueChange={(val: 'sla' | 'operational') => {
                             if (val === (template.template_category || 'sla')) {
-                              setPendingCategoryChanges(prev => {
-                                const next = { ...prev };
-                                delete next[template.id];
-                                return next;
-                              });
+                              setPendingCategoryChanges(prev => { const next = { ...prev }; delete next[template.id]; return next; });
                             } else {
                               setPendingCategoryChanges(prev => ({ ...prev, [template.id]: val }));
                             }
                           }}
                         >
-                          <SelectTrigger className="w-[120px] h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
+                          <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="sla">SLA</SelectItem>
                             <SelectItem value="operational">Operacional</SelectItem>
@@ -345,6 +546,11 @@ export default function WhatsAppTemplatesSettings() {
                       </TableCell>
                       <TableCell className="max-w-[300px] truncate text-muted-foreground text-xs">
                         {template.body_text}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[10px]">
+                          {ctOption?.label || 'Texto'}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-xs">
@@ -364,31 +570,17 @@ export default function WhatsAppTemplatesSettings() {
                         {template.content_sid || '—'}
                       </TableCell>
                       <TableCell>
-                        <Switch
-                          checked={template.is_active}
-                          onCheckedChange={() => handleToggleActive(template.id, template.is_active)}
-                        />
+                        <Switch checked={template.is_active} onCheckedChange={() => handleToggleActive(template.id, template.is_active)} />
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           <Button variant="ghost" size="icon" onClick={() => handleEdit(template)}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => submitTemplates.mutate(template.automation_type)}
-                            disabled={submitTemplates.isPending}
-                          >
+                          <Button variant="ghost" size="icon" onClick={() => submitTemplates.mutate(template.automation_type)} disabled={submitTemplates.isPending}>
                             <Send className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => setDeletingTemplateId(template.id)}
-                            disabled={deleteTemplate.isPending}
-                          >
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeletingTemplateId(template.id)} disabled={deleteTemplate.isPending}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -430,7 +622,7 @@ export default function WhatsAppTemplatesSettings() {
           <CollapsibleContent>
             <CardContent>
               <p className="text-xs text-muted-foreground mb-3">
-                Use <code className="bg-muted px-1 rounded">{'{{1}}'}</code> para a 1ª variável, <code className="bg-muted px-1 rounded">{'{{2}}'}</code> para a 2ª, e assim por diante. A ordem segue o array de variáveis cadastrado no template.
+                Use <code className="bg-muted px-1 rounded">{'{{1}}'}</code> para a 1ª variável, <code className="bg-muted px-1 rounded">{'{{2}}'}</code> para a 2ª, e assim por diante.
               </p>
               <Table>
                 <TableHeader>
@@ -462,7 +654,7 @@ export default function WhatsAppTemplatesSettings() {
                         <span className="text-muted-foreground ml-1 text-[10px]">({row.type})</span>
                       </TableCell>
                       <TableCell className="text-xs">
-                        {row.vars.map((v, i) => (
+                        {row.vars.map((v) => (
                           <Badge key={v} variant="secondary" className="mr-1 text-xs">{v}</Badge>
                         ))}
                       </TableCell>
@@ -481,19 +673,30 @@ export default function WhatsAppTemplatesSettings() {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingTemplate} onOpenChange={(open) => !open && setEditingTemplate(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Template: {editingTemplate?.template_name}</DialogTitle>
             <DialogDescription>Edite os campos abaixo. Alterações exigirão nova aprovação da Meta.</DialogDescription>
           </DialogHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Form */}
             <div className="space-y-4">
               <div>
                 <Label>Nome do Template</Label>
                 <Input value={editingTemplate?.template_name || ''} disabled className="mt-1 bg-muted" />
                 <p className="text-xs text-muted-foreground mt-1">O nome não pode ser alterado</p>
+              </div>
+
+              <div>
+                <Label>Tipo de Conteúdo *</Label>
+                <Select value={editContentType} onValueChange={(v) => { setEditContentType(v); setEditButtons([]); }}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CONTENT_TYPE_OPTIONS.map(o => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
@@ -531,29 +734,32 @@ export default function WhatsAppTemplatesSettings() {
                 </div>
               )}
 
-              <div>
-                <Label>Idioma</Label>
-                <Select value={editLanguage} onValueChange={setEditLanguage}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {LANGUAGE_OPTIONS.map((l) => (
-                      <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Idioma</Label>
+                  <Select value={editLanguage} onValueChange={setEditLanguage}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGE_OPTIONS.map((l) => (
+                        <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Categoria Meta *</Label>
+                  <Select value={editMetaCategory} onValueChange={(v: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION') => setEditMetaCategory(v)}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="UTILITY">UTILITY</SelectItem>
+                      <SelectItem value="MARKETING">MARKETING</SelectItem>
+                      <SelectItem value="AUTHENTICATION">AUTHENTICATION</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              <div>
-                <Label>Categoria Meta *</Label>
-                <Select value={editMetaCategory} onValueChange={(v: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION') => setEditMetaCategory(v)}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="UTILITY">UTILITY — Transacional</SelectItem>
-                    <SelectItem value="MARKETING">MARKETING — Promoções</SelectItem>
-                    <SelectItem value="AUTHENTICATION">AUTHENTICATION — Verificação</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {renderContentTypeFields(editContentType, editHeader, setEditHeader, editFooter, setEditFooter, editMediaUrl, setEditMediaUrl, editButtons, setEditButtons)}
 
               <div>
                 <Label>Corpo da Mensagem *</Label>
@@ -612,14 +818,13 @@ export default function WhatsAppTemplatesSettings() {
             {/* Preview */}
             <div className="space-y-2">
               <Label>Preview</Label>
-              <div className="bg-[#e5ddd5] rounded-lg p-4 min-h-[200px]">
-                <div className="bg-white rounded-lg p-3 shadow-sm max-w-[280px]">
-                  <p className="text-sm whitespace-pre-wrap">{editPreviewText || 'Escreva o corpo da mensagem...'}</p>
-                  <p className="text-[10px] text-muted-foreground text-right mt-1">
-                    {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              </div>
+              <WhatsAppPreview
+                header={editHeader}
+                body={editPreviewText}
+                footer={editFooter}
+                buttons={editButtons}
+                mediaUrl={supportsMedia(editContentType) ? editMediaUrl : null}
+              />
               <div className="text-xs text-muted-foreground space-y-1 mt-3">
                 <p className="font-medium">Dicas para aprovação Meta:</p>
                 <ul className="list-disc pl-4 space-y-0.5">
@@ -628,6 +833,8 @@ export default function WhatsAppTemplatesSettings() {
                   <li>Inclua opt-out quando obrigatório</li>
                   <li>Use variáveis para dados pessoais</li>
                   <li>Máximo 1024 caracteres no corpo</li>
+                  <li>Cabeçalho e rodapé: máx 60 caracteres</li>
+                  <li>Botões: máx 25 caracteres por título</li>
                 </ul>
               </div>
             </div>
@@ -651,34 +858,27 @@ export default function WhatsAppTemplatesSettings() {
               Atenção — Re-submissão Obrigatória
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm space-y-2">
-              <p>
-                Ao alterar este template, ele deverá ser <strong>submetido novamente para aprovação da Meta</strong>.
-              </p>
-              <p>
-                O prazo de retorno é de <strong>até 48 horas</strong>. Durante esse período, o template anterior deixará de funcionar e as automações associadas usarão mensagem livre (válida apenas na janela de 24h).
-              </p>
+              <p>Ao alterar este template, ele deverá ser <strong>submetido novamente para aprovação da Meta</strong>.</p>
+              <p>O prazo de retorno é de <strong>até 48 horas</strong>. Durante esse período, o template anterior deixará de funcionar.</p>
               <p className="font-medium">Deseja continuar?</p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmSaveEdit}>
-              Sim, salvar e re-submeter
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleConfirmSaveEdit}>Sim, salvar e re-submeter</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* New Template Dialog */}
       <Dialog open={showNewDialog} onOpenChange={(open) => { if (!open) { setShowNewDialog(false); resetNewForm(); } }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Novo Template de WhatsApp</DialogTitle>
             <DialogDescription>Preencha os campos abaixo seguindo as normas da Meta para aprovação.</DialogDescription>
           </DialogHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Form */}
             <div className="space-y-4">
               <div>
                 <Label htmlFor="tpl-name">Nome do Template *</Label>
@@ -702,19 +902,30 @@ export default function WhatsAppTemplatesSettings() {
               </div>
 
               <div>
+                <Label>Tipo de Conteúdo *</Label>
+                <Select value={newContentType} onValueChange={(v) => { setNewContentType(v); setNewButtons([]); }}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CONTENT_TYPE_OPTIONS.map(o => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Formato do conteúdo conforme Twilio Content API</p>
+              </div>
+
+              <div>
                 <Label>Categoria *</Label>
                 <Select value={newCategory} onValueChange={(v: 'sla' | 'operational') => setNewCategory(v)}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="sla">SLA — Automação vinculada a regra</SelectItem>
                     <SelectItem value="operational">Operacional — Disponível no chat</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {newCategory === 'sla' 
-                    ? 'Templates SLA são usados automaticamente pelas automações' 
+                  {newCategory === 'sla'
+                    ? 'Templates SLA são usados automaticamente pelas automações'
                     : 'Templates operacionais ficam disponíveis no chat para envio manual fora da janela de 24h'}
                 </p>
               </div>
@@ -723,16 +934,13 @@ export default function WhatsAppTemplatesSettings() {
                 <div>
                   <Label>Tipo de Automação (Regra SLA) *</Label>
                   <Select value={newAutomationType} onValueChange={setNewAutomationType}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Selecione a regra..." />
-                    </SelectTrigger>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a regra..." /></SelectTrigger>
                     <SelectContent>
                       {Object.entries(AUTOMATION_LABELS).map(([key, label]) => (
                         <SelectItem key={key} value={key}>{label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground mt-1">Regra SLA vinculada a este template</p>
                   {duplicateTemplate && (
                     <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
                       <AlertCircle className="h-3 w-3" />
@@ -750,38 +958,35 @@ export default function WhatsAppTemplatesSettings() {
                     placeholder="ex: contato_geral"
                     className="mt-1"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Identificador livre para organização interna</p>
                 </div>
               )}
 
-              <div>
-                <Label>Idioma</Label>
-                <Select value={newLanguage} onValueChange={setNewLanguage}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LANGUAGE_OPTIONS.map((l) => (
-                      <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Idioma</Label>
+                  <Select value={newLanguage} onValueChange={setNewLanguage}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGE_OPTIONS.map((l) => (
+                        <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Categoria Meta *</Label>
+                  <Select value={newMetaCategory} onValueChange={(v: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION') => setNewMetaCategory(v)}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="UTILITY">UTILITY — Transacional</SelectItem>
+                      <SelectItem value="MARKETING">MARKETING — Promoções</SelectItem>
+                      <SelectItem value="AUTHENTICATION">AUTHENTICATION — Verificação</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              <div>
-                <Label>Categoria Meta *</Label>
-                <Select value={newMetaCategory} onValueChange={(v: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION') => setNewMetaCategory(v)}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="UTILITY">UTILITY — Transacional (aprovação mais rápida)</SelectItem>
-                    <SelectItem value="MARKETING">MARKETING — Promoções e ofertas</SelectItem>
-                    <SelectItem value="AUTHENTICATION">AUTHENTICATION — Códigos de verificação</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">Categoria exigida pela Meta para aprovação do template</p>
-              </div>
+              {renderContentTypeFields(newContentType, newHeader, setNewHeader, newFooter, setNewFooter, newMediaUrl, setNewMediaUrl, newButtons, setNewButtons)}
 
               <div>
                 <Label htmlFor="tpl-body">Corpo da Mensagem *</Label>
@@ -841,14 +1046,13 @@ export default function WhatsAppTemplatesSettings() {
             {/* Preview */}
             <div className="space-y-2">
               <Label>Preview</Label>
-              <div className="bg-[#e5ddd5] rounded-lg p-4 min-h-[200px]">
-                <div className="bg-white rounded-lg p-3 shadow-sm max-w-[280px]">
-                  <p className="text-sm whitespace-pre-wrap">{previewText || 'Escreva o corpo da mensagem...'}</p>
-                  <p className="text-[10px] text-muted-foreground text-right mt-1">
-                    {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              </div>
+              <WhatsAppPreview
+                header={newHeader}
+                body={previewText}
+                footer={newFooter}
+                buttons={newButtons}
+                mediaUrl={supportsMedia(newContentType) ? newMediaUrl : null}
+              />
               <div className="text-xs text-muted-foreground space-y-1 mt-3">
                 <p className="font-medium">Dicas para aprovação Meta:</p>
                 <ul className="list-disc pl-4 space-y-0.5">
@@ -857,6 +1061,8 @@ export default function WhatsAppTemplatesSettings() {
                   <li>Inclua opt-out quando obrigatório</li>
                   <li>Use variáveis para dados pessoais</li>
                   <li>Máximo 1024 caracteres no corpo</li>
+                  <li>Cabeçalho e rodapé: máx 60 caracteres</li>
+                  <li>Botões: máx 25 caracteres por título</li>
                 </ul>
               </div>
             </div>
@@ -873,6 +1079,7 @@ export default function WhatsAppTemplatesSettings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       {/* Logs Section */}
       <Collapsible open={logsOpen} onOpenChange={setLogsOpen}>
         <Card>
@@ -890,9 +1097,7 @@ export default function WhatsAppTemplatesSettings() {
           <CollapsibleContent>
             <div className="px-6 pb-2">
               <Select value={logFilter} onValueChange={setLogFilter}>
-                <SelectTrigger className="w-[140px] h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
                   <SelectItem value="success">Sucesso</SelectItem>
@@ -925,38 +1130,20 @@ export default function WhatsAppTemplatesSettings() {
                       .filter((log) => logFilter === 'all' || log.status === logFilter)
                       .map((log) => {
                         const isExpanded = expandedLogId === log.id;
-                        const statusColor = log.status === 'success'
-                          ? 'text-green-600'
-                          : log.status === 'error'
-                            ? 'text-red-600'
-                            : 'text-blue-600';
+                        const statusColor = log.status === 'success' ? 'text-green-600' : log.status === 'error' ? 'text-red-600' : 'text-blue-600';
                         return (
                           <>
-                            <TableRow
-                              key={log.id}
-                              className="cursor-pointer hover:bg-muted/50"
-                              onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
-                            >
+                            <TableRow key={log.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setExpandedLogId(isExpanded ? null : log.id)}>
                               <TableCell className="p-2">
                                 {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                               </TableCell>
-                              <TableCell className="text-xs whitespace-nowrap">
-                                {new Date(log.created_at).toLocaleString('pt-BR')}
-                              </TableCell>
+                              <TableCell className="text-xs whitespace-nowrap">{new Date(log.created_at).toLocaleString('pt-BR')}</TableCell>
                               <TableCell className="text-xs font-medium">{log.template_name}</TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="text-xs">{log.action}</Badge>
-                              </TableCell>
-                              <TableCell>
-                                <span className={`text-xs font-semibold ${statusColor}`}>{log.status}</span>
-                              </TableCell>
+                              <TableCell><Badge variant="outline" className="text-xs">{log.action}</Badge></TableCell>
+                              <TableCell><span className={`text-xs font-semibold ${statusColor}`}>{log.status}</span></TableCell>
                               <TableCell className="text-xs font-mono">{log.twilio_status_code || '—'}</TableCell>
-                              <TableCell className="text-xs font-mono text-muted-foreground max-w-[120px] truncate">
-                                {log.content_sid || '—'}
-                              </TableCell>
-                              <TableCell className="text-xs text-destructive max-w-[200px] truncate">
-                                {log.error_message || '—'}
-                              </TableCell>
+                              <TableCell className="text-xs font-mono text-muted-foreground max-w-[120px] truncate">{log.content_sid || '—'}</TableCell>
+                              <TableCell className="text-xs text-destructive max-w-[200px] truncate">{log.error_message || '—'}</TableCell>
                             </TableRow>
                             {isExpanded && (
                               <TableRow key={`${log.id}-detail`}>
@@ -988,24 +1175,18 @@ export default function WhatsAppTemplatesSettings() {
           </CollapsibleContent>
         </Card>
       </Collapsible>
+
       <AlertDialog open={deletingTemplateId !== null} onOpenChange={(open) => !open && setDeletingTemplateId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir template</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir este template? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Tem certeza que deseja excluir este template? Esta ação não pode ser desfeita.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (deletingTemplateId) {
-                  deleteTemplate.mutate(deletingTemplateId);
-                  setDeletingTemplateId(null);
-                }
-              }}
+              onClick={() => { if (deletingTemplateId) { deleteTemplate.mutate(deletingTemplateId); setDeletingTemplateId(null); } }}
             >
               Excluir
             </AlertDialogAction>
@@ -1013,7 +1194,6 @@ export default function WhatsAppTemplatesSettings() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Force Resubmit Confirmation */}
       <AlertDialog open={showForceResubmitConfirm} onOpenChange={setShowForceResubmitConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1030,10 +1210,7 @@ export default function WhatsAppTemplatesSettings() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                forceResubmit.mutate();
-                setShowForceResubmitConfirm(false);
-              }}
+              onClick={() => { forceResubmit.mutate(); setShowForceResubmitConfirm(false); }}
             >
               Sim, Resubmeter Todos
             </AlertDialogAction>

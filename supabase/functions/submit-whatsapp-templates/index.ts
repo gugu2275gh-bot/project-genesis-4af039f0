@@ -151,20 +151,62 @@ serve(async (req) => {
           const sampleDefaults: Record<string, string> = { '1': 'Jorge', '2': '9,99', '3': '31/12/2050' }
           const variables: Record<string, string> = {}
           let match
-          while ((match = placeholderRegex.exec(template.body_text)) !== null) {
+          // Check body, header, and footer for variables
+          const allText = [template.body_text, template.header_text || '', template.footer_text || ''].join(' ')
+          while ((match = placeholderRegex.exec(allText)) !== null) {
             const idx = match[1]
             variables[idx] = sampleDefaults[idx] || `exemplo_${idx}`
+          }
+
+          // Build types payload based on content_type
+          const contentType = template.content_type || 'twilio/text'
+          const typesPayload: any = {}
+
+          if (contentType === 'twilio/card') {
+            typesPayload['twilio/card'] = {
+              body: template.body_text,
+              ...(template.header_text ? { title: template.header_text } : {}),
+              ...(template.media_url ? { media: [template.media_url] } : {}),
+              ...(template.buttons && template.buttons.length > 0 ? { actions: template.buttons.map((b: any, i: number) => {
+                if (b.type === 'QUICK_REPLY') return { type: 'QUICK_REPLY', title: b.title, id: `qr_${i}` }
+                if (b.type === 'URL') return { type: 'URL', title: b.title, url: b.url }
+                if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', title: b.title, phone: b.phone }
+                return { type: b.type, title: b.title }
+              }) } : {}),
+            }
+          } else if (contentType === 'twilio/media') {
+            typesPayload['twilio/media'] = {
+              body: template.body_text,
+              ...(template.media_url ? { media: [template.media_url] } : {}),
+            }
+          } else if (contentType === 'twilio/quick-reply') {
+            typesPayload['twilio/quick-reply'] = {
+              body: template.body_text,
+              ...(template.buttons && template.buttons.length > 0 ? { actions: template.buttons.map((b: any, i: number) => ({
+                type: 'QUICK_REPLY', title: b.title, id: `qr_${i}`,
+              })) } : {}),
+            }
+          } else if (contentType === 'twilio/call-to-action') {
+            typesPayload['twilio/call-to-action'] = {
+              body: template.body_text,
+              ...(template.buttons && template.buttons.length > 0 ? { actions: template.buttons.map((b: any) => {
+                if (b.type === 'URL') return { type: 'URL', title: b.title, url: b.url }
+                if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', title: b.title, phone: b.phone }
+                return { type: b.type, title: b.title }
+              }) } : {}),
+            }
+          } else {
+            // Default: twilio/text
+            let bodyWithHeaderFooter = template.body_text
+            if (template.header_text) bodyWithHeaderFooter = `*${template.header_text}*\n\n${bodyWithHeaderFooter}`
+            if (template.footer_text) bodyWithHeaderFooter = `${bodyWithHeaderFooter}\n\n_${template.footer_text}_`
+            typesPayload['twilio/text'] = { body: bodyWithHeaderFooter }
           }
 
           const contentBody: any = {
             friendly_name: template.template_name,
             language: template.language || 'pt_BR',
-            types: {
-              'twilio/text': {
-                body: template.body_text,
-              },
-            },
-            content_type: 'twilio/text',
+            types: typesPayload,
           }
 
           if (Object.keys(variables).length > 0) {
@@ -483,20 +525,60 @@ serve(async (req) => {
           const sampleDefaults: Record<string, string> = { '1': 'Jorge', '2': '9,99', '3': '31/12/2050' }
           const variables: Record<string, string> = {}
           let match
-          while ((match = placeholderRegex.exec(template.body_text)) !== null) {
+          const allText = [template.body_text, template.header_text || '', template.footer_text || ''].join(' ')
+          while ((match = placeholderRegex.exec(allText)) !== null) {
             const idx = match[1]
             variables[idx] = sampleDefaults[idx] || `exemplo_${idx}`
+          }
+
+          // Build types payload based on content_type
+          const contentType = template.content_type || 'twilio/text'
+          const typesPayload: any = {}
+
+          if (contentType === 'twilio/card') {
+            typesPayload['twilio/card'] = {
+              body: template.body_text,
+              ...(template.header_text ? { title: template.header_text } : {}),
+              ...(template.media_url ? { media: [template.media_url] } : {}),
+              ...(template.buttons && (template.buttons as any[]).length > 0 ? { actions: (template.buttons as any[]).map((b: any, i: number) => {
+                if (b.type === 'QUICK_REPLY') return { type: 'QUICK_REPLY', title: b.title, id: `qr_${i}` }
+                if (b.type === 'URL') return { type: 'URL', title: b.title, url: b.url }
+                if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', title: b.title, phone: b.phone }
+                return { type: b.type, title: b.title }
+              }) } : {}),
+            }
+          } else if (contentType === 'twilio/media') {
+            typesPayload['twilio/media'] = {
+              body: template.body_text,
+              ...(template.media_url ? { media: [template.media_url] } : {}),
+            }
+          } else if (contentType === 'twilio/quick-reply') {
+            typesPayload['twilio/quick-reply'] = {
+              body: template.body_text,
+              ...(template.buttons && (template.buttons as any[]).length > 0 ? { actions: (template.buttons as any[]).map((b: any, i: number) => ({
+                type: 'QUICK_REPLY', title: b.title, id: `qr_${i}`,
+              })) } : {}),
+            }
+          } else if (contentType === 'twilio/call-to-action') {
+            typesPayload['twilio/call-to-action'] = {
+              body: template.body_text,
+              ...(template.buttons && (template.buttons as any[]).length > 0 ? { actions: (template.buttons as any[]).map((b: any) => {
+                if (b.type === 'URL') return { type: 'URL', title: b.title, url: b.url }
+                if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', title: b.title, phone: b.phone }
+                return { type: b.type, title: b.title }
+              }) } : {}),
+            }
+          } else {
+            let bodyWithHeaderFooter = template.body_text
+            if (template.header_text) bodyWithHeaderFooter = `*${template.header_text}*\n\n${bodyWithHeaderFooter}`
+            if (template.footer_text) bodyWithHeaderFooter = `${bodyWithHeaderFooter}\n\n_${template.footer_text}_`
+            typesPayload['twilio/text'] = { body: bodyWithHeaderFooter }
           }
 
           const contentBody: any = {
             friendly_name: template.template_name,
             language: template.language || 'pt_BR',
-            types: {
-              'twilio/text': {
-                body: template.body_text,
-              },
-            },
-            content_type: 'twilio/text',
+            types: typesPayload,
           }
 
           if (Object.keys(variables).length > 0) {

@@ -3,6 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+interface TemplateButton {
+  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER';
+  title: string;
+  url?: string;
+  phone?: string;
+}
+
 interface WhatsAppTemplate {
   id: string;
   automation_type: string;
@@ -16,9 +23,16 @@ interface WhatsAppTemplate {
   template_category: 'sla' | 'operational';
   meta_category: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
   language: string;
+  content_type: string;
+  header_text: string | null;
+  footer_text: string | null;
+  media_url: string | null;
+  buttons: TemplateButton[];
   created_at: string;
   updated_at: string;
 }
+
+export type { WhatsAppTemplate, TemplateButton };
 
 export function useWhatsAppTemplates() {
   const queryClient = useQueryClient();
@@ -113,7 +127,7 @@ export function useWhatsAppTemplates() {
   });
 
   const updateTemplate = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; body_text?: string; is_active?: boolean; template_name?: string; template_category?: 'sla' | 'operational'; meta_category?: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION'; automation_type?: string; language?: string; variables?: string[]; status?: string }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; body_text?: string; is_active?: boolean; template_name?: string; template_category?: 'sla' | 'operational'; meta_category?: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION'; automation_type?: string; language?: string; variables?: string[]; status?: string; content_type?: string; header_text?: string | null; footer_text?: string | null; media_url?: string | null; buttons?: TemplateButton[] }) => {
       const { error } = await supabase
         .from('whatsapp_templates')
         .update({ ...updates, updated_at: new Date().toISOString() } as any)
@@ -138,6 +152,11 @@ export function useWhatsAppTemplates() {
       template_category?: 'sla' | 'operational';
       meta_category?: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
       language?: string;
+      content_type?: string;
+      header_text?: string | null;
+      footer_text?: string | null;
+      media_url?: string | null;
+      buttons?: TemplateButton[];
     }) => {
       const { error } = await supabase
         .from('whatsapp_templates')
@@ -148,6 +167,11 @@ export function useWhatsAppTemplates() {
           template_category: newTemplate.template_category || 'sla',
           meta_category: newTemplate.meta_category || 'UTILITY',
           language: newTemplate.language || 'pt_BR',
+          content_type: newTemplate.content_type || 'twilio/text',
+          header_text: newTemplate.header_text || null,
+          footer_text: newTemplate.footer_text || null,
+          media_url: newTemplate.media_url || null,
+          buttons: newTemplate.buttons || [],
         } as any);
       if (error) throw error;
     },
