@@ -632,7 +632,13 @@ export default function LeadDetail() {
                   (lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) ||
                   serviceTypeMap[lead.service_interest || 'OUTRO'] || 
                   lead.service_interest || 'Outro'
-                } 
+                }
+                className="max-w-full truncate inline-block"
+                title={
+                  (lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) ||
+                  serviceTypeMap[lead.service_interest || 'OUTRO'] || 
+                  lead.service_interest || 'Outro'
+                }
               />
             </div>
 

@@ -422,8 +422,8 @@ export default function Leads() {
                         className="flex items-center gap-3 px-4 py-3 pl-16 hover:bg-muted/50 cursor-pointer transition-colors border-t first:border-t-0"
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-medium">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <span className="text-sm font-medium truncate max-w-[200px]" title={(lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) || serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro'}>
                               {(lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) || serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro'}
                             </span>
                             <StatusBadge
