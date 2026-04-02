@@ -87,13 +87,46 @@ export default function WhatsAppTemplatesSettings() {
   const handleEdit = (template: any) => {
     setEditingTemplate(template);
     setEditBody(template.body_text);
+    setEditCategory(template.template_category || 'sla');
+    setEditMetaCategory((template as any).meta_category || 'UTILITY');
+    setEditAutomationType(template.automation_type || '');
+    setEditLanguage((template as any).language || 'pt_BR');
+    setEditVariables(template.variables || []);
+    setEditVariable('');
   };
 
   const handleSaveEdit = () => {
+    setShowEditConfirm(true);
+  };
+
+  const handleConfirmSaveEdit = () => {
     if (editingTemplate) {
-      updateTemplate.mutate({ id: editingTemplate.id, body_text: editBody });
+      updateTemplate.mutate({
+        id: editingTemplate.id,
+        body_text: editBody,
+        template_category: editCategory,
+        meta_category: editMetaCategory,
+        automation_type: editAutomationType || editingTemplate.automation_type,
+        language: editLanguage,
+        variables: editVariables,
+        status: 'draft',
+        is_active: false,
+      });
+      setShowEditConfirm(false);
       setEditingTemplate(null);
     }
+  };
+
+  const addEditVariable = () => {
+    const trimmed = editVariable.trim();
+    if (trimmed && !editVariables.includes(trimmed)) {
+      setEditVariables([...editVariables, trimmed]);
+      setEditVariable('');
+    }
+  };
+
+  const removeEditVariable = (v: string) => {
+    setEditVariables(editVariables.filter((x) => x !== v));
   };
 
   const handleToggleActive = (id: string, currentActive: boolean) => {
