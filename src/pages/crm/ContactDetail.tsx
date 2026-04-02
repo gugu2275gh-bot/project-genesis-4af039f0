@@ -96,6 +96,7 @@ export default function ContactDetail() {
   const [showNewServiceDialog, setShowNewServiceDialog] = useState(false);
   const [newServiceInterest, setNewServiceInterest] = useState<string>('OUTRO');
   const [newServiceNotes, setNewServiceNotes] = useState('');
+  const [newServiceStandby, setNewServiceStandby] = useState(false);
   const [paymentNotes, setPaymentNotes] = useState<string | null>(null);
   const [isSavingPaymentNotes, setIsSavingPaymentNotes] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
