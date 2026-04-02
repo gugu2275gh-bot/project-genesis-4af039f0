@@ -519,7 +519,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                   <div className="grid grid-cols-[auto_1fr_1fr] gap-2 text-xs font-medium text-muted-foreground">
                     <span className="w-8">#</span>
                     <span>Valor (€)</span>
-                    <span>Vencimento</span>
+                    <span>Vencimento <span className="text-destructive">*</span></span>
                   </div>
                   {form.installments.map((inst, idx) => (
                     <div key={idx} className="grid grid-cols-[auto_1fr_1fr] gap-2 items-center">
