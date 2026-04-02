@@ -14,6 +14,7 @@ interface WhatsAppTemplate {
   rejection_reason: string | null;
   is_active: boolean;
   template_category: 'sla' | 'operational';
+  meta_category: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
   language: string;
   created_at: string;
   updated_at: string;
@@ -75,7 +76,7 @@ export function useWhatsAppTemplates() {
   });
 
   const updateTemplate = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; body_text?: string; is_active?: boolean; template_name?: string; template_category?: 'sla' | 'operational' }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; body_text?: string; is_active?: boolean; template_name?: string; template_category?: 'sla' | 'operational'; meta_category?: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION' }) => {
       const { error } = await supabase
         .from('whatsapp_templates')
         .update({ ...updates, updated_at: new Date().toISOString() } as any)
@@ -98,6 +99,7 @@ export function useWhatsAppTemplates() {
       body_text: string;
       variables: string[];
       template_category?: 'sla' | 'operational';
+      meta_category?: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
       language?: string;
     }) => {
       const { error } = await supabase
@@ -107,6 +109,7 @@ export function useWhatsAppTemplates() {
           status: 'draft',
           is_active: false,
           template_category: newTemplate.template_category || 'sla',
+          meta_category: newTemplate.meta_category || 'UTILITY',
           language: newTemplate.language || 'pt_BR',
         } as any);
       if (error) throw error;

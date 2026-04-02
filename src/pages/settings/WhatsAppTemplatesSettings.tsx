@@ -68,6 +68,7 @@ export default function WhatsAppTemplatesSettings() {
   // New template form state
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState<'sla' | 'operational'>('sla');
+  const [newMetaCategory, setNewMetaCategory] = useState<'UTILITY' | 'MARKETING' | 'AUTHENTICATION'>('UTILITY');
   const [newAutomationType, setNewAutomationType] = useState('');
   const [newLanguage, setNewLanguage] = useState('pt_BR');
   const [newBody, setNewBody] = useState('');
@@ -93,6 +94,7 @@ export default function WhatsAppTemplatesSettings() {
   const resetNewForm = () => {
     setNewName('');
     setNewCategory('sla');
+    setNewMetaCategory('UTILITY');
     setNewAutomationType('');
     setNewLanguage('pt_BR');
     setNewBody('');
@@ -110,6 +112,7 @@ export default function WhatsAppTemplatesSettings() {
         body_text: newBody,
         variables: newVariables,
         template_category: newCategory,
+        meta_category: newMetaCategory,
         language: newLanguage,
       },
       {
@@ -223,9 +226,10 @@ export default function WhatsAppTemplatesSettings() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Categoria</TableHead>
+                 <TableHead>Categoria</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Template</TableHead>
+                  <TableHead>Meta</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Content SID</TableHead>
                   <TableHead>Ativo</TableHead>
@@ -270,6 +274,11 @@ export default function WhatsAppTemplatesSettings() {
                       </TableCell>
                       <TableCell className="max-w-[300px] truncate text-muted-foreground text-xs">
                         {template.body_text}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {(template as any).meta_category || 'UTILITY'}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.badgeClass}`}>
@@ -464,6 +473,21 @@ export default function WhatsAppTemplatesSettings() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label>Categoria Meta *</Label>
+                <Select value={newMetaCategory} onValueChange={(v: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION') => setNewMetaCategory(v)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="UTILITY">UTILITY — Transacional (aprovação mais rápida)</SelectItem>
+                    <SelectItem value="MARKETING">MARKETING — Promoções e ofertas</SelectItem>
+                    <SelectItem value="AUTHENTICATION">AUTHENTICATION — Códigos de verificação</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Categoria exigida pela Meta para aprovação do template</p>
               </div>
 
               <div>
