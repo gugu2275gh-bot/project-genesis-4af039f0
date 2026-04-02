@@ -190,7 +190,7 @@ export default function WhatsAppTemplatesSettings() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => checkStatus.mutate()}
+                onClick={() => checkStatus.mutate(false)}
                 disabled={checkStatus.isPending}
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${checkStatus.isPending ? 'animate-spin' : ''}`} />
