@@ -253,7 +253,6 @@ export default function ContactDetail() {
   const handleCreateNewService = async () => {
     if (!id) return;
     try {
-      // Find the selected service type to get the service_interest enum
       const selectedST = serviceTypes?.find(st => st.code === newServiceInterest);
       const newLead = await createLeadForContact.mutateAsync({
         contact_id: id,
@@ -261,10 +260,18 @@ export default function ContactDetail() {
         service_type_id: selectedST?.id,
         notes: newServiceNotes || undefined,
       });
+      // If standby checkbox is checked, update the lead status to STANDBY
+      if (newServiceStandby) {
+        await supabase.from('leads').update({ status: 'STANDBY' }).eq('id', newLead.id);
+        queryClient.invalidateQueries({ queryKey: ['leads'] });
+      }
       setShowNewServiceDialog(false);
       setNewServiceInterest('OUTRO');
       setNewServiceNotes('');
-      navigate(`/crm/leads/${newLead.id}`);
+      setNewServiceStandby(false);
+      if (!newServiceStandby) {
+        navigate(`/crm/leads/${newLead.id}`);
+      }
     } catch (error) {
       // toast handled by hook
     }
