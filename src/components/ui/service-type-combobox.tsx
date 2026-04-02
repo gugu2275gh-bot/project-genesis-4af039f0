@@ -42,9 +42,9 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between font-normal"
+          className="w-full justify-between font-normal overflow-hidden min-w-0"
         >
-          <span className="truncate">
+          <span className="truncate block min-w-0">
             {displaySelectedLabel || placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
