@@ -189,8 +189,18 @@ export default function ContractsList() {
   };
 
   const calculatePaymentStatus = (contract: typeof contracts[0]) => {
-    const payments = contract.payments || [];
+    // Use contract_leads-based totals (sums payments from all services in the group)
+    const groupTotals = contractPaymentTotals?.[contract.id];
     
+    if (groupTotals && groupTotals.total > 0) {
+      const totalFee = contract.total_fee || groupTotals.total;
+      const paidAmount = groupTotals.paid;
+      const balance = totalFee - paidAmount;
+      return { totalFee, paidAmount, balance };
+    }
+
+    // Fallback to direct contract payments
+    const payments = contract.payments || [];
     const totalAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
     const totalFee = contract.total_fee || totalAmount;
     
