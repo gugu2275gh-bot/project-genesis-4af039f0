@@ -25,6 +25,7 @@ export default function Contacts() {
   const [phoneInput, setPhoneInput] = useState('');
   const [isBeneficiary, setIsBeneficiary] = useState(false);
   const [principalContactId, setPrincipalContactId] = useState<string>('');
+  const [principalSearchOpen, setPrincipalSearchOpen] = useState(false);
   const [newContact, setNewContact] = useState<Omit<Partial<ContactInsert>, 'phone'>>({
     full_name: '',
     email: '',
