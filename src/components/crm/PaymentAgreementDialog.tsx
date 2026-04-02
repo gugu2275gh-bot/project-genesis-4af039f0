@@ -148,6 +148,15 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   const handleSave = async (keepOpen = false) => {
     if (!form.amount) return;
 
+    // Validate installment dates when PARCELADO
+    if (form.payment_form === 'PARCELADO' && form.installments.length > 0) {
+      const missingDates = form.installments.some(inst => !inst.due_date);
+      if (missingDates) {
+        toast({ title: 'Preencha todas as datas de vencimento das parcelas', variant: 'destructive' });
+        return;
+      }
+    }
+
     const { finalAmount, gross, discountAmount, vatAmount } = calculatedAmounts;
     const methodLabel = PAYMENT_METHOD_LABELS[form.payment_method as keyof typeof PAYMENT_METHOD_LABELS] || form.payment_method;
     const formLabel = PAYMENT_FORM_LABELS[form.payment_form as keyof typeof PAYMENT_FORM_LABELS] || form.payment_form;
@@ -778,14 +787,14 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             <Button
               variant="secondary"
               onClick={() => handleSave(true)}
-              disabled={!form.amount || updateContact.isPending}
+              disabled={!form.amount || updateContact.isPending || (form.payment_form === 'PARCELADO' && form.installments.some(i => !i.due_date))}
             >
               <Plus className="h-4 w-4 mr-2" />
               Salvar e Adicionar Novo
             </Button>
             <Button
               onClick={() => handleSave(false)}
-              disabled={!form.amount || updateContact.isPending}
+              disabled={!form.amount || updateContact.isPending || (form.payment_form === 'PARCELADO' && form.installments.some(i => !i.due_date))}
             >
               <DollarSign className="h-4 w-4 mr-2" />
               Salvar Acordo
