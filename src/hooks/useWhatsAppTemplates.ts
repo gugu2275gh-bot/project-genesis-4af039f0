@@ -3,6 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+interface TemplateButton {
+  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER';
+  title: string;
+  url?: string;
+  phone?: string;
+}
+
 interface WhatsAppTemplate {
   id: string;
   automation_type: string;
@@ -16,9 +23,16 @@ interface WhatsAppTemplate {
   template_category: 'sla' | 'operational';
   meta_category: 'UTILITY' | 'MARKETING' | 'AUTHENTICATION';
   language: string;
+  content_type: string;
+  header_text: string | null;
+  footer_text: string | null;
+  media_url: string | null;
+  buttons: TemplateButton[];
   created_at: string;
   updated_at: string;
 }
+
+export type { WhatsAppTemplate, TemplateButton };
 
 export function useWhatsAppTemplates() {
   const queryClient = useQueryClient();
