@@ -99,6 +99,11 @@ export default function ContactDetail() {
   const [paymentNotes, setPaymentNotes] = useState<string | null>(null);
   const [isSavingPaymentNotes, setIsSavingPaymentNotes] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [showAddBeneficiaryDialog, setShowAddBeneficiaryDialog] = useState(false);
+  const [newBeneficiaryName, setNewBeneficiaryName] = useState('');
+  const [newBeneficiaryPhone, setNewBeneficiaryPhone] = useState('');
+  const [newBeneficiaryEmail, setNewBeneficiaryEmail] = useState('');
+  const [isCreatingBeneficiary, setIsCreatingBeneficiary] = useState(false);
   const queryClient = useQueryClient();
 
   const contactLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
@@ -1411,69 +1416,79 @@ export default function ContactDetail() {
           </Card>
 
           {/* Beneficiários / Titular */}
-          {(contactBeneficiaries.length > 0 || contactTitular) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  {contactTitular ? 'Titular Vinculado' : `Beneficiários (${contactBeneficiaries.length})`}
-                </CardTitle>
-                <CardDescription>
-                  {contactTitular 
-                    ? 'Este contato é beneficiário vinculado ao titular abaixo' 
-                    : 'Beneficiários vinculados a este titular'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {benefLoading ? (
-                  <Skeleton className="h-16" />
-                ) : contactTitular ? (
-                  <div
-                    className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => contactTitular.contact_id && navigate(`/crm/contacts/${contactTitular.contact_id}`)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium">{contactTitular.full_name}</p>
-                        <p className="text-sm text-muted-foreground">Titular</p>
-                      </div>
-                    </div>
-                    {contactTitular.contact_id && (
-                      <Badge variant="outline">Ver Ficha</Badge>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {contactBeneficiaries.map(ben => (
-                      <div
-                        key={ben.id}
-                        className={`flex items-center justify-between p-3 rounded-lg border ${ben.contact_id ? 'cursor-pointer hover:bg-muted/50' : ''} transition-colors`}
-                        onClick={() => ben.contact_id && navigate(`/crm/contacts/${ben.contact_id}`)}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-secondary/50 flex items-center justify-center">
-                            <User className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{ben.full_name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {ben.relationship || 'Beneficiário'}
-                            </p>
-                          </div>
-                        </div>
-                        {ben.contact_id && (
-                          <Badge variant="outline">Ver Ficha</Badge>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    {contactTitular ? 'Titular Vinculado' : `Beneficiários (${contactBeneficiaries.length})`}
+                  </CardTitle>
+                  <CardDescription>
+                    {contactTitular 
+                      ? 'Este contato é beneficiário vinculado ao titular abaixo' 
+                      : 'Beneficiários vinculados a este titular'}
+                  </CardDescription>
+                </div>
+                {!contactTitular && (
+                  <Button size="sm" onClick={() => setShowAddBeneficiaryDialog(true)}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Adicionar
+                  </Button>
                 )}
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {benefLoading ? (
+                <Skeleton className="h-16" />
+              ) : contactTitular ? (
+                <div
+                  className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => contactTitular.contact_id && navigate(`/crm/contacts/${contactTitular.contact_id}`)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <User className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{contactTitular.full_name}</p>
+                      <p className="text-sm text-muted-foreground">Titular</p>
+                    </div>
+                  </div>
+                  {contactTitular.contact_id && (
+                    <Badge variant="outline">Ver Ficha</Badge>
+                  )}
+                </div>
+              ) : contactBeneficiaries.length > 0 ? (
+                <div className="space-y-3">
+                  {contactBeneficiaries.map(ben => (
+                    <div
+                      key={ben.id}
+                      className={`flex items-center justify-between p-3 rounded-lg border ${ben.contact_id ? 'cursor-pointer hover:bg-muted/50' : ''} transition-colors`}
+                      onClick={() => ben.contact_id && navigate(`/crm/contacts/${ben.contact_id}`)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-secondary/50 flex items-center justify-center">
+                          <User className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{ben.full_name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {ben.relationship || 'Beneficiário'}
+                          </p>
+                        </div>
+                      </div>
+                      {ben.contact_id && (
+                        <Badge variant="outline">Ver Ficha</Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">Nenhum beneficiário vinculado</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
@@ -1511,6 +1526,82 @@ export default function ContactDetail() {
             <Button onClick={handleCreateNewService} disabled={createLeadForContact.isPending}>
               {createLeadForContact.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Criar Lead
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Adicionar Beneficiário */}
+      <Dialog open={showAddBeneficiaryDialog} onOpenChange={setShowAddBeneficiaryDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar Beneficiário</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Nome Completo *</Label>
+              <Input
+                value={newBeneficiaryName}
+                onChange={(e) => setNewBeneficiaryName(e.target.value)}
+                placeholder="Nome do beneficiário"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Telefone</Label>
+                <Input
+                  value={newBeneficiaryPhone}
+                  onChange={(e) => setNewBeneficiaryPhone(e.target.value)}
+                  placeholder="+34 600 000 000"
+                />
+              </div>
+              <div>
+                <Label>E-mail</Label>
+                <Input
+                  value={newBeneficiaryEmail}
+                  onChange={(e) => setNewBeneficiaryEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddBeneficiaryDialog(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!newBeneficiaryName.trim() || isCreatingBeneficiary}
+              onClick={async () => {
+                if (!id || !newBeneficiaryName.trim()) return;
+                setIsCreatingBeneficiary(true);
+                try {
+                  const { data: newContact, error } = await supabase
+                    .from('contacts')
+                    .insert({
+                      full_name: newBeneficiaryName.trim(),
+                      phone: newBeneficiaryPhone || null,
+                      email: newBeneficiaryEmail || null,
+                      is_beneficiary: true,
+                      linked_principal_contact_id: id,
+                    })
+                    .select()
+                    .single();
+                  if (error) throw error;
+                  toast({ title: 'Beneficiário adicionado com sucesso' });
+                  queryClient.invalidateQueries({ queryKey: ['contact-beneficiaries', id] });
+                  setShowAddBeneficiaryDialog(false);
+                  setNewBeneficiaryName('');
+                  setNewBeneficiaryPhone('');
+                  setNewBeneficiaryEmail('');
+                } catch (err: any) {
+                  toast({ title: 'Erro ao criar beneficiário', description: err.message, variant: 'destructive' });
+                } finally {
+                  setIsCreatingBeneficiary(false);
+                }
+              }}
+            >
+              {isCreatingBeneficiary && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Adicionar
             </Button>
           </DialogFooter>
         </DialogContent>
