@@ -179,9 +179,16 @@ export default function ContractsList() {
       key: 'service_type',
       header: 'Serviço',
       cell: (contract) => {
-        const dynamicName = contract.opportunities?.leads?.service_types?.name;
-        const name = dynamicName || SERVICE_INTEREST_LABELS[contract.service_type || 'OUTRO'];
-        return <span className="truncate block max-w-[220px]" title={name}>{name}</span>;
+        const services = getContractServices(contract);
+        return (
+          <div className="max-w-[260px]">
+            {services.map((name, idx) => (
+              <div key={idx} className="truncate text-sm" title={name}>
+                {services.length > 1 ? `• ${name}` : name}
+              </div>
+            ))}
+          </div>
+        );
       },
     },
     {
