@@ -1012,6 +1012,34 @@ export default function WhatsAppTemplatesSettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Force Resubmit Confirmation */}
+      <AlertDialog open={showForceResubmitConfirm} onOpenChange={setShowForceResubmitConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resubmeter Todos os Templates</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação irá <strong>deletar todos os templates existentes no Twilio</strong>, recriá-los com os dados de teste corretos e resubmetê-los para aprovação da Meta.
+              <br /><br />
+              ⚠️ Todos os templates ficarão inativos até serem aprovados novamente (prazo de até 48h).
+              <br /><br />
+              Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                forceResubmit.mutate();
+                setShowForceResubmitConfirm(false);
+              }}
+            >
+              Sim, Resubmeter Todos
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
