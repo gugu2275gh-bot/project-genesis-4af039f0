@@ -264,7 +264,9 @@ export function ContractGroupsSection({
 
   // Ungrouped leads (not linked to any contract)
   const groupedLeadIds = new Set(contractGroups.flatMap(g => g.leads.map(l => l.id)));
-  const ungroupedLeads = allLeads.filter(l => !groupedLeadIds.has(l.id));
+  const allUngroupedLeads = allLeads.filter(l => !groupedLeadIds.has(l.id));
+  const ungroupedLeads = allUngroupedLeads.filter(l => l.status !== 'STANDBY');
+  const standbyLeads = allUngroupedLeads.filter(l => l.status === 'STANDBY');
 
   // Ungrouped payments
   const groupedPaymentIds = new Set(contractGroups.flatMap(g => g.payments.map(p => p.id)));
