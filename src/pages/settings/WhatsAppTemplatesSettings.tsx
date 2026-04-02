@@ -803,6 +803,17 @@ export default function WhatsAppTemplatesSettings() {
                     </Badge>
                   ))}
                 </div>
+                {newVariables.length > 0 && (
+                  <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded text-xs text-blue-700 dark:text-blue-300">
+                    <p className="font-medium flex items-center gap-1">ℹ️ Valores de exemplo enviados ao WhatsApp:</p>
+                    <p className="mt-1">
+                      {newVariables.map((_, i) => {
+                        const samples = ['Jorge', '9,99', '31/12/2050'];
+                        return `{{${i + 1}}} → ${samples[i] || `exemplo_${i + 1}`}`;
+                      }).join('  |  ')}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
