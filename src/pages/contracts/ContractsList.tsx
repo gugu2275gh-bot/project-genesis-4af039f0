@@ -90,7 +90,7 @@ export default function ContractsList() {
       .limit(1);
     
     if (existingContracts?.length) {
-      toast({ title: 'Contrato já existe', description: 'Já existe um contrato ativo para esta oportunidade.', variant: 'destructive' });
+      toast.error('Já existe um contrato ativo para esta oportunidade.');
       return;
     }
 
