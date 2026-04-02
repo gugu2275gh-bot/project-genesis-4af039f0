@@ -290,8 +290,8 @@ export default function Contacts() {
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancelar
                   </Button>
-                  <Button onClick={handleCreate} disabled={createContact.isPending}>
-                    {createContact.isPending ? 'Criando...' : 'Criar Contato'}
+                  <Button onClick={handleCreate} disabled={isCreating || createContact.isPending}>
+                    {isCreating ? 'Criando...' : 'Criar Contato'}
                   </Button>
                 </div>
               </div>
