@@ -447,8 +447,12 @@ export function ContractGroupsSection({
         await supabase.from('leads').update({ status: 'ARQUIVADO_SEM_RETORNO' }).eq('id', lead.id);
         toast({ title: 'Serviço arquivado' });
       } else {
-        // Remove from contract_leads first
+        // Remove all related records before deleting the lead
         await supabase.from('contract_leads').delete().eq('lead_id', lead.id);
+        await supabase.from('interactions').delete().eq('lead_id', lead.id);
+        await supabase.from('tasks').delete().eq('related_lead_id', lead.id);
+        await supabase.from('mensagens_cliente').delete().eq('id_lead', lead.id);
+        await supabase.from('customer_sector_pending_items').delete().eq('lead_id', lead.id);
         // Delete payments, contracts, opportunities, then lead
         const { data: opps } = await supabase.from('opportunities').select('id').eq('lead_id', lead.id);
         if (opps && opps.length > 0) {
