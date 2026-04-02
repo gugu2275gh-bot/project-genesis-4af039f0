@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { CONTRACT_STATUS_LABELS, SERVICE_INTEREST_LABELS, CONTRACT_TEMPLATE_LABELS } from '@/types/database';
+import { toast } from 'sonner';
 
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format } from 'date-fns';
