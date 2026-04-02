@@ -1,2 +1,0 @@
-TRUNCATE TABLE whatsapp_template_logs;
-TRUNCATE TABLE whatsapp_templates CASCADE;
