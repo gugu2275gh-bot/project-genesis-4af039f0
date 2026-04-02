@@ -119,9 +119,26 @@ export default function ContractsList() {
     }
   };
 
+  const getContractServices = (contract: typeof contracts[0]): string[] => {
+    const contractLeads = contract.contract_leads || [];
+    if (contractLeads.length > 0) {
+      return contractLeads.map(cl => {
+        const name = cl.leads?.service_types?.name;
+        if (name) return name;
+        const interest = cl.leads?.service_interest;
+        return interest ? (SERVICE_INTEREST_LABELS[interest] || interest) : 'Serviço';
+      });
+    }
+    // Fallback to primary lead service
+    const dynamicName = contract.opportunities?.leads?.service_types?.name;
+    return [dynamicName || SERVICE_INTEREST_LABELS[contract.service_type || 'OUTRO']];
+  };
+
   const calculatePaymentStatus = (contract: typeof contracts[0]) => {
-    const totalFee = contract.total_fee || 0;
     const payments = contract.payments || [];
+    
+    const totalAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const totalFee = contract.total_fee || totalAmount;
     
     const paidAmount = payments
       .filter(p => p.status === 'CONFIRMADO')
@@ -162,9 +179,16 @@ export default function ContractsList() {
       key: 'service_type',
       header: 'Serviço',
       cell: (contract) => {
-        const dynamicName = contract.opportunities?.leads?.service_types?.name;
-        const name = dynamicName || SERVICE_INTEREST_LABELS[contract.service_type || 'OUTRO'];
-        return <span className="truncate block max-w-[220px]" title={name}>{name}</span>;
+        const services = getContractServices(contract);
+        return (
+          <div className="max-w-[260px]">
+            {services.map((name, idx) => (
+              <div key={idx} className="truncate text-sm" title={name}>
+                {services.length > 1 ? `• ${name}` : name}
+              </div>
+            ))}
+          </div>
+        );
       },
     },
     {
