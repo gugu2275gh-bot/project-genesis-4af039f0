@@ -197,6 +197,15 @@ export default function WhatsAppTemplatesSettings() {
                 Verificar Status
               </Button>
               <Button
+                variant="outline"
+                size="sm"
+                onClick={() => syncFromTwilio.mutate()}
+                disabled={syncFromTwilio.isPending}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${syncFromTwilio.isPending ? 'animate-spin' : ''}`} />
+                Sincronizar Twilio
+              </Button>
+              <Button
                 size="sm"
                 onClick={() => submitTemplates.mutate('ALL')}
                 disabled={submitTemplates.isPending}
