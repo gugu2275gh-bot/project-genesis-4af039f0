@@ -156,7 +156,7 @@ export default function ContactDetail() {
   const confirmedLeads = contactLeads.filter(l => confirmedLeadIds.includes(l.id));
   const pendingPaymentLeads = contactLeads.filter(l => l.service_type_id && !confirmedLeadIds.includes(l.id));
   const { data: serviceTypes } = useServiceTypes();
-  const allServiceLeads = [...confirmedLeads, ...pendingPaymentLeads];
+  const allServiceLeads = contactLeads.filter(l => l.service_type_id || confirmedLeadIds.includes(l.id));
   const { data: contactDocuments = [], isLoading: docsLoading } = useContactDocuments(id);
   const { beneficiaries: contactBeneficiaries, titular: contactTitular, isLoading: benefLoading } = useContactBeneficiaries(id);
   const { interactions } = useInteractions(id);
