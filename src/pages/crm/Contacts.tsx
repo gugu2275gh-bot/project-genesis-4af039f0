@@ -9,10 +9,13 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Phone, Mail, Users } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Plus, Search, Phone, Mail, Users, Check, ChevronsUpDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ORIGIN_CHANNEL_LABELS, LANGUAGE_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { cn } from '@/lib/utils';
 
 export default function Contacts() {
   const navigate = useNavigate();
@@ -22,6 +25,7 @@ export default function Contacts() {
   const [phoneInput, setPhoneInput] = useState('');
   const [isBeneficiary, setIsBeneficiary] = useState(false);
   const [principalContactId, setPrincipalContactId] = useState<string>('');
+  const [principalSearchOpen, setPrincipalSearchOpen] = useState(false);
   const [newContact, setNewContact] = useState<Omit<Partial<ContactInsert>, 'phone'>>({
     full_name: '',
     email: '',
@@ -229,21 +233,49 @@ export default function Contacts() {
                 {isBeneficiary && (
                   <div>
                     <Label>Contato Principal (Titular) *</Label>
-                    <Select
-                      value={principalContactId}
-                      onValueChange={setPrincipalContactId}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o titular..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {contacts
-                          .filter(c => !c.is_beneficiary)
-                          .map((c) => (
-                            <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={principalSearchOpen} onOpenChange={setPrincipalSearchOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={principalSearchOpen}
+                          className="w-full justify-between font-normal"
+                        >
+                          {principalContactId
+                            ? contacts.find(c => c.id === principalContactId)?.full_name
+                            : 'Pesquisar titular...'}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Buscar por nome..." />
+                          <CommandList>
+                            <CommandEmpty>Nenhum titular encontrado.</CommandEmpty>
+                            <CommandGroup>
+                              {contacts
+                                .filter(c => !c.is_beneficiary)
+                                .map((c) => (
+                                  <CommandItem
+                                    key={c.id}
+                                    value={c.full_name}
+                                    onSelect={() => {
+                                      setPrincipalContactId(c.id);
+                                      setPrincipalSearchOpen(false);
+                                    }}
+                                  >
+                                    <Check className={cn("mr-2 h-4 w-4", principalContactId === c.id ? "opacity-100" : "opacity-0")} />
+                                    <div className="flex flex-col">
+                                      <span>{c.full_name}</span>
+                                      {c.phone && <span className="text-xs text-muted-foreground">{c.phone}</span>}
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 )}
                 <div className="flex justify-end gap-2">
