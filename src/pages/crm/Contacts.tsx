@@ -39,18 +39,26 @@ export default function Contacts() {
     c.phone?.toString().includes(search)
   );
 
+  const [isCreating, setIsCreating] = useState(false);
+
   const handleCreate = async () => {
     if (!newContact.full_name) return;
     if (isBeneficiary && !principalContactId) return;
-    const phoneStr = phoneInput ? phoneInput.replace(/\D/g, '') : null;
-    const created = await createContact.mutateAsync({ 
-      ...newContact, 
-      phone: phoneStr || undefined,
-      is_beneficiary: isBeneficiary,
-      linked_principal_contact_id: isBeneficiary ? principalContactId : null,
-    } as ContactInsert);
-    setIsDialogOpen(false);
-    navigate(`/crm/contacts/${created.id}`);
+    if (isCreating) return;
+    setIsCreating(true);
+    try {
+      const phoneStr = phoneInput ? phoneInput.replace(/\D/g, '') : null;
+      const created = await createContact.mutateAsync({ 
+        ...newContact, 
+        phone: phoneStr || undefined,
+        is_beneficiary: isBeneficiary,
+        linked_principal_contact_id: isBeneficiary ? principalContactId : null,
+      } as ContactInsert);
+      setIsDialogOpen(false);
+      navigate(`/crm/contacts/${created.id}`);
+    } finally {
+      setIsCreating(false);
+    }
     setPhoneInput('');
     setIsBeneficiary(false);
     setPrincipalContactId('');
