@@ -50,7 +50,7 @@ serve(async (req) => {
     }
 
     const body = await req.json()
-    const { action, automation_type } = body
+    const { action, automation_type, force } = body
 
     // Helper to insert log
     async function insertLog(logData: {
@@ -184,7 +184,6 @@ serve(async (req) => {
           })
 
           if (!response.ok || !responseData.sid) {
-            // Content creation failed
             await adminSupabase.from('whatsapp_templates').update({
               status: 'error',
               rejection_reason: responseData.message || JSON.stringify(responseData),
@@ -197,7 +196,6 @@ serve(async (req) => {
 
           contentSid = responseData.sid
 
-          // Save the content_sid immediately
           await adminSupabase.from('whatsapp_templates').update({
             content_sid: contentSid,
             updated_at: new Date().toISOString(),
@@ -218,7 +216,6 @@ serve(async (req) => {
 
           results.push({ automation_type: template.automation_type, status: 'submitted', content_sid: contentSid })
         } else {
-          // Approval request failed — mark as draft so it can be resubmitted
           await adminSupabase.from('whatsapp_templates').update({
             status: 'draft',
             rejection_reason: `Aprovação falhou: ${approvalResult.error}`,
@@ -232,70 +229,208 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: true, results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // ACTION: check_status
+    // ACTION: check_status — checks ALL templates with content_sid (not just pending)
     if (action === 'check_status') {
-      const { data: templates } = await adminSupabase
+      let query = adminSupabase
         .from('whatsapp_templates')
         .select('*')
         .not('content_sid', 'is', null)
-        .eq('status', 'pending')
+
+      // By default, skip already approved unless force=true
+      if (!force) {
+        query = query.neq('status', 'approved')
+      }
+
+      const { data: templates } = await query
 
       const results = []
       for (const template of templates || []) {
-        // Correct endpoint: GET /v1/Content/{SID}/ApprovalRequests
-        const response = await fetch(`${CONTENT_API_URL}/${template.content_sid}/ApprovalRequests`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Basic ${basicAuth}`,
-          },
-        })
+        try {
+          // GET /v1/Content/{SID}/ApprovalRequests
+          const response = await fetch(`${CONTENT_API_URL}/${template.content_sid}/ApprovalRequests`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${basicAuth}`,
+            },
+          })
 
-        const data = await response.json()
-        console.log(`Approval status for ${template.template_name}:`, JSON.stringify(data))
+          const data = await response.json()
+          console.log(`Approval status for ${template.template_name}:`, JSON.stringify(data))
 
-        let newStatus = template.status
-        let rejectionReason = null
+          let newStatus = template.status
+          let rejectionReason = null
 
-        // Response format: { data: [{ status: "approved"|"rejected"|"pending", rejection_reason: "..." }] }
-        if (data.data && Array.isArray(data.data) && data.data.length > 0) {
-          const approval = data.data[0]
-          if (approval.status === 'approved') {
-            newStatus = 'approved'
-          } else if (approval.status === 'rejected') {
-            newStatus = 'rejected'
-            rejectionReason = approval.rejection_reason || 'Rejected by Meta'
-          } else if (approval.status === 'pending') {
-            newStatus = 'pending'
+          // Response format: { data: [{ status: "approved"|"rejected"|"pending", rejection_reason: "..." }] }
+          if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+            const approval = data.data[0]
+            if (approval.status === 'approved') {
+              newStatus = 'approved'
+            } else if (approval.status === 'rejected') {
+              newStatus = 'rejected'
+              rejectionReason = approval.rejection_reason || 'Rejected by Meta'
+            } else if (approval.status === 'pending') {
+              newStatus = 'pending'
+            }
+          } else if (response.ok && (!data.data || data.data.length === 0)) {
+            // No approval request found — template was never submitted for approval
+            newStatus = 'draft'
           }
+
+          await insertLog({
+            template_id: template.id,
+            template_name: template.template_name,
+            action: 'check_status',
+            status: newStatus !== template.status ? 'updated' : 'no_change',
+            request_payload: { url: `${CONTENT_API_URL}/${template.content_sid}/ApprovalRequests`, method: 'GET' },
+            response_payload: data,
+            error_message: rejectionReason,
+            twilio_status_code: response.status,
+            content_sid: template.content_sid,
+          })
+
+          if (newStatus !== template.status) {
+            const updateData: any = {
+              status: newStatus,
+              rejection_reason: rejectionReason,
+              updated_at: new Date().toISOString(),
+            }
+            // Auto-activate approved templates
+            if (newStatus === 'approved') {
+              updateData.is_active = true
+            }
+            await adminSupabase.from('whatsapp_templates').update(updateData).eq('id', template.id)
+          }
+
+          results.push({
+            template_name: template.template_name,
+            automation_type: template.automation_type,
+            previous_status: template.status,
+            current_status: newStatus,
+            content_sid: template.content_sid,
+            changed: newStatus !== template.status,
+          })
+        } catch (err) {
+          console.error(`Error checking status for ${template.template_name}:`, err)
+          results.push({
+            template_name: template.template_name,
+            automation_type: template.automation_type,
+            status: 'error',
+            error: err instanceof Error ? err.message : 'Unknown error',
+          })
         }
-
-        await insertLog({
-          template_id: template.id,
-          template_name: template.template_name,
-          action: 'check_status',
-          status: newStatus !== template.status ? 'success' : 'skipped',
-          request_payload: { url: `${CONTENT_API_URL}/${template.content_sid}/ApprovalRequests`, method: 'GET' },
-          response_payload: data,
-          error_message: rejectionReason,
-          twilio_status_code: response.status,
-          content_sid: template.content_sid,
-        })
-
-        if (newStatus !== template.status) {
-          await adminSupabase.from('whatsapp_templates').update({
-            status: newStatus,
-            rejection_reason: rejectionReason,
-            updated_at: new Date().toISOString(),
-          }).eq('id', template.id)
-        }
-
-        results.push({ automation_type: template.automation_type, status: newStatus, content_sid: template.content_sid })
       }
 
       return new Response(JSON.stringify({ success: true, results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    return new Response(JSON.stringify({ error: 'Invalid action. Use "submit" or "check_status"' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    // ACTION: sync_from_twilio — List all Content Templates from Twilio and sync with DB
+    if (action === 'sync_from_twilio') {
+      console.log('Starting sync_from_twilio...')
+
+      // Step 1: List all content templates from Twilio
+      const listResponse = await fetch(`${CONTENT_API_URL}?PageSize=100`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Basic ${basicAuth}`,
+        },
+      })
+
+      const listData = await listResponse.json()
+      console.log(`Twilio returned ${listData.contents?.length || 0} content templates`)
+
+      if (!listResponse.ok) {
+        return new Response(JSON.stringify({ error: 'Failed to list Twilio content templates', details: listData }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
+      const twilioTemplates = listData.contents || []
+
+      // Step 2: Get all templates from DB
+      const { data: dbTemplates } = await adminSupabase.from('whatsapp_templates').select('*')
+
+      const results = []
+      let matched = 0
+      let updated = 0
+      let unmatched = 0
+
+      for (const twilioTpl of twilioTemplates) {
+        const friendlyName = twilioTpl.friendly_name
+        const sid = twilioTpl.sid
+
+        // Find matching DB template by template_name = friendly_name
+        const dbMatch = dbTemplates?.find(db => db.template_name === friendlyName)
+
+        if (!dbMatch) {
+          unmatched++
+          results.push({ friendly_name: friendlyName, sid, status: 'no_db_match' })
+          continue
+        }
+
+        matched++
+
+        // Check approval status for this SID
+        let approvalStatus = 'unknown'
+        let rejectionReason = null
+        try {
+          const approvalResponse = await fetch(`${CONTENT_API_URL}/${sid}/ApprovalRequests`, {
+            method: 'GET',
+            headers: { 'Authorization': `Basic ${basicAuth}` },
+          })
+          const approvalData = await approvalResponse.json()
+
+          if (approvalData.data && Array.isArray(approvalData.data) && approvalData.data.length > 0) {
+            approvalStatus = approvalData.data[0].status || 'unknown'
+            rejectionReason = approvalData.data[0].rejection_reason || null
+          } else {
+            approvalStatus = 'not_submitted'
+          }
+        } catch (e) {
+          console.error(`Error checking approval for ${friendlyName}:`, e)
+          approvalStatus = 'error'
+        }
+
+        // Update DB if needed
+        const needsUpdate = dbMatch.content_sid !== sid || dbMatch.status !== approvalStatus
+        if (needsUpdate && ['approved', 'rejected', 'pending'].includes(approvalStatus)) {
+          const updateData: any = {
+            content_sid: sid,
+            status: approvalStatus,
+            rejection_reason: rejectionReason,
+            updated_at: new Date().toISOString(),
+          }
+          if (approvalStatus === 'approved') {
+            updateData.is_active = true
+          }
+          await adminSupabase.from('whatsapp_templates').update(updateData).eq('id', dbMatch.id)
+          updated++
+        }
+
+        results.push({
+          template_name: friendlyName,
+          sid,
+          db_status: dbMatch.status,
+          twilio_status: approvalStatus,
+          updated: needsUpdate && ['approved', 'rejected', 'pending'].includes(approvalStatus),
+        })
+
+        await insertLog({
+          template_id: dbMatch.id,
+          template_name: friendlyName,
+          action: 'sync_from_twilio',
+          status: needsUpdate ? 'updated' : 'no_change',
+          request_payload: { friendly_name: friendlyName, sid },
+          response_payload: { approval_status: approvalStatus },
+          content_sid: sid,
+        })
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        summary: { total_twilio: twilioTemplates.length, matched, updated, unmatched },
+        results,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    return new Response(JSON.stringify({ error: 'Invalid action. Use "submit", "check_status", or "sync_from_twilio"' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error'

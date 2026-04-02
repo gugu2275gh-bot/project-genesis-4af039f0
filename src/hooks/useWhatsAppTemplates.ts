@@ -56,9 +56,9 @@ export function useWhatsAppTemplates() {
   });
 
   const checkStatus = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (force?: boolean) => {
       const { data, error } = await supabase.functions.invoke('submit-whatsapp-templates', {
-        body: { action: 'check_status' },
+        body: { action: 'check_status', force: force || false },
       });
       if (error) throw error;
       return data;
@@ -66,12 +66,31 @@ export function useWhatsAppTemplates() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
       const results = data?.results || [];
-      const approved = results.filter((r: any) => r.status === 'approved').length;
-      const rejected = results.filter((r: any) => r.status === 'rejected').length;
-      toast.info(`Status atualizado: ${approved} aprovado(s), ${rejected} rejeitado(s), ${results.length - approved - rejected} pendente(s)`);
+      const approved = results.filter((r: any) => r.current_status === 'approved').length;
+      const rejected = results.filter((r: any) => r.current_status === 'rejected').length;
+      const changed = results.filter((r: any) => r.changed).length;
+      toast.info(`Status verificado: ${results.length} template(s), ${changed} atualizado(s), ${approved} aprovado(s), ${rejected} rejeitado(s)`);
     },
     onError: (error: Error) => {
       toast.error('Erro ao verificar status: ' + error.message);
+    },
+  });
+
+  const syncFromTwilio = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('submit-whatsapp-templates', {
+        body: { action: 'sync_from_twilio' },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
+      const summary = data?.summary || {};
+      toast.success(`Sincronizado: ${summary.matched || 0} encontrado(s), ${summary.updated || 0} atualizado(s), ${summary.unmatched || 0} sem correspondência`);
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao sincronizar: ' + error.message);
     },
   });
 
@@ -162,6 +181,7 @@ export function useWhatsAppTemplates() {
     isLoading,
     submitTemplates,
     checkStatus,
+    syncFromTwilio,
     updateTemplate,
     createTemplate,
     deleteTemplate,

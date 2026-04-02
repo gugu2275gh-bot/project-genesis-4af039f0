@@ -54,7 +54,7 @@ const LANGUAGE_OPTIONS = [
 ];
 
 export default function WhatsAppTemplatesSettings() {
-  const { templates, isLoading, submitTemplates, checkStatus, updateTemplate, createTemplate, deleteTemplate, templateLogs, logsLoading } = useWhatsAppTemplates();
+  const { templates, isLoading, submitTemplates, checkStatus, syncFromTwilio, updateTemplate, createTemplate, deleteTemplate, templateLogs, logsLoading } = useWhatsAppTemplates();
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const [editBody, setEditBody] = useState('');
   const [showNewDialog, setShowNewDialog] = useState(false);
@@ -190,11 +190,20 @@ export default function WhatsAppTemplatesSettings() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => checkStatus.mutate()}
+                onClick={() => checkStatus.mutate(false)}
                 disabled={checkStatus.isPending}
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${checkStatus.isPending ? 'animate-spin' : ''}`} />
                 Verificar Status
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => syncFromTwilio.mutate()}
+                disabled={syncFromTwilio.isPending}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${syncFromTwilio.isPending ? 'animate-spin' : ''}`} />
+                Sincronizar Twilio
               </Button>
               <Button
                 size="sm"
