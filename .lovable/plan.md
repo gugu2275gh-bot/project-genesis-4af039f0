@@ -1,30 +1,39 @@
 
 
-## Re-inserir Templates WhatsApp em Espanhol
+## Atualizar Templates com SIDs do Twilio e Corrigir Verificacao de Status
 
-### O que será feito
-Executar uma migração SQL para re-inserir os 12 templates em espanhol que foram perdidos na limpeza do banco, com as colunas adicionais `language`, `template_category` e `meta_category`.
+### Problema
+Os 12 templates ES estao aprovados no Twilio mas no banco estao como `draft` sem `content_sid`. A verificacao de status (`check_status`) so busca templates com status `pending`, entao nunca vai pegar os que estao como `draft`.
 
-### SQL a executar
+### Plano
+
+#### 1. SQL — Atualizar content_sid e status dos 12 templates ES
+Update direto com os SIDs extraidos das screenshots do Twilio:
 
 ```sql
-INSERT INTO public.whatsapp_templates 
-  (automation_type, template_name, body_text, variables, status, is_active, language, template_category, meta_category) 
-VALUES
-  ('welcome', 'cb_welcome_es', 'Hola {{1}}! Gracias por contactar con CB Asesoría. En breve uno de nuestros especialistas le atenderá.', '["nombre"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
-  ('reengagement', 'cb_reengagement_es', 'Hola {{1}}! Hemos notado que su registro está incompleto. ¿Podemos ayudarle a completar su información?', '["nombre"]'::jsonb, 'draft', false, 'es', 'sla', 'MARKETING'),
-  ('contract_reminder', 'cb_contract_reminder_es', 'Hola {{1}}! Su contrato está pendiente de firma. Acceda al portal para finalizarlo.', '["nombre"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
-  ('payment_pre_7d', 'cb_payment_pre_7d_es', 'Hola {{1}}! 📅 Su cuota de €{{2}} vence en 7 días ({{3}}). Recuerde realizar el pago.', '["nombre","valor","fecha"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
-  ('payment_pre_48h', 'cb_payment_pre_48h_es', 'Hola {{1}}! ⏰ Su cuota de €{{2}} vence en 2 días ({{3}}). Por favor, realice el pago.', '["nombre","valor","fecha"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
-  ('payment_due_today', 'cb_payment_due_today_es', 'Hola {{1}}! 🔔 Hoy vence su cuota de €{{2}}. Realice el pago antes del final del día.', '["nombre","valor"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
-  ('payment_post_d1', 'cb_payment_post_d1_es', 'Hola {{1}}! Tiene un pago de €{{2}} pendiente. Regularice su situación para evitar la cancelación.', '["nombre","valor"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
-  ('payment_post_d3', 'cb_payment_post_d3_es', 'Hola {{1}}! ⚠️ Su pago de €{{2}} lleva 3 días de retraso. Regularice urgentemente.', '["nombre","valor"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
-  ('document_reminder', 'cb_document_reminder_es', 'Hola {{1}}! 📄 Estamos esperando el documento: {{2}}. Por favor, envíelo a través del portal.', '["nombre","documento"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
-  ('onboarding_reminder', 'cb_onboarding_reminder_es', 'Hola {{1}}! 📝 Complete su registro en el portal para iniciar su trámite.', '["nombre"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
-  ('tie_pickup', 'cb_tie_pickup_es', 'Hola {{1}}! 🎊 Su TIE está disponible para recoger. Plazo: {{2}}.', '["nombre","fecha"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY'),
-  ('huellas_reminder', 'cb_huellas_reminder_es', 'Hola {{1}}! 🔔 Recordatorio sobre su cita de huellas: {{2}}.', '["nombre","fecha"]'::jsonb, 'draft', false, 'es', 'sla', 'UTILITY');
+UPDATE whatsapp_templates SET content_sid = 'HXd882763fd17c5c2f9802a5420c31374c', status = 'approved', is_active = true WHERE template_name = 'cb_welcome_es';
+UPDATE whatsapp_templates SET content_sid = 'HX06ad87c416e5eb2b9f283cf44b2fc978', status = 'approved', is_active = true WHERE template_name = 'cb_reengagement_es';
+UPDATE whatsapp_templates SET content_sid = 'HX60a121229da869875ce534162c4a801b', status = 'approved', is_active = true WHERE template_name = 'cb_contract_reminder_es';
+UPDATE whatsapp_templates SET content_sid = 'HX2ff98da4e5048288f928ffda7d8166c8', status = 'approved', is_active = true WHERE template_name = 'cb_payment_pre_7d_es';
+UPDATE whatsapp_templates SET content_sid = 'HXee91f2efdadbe9df2b2ec28f5d848f31', status = 'approved', is_active = true WHERE template_name = 'cb_payment_pre_48h_es';
+UPDATE whatsapp_templates SET content_sid = 'HX5e4c6aa5bed1177d2e8e1a6d76c74244', status = 'approved', is_active = true WHERE template_name = 'cb_payment_due_today_es';
+UPDATE whatsapp_templates SET content_sid = 'HX49931df11fb38d7e15ff43535bf75eb7', status = 'approved', is_active = true WHERE template_name = 'cb_payment_post_d1_es';
+UPDATE whatsapp_templates SET content_sid = 'HX14fbe686aadb5cc8b59413bbfda3ccbc', status = 'approved', is_active = true WHERE template_name = 'cb_payment_post_d3_es';
+UPDATE whatsapp_templates SET content_sid = 'HX811bf0637897f918b9631519ba89baaa', status = 'approved', is_active = true WHERE template_name = 'cb_document_reminder_es';
+UPDATE whatsapp_templates SET content_sid = 'HXc41df87e6ff875ebdc6f004edbc7acfa', status = 'approved', is_active = true WHERE template_name = 'cb_onboarding_reminder_es';
+UPDATE whatsapp_templates SET content_sid = 'HXf6499a023f1a6b1ec722f2ba77f56720', status = 'approved', is_active = true WHERE template_name = 'cb_tie_pickup_es';
+UPDATE whatsapp_templates SET content_sid = 'HX3d03ac8855b5081d22b9770b913251ce', status = 'approved', is_active = true WHERE template_name = 'cb_huellas_reminder_es';
 ```
 
+#### 2. Edge Function — Melhorar `check_status`
+Alterar a action `check_status` em `submit-whatsapp-templates/index.ts` para:
+- Buscar templates com `content_sid` nao nulo em **qualquer status** (nao apenas `pending`), permitindo re-verificacao
+- Aceitar parametro opcional `force` para verificar todos, incluindo aprovados
+
+#### 3. Adicionar action `sync_from_twilio`
+Nova action que lista todos os Content Templates da Twilio (`GET /v1/Content`), cruza pelo `friendly_name` com `template_name` no banco, e atualiza `content_sid` + busca status de aprovacao automaticamente. Isso permite sincronizacao futura sem precisar copiar SIDs manualmente.
+
 ### Arquivos modificados
-- Nova migração SQL (apenas INSERT dos 12 templates ES)
+- Nova migracao SQL (UPDATE dos 12 templates com SIDs)
+- `supabase/functions/submit-whatsapp-templates/index.ts` (melhorar check_status + adicionar sync_from_twilio)
 
