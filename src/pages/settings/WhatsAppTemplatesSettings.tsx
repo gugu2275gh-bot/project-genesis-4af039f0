@@ -57,6 +57,13 @@ export default function WhatsAppTemplatesSettings() {
   const { templates, isLoading, submitTemplates, checkStatus, syncFromTwilio, updateTemplate, createTemplate, deleteTemplate, templateLogs, logsLoading } = useWhatsAppTemplates();
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const [editBody, setEditBody] = useState('');
+  const [editCategory, setEditCategory] = useState<'sla' | 'operational'>('sla');
+  const [editMetaCategory, setEditMetaCategory] = useState<'UTILITY' | 'MARKETING' | 'AUTHENTICATION'>('UTILITY');
+  const [editAutomationType, setEditAutomationType] = useState('');
+  const [editLanguage, setEditLanguage] = useState('pt_BR');
+  const [editVariable, setEditVariable] = useState('');
+  const [editVariables, setEditVariables] = useState<string[]>([]);
+  const [showEditConfirm, setShowEditConfirm] = useState(false);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
   const [logFilter, setLogFilter] = useState<string>('all');
