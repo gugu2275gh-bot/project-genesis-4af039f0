@@ -272,12 +272,12 @@ export function ContractGroupsSection({
   const groupedPaymentIds = new Set(contractGroups.flatMap(g => g.payments.map(p => p.id)));
   const ungroupedPayments = deduplicatedPayments.filter(p => !groupedPaymentIds.has(p.id));
 
-  const getLeadDisplayName = (lead: any) => {
+  const getLeadDisplayName = useCallback((lead: any) => {
     const serviceTypeName = lead.service_type_id
       ? serviceTypes?.find(st => st.id === lead.service_type_id)?.name
       : null;
     return serviceTypeName || SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO'];
-  };
+  }, [serviceTypes]);
 
   const extractLastNotes = (): string => {
     const notes = paymentNotes || '';
