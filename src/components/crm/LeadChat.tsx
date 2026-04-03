@@ -552,6 +552,26 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                         />
                       </div>
                     )}
+                    {/* Transcribe button for audio without transcription */}
+                    {msg.media_url && (msg.media_type === 'audio' || msg.media_type === 'ptt') && 
+                     (!msg.content || msg.content.match(/^\[(audio|ptt)\]$/)) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                        disabled={transcribingIds.has(String(msg.id.replace('-client', '')))}
+                        onClick={() => handleTranscribe(
+                          String(msg.id.replace('-client', '')),
+                          msg.media_url!
+                        )}
+                      >
+                        {transcribingIds.has(String(msg.id.replace('-client', ''))) ? (
+                          <><Loader2 className="h-3 w-3 animate-spin" /> Transcrevendo...</>
+                        ) : (
+                          <><Mic className="h-3 w-3" /> Transcrever</>
+                        )}
+                      </Button>
+                    )}
                     {/* Text content - show transcription label for audio */}
                     {msg.content && !(msg.media_url && msg.content.match(/^\[(image|audio|video|document|sticker|ptt)\]$/)) && (() => {
                       const isAudioTranscription = (msg.media_type === 'audio' || msg.media_type === 'ptt') && msg.media_url;
