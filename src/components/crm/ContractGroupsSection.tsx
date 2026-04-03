@@ -904,6 +904,19 @@ export function ContractGroupsSection({
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Beneficiary info banner */}
+          {isBeneficiary && titularContactName && (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary shrink-0" />
+              <span>
+                Contratos deste beneficiário são geridos pelo titular: <strong 
+                  className="cursor-pointer hover:underline"
+                  onClick={() => titularContactId && navigate(`/crm/contacts/${titularContactId}`)}
+                >{titularContactName}</strong>
+              </span>
+            </div>
+          )}
+
           {/* Last payment agreement group notes */}
           {lastGroupNotes ? (
             <div className="rounded-lg border bg-muted/30 p-3 text-sm whitespace-pre-line">
