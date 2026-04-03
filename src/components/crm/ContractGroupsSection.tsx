@@ -442,28 +442,16 @@ export function ContractGroupsSection({
     if (!lead) return;
     setIsDeletingService(true);
     try {
-      const isProtected = hasProtectedContract(lead.id);
-      if (isProtected) {
-        await supabase.from('leads').update({ status: 'ARQUIVADO_SEM_RETORNO' }).eq('id', lead.id);
-        toast({ title: 'Serviço arquivado' });
-      } else {
-        // Remove all related records before deleting the lead
-        await supabase.from('contract_leads').delete().eq('lead_id', lead.id);
-        await supabase.from('interactions').delete().eq('lead_id', lead.id);
-        await supabase.from('tasks').delete().eq('related_lead_id', lead.id);
-        await supabase.from('mensagens_cliente').delete().eq('id_lead', lead.id);
-        await supabase.from('customer_sector_pending_items').delete().eq('lead_id', lead.id);
-        // Delete payments, contracts, opportunities, then lead
-        const { data: opps } = await supabase.from('opportunities').select('id').eq('lead_id', lead.id);
-        if (opps && opps.length > 0) {
-          const oppIds = opps.map(o => o.id);
-          await supabase.from('payments').delete().in('opportunity_id', oppIds);
-          await supabase.from('contracts').delete().in('opportunity_id', oppIds);
-          await supabase.from('opportunities').delete().in('id', oppIds);
-        }
-        await supabase.from('leads').delete().eq('id', lead.id);
-        toast({ title: 'Serviço excluído com sucesso' });
-      }
+      const { data, error } = await supabase.functions.invoke('delete-service', {
+        body: { lead_id: lead.id },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: data?.action === 'archived' ? 'Serviço arquivado' : 'Serviço excluído com sucesso',
+      });
+
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       queryClient.invalidateQueries({ queryKey: ['contract-leads', contactId] });
       queryClient.invalidateQueries({ queryKey: ['contact-contracts', contactId] });
