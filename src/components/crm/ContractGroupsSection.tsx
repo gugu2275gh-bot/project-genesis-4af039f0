@@ -687,7 +687,7 @@ export function ContractGroupsSection({
     const latestStatus = latestGroup?.contract?.status;
 
     // If the latest group is finalized and there are no ungrouped leads, show nothing
-    const isFinalized = latestStatus && ['APROVADO', 'ASSINADO', 'CANCELADO'].includes(latestStatus);
+    const isFinalized = latestStatus && ['APROVADO', 'ASSINADO', 'CANCELADO', 'REPROVADO'].includes(latestStatus);
     
     // Determine which leads to show notes for
     let relevantLeads: any[] = [];
