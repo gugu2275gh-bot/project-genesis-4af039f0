@@ -629,8 +629,9 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                         )}
                       </div>
                     )}
-                    {/* Text content */}
+                    {/* Text content - show transcription label for audio */}
                     {msg.content && !(msg.media_url && msg.content.match(/^\[(image|audio|video|document|sticker|ptt)\]$/)) && (() => {
+                      const isAudioTranscription = (msg.media_type === 'audio' || msg.media_type === 'ptt') && msg.media_url;
                       const flowData = parseWhatsAppFlowMessage(msg.content);
                       if (flowData) {
                         return (
