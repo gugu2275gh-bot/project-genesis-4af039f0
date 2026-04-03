@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff, ExternalLink, LayoutTemplate, Clock, AlertTriangle, Paperclip, X, Loader2 } from 'lucide-react';
+import { ProxiedMedia } from './ProxiedMedia';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -522,111 +523,12 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                     {/* Media content */}
                     {msg.media_url && (
                       <div className="mb-1.5 space-y-1.5">
-                        {msg.media_type === 'image' || msg.media_type === 'sticker' || msg.media_mimetype?.startsWith('image/') ? (
-                          <>
-                            <a href={msg.media_url} target="_blank" rel="noopener noreferrer">
-                              <img
-                                src={msg.media_url}
-                                alt="Imagem recebida"
-                                className="max-w-[240px] rounded-md cursor-pointer hover:opacity-90 transition"
-                                loading="lazy"
-                              />
-                            </a>
-                            <div className="flex items-center gap-2">
-                              <a
-                                href={msg.media_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-foreground/80 hover:text-foreground underline underline-offset-2"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                                Visualizar
-                              </a>
-                              <a
-                                href={msg.media_url}
-                                download={msg.media_filename || 'imagem'}
-                                className="inline-flex items-center gap-1 text-xs text-foreground/80 hover:text-foreground underline underline-offset-2"
-                              >
-                                <Download className="h-3 w-3" />
-                                Baixar
-                              </a>
-                            </div>
-                          </>
-                        ) : msg.media_type === 'video' ? (
-                          <>
-                            <video
-                              src={msg.media_url}
-                              controls
-                              className="max-w-[240px] rounded-md"
-                            />
-                            <div className="flex items-center gap-2">
-                              <a
-                                href={msg.media_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-foreground/80 hover:text-foreground underline underline-offset-2"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                                Abrir em nova aba
-                              </a>
-                              <a
-                                href={msg.media_url}
-                                download={msg.media_filename || 'video'}
-                                className="inline-flex items-center gap-1 text-xs text-foreground/80 hover:text-foreground underline underline-offset-2"
-                              >
-                                <Download className="h-3 w-3" />
-                                Baixar
-                              </a>
-                            </div>
-                          </>
-                        ) : (msg.media_type === 'audio' || msg.media_type === 'ptt') ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/70 mb-1">
-                              <Mic className="h-3.5 w-3.5" />
-                              <span>{msg.media_type === 'ptt' ? 'Nota de voz' : 'Áudio'}</span>
-                            </div>
-                            <audio src={msg.media_url} controls className="max-w-[240px]" />
-                            <a
-                              href={msg.media_url}
-                              download={msg.media_filename || 'audio'}
-                              className="inline-flex items-center gap-1 text-xs text-foreground/80 hover:text-foreground underline underline-offset-2"
-                            >
-                              <Download className="h-3 w-3" />
-                              Baixar áudio
-                            </a>
-                          </div>
-                        ) : msg.media_type === 'document' ? (
-                          <div className="space-y-1">
-                            <a
-                              href={msg.media_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 bg-background/50 rounded-md p-2 hover:bg-background/80 transition"
-                            >
-                              <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                              <span className="text-sm truncate">{msg.media_filename || 'Documento'}</span>
-                              <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0 ml-auto" />
-                            </a>
-                            <a
-                              href={msg.media_url}
-                              download={msg.media_filename || 'documento'}
-                              className="inline-flex items-center gap-1 text-xs text-foreground/80 hover:text-foreground underline underline-offset-2"
-                            >
-                              <Download className="h-3 w-3" />
-                              Baixar documento
-                            </a>
-                          </div>
-                        ) : (
-                          <a
-                            href={msg.media_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-foreground/80 hover:text-foreground underline underline-offset-2"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            Abrir mídia em nova aba
-                          </a>
-                        )}
+                        <ProxiedMedia
+                          mediaUrl={msg.media_url}
+                          mediaType={msg.media_type}
+                          mediaMimetype={msg.media_mimetype}
+                          mediaFilename={msg.media_filename}
+                        />
                       </div>
                     )}
                     {/* Text content - show transcription label for audio */}
