@@ -193,10 +193,17 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
     return outgoing[outgoing.length - 1].origem === 'SISTEMA';
   }, [messages]);
 
-  // Detect 24h window status based on last client message
+  // Detect 24h window status based on last inbound customer message
   const windowStatus = useMemo(() => {
-    const clientMessages = messages.filter(m => m.mensagem_cliente && ['cliente', 'CLIENTE', 'Cliente'].includes(m.origem || ''));
+    const inboundOrigins = new Set(['CLIENTE', 'WHATSAPP']);
+    const clientMessages = messages.filter((message) => {
+      if (!message.mensagem_cliente) return false;
+      const normalizedOrigin = (message.origem || '').trim().toUpperCase();
+      return inboundOrigins.has(normalizedOrigin);
+    });
+
     if (clientMessages.length === 0) return { isOutside: true, hoursAgo: null };
+
     const lastClientMsg = clientMessages[clientMessages.length - 1];
     const hoursAgo = Math.round((Date.now() - new Date(lastClientMsg.created_at).getTime()) / (1000 * 60 * 60));
     return { isOutside: hoursAgo >= 24, hoursAgo };
