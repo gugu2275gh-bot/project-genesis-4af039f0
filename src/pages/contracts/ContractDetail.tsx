@@ -79,15 +79,20 @@ export default function ContractDetail() {
   });
 
   const { data: contractPayments } = useQuery({
-    queryKey: ['contract-payments', id],
+    queryKey: ['contract-payments', id, linkedOpportunityIds],
     queryFn: async () => {
       if (!id) return [];
       
-      // Only fetch payments directly linked to this contract
+      // Fetch payments linked to this contract directly OR via linked opportunities from contract_leads
+      const orConditions = [`contract_id.eq.${id}`];
+      if (linkedOpportunityIds && linkedOpportunityIds.length > 0) {
+        linkedOpportunityIds.forEach(oppId => orConditions.push(`opportunity_id.eq.${oppId}`));
+      }
+      
       const { data, error } = await supabase
         .from('payments')
         .select('*, contract_beneficiaries:beneficiary_contact_id(full_name)')
-        .eq('contract_id', id);
+        .or(orConditions.join(','));
       
       if (error) throw error;
       return data;
