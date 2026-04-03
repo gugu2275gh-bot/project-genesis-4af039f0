@@ -665,7 +665,7 @@ export default function LeadDetail() {
                 </SelectTrigger>
                 <SelectContent>
                   {Object.entries(LEAD_STATUS_LABELS)
-                    .filter(([value]) => !['DADOS_INCOMPLETOS', 'INTERESSE_PENDENTE'].includes(value))
+                    .filter(([value]) => !['DADOS_INCOMPLETOS', 'INTERESSE_PENDENTE', 'MESCLADO'].includes(value))
                     .map(([value, label]) => (
                       <SelectItem key={value} value={value}>{label}</SelectItem>
                     ))}
