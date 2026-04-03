@@ -79,31 +79,16 @@ export default function ContractDetail() {
   });
 
   const { data: contractPayments } = useQuery({
-    queryKey: ['contract-payments', id, contract?.opportunity_id, linkedOpportunityIds],
+    queryKey: ['contract-payments', id],
     queryFn: async () => {
       if (!id) return [];
       
-      // Collect all opportunity IDs: the contract's own + all linked via contract_leads
-      const allOppIds = new Set<string>();
-      if (contract?.opportunity_id) allOppIds.add(contract.opportunity_id);
-      linkedOpportunityIds?.forEach(oppId => allOppIds.add(oppId));
-      
-      const oppIdsArray = Array.from(allOppIds);
-      
-      let query = supabase
+      // Only fetch payments directly linked to this contract
+      const { data, error } = await supabase
         .from('payments')
-        .select('*, contract_beneficiaries:beneficiary_contact_id(full_name)');
+        .select('*, contract_beneficiaries:beneficiary_contact_id(full_name)')
+        .eq('contract_id', id);
       
-      if (oppIdsArray.length > 0) {
-        // Fetch payments linked to this contract OR to any of the related opportunities
-        const orConditions = [`contract_id.eq.${id}`];
-        oppIdsArray.forEach(oppId => orConditions.push(`opportunity_id.eq.${oppId}`));
-        query = query.or(orConditions.join(','));
-      } else {
-        query = query.eq('contract_id', id);
-      }
-      
-      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
