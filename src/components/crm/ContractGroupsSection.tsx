@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -272,12 +272,12 @@ export function ContractGroupsSection({
   const groupedPaymentIds = new Set(contractGroups.flatMap(g => g.payments.map(p => p.id)));
   const ungroupedPayments = deduplicatedPayments.filter(p => !groupedPaymentIds.has(p.id));
 
-  const getLeadDisplayName = (lead: any) => {
+  const getLeadDisplayName = useCallback((lead: any) => {
     const serviceTypeName = lead.service_type_id
       ? serviceTypes?.find(st => st.id === lead.service_type_id)?.name
       : null;
     return serviceTypeName || SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO'];
-  };
+  }, [serviceTypes]);
 
   const extractLastNotes = (): string => {
     const notes = paymentNotes || '';
@@ -669,85 +669,66 @@ export function ContractGroupsSection({
 
   const totalServices = allLeads.length;
 
-  // Show payment notes only for services in the latest draft contract group
-  // If the latest group is finalized (APROVADO, ASSINADO, CANCELADO), show nothing
+  // Show payment notes only for services in the latest pending group
+  // If the latest group is finalized, show nothing until a new group is created
   const lastGroupNotes = useMemo(() => {
     const notes = paymentNotes || '';
     const parts = notes.split('\n---\n').filter(Boolean).map(p => p.trim());
     if (parts.length === 0) return '';
 
-    // Determine the latest contract group and its status
-    const sortedGroups = [...contractGroups].sort((a, b) => {
-      const dateA = a.contract?.created_at ? new Date(a.contract.created_at).getTime() : 0;
-      const dateB = b.contract?.created_at ? new Date(b.contract.created_at).getTime() : 0;
-      return dateB - dateA;
-    });
-
-    const latestGroup = sortedGroups[0];
-    const latestStatus = latestGroup?.contract?.status;
-
-    // If the latest group is finalized and there are no ungrouped leads, show nothing
-    const isFinalized = latestStatus && ['APROVADO', 'ASSINADO', 'CANCELADO', 'REPROVADO'].includes(latestStatus);
-    
-    // Determine which leads to show notes for
+    // Determine which leads belong to the "latest pending group"
+    // Priority: ungrouped leads first, then the latest draft contract group
     let relevantLeads: any[] = [];
-    let showAllRecentNotes = false;
+
     if (ungroupedLeads.length > 0) {
-      // If there are ungrouped leads, show all recent notes (they're the "current working set")
       relevantLeads = ungroupedLeads;
-      showAllRecentNotes = true;
-    } else if (!isFinalized && latestGroup) {
-      // If latest group is still a draft, show notes for its leads
-      relevantLeads = latestGroup.leads || [];
     } else {
-      // Latest group is finalized and no ungrouped leads — blank
-      return '';
+      // Check the latest contract group
+      const sortedGroups = [...contractGroups].sort((a, b) => {
+        const dateA = a.contract?.created_at ? new Date(a.contract.created_at).getTime() : 0;
+        const dateB = b.contract?.created_at ? new Date(b.contract.created_at).getTime() : 0;
+        return dateB - dateA;
+      });
+      const latestGroup = sortedGroups[0];
+      const latestStatus = latestGroup?.contract?.status;
+      const isFinalized = latestStatus && ['APROVADO', 'ASSINADO', 'CANCELADO', 'REPROVADO'].includes(latestStatus);
+
+      if (!isFinalized && latestGroup) {
+        relevantLeads = latestGroup.leads || [];
+      } else {
+        return '';
+      }
     }
 
     if (relevantLeads.length === 0) return '';
 
-    // Build set of service names from relevant leads (used when not showing all)
+    // Build set of service names using getLeadDisplayName for accurate matching
     const activeServiceNames = new Set<string>();
-    if (!showAllRecentNotes) {
-      relevantLeads.forEach((lead: any) => {
-        if (lead.service_type_id) {
-          const st = serviceTypes?.find(s => s.id === lead.service_type_id);
-          if (st?.name) activeServiceNames.add(st.name);
-        }
-        const label = SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO'];
-        if (label) activeServiceNames.add(label);
-      });
-    }
+    relevantLeads.forEach((lead: any) => {
+      // Add display name (same logic used in UI)
+      const displayName = getLeadDisplayName(lead);
+      if (displayName) activeServiceNames.add(displayName);
+      // Also add raw service_type name for exact matching
+      if (lead.service_type_id) {
+        const st = serviceTypes?.find(s => s.id === lead.service_type_id);
+        if (st?.name) activeServiceNames.add(st.name);
+      }
+    });
 
-    // Extract date from the last block
-    const lastPart = parts[parts.length - 1];
-    const dateMatch = lastPart.match(/Acordo de Pagamento\s*[—–-]\s*(\d{2}\/\d{2}\/\d{4})/);
-    if (!dateMatch) return lastPart;
+    if (activeServiceNames.size === 0) return '';
 
-    const lastDate = dateMatch[1];
-
-    // Collect consecutive blocks from the end with same date
+    // Filter notes: only blocks whose "Serviço:" matches the relevant leads
     const groupBlocks: string[] = [];
     for (let i = parts.length - 1; i >= 0; i--) {
-      const blockDateMatch = parts[i].match(/Acordo de Pagamento\s*[—–-]\s*(\d{2}\/\d{2}\/\d{4})/);
-      if (blockDateMatch && blockDateMatch[1] === lastDate) {
-        if (showAllRecentNotes) {
-          // Show all blocks with matching date when there are ungrouped leads
-          groupBlocks.unshift(parts[i]);
-        } else {
-          const serviceMatch = parts[i].match(/Serviço:\s*(.+?)(?:\n|$)/);
-          const serviceName = serviceMatch ? serviceMatch[1].trim() : null;
-          if (!serviceName || activeServiceNames.has(serviceName)) {
-            groupBlocks.unshift(parts[i]);
-          }
-        }
-      } else {
-        break;
+      const serviceMatch = parts[i].match(/Serviço:\s*(.+?)(?:\n|$)/);
+      const serviceName = serviceMatch ? serviceMatch[1].trim() : null;
+      if (serviceName && activeServiceNames.has(serviceName)) {
+        groupBlocks.unshift(parts[i]);
       }
     }
 
     return groupBlocks.join('\n\n');
-  }, [paymentNotes, contractGroups, ungroupedLeads, serviceTypes]);
+  }, [paymentNotes, contractGroups, ungroupedLeads, serviceTypes, getLeadDisplayName]);
 
   return (
     <>
