@@ -668,6 +668,17 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                           </div>
                         );
                       }
+                      if (isAudioTranscription) {
+                        return (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/60 italic">
+                              <Mic className="h-3 w-3" />
+                              <span>Transcrição do áudio:</span>
+                            </div>
+                            <p className="text-sm whitespace-pre-wrap break-words italic">{msg.content}</p>
+                          </div>
+                        );
+                      }
                       return <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>;
                     })()}
                     <p
