@@ -691,9 +691,11 @@ export function ContractGroupsSection({
     
     // Determine which leads to show notes for
     let relevantLeads: any[] = [];
+    let showAllRecentNotes = false;
     if (ungroupedLeads.length > 0) {
-      // If there are ungrouped leads, show notes for those (they're the "current working set")
+      // If there are ungrouped leads, show all recent notes (they're the "current working set")
       relevantLeads = ungroupedLeads;
+      showAllRecentNotes = true;
     } else if (!isFinalized && latestGroup) {
       // If latest group is still a draft, show notes for its leads
       relevantLeads = latestGroup.leads || [];
@@ -702,19 +704,20 @@ export function ContractGroupsSection({
       return '';
     }
 
-    // Build set of service names from relevant leads
-    const activeServiceNames = new Set<string>();
-    relevantLeads.forEach((lead: any) => {
-      if (lead.service_type_id) {
-        const st = serviceTypes?.find(s => s.id === lead.service_type_id);
-        if (st?.name) activeServiceNames.add(st.name);
-      }
-      // Also add by service_interest label as fallback
-      const label = SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO'];
-      if (label) activeServiceNames.add(label);
-    });
+    if (relevantLeads.length === 0) return '';
 
-    if (activeServiceNames.size === 0) return '';
+    // Build set of service names from relevant leads (used when not showing all)
+    const activeServiceNames = new Set<string>();
+    if (!showAllRecentNotes) {
+      relevantLeads.forEach((lead: any) => {
+        if (lead.service_type_id) {
+          const st = serviceTypes?.find(s => s.id === lead.service_type_id);
+          if (st?.name) activeServiceNames.add(st.name);
+        }
+        const label = SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO'];
+        if (label) activeServiceNames.add(label);
+      });
+    }
 
     // Extract date from the last block
     const lastPart = parts[parts.length - 1];
@@ -723,15 +726,20 @@ export function ContractGroupsSection({
 
     const lastDate = dateMatch[1];
 
-    // Collect consecutive blocks from the end with same date AND matching relevant leads
+    // Collect consecutive blocks from the end with same date
     const groupBlocks: string[] = [];
     for (let i = parts.length - 1; i >= 0; i--) {
       const blockDateMatch = parts[i].match(/Acordo de Pagamento\s*[—–-]\s*(\d{2}\/\d{2}\/\d{4})/);
       if (blockDateMatch && blockDateMatch[1] === lastDate) {
-        const serviceMatch = parts[i].match(/Serviço:\s*(.+?)(?:\n|$)/);
-        const serviceName = serviceMatch ? serviceMatch[1].trim() : null;
-        if (!serviceName || activeServiceNames.has(serviceName)) {
+        if (showAllRecentNotes) {
+          // Show all blocks with matching date when there are ungrouped leads
           groupBlocks.unshift(parts[i]);
+        } else {
+          const serviceMatch = parts[i].match(/Serviço:\s*(.+?)(?:\n|$)/);
+          const serviceName = serviceMatch ? serviceMatch[1].trim() : null;
+          if (!serviceName || activeServiceNames.has(serviceName)) {
+            groupBlocks.unshift(parts[i]);
+          }
         }
       } else {
         break;
