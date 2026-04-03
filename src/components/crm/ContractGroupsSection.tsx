@@ -37,6 +37,9 @@ interface ContractGroupsSectionProps {
   confirmedLeadIds: string[];
   navigate: (path: string) => void;
   beneficiaryContacts?: BeneficiaryContact[];
+  isBeneficiary?: boolean;
+  titularContactId?: string | null;
+  titularContactName?: string | null;
 }
 
 export function ContractGroupsSection({
@@ -47,6 +50,9 @@ export function ContractGroupsSection({
   confirmedLeadIds,
   navigate,
   beneficiaryContacts = [],
+  isBeneficiary = false,
+  titularContactId = null,
+  titularContactName = null,
 }: ContractGroupsSectionProps) {
   const { user } = useAuth();
   const { toast } = useToast();

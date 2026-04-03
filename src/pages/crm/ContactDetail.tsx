@@ -1200,7 +1200,7 @@ export default function ContactDetail() {
             />
           )}
 
-          {/* Serviços como Beneficiário — apenas os próprios serviços */}
+          {/* Serviços como Beneficiário — contratos geridos pelo titular */}
           {contact.is_beneficiary && (
             <ContractGroupsSection
               contactId={id!}
@@ -1210,6 +1210,9 @@ export default function ContactDetail() {
               confirmedLeadIds={confirmedLeadIds}
               navigate={navigate}
               beneficiaryContacts={[]}
+              isBeneficiary={true}
+              titularContactId={contactTitular?.contact_id}
+              titularContactName={contactTitular?.full_name}
             />
           )}
 
