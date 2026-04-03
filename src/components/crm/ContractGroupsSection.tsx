@@ -565,14 +565,48 @@ export function ContractGroupsSection({
     }
   };
 
-  // "Concluir" - mark contract as APROVADO so it appears in Contracts list
+  // "Concluir" - mark contract as APROVADO and persist payment notes into installment_conditions
   const [isFinalizingContract, setIsFinalizingContract] = useState(false);
   const handleFinalizeContract = async (contractId: string) => {
     setIsFinalizingContract(true);
     try {
+      // Find the group being finalized to get its leads
+      const group = contractGroups.find(g => g.contract?.id === contractId);
+      let notesToPersist = '';
+
+      if (group && paymentNotes) {
+        const groupLeads = group.leads || [];
+        const activeServiceNames = new Set<string>();
+        groupLeads.forEach((lead: any) => {
+          const displayName = getLeadDisplayName(lead);
+          if (displayName) activeServiceNames.add(displayName);
+          if (lead.service_type_id) {
+            const st = serviceTypes?.find(s => s.id === lead.service_type_id);
+            if (st?.name) activeServiceNames.add(st.name);
+          }
+        });
+
+        if (activeServiceNames.size > 0) {
+          const parts = paymentNotes.split('\n---\n').filter(Boolean).map(p => p.trim());
+          const groupBlocks: string[] = [];
+          for (let i = parts.length - 1; i >= 0; i--) {
+            const serviceMatch = parts[i].match(/Serviço:\s*(.+?)(?:\n|$)/);
+            const serviceName = serviceMatch ? serviceMatch[1].trim() : null;
+            if (serviceName && activeServiceNames.has(serviceName)) {
+              groupBlocks.unshift(parts[i]);
+            }
+          }
+          notesToPersist = groupBlocks.join('\n\n');
+        }
+      }
+
       const { error } = await supabase
         .from('contracts')
-        .update({ status: 'APROVADO', updated_by_user_id: user?.id })
+        .update({
+          status: 'APROVADO',
+          updated_by_user_id: user?.id,
+          ...(notesToPersist ? { installment_conditions: notesToPersist } : {}),
+        })
         .eq('id', contractId);
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ['contract-leads', contactId] });
