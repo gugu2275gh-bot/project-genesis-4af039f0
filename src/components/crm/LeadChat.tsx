@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff, ExternalLink, LayoutTemplate, Clock, AlertTriangle, Paperclip, X, Loader2 } from 'lucide-react';
+import { ProxiedMedia } from './ProxiedMedia';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
