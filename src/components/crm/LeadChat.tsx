@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useLeadMessages } from '@/hooks/useLeadMessages';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -158,6 +158,7 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [transcribingIds, setTranscribingIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
@@ -335,6 +336,26 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['lead-messages', leadId] });
   };
+
+  const handleTranscribe = useCallback(async (msgId: string, mediaUrl: string) => {
+    setTranscribingIds(prev => new Set(prev).add(msgId));
+    try {
+      const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+        body: { audioUrl: mediaUrl, messageId: parseInt(msgId) },
+      });
+      if (error) throw error;
+      toast.success('Áudio transcrito com sucesso');
+      queryClient.invalidateQueries({ queryKey: cacheKey });
+    } catch (err: any) {
+      toast.error('Erro ao transcrever: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setTranscribingIds(prev => {
+        const next = new Set(prev);
+        next.delete(msgId);
+        return next;
+      });
+    }
+  }, [cacheKey, queryClient]);
 
   const getSenderLabel = (type: 'client' | 'system', origem: string | null) => {
     if (type === 'client') {
@@ -530,6 +551,26 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                           mediaFilename={msg.media_filename}
                         />
                       </div>
+                    )}
+                    {/* Transcribe button for audio without transcription */}
+                    {msg.media_url && (msg.media_type === 'audio' || msg.media_type === 'ptt') && 
+                     (!msg.content || msg.content.match(/^\[(audio|ptt)\]$/)) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                        disabled={transcribingIds.has(String(msg.id.replace('-client', '')))}
+                        onClick={() => handleTranscribe(
+                          String(msg.id.replace('-client', '')),
+                          msg.media_url!
+                        )}
+                      >
+                        {transcribingIds.has(String(msg.id.replace('-client', ''))) ? (
+                          <><Loader2 className="h-3 w-3 animate-spin" /> Transcrevendo...</>
+                        ) : (
+                          <><Mic className="h-3 w-3" /> Transcrever</>
+                        )}
+                      </Button>
                     )}
                     {/* Text content - show transcription label for audio */}
                     {msg.content && !(msg.media_url && msg.content.match(/^\[(image|audio|video|document|sticker|ptt)\]$/)) && (() => {

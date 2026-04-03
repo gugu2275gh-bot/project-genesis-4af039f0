@@ -983,6 +983,35 @@ serve(async (req) => {
       media_mimetype: mediaMimetype,
     }).select('id').single()
 
+    // ========== AUTO-TRANSCRIBE AUDIO/PTT ==========
+    if ((mediaType === 'audio' || mediaType === 'ptt') && storedMediaUrl && insertedMsg?.id) {
+      try {
+        console.log('Auto-transcribing audio message:', insertedMsg.id)
+        const transcribeResponse = await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/transcribe-audio`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify({
+              audioUrl: storedMediaUrl,
+              messageId: insertedMsg.id,
+            }),
+          }
+        )
+        if (transcribeResponse.ok) {
+          const transcribeResult = await transcribeResponse.json()
+          console.log('Auto-transcription completed:', transcribeResult.transcription?.substring(0, 100))
+        } else {
+          console.warn('Auto-transcription failed:', transcribeResponse.status)
+        }
+      } catch (transcribeErr) {
+        console.error('Auto-transcription error (non-blocking):', transcribeErr instanceof Error ? transcribeErr.message : transcribeErr)
+      }
+    }
+
     // ========== MULTICHAT SECTOR ROUTING (REFINED) ==========
     let routedSector: string | null = null
 
