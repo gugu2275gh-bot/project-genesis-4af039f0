@@ -669,34 +669,65 @@ export function ContractGroupsSection({
 
   const totalServices = allLeads.length;
 
-  // Show payment notes only for active leads (match by service name)
+  // Show payment notes only for services in the latest draft contract group
+  // If the latest group is finalized (APROVADO, ASSINADO, CANCELADO), show nothing
   const lastGroupNotes = useMemo(() => {
     const notes = paymentNotes || '';
     const parts = notes.split('\n---\n').filter(Boolean).map(p => p.trim());
     if (parts.length === 0) return '';
+
+    // Determine the latest contract group and its status
+    const sortedGroups = [...contractGroups].sort((a, b) => {
+      const dateA = a.contract?.created_at ? new Date(a.contract.created_at).getTime() : 0;
+      const dateB = b.contract?.created_at ? new Date(b.contract.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    const latestGroup = sortedGroups[0];
+    const latestStatus = latestGroup?.contract?.status;
+
+    // If the latest group is finalized and there are no ungrouped leads, show nothing
+    const isFinalized = latestStatus && ['APROVADO', 'ASSINADO', 'CANCELADO'].includes(latestStatus);
     
-    // Build set of active service names from leads
+    // Determine which leads to show notes for
+    let relevantLeads: any[] = [];
+    if (ungroupedLeads.length > 0) {
+      // If there are ungrouped leads, show notes for those (they're the "current working set")
+      relevantLeads = ungroupedLeads;
+    } else if (!isFinalized && latestGroup) {
+      // If latest group is still a draft, show notes for its leads
+      relevantLeads = latestGroup.leads || [];
+    } else {
+      // Latest group is finalized and no ungrouped leads — blank
+      return '';
+    }
+
+    // Build set of service names from relevant leads
     const activeServiceNames = new Set<string>();
-    allLeads.forEach(lead => {
+    relevantLeads.forEach((lead: any) => {
       if (lead.service_type_id) {
         const st = serviceTypes?.find(s => s.id === lead.service_type_id);
         if (st?.name) activeServiceNames.add(st.name);
       }
+      // Also add by service_interest label as fallback
+      const label = SERVICE_INTEREST_LABELS[lead.service_interest || 'OUTRO'];
+      if (label) activeServiceNames.add(label);
     });
-    
+
+    if (activeServiceNames.size === 0) return '';
+
     // Extract date from the last block
     const lastPart = parts[parts.length - 1];
     const dateMatch = lastPart.match(/Acordo de Pagamento\s*[—–-]\s*(\d{2}\/\d{2}\/\d{4})/);
     if (!dateMatch) return lastPart;
-    
+
     const lastDate = dateMatch[1];
-    
-    // Collect consecutive blocks from the end with same date AND matching active leads
+
+    // Collect consecutive blocks from the end with same date AND matching relevant leads
     const groupBlocks: string[] = [];
     for (let i = parts.length - 1; i >= 0; i--) {
       const blockDateMatch = parts[i].match(/Acordo de Pagamento\s*[—–-]\s*(\d{2}\/\d{2}\/\d{4})/);
       if (blockDateMatch && blockDateMatch[1] === lastDate) {
-        // Check if this note's service matches an active lead
         const serviceMatch = parts[i].match(/Serviço:\s*(.+?)(?:\n|$)/);
         const serviceName = serviceMatch ? serviceMatch[1].trim() : null;
         if (!serviceName || activeServiceNames.has(serviceName)) {
@@ -706,9 +737,9 @@ export function ContractGroupsSection({
         break;
       }
     }
-    
+
     return groupBlocks.join('\n\n');
-  }, [paymentNotes, allLeads, serviceTypes]);
+  }, [paymentNotes, contractGroups, ungroupedLeads, serviceTypes]);
 
   return (
     <>
