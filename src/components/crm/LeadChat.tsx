@@ -158,6 +158,7 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
   const [sendingTemplate, setSendingTemplate] = useState(false);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [transcribingIds, setTranscribingIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
