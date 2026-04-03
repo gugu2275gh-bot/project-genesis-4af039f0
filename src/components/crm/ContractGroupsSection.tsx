@@ -950,6 +950,13 @@ export function ContractGroupsSection({
                           setSelectedLeadIds(allIds);
                           setIsCreatingContract(true);
                           try {
+                            // If beneficiary, redirect to titular's contract
+                            if (isBeneficiary && titularContactId) {
+                              await linkLeadsToTitularContract(ungroupedLeads);
+                              setSelectedLeadIds(new Set());
+                              return;
+                            }
+
                             const firstLead = ungroupedLeads[0];
                             const { data: opps } = await supabase
                               .from('opportunities')
@@ -996,7 +1003,7 @@ export function ContractGroupsSection({
                         ) : (
                           <CheckCircle2 className="h-4 w-4 mr-1" />
                         )}
-                        Concluir
+                        {isBeneficiary ? 'Vincular ao Titular' : 'Concluir'}
                       </Button>
                     </div>
                   </div>
