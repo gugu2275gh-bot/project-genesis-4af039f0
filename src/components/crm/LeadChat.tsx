@@ -337,6 +337,26 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
     queryClient.invalidateQueries({ queryKey: ['lead-messages', leadId] });
   };
 
+  const handleTranscribe = useCallback(async (msgId: string, mediaUrl: string) => {
+    setTranscribingIds(prev => new Set(prev).add(msgId));
+    try {
+      const { data, error } = await supabase.functions.invoke('transcribe-audio', {
+        body: { audioUrl: mediaUrl, messageId: parseInt(msgId) },
+      });
+      if (error) throw error;
+      toast.success('Áudio transcrito com sucesso');
+      queryClient.invalidateQueries({ queryKey: cacheKey });
+    } catch (err: any) {
+      toast.error('Erro ao transcrever: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setTranscribingIds(prev => {
+        const next = new Set(prev);
+        next.delete(msgId);
+        return next;
+      });
+    }
+  }, [cacheKey, queryClient]);
+
   const getSenderLabel = (type: 'client' | 'system', origem: string | null) => {
     if (type === 'client') {
       return 'Cliente';
