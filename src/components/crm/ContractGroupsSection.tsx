@@ -90,6 +90,50 @@ export function ContractGroupsSection({
     enabled: leadIds.length > 0,
   });
 
+  // Fetch titular's draft contracts when this is a beneficiary view
+  const { data: titularDraftContracts = [] } = useQuery({
+    queryKey: ['titular-draft-contracts', titularContactId],
+    queryFn: async () => {
+      if (!titularContactId) return [];
+      // Get titular's leads
+      const { data: titularLeads } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('contact_id', titularContactId);
+      if (!titularLeads?.length) return [];
+      // Get their opportunities
+      const { data: titularOpps } = await supabase
+        .from('opportunities')
+        .select('id, lead_id')
+        .in('lead_id', titularLeads.map(l => l.id));
+      if (!titularOpps?.length) return [];
+      // Get draft contracts
+      const { data: drafts } = await supabase
+        .from('contracts')
+        .select('id, contract_number, status, opportunity_id, created_at')
+        .in('opportunity_id', titularOpps.map(o => o.id))
+        .eq('status', 'EM_ELABORACAO')
+        .order('created_at', { ascending: false });
+      // Also check contract_leads for draft contracts linked to titular's leads
+      const { data: titularContractLinks } = await supabase
+        .from('contract_leads')
+        .select('contract_id, contracts(id, contract_number, status, opportunity_id, created_at)')
+        .in('lead_id', titularLeads.map(l => l.id));
+      const draftFromLinks = (titularContractLinks || [])
+        .filter((cl: any) => cl.contracts?.status === 'EM_ELABORACAO')
+        .map((cl: any) => cl.contracts);
+      // Merge and deduplicate
+      const allDrafts = [...(drafts || []), ...draftFromLinks];
+      const seen = new Set<string>();
+      return allDrafts.filter(d => {
+        if (seen.has(d.id)) return false;
+        seen.add(d.id);
+        return true;
+      });
+    },
+    enabled: isBeneficiary && !!titularContactId,
+  });
+
   // Fetch payments for this contact
   const { data: contactPayments = [] } = useQuery({
     queryKey: ['contact-payments', contactId],
