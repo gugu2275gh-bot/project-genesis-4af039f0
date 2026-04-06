@@ -741,9 +741,6 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               </div>
             )}
           </div>
-
-            <div className="min-w-0">
-              <Label>Titular do Contrato *</Label>
               <Select value={selectedTitularId} onValueChange={setSelectedTitularId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o titular..." />
