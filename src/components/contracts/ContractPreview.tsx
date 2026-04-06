@@ -180,10 +180,18 @@ export function ContractPreview({
           {contractStatus === 'EM_ELABORACAO' && (
             <>
               {isEditing ? (
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
-                  <X className="h-4 w-4 mr-1" />
-                  Cancelar Edição
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setIsEditing(false)} disabled={isSavingEdits}>
+                    <X className="h-4 w-4 mr-1" />
+                    Cancelar
+                  </Button>
+                  {onSaveEdits && (
+                    <Button size="sm" onClick={handleSaveEdits} disabled={isSavingEdits}>
+                      {isSavingEdits ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                      {isSavingEdits ? 'Salvando...' : 'Salvar Alterações'}
+                    </Button>
+                  )}
+                </div>
               ) : (
                 <Button variant="outline" size="sm" onClick={handleStartEditing}>
                   <Edit className="h-4 w-4 mr-1" />
