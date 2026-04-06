@@ -8,6 +8,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Download, Edit, X, FileText, ChevronDown } from 'lucide-react';
 import { getContractSections, generateContractDocument, generateContractWord, type ContractData, type ContractSection, type BeneficiaryData, type BankAccountData, type PaymentData } from '@/lib/generate-contract';
 
+export interface ContractPreviewEditData {
+  contractNumber: string;
+  installmentConditions: string;
+  date?: string;
+}
+
 interface ContractPreviewProps {
   template: string;
   clientName: string;
@@ -30,6 +36,7 @@ interface ContractPreviewProps {
   currency?: string;
   date?: Date;
   payments?: PaymentData[];
+  onSaveEdits?: (data: ContractPreviewEditData) => Promise<void>;
 }
 
 export function ContractPreview({ 
