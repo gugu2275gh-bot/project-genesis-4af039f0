@@ -471,7 +471,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', selectedTitularId] });
     }
 
-    const titularName = titulares.find(t => t.contact_id === selectedTitularId)?.full_name;
+    const titularName = selectedTitularName;
     toast({ 
       title: 'Acordo de pagamento salvo', 
       description: isBeneficiary && titularName ? `Vinculado ao titular: ${titularName}` : undefined 
