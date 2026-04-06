@@ -97,20 +97,22 @@ export function ContractGroupsSection({
 
   // Fetch titular's draft contracts when this is a beneficiary view
   const { data: titularDraftContracts = [] } = useQuery({
-    queryKey: ['titular-draft-contracts', titularContactId],
+    queryKey: ['titular-draft-contracts', titularContactId, titulares.map(t => t.contact_id).join(',')],
     queryFn: async () => {
-      if (!titularContactId) return [];
-      // Get titular's leads
-      const { data: titularLeads } = await supabase
+      // Get all titular contact IDs
+      const titularIds = titulares.map(t => t.contact_id).filter(Boolean) as string[];
+      if (titularIds.length === 0) return [];
+      // Get all titulars' leads
+      const { data: allTitularLeads } = await supabase
         .from('leads')
         .select('id')
-        .eq('contact_id', titularContactId);
-      if (!titularLeads?.length) return [];
+        .in('contact_id', titularIds);
+      if (!allTitularLeads?.length) return [];
       // Get their opportunities
       const { data: titularOpps } = await supabase
         .from('opportunities')
         .select('id, lead_id')
-        .in('lead_id', titularLeads.map(l => l.id));
+        .in('lead_id', allTitularLeads.map(l => l.id));
       if (!titularOpps?.length) return [];
       // Get draft contracts
       const { data: drafts } = await supabase
@@ -123,7 +125,7 @@ export function ContractGroupsSection({
       const { data: titularContractLinks } = await supabase
         .from('contract_leads')
         .select('contract_id, contracts(id, contract_number, status, opportunity_id, created_at)')
-        .in('lead_id', titularLeads.map(l => l.id));
+        .in('lead_id', allTitularLeads.map(l => l.id));
       const draftFromLinks = (titularContractLinks || [])
         .filter((cl: any) => cl.contracts?.status === 'EM_ELABORACAO')
         .map((cl: any) => cl.contracts);
@@ -136,7 +138,7 @@ export function ContractGroupsSection({
         return true;
       });
     },
-    enabled: isBeneficiary && !!titularContactId,
+    enabled: isBeneficiary && titulares.length > 0,
   });
 
   // Fetch payments for this contact
