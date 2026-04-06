@@ -98,6 +98,21 @@ export function ContractPreview({
     setIsEditing(true);
   };
 
+  const handleSaveEdits = async () => {
+    if (!onSaveEdits || isSavingEdits) return;
+    setIsSavingEdits(true);
+    try {
+      await onSaveEdits({
+        contractNumber: editedContractNumber,
+        installmentConditions: editedPaymentConditions,
+        date: editedDate || undefined,
+      });
+      setIsEditing(false);
+    } finally {
+      setIsSavingEdits(false);
+    }
+  };
+
   const updatePayment = (index: number, field: keyof PaymentData, value: string | number) => {
     setEditedPayments(prev => prev.map((p, i) => i === index ? { ...p, [field]: value } : p));
   };
