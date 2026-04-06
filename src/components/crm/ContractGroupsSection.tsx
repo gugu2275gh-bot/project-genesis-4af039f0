@@ -484,9 +484,9 @@ export function ContractGroupsSection({
     setIsCreatingContract(true);
     try {
       // If beneficiary, redirect to titular's contract
-      if (isBeneficiary && titularContactId) {
+      if (isBeneficiary && titulares.length > 0) {
         const leadsToLink = contactLeads.filter(l => selectedLeadIds.has(l.id));
-        await linkLeadsToTitularContract(leadsToLink);
+        await startBeneficiaryContractFlow(leadsToLink);
         setSelectedLeadIds(new Set());
         return;
       }
@@ -1039,8 +1039,8 @@ export function ContractGroupsSection({
                           setIsCreatingContract(true);
                           try {
                             // If beneficiary, redirect to titular's contract
-                            if (isBeneficiary && titularContactId) {
-                              await linkLeadsToTitularContract(ungroupedLeads);
+                            if (isBeneficiary && titulares.length > 0) {
+                              await startBeneficiaryContractFlow(ungroupedLeads);
                               setSelectedLeadIds(new Set());
                               return;
                             }
