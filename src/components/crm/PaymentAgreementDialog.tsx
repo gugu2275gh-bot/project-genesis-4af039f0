@@ -243,27 +243,36 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       summary += `Observações: ${form.notes}\n`;
     }
 
-    // Append new agreement to existing payment_notes (don't overwrite)
+    // Determine which contact owns the lead/contract
+    // For beneficiaries with a selected titular, the lead goes under the titular
+    const leadOwnerContactId = (isBeneficiary && selectedTitularId) ? selectedTitularId : contactId;
+
+    // Append new agreement to existing payment_notes on the lead owner's contact
     const { data: currentContact } = await supabase
       .from('contacts')
       .select('payment_notes')
-      .eq('id', contactId)
+      .eq('id', leadOwnerContactId)
       .single();
 
     const existingNotes = currentContact?.payment_notes || '';
     const separator = existingNotes ? '\n---\n\n' : '';
 
+    // Add beneficiary name to summary when saving under titular
+    const titularSummary = (isBeneficiary && selectedTitularId)
+      ? `Beneficiário: ${contactName}\n` + summary
+      : summary;
+
     await updateContact.mutateAsync({
-      id: contactId,
-      payment_notes: existingNotes + separator + summary,
+      id: leadOwnerContactId,
+      payment_notes: existingNotes + separator + titularSummary,
     });
 
-    // Create or reuse a lead for this contact with the selected service_type_id
+    // Create or reuse a lead under the lead owner's contact
     let leadId: string | null = initialData?.leadId || null;
     if (selectedServiceTypeId && !leadId) {
       // Always create a new lead for new agreements — allows multiple services of the same type
       const { data: newLead, error: leadError } = await supabase.from('leads').insert({
-        contact_id: contactId,
+        contact_id: leadOwnerContactId,
         service_type_id: selectedServiceTypeId,
         service_interest: 'OUTRO' as any,
         status: 'NOVO',
