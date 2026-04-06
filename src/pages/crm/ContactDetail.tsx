@@ -57,7 +57,8 @@ import {
   Plus,
   Upload,
   Trash2,
-  Pencil
+  Pencil,
+  UserCheck
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -105,6 +106,7 @@ export default function ContactDetail() {
   const [newBeneficiaryPhone, setNewBeneficiaryPhone] = useState('');
   const [newBeneficiaryEmail, setNewBeneficiaryEmail] = useState('');
   const [isCreatingBeneficiary, setIsCreatingBeneficiary] = useState(false);
+  const [isPromotingToTitular, setIsPromotingToTitular] = useState(false);
   const queryClient = useQueryClient();
 
   const contactLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
