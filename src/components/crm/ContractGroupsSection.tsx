@@ -742,6 +742,8 @@ export function ContractGroupsSection({
                 serviceTypeId,
                 installments,
                 notes: extractLastNotes(),
+                leadId: leadData?.id,
+                opportunityId: payment.opportunity_id,
               });
               setShowPaymentAgreement(true);
             }}

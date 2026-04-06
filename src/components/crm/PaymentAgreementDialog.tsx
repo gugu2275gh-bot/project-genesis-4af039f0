@@ -30,6 +30,8 @@ export interface PaymentAgreementInitialData {
   installments?: { amount: string; due_date: string }[];
   notes?: string;
   fees?: { description: string; amount: string }[];
+  leadId?: string;
+  opportunityId?: string;
 }
 
 interface PaymentAgreementDialogProps {
