@@ -149,7 +149,16 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async (keepOpen = false) => {
-    if (!form.amount) return;
+    if (!form.amount || isSaving) return;
+    setIsSaving(true);
+    try {
+    await handleSaveInner(keepOpen);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveInner = async (keepOpen = false) => {
 
     // Validate installment dates when PARCELADO
     if (form.payment_form === 'PARCELADO' && form.installments.length > 0) {
