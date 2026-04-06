@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Download, Edit, X, FileText, ChevronDown } from 'lucide-react';
+import { Download, Edit, X, FileText, ChevronDown, Save } from 'lucide-react';
 import { getContractSections, generateContractDocument, generateContractWord, type ContractData, type ContractSection, type BeneficiaryData, type BankAccountData, type PaymentData } from '@/lib/generate-contract';
 
 export interface ContractPreviewEditData {
