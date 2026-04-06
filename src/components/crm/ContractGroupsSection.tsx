@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { TitularLink } from '@/hooks/useContactBeneficiaries';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,8 +39,7 @@ interface ContractGroupsSectionProps {
   navigate: (path: string) => void;
   beneficiaryContacts?: BeneficiaryContact[];
   isBeneficiary?: boolean;
-  titularContactId?: string | null;
-  titularContactName?: string | null;
+  titulares?: TitularLink[];
 }
 
 export function ContractGroupsSection({
@@ -51,8 +51,7 @@ export function ContractGroupsSection({
   navigate,
   beneficiaryContacts = [],
   isBeneficiary = false,
-  titularContactId = null,
-  titularContactName = null,
+  titulares = [],
 }: ContractGroupsSectionProps) {
   const { user } = useAuth();
   const { toast } = useToast();
