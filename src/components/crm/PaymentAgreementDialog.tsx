@@ -60,6 +60,34 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   const queryClient = useQueryClient();
   const [selectedServiceTypeId, setSelectedServiceTypeId] = useState(serviceTypeId || '');
   const [selectedTitularId, setSelectedTitularId] = useState<string>('');
+  const [titularPopoverOpen, setTitularPopoverOpen] = useState(false);
+  const [titularSearch, setTitularSearch] = useState('');
+
+  // Fetch all non-beneficiary contacts for the titular combobox
+  const { data: allContacts = [] } = useQuery({
+    queryKey: ['all-contacts-for-titular'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contacts')
+        .select('id, full_name, phone')
+        .eq('is_beneficiary', false)
+        .order('full_name');
+      return data || [];
+    },
+    enabled: open && isBeneficiary,
+  });
+
+  // Build titular options: linked first (highlighted), then others
+  const titularOptions = useMemo(() => {
+    const linkedIds = new Set(titulares.map(t => t.contact_id).filter(Boolean));
+    const linked = allContacts.filter(c => linkedIds.has(c.id));
+    const others = allContacts.filter(c => !linkedIds.has(c.id));
+    return { linked, others };
+  }, [allContacts, titulares]);
+
+  const selectedTitularName = allContacts.find(c => c.id === selectedTitularId)?.full_name
+    || titulares.find(t => t.contact_id === selectedTitularId)?.full_name
+    || '';
 
   const serviceTypeOptions = useMemo(() => 
     serviceTypes?.map(st => ({ code: st.id, name: st.name })) || [],
