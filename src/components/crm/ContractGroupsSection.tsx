@@ -980,14 +980,20 @@ export function ContractGroupsSection({
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Beneficiary info banner */}
-          {isBeneficiary && titularContactName && (
+          {isBeneficiary && titulares.length > 0 && (
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm flex items-center gap-2">
               <Users className="h-4 w-4 text-primary shrink-0" />
               <span>
-                Contratos deste beneficiário são geridos pelo titular: <strong 
-                  className="cursor-pointer hover:underline"
-                  onClick={() => titularContactId && navigate(`/crm/contacts/${titularContactId}`)}
-                >{titularContactName}</strong>
+                Contratos deste beneficiário são geridos {titulares.length === 1 ? 'pelo titular: ' : 'pelos titulares: '}
+                {titulares.map((t, i) => (
+                  <span key={t.contact_id || i}>
+                    {i > 0 && ', '}
+                    <strong 
+                      className="cursor-pointer hover:underline"
+                      onClick={() => t.contact_id && navigate(`/crm/contacts/${t.contact_id}`)}
+                    >{t.full_name}</strong>
+                  </span>
+                ))}
               </span>
             </div>
           )}
