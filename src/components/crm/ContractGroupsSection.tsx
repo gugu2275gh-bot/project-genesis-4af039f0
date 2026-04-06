@@ -1386,6 +1386,44 @@ export function ContractGroupsSection({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Titular Picker Dialog — shown when beneficiary has multiple titulars */}
+      <Dialog open={showTitularPicker} onOpenChange={setShowTitularPicker}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Selecionar Titular</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mb-4">
+            Este beneficiário está vinculado a múltiplos titulares. Selecione em qual titular o contrato será criado:
+          </p>
+          <div className="space-y-2">
+            {titulares.map((t, idx) => (
+              <Button
+                key={t.contact_id || idx}
+                variant="outline"
+                className="w-full justify-start gap-3"
+                onClick={async () => {
+                  setShowTitularPicker(false);
+                  if (!t.contact_id) return;
+                  setIsCreatingContract(true);
+                  try {
+                    await linkLeadsToTitularContract(pendingLeadsToLink, t.contact_id, t.full_name);
+                    setSelectedLeadIds(new Set());
+                  } catch (error: any) {
+                    toast({ title: 'Erro ao vincular ao titular', description: error.message, variant: 'destructive' });
+                  } finally {
+                    setIsCreatingContract(false);
+                    setPendingLeadsToLink([]);
+                  }
+                }}
+              >
+                <User className="h-4 w-4" />
+                {t.full_name}
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
