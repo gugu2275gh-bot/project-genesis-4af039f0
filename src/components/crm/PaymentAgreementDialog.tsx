@@ -196,7 +196,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   const handleSave = async (keepOpen = false) => {
     if (!form.amount || isSaving) return;
     // Validate titular selection for beneficiaries
-    if (isBeneficiary && titulares.length > 0 && !selectedTitularId) {
+    if (isBeneficiary && !selectedTitularId) {
       toast({ title: 'Selecione o titular do contrato', variant: 'destructive' });
       return;
     }
