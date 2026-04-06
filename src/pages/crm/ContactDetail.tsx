@@ -111,6 +111,26 @@ export default function ContactDetail() {
 
   const contactLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
 
+  const handlePromoteToTitular = async () => {
+    if (!id) return;
+    setIsPromotingToTitular(true);
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .update({ is_beneficiary: false, linked_principal_contact_id: null })
+        .eq('id', id);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['contact', id] });
+      queryClient.invalidateQueries({ queryKey: ['contact-titular', id] });
+      queryClient.invalidateQueries({ queryKey: ['contact-beneficiaries'] });
+      toast({ title: 'Contato promovido a titular', description: 'Este contato agora pode ter contratos próprios.' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao promover contato', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsPromotingToTitular(false);
+    }
+  };
+
   // Extract "Observações" from the last payment agreement block in payment_notes
   const extractLastNotes = (): string => {
     const notes = (contact as any)?.payment_notes || '';
