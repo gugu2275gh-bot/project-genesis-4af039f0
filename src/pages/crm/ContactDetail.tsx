@@ -1477,32 +1477,29 @@ export default function ContactDetail() {
               {benefLoading ? (
                 <Skeleton className="h-16" />
               ) : contactTitular ? (
-                <div
-                  className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => contactTitular.contact_id && navigate(`/crm/contacts/${contactTitular.contact_id}`)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <User className="h-5 w-5 text-primary" />
+                <div className="space-y-3">
+                  <div
+                    className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => contactTitular.contact_id && navigate(`/crm/contacts/${contactTitular.contact_id}`)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{contactTitular.full_name}</p>
+                        <p className="text-sm text-muted-foreground">Titular</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{contactTitular.full_name}</p>
-                      <p className="text-sm text-muted-foreground">Titular</p>
-                    </div>
+                    {contactTitular.contact_id && (
+                      <Badge variant="outline">Ver Ficha</Badge>
+                    )}
                   </div>
-                  {contactTitular.contact_id && (
-                    <Badge variant="outline">Ver Ficha</Badge>
-                  )}
-                </div>
-                {contact?.is_beneficiary && (
-                  <div className="mt-3 pt-3 border-t">
+                  <div className="pt-3 border-t">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePromoteToTitular();
-                      }}
+                      onClick={() => handlePromoteToTitular()}
                       disabled={isPromotingToTitular}
                       className="w-full"
                     >
@@ -1517,8 +1514,8 @@ export default function ContactDetail() {
                       Remove o vínculo de beneficiário e permite contratos próprios
                     </p>
                   </div>
-                )}
-                <div className="space-y-3">
+                </div>
+              ) : contactBeneficiaries.length > 0 ? (
                   {contactBeneficiaries.map(ben => (
                     <div
                       key={ben.id}
