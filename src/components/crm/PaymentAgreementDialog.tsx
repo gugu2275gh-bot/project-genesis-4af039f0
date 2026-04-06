@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { TitularLink } from '@/hooks/useContactBeneficiaries';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
@@ -48,13 +49,16 @@ interface PaymentAgreementDialogProps {
   serviceTypeId?: string | null;
   onServiceTypeChange?: (serviceTypeId: string) => void;
   initialData?: PaymentAgreementInitialData | null;
+  isBeneficiary?: boolean;
+  titulares?: TitularLink[];
 }
 
-export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange, initialData }: PaymentAgreementDialogProps) {
+export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange, initialData, isBeneficiary = false, titulares = [] }: PaymentAgreementDialogProps) {
   const { updateContact } = useContacts();
   const { data: serviceTypes } = useServiceTypes();
   const queryClient = useQueryClient();
   const [selectedServiceTypeId, setSelectedServiceTypeId] = useState(serviceTypeId || '');
+  const [selectedTitularId, setSelectedTitularId] = useState<string>('');
 
   const serviceTypeOptions = useMemo(() => 
     serviceTypes?.map(st => ({ code: st.id, name: st.name })) || [],
