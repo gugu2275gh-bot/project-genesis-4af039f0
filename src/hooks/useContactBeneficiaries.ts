@@ -9,7 +9,7 @@ interface BeneficiaryLink {
   is_primary: boolean;
 }
 
-interface TitularLink {
+export interface TitularLink {
   full_name: string;
   contact_id: string | null;
 }
@@ -73,13 +73,16 @@ export function useContactBeneficiaries(contactId?: string) {
     enabled: !!contactId,
   });
 
-  // Single query: find titular (contract-based or direct)
-  const titularQuery = useQuery({
-    queryKey: ['contact-titular', contactId],
+  // Query: find ALL titulars (contract-based + direct) — supports multiple titulars
+  const titularesQuery = useQuery({
+    queryKey: ['contact-titulares', contactId],
     queryFn: async () => {
-      if (!contactId) return null;
+      if (!contactId) return [];
 
-      // 1) Check direct titular via linked_principal_contact_id
+      const results: TitularLink[] = [];
+      const seenIds = new Set<string>();
+
+      // 1) Direct titular via linked_principal_contact_id
       const { data: self } = await supabase
         .from('contacts')
         .select('is_beneficiary, linked_principal_contact_id')
@@ -93,11 +96,12 @@ export function useContactBeneficiaries(contactId?: string) {
           .eq('id', self.linked_principal_contact_id)
           .single();
         if (titular) {
-          return { full_name: titular.full_name, contact_id: titular.id } as TitularLink;
+          seenIds.add(titular.id);
+          results.push({ full_name: titular.full_name, contact_id: titular.id });
         }
       }
 
-      // 2) Contract-based titular
+      // 2) Contract-based titulars — find all contracts where this contact is non-primary
       const { data: myEntries } = await supabase
         .from('contract_beneficiaries')
         .select('contract_id')
@@ -110,22 +114,29 @@ export function useContactBeneficiaries(contactId?: string) {
           .from('contract_beneficiaries')
           .select('full_name, contact_id')
           .in('contract_id', contractIds)
-          .eq('is_primary', true)
-          .limit(1)
-          .maybeSingle();
-        if (primaries) {
-          return primaries as TitularLink;
+          .eq('is_primary', true);
+
+        for (const p of primaries || []) {
+          const key = p.contact_id || p.full_name;
+          if (key && !seenIds.has(key)) {
+            seenIds.add(key);
+            results.push(p as TitularLink);
+          }
         }
       }
 
-      return null;
+      return results;
     },
     enabled: !!contactId,
   });
 
+  // Backward-compatible: first titular or null
+  const titular = titularesQuery.data?.[0] ?? null;
+
   return {
     beneficiaries: beneficiariesQuery.data ?? [],
-    titular: titularQuery.data ?? null,
-    isLoading: beneficiariesQuery.isLoading || titularQuery.isLoading,
+    titular,
+    titulares: titularesQuery.data ?? [],
+    isLoading: beneficiariesQuery.isLoading || titularesQuery.isLoading,
   };
 }
