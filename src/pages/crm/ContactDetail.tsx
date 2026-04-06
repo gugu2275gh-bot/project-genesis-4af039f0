@@ -1692,6 +1692,7 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { titulares: contactTitulares } = useContactBeneficiaries(contactId);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [serviceType, setServiceType] = useState('');
   const [sector, setSector] = useState('');
