@@ -1494,7 +1494,30 @@ export default function ContactDetail() {
                     <Badge variant="outline">Ver Ficha</Badge>
                   )}
                 </div>
-              ) : contactBeneficiaries.length > 0 ? (
+                {contact?.is_beneficiary && (
+                  <div className="mt-3 pt-3 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePromoteToTitular();
+                      }}
+                      disabled={isPromotingToTitular}
+                      className="w-full"
+                    >
+                      {isPromotingToTitular ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <UserCheck className="h-4 w-4 mr-2" />
+                      )}
+                      Tornar Titular
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-1 text-center">
+                      Remove o vínculo de beneficiário e permite contratos próprios
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-3">
                   {contactBeneficiaries.map(ben => (
                     <div
