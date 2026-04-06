@@ -345,16 +345,37 @@ export function ContractGroupsSection({
     return match ? match[1].trim() : '';
   };
 
-  // Helper: link beneficiary leads to titular's draft or create new draft under titular
-  const linkLeadsToTitularContract = async (leadsToLink: any[]) => {
-    if (!titularContactId || leadsToLink.length === 0) return;
+  // Helper: link beneficiary leads to a specific titular's draft or create new draft
+  const linkLeadsToTitularContract = async (leadsToLink: any[], chosenTitularId: string, chosenTitularName?: string) => {
+    if (!chosenTitularId || leadsToLink.length === 0) return;
 
     const leadIdsToLink = leadsToLink.map(l => l.id);
 
-    // Check if titular has an open draft contract
-    if (titularDraftContracts.length > 0) {
-      // Add to the most recent draft
-      const draftContract = titularDraftContracts[0];
+    // Check if this specific titular has an open draft contract
+    const { data: thisLeads } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('contact_id', chosenTitularId);
+    
+    let draftContract: any = null;
+    if (thisLeads?.length) {
+      const { data: thisOpps } = await supabase
+        .from('opportunities')
+        .select('id')
+        .in('lead_id', thisLeads.map(l => l.id));
+      if (thisOpps?.length) {
+        const { data: drafts } = await supabase
+          .from('contracts')
+          .select('id, contract_number, status, opportunity_id, created_at')
+          .in('opportunity_id', thisOpps.map(o => o.id))
+          .eq('status', 'EM_ELABORACAO')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (drafts?.length) draftContract = drafts[0];
+      }
+    }
+
+    if (draftContract) {
       const links = leadIdsToLink.map(lid => ({
         contract_id: draftContract.id,
         lead_id: lid,
@@ -363,37 +384,35 @@ export function ContractGroupsSection({
         .from('contract_leads')
         .upsert(links, { onConflict: 'contract_id,lead_id' });
       if (error) throw error;
-      toast({ title: 'Serviços adicionados ao contrato do titular', description: titularContactName || undefined });
+      toast({ title: 'Serviços adicionados ao contrato do titular', description: chosenTitularName || undefined });
     } else {
-      // Create new draft under titular - need titular's opportunity
-      const { data: titularLeads } = await supabase
+      // Create new draft under this titular
+      const { data: titLeads } = await supabase
         .from('leads')
         .select('id, service_interest')
-        .eq('contact_id', titularContactId)
+        .eq('contact_id', chosenTitularId)
         .order('created_at', { ascending: false })
         .limit(1);
 
       let opportunityId: string;
-      if (titularLeads?.length) {
-        const { data: titularOpps } = await supabase
+      if (titLeads?.length) {
+        const { data: titOpps } = await supabase
           .from('opportunities')
           .select('id')
-          .eq('lead_id', titularLeads[0].id)
+          .eq('lead_id', titLeads[0].id)
           .limit(1);
-        if (titularOpps?.length) {
-          opportunityId = titularOpps[0].id;
+        if (titOpps?.length) {
+          opportunityId = titOpps[0].id;
         } else {
-          // Create opportunity for titular's lead
           const { data: newOpp, error: oppErr } = await supabase
             .from('opportunities')
-            .insert({ lead_id: titularLeads[0].id })
+            .insert({ lead_id: titLeads[0].id })
             .select()
             .single();
           if (oppErr) throw oppErr;
           opportunityId = newOpp.id;
         }
       } else {
-        // Titular has no leads - use beneficiary's first lead opportunity
         const { data: benOpps } = await supabase
           .from('opportunities')
           .select('id')
@@ -428,18 +447,31 @@ export function ContractGroupsSection({
         .insert(links);
       if (linkError) throw linkError;
 
-      toast({ title: 'Novo contrato criado no titular', description: titularContactName || undefined });
+      toast({ title: 'Novo contrato criado no titular', description: chosenTitularName || undefined });
     }
 
-    // Invalidate both beneficiary and titular queries
+    // Invalidate queries
     queryClient.invalidateQueries({ queryKey: ['contract-leads', contactId] });
     queryClient.invalidateQueries({ queryKey: ['contact-contracts', contactId] });
     queryClient.invalidateQueries({ queryKey: ['contracts'] });
-    queryClient.invalidateQueries({ queryKey: ['titular-draft-contracts', titularContactId] });
-    queryClient.invalidateQueries({ queryKey: ['contract-leads', titularContactId] });
-    queryClient.invalidateQueries({ queryKey: ['contact-contracts', titularContactId] });
-    queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', titularContactId] });
-    queryClient.invalidateQueries({ queryKey: ['beneficiary-contract-leads', titularContactId] });
+    queryClient.invalidateQueries({ queryKey: ['titular-draft-contracts'] });
+    queryClient.invalidateQueries({ queryKey: ['contract-leads', chosenTitularId] });
+    queryClient.invalidateQueries({ queryKey: ['contact-contracts', chosenTitularId] });
+    queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', chosenTitularId] });
+    queryClient.invalidateQueries({ queryKey: ['beneficiary-contract-leads', chosenTitularId] });
+  };
+
+  // Helper: start the beneficiary→titular flow, showing picker if multiple titulars
+  const startBeneficiaryContractFlow = (leadsToLink: any[]) => {
+    if (titulares.length === 1 && titulares[0].contact_id) {
+      return linkLeadsToTitularContract(leadsToLink, titulares[0].contact_id, titulares[0].full_name);
+    } else if (titulares.length > 1) {
+      setPendingLeadsToLink(leadsToLink);
+      setShowTitularPicker(true);
+      return Promise.resolve();
+    }
+    toast({ title: 'Nenhum titular vinculado', variant: 'destructive' });
+    return Promise.resolve();
   };
 
   // Create a new draft contract and link selected leads
