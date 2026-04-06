@@ -1234,8 +1234,7 @@ export default function ContactDetail() {
               navigate={navigate}
               beneficiaryContacts={[]}
               isBeneficiary={true}
-              titularContactId={contactTitular?.contact_id}
-              titularContactName={contactTitular?.full_name}
+              titulares={contactTitulares}
             />
           )}
 
@@ -1458,15 +1457,15 @@ export default function ContactDetail() {
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <Users className="h-5 w-5" />
-                    {contactTitular ? 'Titular Vinculado' : `Beneficiários (${contactBeneficiaries.length})`}
+                    {hasTitulares ? `Titulares Vinculados (${contactTitulares.length})` : `Beneficiários (${contactBeneficiaries.length})`}
                   </CardTitle>
                   <CardDescription>
-                    {contactTitular 
-                      ? 'Este contato é beneficiário vinculado ao titular abaixo' 
+                    {hasTitulares 
+                      ? 'Este contato é beneficiário vinculado aos titulares abaixo' 
                       : 'Beneficiários vinculados a este titular'}
                   </CardDescription>
                 </div>
-                {!contactTitular && (
+                {!hasTitulares && (
                   <Button size="sm" onClick={() => setShowAddBeneficiaryDialog(true)}>
                     <Plus className="h-4 w-4 mr-1" />
                     Adicionar
@@ -1477,25 +1476,28 @@ export default function ContactDetail() {
             <CardContent>
               {benefLoading ? (
                 <Skeleton className="h-16" />
-              ) : contactTitular ? (
+              ) : hasTitulares ? (
                 <div className="space-y-3">
-                  <div
-                    className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => contactTitular.contact_id && navigate(`/crm/contacts/${contactTitular.contact_id}`)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="h-5 w-5 text-primary" />
+                  {contactTitulares.map((t, idx) => (
+                    <div
+                      key={t.contact_id || idx}
+                      className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                      onClick={() => t.contact_id && navigate(`/crm/contacts/${t.contact_id}`)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <User className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{t.full_name}</p>
+                          <p className="text-sm text-muted-foreground">Titular</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium">{contactTitular.full_name}</p>
-                        <p className="text-sm text-muted-foreground">Titular</p>
-                      </div>
+                      {t.contact_id && (
+                        <Badge variant="outline">Ver Ficha</Badge>
+                      )}
                     </div>
-                    {contactTitular.contact_id && (
-                      <Badge variant="outline">Ver Ficha</Badge>
-                    )}
-                  </div>
+                  ))}
                   <div className="pt-3 border-t">
                     <Button
                       variant="outline"
