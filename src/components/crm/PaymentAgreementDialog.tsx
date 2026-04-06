@@ -15,8 +15,9 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { PAYMENT_METHOD_LABELS, PAYMENT_FORM_LABELS } from '@/types/database';
-import { DollarSign, Plus, Trash2, CalendarIcon } from 'lucide-react';
+import { DollarSign, Plus, Trash2, CalendarIcon, ChevronsUpDown, Check, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -59,6 +60,34 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   const queryClient = useQueryClient();
   const [selectedServiceTypeId, setSelectedServiceTypeId] = useState(serviceTypeId || '');
   const [selectedTitularId, setSelectedTitularId] = useState<string>('');
+  const [titularPopoverOpen, setTitularPopoverOpen] = useState(false);
+  const [titularSearch, setTitularSearch] = useState('');
+
+  // Fetch all non-beneficiary contacts for the titular combobox
+  const { data: allContacts = [] } = useQuery({
+    queryKey: ['all-contacts-for-titular'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contacts')
+        .select('id, full_name, phone')
+        .eq('is_beneficiary', false)
+        .order('full_name');
+      return data || [];
+    },
+    enabled: open && isBeneficiary,
+  });
+
+  // Build titular options: linked first (highlighted), then others
+  const titularOptions = useMemo(() => {
+    const linkedIds = new Set(titulares.map(t => t.contact_id).filter(Boolean));
+    const linked = allContacts.filter(c => linkedIds.has(c.id));
+    const others = allContacts.filter(c => !linkedIds.has(c.id));
+    return { linked, others };
+  }, [allContacts, titulares]);
+
+  const selectedTitularName = allContacts.find(c => c.id === selectedTitularId)?.full_name
+    || titulares.find(t => t.contact_id === selectedTitularId)?.full_name
+    || '';
 
   const serviceTypeOptions = useMemo(() => 
     serviceTypes?.map(st => ({ code: st.id, name: st.name })) || [],
@@ -167,7 +196,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   const handleSave = async (keepOpen = false) => {
     if (!form.amount || isSaving) return;
     // Validate titular selection for beneficiaries
-    if (isBeneficiary && titulares.length > 0 && !selectedTitularId) {
+    if (isBeneficiary && !selectedTitularId) {
       toast({ title: 'Selecione o titular do contrato', variant: 'destructive' });
       return;
     }
@@ -442,7 +471,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', selectedTitularId] });
     }
 
-    const titularName = titulares.find(t => t.contact_id === selectedTitularId)?.full_name;
+    const titularName = selectedTitularName;
     toast({ 
       title: 'Acordo de pagamento salvo', 
       description: isBeneficiary && titularName ? `Vinculado ao titular: ${titularName}` : undefined 
@@ -485,21 +514,72 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
           </div>
 
           {/* Titular selector for beneficiaries */}
-          {isBeneficiary && titulares.length > 0 && (
+          {isBeneficiary && (
             <div className="min-w-0">
               <Label>Titular do Contrato *</Label>
-              <Select value={selectedTitularId} onValueChange={setSelectedTitularId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o titular..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {titulares.map((t, idx) => (
-                    <SelectItem key={t.contact_id || idx} value={t.contact_id || ''}>
-                      {t.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={titularPopoverOpen} onOpenChange={setTitularPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={titularPopoverOpen}
+                    className="w-full justify-between font-normal"
+                  >
+                    {selectedTitularId ? selectedTitularName : 'Pesquisar titular...'}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Buscar por nome ou telefone..."
+                      value={titularSearch}
+                      onValueChange={setTitularSearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>Nenhum contato encontrado</CommandEmpty>
+                      {/* Linked titulars first */}
+                      {titularOptions.linked.length > 0 && (
+                        <CommandGroup heading="Titulares vinculados">
+                          {titularOptions.linked
+                            .filter(c => !titularSearch || c.full_name.toLowerCase().includes(titularSearch.toLowerCase()) || c.phone?.includes(titularSearch))
+                            .map(c => (
+                              <CommandItem
+                                key={c.id}
+                                value={c.id}
+                                onSelect={() => { setSelectedTitularId(c.id); setTitularPopoverOpen(false); }}
+                                className="flex items-center gap-2"
+                              >
+                                <Check className={cn("h-4 w-4", selectedTitularId === c.id ? "opacity-100" : "opacity-0")} />
+                                <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                                <span>{c.full_name}</span>
+                                {c.phone && <span className="text-xs text-muted-foreground ml-auto">{c.phone}</span>}
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                      )}
+                      {/* All other contacts */}
+                      <CommandGroup heading="Outros contatos">
+                        {titularOptions.others
+                          .filter(c => !titularSearch || c.full_name.toLowerCase().includes(titularSearch.toLowerCase()) || c.phone?.includes(titularSearch))
+                          .slice(0, 50)
+                          .map(c => (
+                            <CommandItem
+                              key={c.id}
+                              value={c.id}
+                              onSelect={() => { setSelectedTitularId(c.id); setTitularPopoverOpen(false); }}
+                              className="flex items-center gap-2"
+                            >
+                              <Check className={cn("h-4 w-4", selectedTitularId === c.id ? "opacity-100" : "opacity-0")} />
+                              <span>{c.full_name}</span>
+                              {c.phone && <span className="text-xs text-muted-foreground ml-auto">{c.phone}</span>}
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               <p className="text-xs text-muted-foreground mt-1">
                 O serviço será vinculado ao contrato deste titular
               </p>
