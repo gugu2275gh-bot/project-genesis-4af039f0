@@ -32,6 +32,7 @@ export interface PaymentAgreementInitialData {
   discount_value?: number;
   gross_amount?: number;
   serviceTypeId?: string;
+  due_date?: string;
   installments?: { amount: string; due_date: string }[];
   notes?: string;
   fees?: { description: string; amount: string }[];
