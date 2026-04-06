@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { TitularLink } from '@/hooks/useContactBeneficiaries';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/integrations/supabase/types';
@@ -48,13 +49,16 @@ interface PaymentAgreementDialogProps {
   serviceTypeId?: string | null;
   onServiceTypeChange?: (serviceTypeId: string) => void;
   initialData?: PaymentAgreementInitialData | null;
+  isBeneficiary?: boolean;
+  titulares?: TitularLink[];
 }
 
-export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange, initialData }: PaymentAgreementDialogProps) {
+export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange, initialData, isBeneficiary = false, titulares = [] }: PaymentAgreementDialogProps) {
   const { updateContact } = useContacts();
   const { data: serviceTypes } = useServiceTypes();
   const queryClient = useQueryClient();
   const [selectedServiceTypeId, setSelectedServiceTypeId] = useState(serviceTypeId || '');
+  const [selectedTitularId, setSelectedTitularId] = useState<string>('');
 
   const serviceTypeOptions = useMemo(() => 
     serviceTypes?.map(st => ({ code: st.id, name: st.name })) || [],
@@ -104,6 +108,8 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     } else if (open && !initialData) {
       setForm(defaultForm);
       setSelectedServiceTypeId(serviceTypeId || '');
+      // Auto-select titular if only one available
+      setSelectedTitularId(titulares.length === 1 ? (titulares[0].contact_id || '') : '');
     }
   }, [open, initialData, serviceTypeId]);
 
@@ -160,6 +166,11 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
   const handleSave = async (keepOpen = false) => {
     if (!form.amount || isSaving) return;
+    // Validate titular selection for beneficiaries
+    if (isBeneficiary && titulares.length > 0 && !selectedTitularId) {
+      toast({ title: 'Selecione o titular do contrato', variant: 'destructive' });
+      return;
+    }
     setIsSaving(true);
     try {
     await handleSaveInner(keepOpen);
@@ -232,27 +243,36 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       summary += `Observações: ${form.notes}\n`;
     }
 
-    // Append new agreement to existing payment_notes (don't overwrite)
+    // Determine which contact owns the lead/contract
+    // For beneficiaries with a selected titular, the lead goes under the titular
+    const leadOwnerContactId = (isBeneficiary && selectedTitularId) ? selectedTitularId : contactId;
+
+    // Append new agreement to existing payment_notes on the lead owner's contact
     const { data: currentContact } = await supabase
       .from('contacts')
       .select('payment_notes')
-      .eq('id', contactId)
+      .eq('id', leadOwnerContactId)
       .single();
 
     const existingNotes = currentContact?.payment_notes || '';
     const separator = existingNotes ? '\n---\n\n' : '';
 
+    // Add beneficiary name to summary when saving under titular
+    const titularSummary = (isBeneficiary && selectedTitularId)
+      ? `Beneficiário: ${contactName}\n` + summary
+      : summary;
+
     await updateContact.mutateAsync({
-      id: contactId,
-      payment_notes: existingNotes + separator + summary,
+      id: leadOwnerContactId,
+      payment_notes: existingNotes + separator + titularSummary,
     });
 
-    // Create or reuse a lead for this contact with the selected service_type_id
+    // Create or reuse a lead under the lead owner's contact
     let leadId: string | null = initialData?.leadId || null;
     if (selectedServiceTypeId && !leadId) {
       // Always create a new lead for new agreements — allows multiple services of the same type
       const { data: newLead, error: leadError } = await supabase.from('leads').insert({
-        contact_id: contactId,
+        contact_id: leadOwnerContactId,
         service_type_id: selectedServiceTypeId,
         service_interest: 'OUTRO' as any,
         status: 'NOVO',
@@ -413,8 +433,20 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     queryClient.invalidateQueries({ queryKey: ['beneficiary-contract-leads', contactId] });
     queryClient.invalidateQueries({ queryKey: ['beneficiary-payments-in-groups', contactId] });
     queryClient.invalidateQueries({ queryKey: ['contact-service-cases', contactId] });
+    // Also invalidate titular's queries if beneficiary flow
+    if (isBeneficiary && selectedTitularId) {
+      queryClient.invalidateQueries({ queryKey: ['contact-payments', selectedTitularId] });
+      queryClient.invalidateQueries({ queryKey: ['contact-contracts', selectedTitularId] });
+      queryClient.invalidateQueries({ queryKey: ['contract-leads', selectedTitularId] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed-lead-ids', selectedTitularId] });
+      queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', selectedTitularId] });
+    }
 
-    toast({ title: 'Acordo de pagamento salvo na ficha do cliente' });
+    const titularName = titulares.find(t => t.contact_id === selectedTitularId)?.full_name;
+    toast({ 
+      title: 'Acordo de pagamento salvo', 
+      description: isBeneficiary && titularName ? `Vinculado ao titular: ${titularName}` : undefined 
+    });
 
     const resetForm = () => setForm({
       amount: '', payment_method: 'TRANSFERENCIA', payment_form: 'UNICO',
@@ -451,6 +483,28 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               serviceTypes={serviceTypeOptions}
             />
           </div>
+
+          {/* Titular selector for beneficiaries */}
+          {isBeneficiary && titulares.length > 0 && (
+            <div className="min-w-0">
+              <Label>Titular do Contrato *</Label>
+              <Select value={selectedTitularId} onValueChange={setSelectedTitularId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o titular..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {titulares.map((t, idx) => (
+                    <SelectItem key={t.contact_id || idx} value={t.contact_id || ''}>
+                      {t.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                O serviço será vinculado ao contrato deste titular
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -713,7 +767,6 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               </div>
             )}
           </div>
-
 
           {/* Taxas / Fees */}
           <div className="space-y-3">

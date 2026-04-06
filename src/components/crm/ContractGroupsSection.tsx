@@ -1347,6 +1347,8 @@ export function ContractGroupsSection({
         contactId={selectedBeneficiaryId || contactId}
         contactName={selectedBeneficiaryName || contactName}
         initialData={editPaymentData}
+        isBeneficiary={isBeneficiary}
+        titulares={titulares}
       />
 
       {/* Delete/Archive Confirmation */}

@@ -2269,6 +2269,8 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
         contactId={contactId}
         contactName={contact.full_name}
         initialData={editPaymentData || undefined}
+        isBeneficiary={contact.is_beneficiary}
+        titulares={contactTitulares}
       />
 
       <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
