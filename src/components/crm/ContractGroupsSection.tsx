@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { TitularLink } from '@/hooks/useContactBeneficiaries';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,8 +39,7 @@ interface ContractGroupsSectionProps {
   navigate: (path: string) => void;
   beneficiaryContacts?: BeneficiaryContact[];
   isBeneficiary?: boolean;
-  titularContactId?: string | null;
-  titularContactName?: string | null;
+  titulares?: TitularLink[];
 }
 
 export function ContractGroupsSection({
@@ -51,8 +51,7 @@ export function ContractGroupsSection({
   navigate,
   beneficiaryContacts = [],
   isBeneficiary = false,
-  titularContactId = null,
-  titularContactName = null,
+  titulares = [],
 }: ContractGroupsSectionProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -64,6 +63,12 @@ export function ContractGroupsSection({
   const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
   const [editPaymentData, setEditPaymentData] = useState<PaymentAgreementInitialData | null>(null);
   const [deleteServiceLead, setDeleteServiceLead] = useState<any>(null);
+  const [showTitularPicker, setShowTitularPicker] = useState(false);
+  const [pendingLeadsToLink, setPendingLeadsToLink] = useState<any[]>([]);
+
+  // Resolve which titular to use — if only one, use it directly
+  const titularContactId = titulares.length === 1 ? (titulares[0].contact_id || null) : null;
+  const titularContactName = titulares.length === 1 ? titulares[0].full_name : null;
   const [isDeletingService, setIsDeletingService] = useState(false);
   const [addingToContractId, setAddingToContractId] = useState<string | null>(null);
   const [addServiceToContractId, setAddServiceToContractId] = useState<string | null>(null);
@@ -92,20 +97,22 @@ export function ContractGroupsSection({
 
   // Fetch titular's draft contracts when this is a beneficiary view
   const { data: titularDraftContracts = [] } = useQuery({
-    queryKey: ['titular-draft-contracts', titularContactId],
+    queryKey: ['titular-draft-contracts', titularContactId, titulares.map(t => t.contact_id).join(',')],
     queryFn: async () => {
-      if (!titularContactId) return [];
-      // Get titular's leads
-      const { data: titularLeads } = await supabase
+      // Get all titular contact IDs
+      const titularIds = titulares.map(t => t.contact_id).filter(Boolean) as string[];
+      if (titularIds.length === 0) return [];
+      // Get all titulars' leads
+      const { data: allTitularLeads } = await supabase
         .from('leads')
         .select('id')
-        .eq('contact_id', titularContactId);
-      if (!titularLeads?.length) return [];
+        .in('contact_id', titularIds);
+      if (!allTitularLeads?.length) return [];
       // Get their opportunities
       const { data: titularOpps } = await supabase
         .from('opportunities')
         .select('id, lead_id')
-        .in('lead_id', titularLeads.map(l => l.id));
+        .in('lead_id', allTitularLeads.map(l => l.id));
       if (!titularOpps?.length) return [];
       // Get draft contracts
       const { data: drafts } = await supabase
@@ -118,7 +125,7 @@ export function ContractGroupsSection({
       const { data: titularContractLinks } = await supabase
         .from('contract_leads')
         .select('contract_id, contracts(id, contract_number, status, opportunity_id, created_at)')
-        .in('lead_id', titularLeads.map(l => l.id));
+        .in('lead_id', allTitularLeads.map(l => l.id));
       const draftFromLinks = (titularContractLinks || [])
         .filter((cl: any) => cl.contracts?.status === 'EM_ELABORACAO')
         .map((cl: any) => cl.contracts);
@@ -131,7 +138,7 @@ export function ContractGroupsSection({
         return true;
       });
     },
-    enabled: isBeneficiary && !!titularContactId,
+    enabled: isBeneficiary && titulares.length > 0,
   });
 
   // Fetch payments for this contact
@@ -338,16 +345,37 @@ export function ContractGroupsSection({
     return match ? match[1].trim() : '';
   };
 
-  // Helper: link beneficiary leads to titular's draft or create new draft under titular
-  const linkLeadsToTitularContract = async (leadsToLink: any[]) => {
-    if (!titularContactId || leadsToLink.length === 0) return;
+  // Helper: link beneficiary leads to a specific titular's draft or create new draft
+  const linkLeadsToTitularContract = async (leadsToLink: any[], chosenTitularId: string, chosenTitularName?: string) => {
+    if (!chosenTitularId || leadsToLink.length === 0) return;
 
     const leadIdsToLink = leadsToLink.map(l => l.id);
 
-    // Check if titular has an open draft contract
-    if (titularDraftContracts.length > 0) {
-      // Add to the most recent draft
-      const draftContract = titularDraftContracts[0];
+    // Check if this specific titular has an open draft contract
+    const { data: thisLeads } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('contact_id', chosenTitularId);
+    
+    let draftContract: any = null;
+    if (thisLeads?.length) {
+      const { data: thisOpps } = await supabase
+        .from('opportunities')
+        .select('id')
+        .in('lead_id', thisLeads.map(l => l.id));
+      if (thisOpps?.length) {
+        const { data: drafts } = await supabase
+          .from('contracts')
+          .select('id, contract_number, status, opportunity_id, created_at')
+          .in('opportunity_id', thisOpps.map(o => o.id))
+          .eq('status', 'EM_ELABORACAO')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (drafts?.length) draftContract = drafts[0];
+      }
+    }
+
+    if (draftContract) {
       const links = leadIdsToLink.map(lid => ({
         contract_id: draftContract.id,
         lead_id: lid,
@@ -356,37 +384,35 @@ export function ContractGroupsSection({
         .from('contract_leads')
         .upsert(links, { onConflict: 'contract_id,lead_id' });
       if (error) throw error;
-      toast({ title: 'Serviços adicionados ao contrato do titular', description: titularContactName || undefined });
+      toast({ title: 'Serviços adicionados ao contrato do titular', description: chosenTitularName || undefined });
     } else {
-      // Create new draft under titular - need titular's opportunity
-      const { data: titularLeads } = await supabase
+      // Create new draft under this titular
+      const { data: titLeads } = await supabase
         .from('leads')
         .select('id, service_interest')
-        .eq('contact_id', titularContactId)
+        .eq('contact_id', chosenTitularId)
         .order('created_at', { ascending: false })
         .limit(1);
 
       let opportunityId: string;
-      if (titularLeads?.length) {
-        const { data: titularOpps } = await supabase
+      if (titLeads?.length) {
+        const { data: titOpps } = await supabase
           .from('opportunities')
           .select('id')
-          .eq('lead_id', titularLeads[0].id)
+          .eq('lead_id', titLeads[0].id)
           .limit(1);
-        if (titularOpps?.length) {
-          opportunityId = titularOpps[0].id;
+        if (titOpps?.length) {
+          opportunityId = titOpps[0].id;
         } else {
-          // Create opportunity for titular's lead
           const { data: newOpp, error: oppErr } = await supabase
             .from('opportunities')
-            .insert({ lead_id: titularLeads[0].id })
+            .insert({ lead_id: titLeads[0].id })
             .select()
             .single();
           if (oppErr) throw oppErr;
           opportunityId = newOpp.id;
         }
       } else {
-        // Titular has no leads - use beneficiary's first lead opportunity
         const { data: benOpps } = await supabase
           .from('opportunities')
           .select('id')
@@ -421,18 +447,31 @@ export function ContractGroupsSection({
         .insert(links);
       if (linkError) throw linkError;
 
-      toast({ title: 'Novo contrato criado no titular', description: titularContactName || undefined });
+      toast({ title: 'Novo contrato criado no titular', description: chosenTitularName || undefined });
     }
 
-    // Invalidate both beneficiary and titular queries
+    // Invalidate queries
     queryClient.invalidateQueries({ queryKey: ['contract-leads', contactId] });
     queryClient.invalidateQueries({ queryKey: ['contact-contracts', contactId] });
     queryClient.invalidateQueries({ queryKey: ['contracts'] });
-    queryClient.invalidateQueries({ queryKey: ['titular-draft-contracts', titularContactId] });
-    queryClient.invalidateQueries({ queryKey: ['contract-leads', titularContactId] });
-    queryClient.invalidateQueries({ queryKey: ['contact-contracts', titularContactId] });
-    queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', titularContactId] });
-    queryClient.invalidateQueries({ queryKey: ['beneficiary-contract-leads', titularContactId] });
+    queryClient.invalidateQueries({ queryKey: ['titular-draft-contracts'] });
+    queryClient.invalidateQueries({ queryKey: ['contract-leads', chosenTitularId] });
+    queryClient.invalidateQueries({ queryKey: ['contact-contracts', chosenTitularId] });
+    queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', chosenTitularId] });
+    queryClient.invalidateQueries({ queryKey: ['beneficiary-contract-leads', chosenTitularId] });
+  };
+
+  // Helper: start the beneficiary→titular flow, showing picker if multiple titulars
+  const startBeneficiaryContractFlow = (leadsToLink: any[]) => {
+    if (titulares.length === 1 && titulares[0].contact_id) {
+      return linkLeadsToTitularContract(leadsToLink, titulares[0].contact_id, titulares[0].full_name);
+    } else if (titulares.length > 1) {
+      setPendingLeadsToLink(leadsToLink);
+      setShowTitularPicker(true);
+      return Promise.resolve();
+    }
+    toast({ title: 'Nenhum titular vinculado', variant: 'destructive' });
+    return Promise.resolve();
   };
 
   // Create a new draft contract and link selected leads
@@ -445,9 +484,9 @@ export function ContractGroupsSection({
     setIsCreatingContract(true);
     try {
       // If beneficiary, redirect to titular's contract
-      if (isBeneficiary && titularContactId) {
+      if (isBeneficiary && titulares.length > 0) {
         const leadsToLink = contactLeads.filter(l => selectedLeadIds.has(l.id));
-        await linkLeadsToTitularContract(leadsToLink);
+        await startBeneficiaryContractFlow(leadsToLink);
         setSelectedLeadIds(new Set());
         return;
       }
@@ -941,14 +980,20 @@ export function ContractGroupsSection({
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Beneficiary info banner */}
-          {isBeneficiary && titularContactName && (
+          {isBeneficiary && titulares.length > 0 && (
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm flex items-center gap-2">
               <Users className="h-4 w-4 text-primary shrink-0" />
               <span>
-                Contratos deste beneficiário são geridos pelo titular: <strong 
-                  className="cursor-pointer hover:underline"
-                  onClick={() => titularContactId && navigate(`/crm/contacts/${titularContactId}`)}
-                >{titularContactName}</strong>
+                Contratos deste beneficiário são geridos {titulares.length === 1 ? 'pelo titular: ' : 'pelos titulares: '}
+                {titulares.map((t, i) => (
+                  <span key={t.contact_id || i}>
+                    {i > 0 && ', '}
+                    <strong 
+                      className="cursor-pointer hover:underline"
+                      onClick={() => t.contact_id && navigate(`/crm/contacts/${t.contact_id}`)}
+                    >{t.full_name}</strong>
+                  </span>
+                ))}
               </span>
             </div>
           )}
@@ -1000,8 +1045,8 @@ export function ContractGroupsSection({
                           setIsCreatingContract(true);
                           try {
                             // If beneficiary, redirect to titular's contract
-                            if (isBeneficiary && titularContactId) {
-                              await linkLeadsToTitularContract(ungroupedLeads);
+                            if (isBeneficiary && titulares.length > 0) {
+                              await startBeneficiaryContractFlow(ungroupedLeads);
                               setSelectedLeadIds(new Set());
                               return;
                             }
@@ -1339,6 +1384,44 @@ export function ContractGroupsSection({
               {deleteServiceLead && hasProtectedContract(deleteServiceLead.id) ? 'Arquivar' : 'Excluir'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Titular Picker Dialog — shown when beneficiary has multiple titulars */}
+      <Dialog open={showTitularPicker} onOpenChange={setShowTitularPicker}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Selecionar Titular</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mb-4">
+            Este beneficiário está vinculado a múltiplos titulares. Selecione em qual titular o contrato será criado:
+          </p>
+          <div className="space-y-2">
+            {titulares.map((t, idx) => (
+              <Button
+                key={t.contact_id || idx}
+                variant="outline"
+                className="w-full justify-start gap-3"
+                onClick={async () => {
+                  setShowTitularPicker(false);
+                  if (!t.contact_id) return;
+                  setIsCreatingContract(true);
+                  try {
+                    await linkLeadsToTitularContract(pendingLeadsToLink, t.contact_id, t.full_name);
+                    setSelectedLeadIds(new Set());
+                  } catch (error: any) {
+                    toast({ title: 'Erro ao vincular ao titular', description: error.message, variant: 'destructive' });
+                  } finally {
+                    setIsCreatingContract(false);
+                    setPendingLeadsToLink([]);
+                  }
+                }}
+              >
+                <User className="h-4 w-4" />
+                {t.full_name}
+              </Button>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
     </>
