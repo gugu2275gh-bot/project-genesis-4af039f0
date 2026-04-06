@@ -63,6 +63,12 @@ export function ContractGroupsSection({
   const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
   const [editPaymentData, setEditPaymentData] = useState<PaymentAgreementInitialData | null>(null);
   const [deleteServiceLead, setDeleteServiceLead] = useState<any>(null);
+  const [showTitularPicker, setShowTitularPicker] = useState(false);
+  const [pendingLeadsToLink, setPendingLeadsToLink] = useState<any[]>([]);
+
+  // Resolve which titular to use — if only one, use it directly
+  const titularContactId = titulares.length === 1 ? (titulares[0].contact_id || null) : null;
+  const titularContactName = titulares.length === 1 ? titulares[0].full_name : null;
   const [isDeletingService, setIsDeletingService] = useState(false);
   const [addingToContractId, setAddingToContractId] = useState<string | null>(null);
   const [addServiceToContractId, setAddServiceToContractId] = useState<string | null>(null);
