@@ -1,12 +1,19 @@
 import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Download, Edit, X, FileText, ChevronDown } from 'lucide-react';
+import { Download, Edit, X, FileText, ChevronDown, Save } from 'lucide-react';
 import { getContractSections, generateContractDocument, generateContractWord, type ContractData, type ContractSection, type BeneficiaryData, type BankAccountData, type PaymentData } from '@/lib/generate-contract';
+
+export interface ContractPreviewEditData {
+  contractNumber: string;
+  installmentConditions: string;
+  date?: string;
+}
 
 interface ContractPreviewProps {
   template: string;
@@ -30,15 +37,17 @@ interface ContractPreviewProps {
   currency?: string;
   date?: Date;
   payments?: PaymentData[];
+  onSaveEdits?: (data: ContractPreviewEditData) => Promise<void>;
 }
 
 export function ContractPreview({ 
   template, clientName, documentType, documentNumber, contractNumber, canDownload = false,
   contractStatus,
   serviceDescription, feeAmount, vatRate, totalAmount, paymentConditions, paymentMethod,
-  bankAccount, beneficiaries, phone, email, address, currency, date, payments,
+  bankAccount, beneficiaries, phone, email, address, currency, date, payments, onSaveEdits,
 }: ContractPreviewProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isSavingEdits, setIsSavingEdits] = useState(false);
   const [editedName, setEditedName] = useState(clientName);
   const [editedDocument, setEditedDocument] = useState(documentNumber);
   const [editedContractNumber, setEditedContractNumber] = useState(contractNumber);
@@ -87,6 +96,21 @@ export function ContractPreview({
     setEditedPaymentConditions(paymentConditions || '');
     setEditedPayments(payments || []);
     setIsEditing(true);
+  };
+
+  const handleSaveEdits = async () => {
+    if (!onSaveEdits || isSavingEdits) return;
+    setIsSavingEdits(true);
+    try {
+      await onSaveEdits({
+        contractNumber: editedContractNumber,
+        installmentConditions: editedPaymentConditions,
+        date: editedDate || undefined,
+      });
+      setIsEditing(false);
+    } finally {
+      setIsSavingEdits(false);
+    }
   };
 
   const updatePayment = (index: number, field: keyof PaymentData, value: string | number) => {
@@ -156,10 +180,18 @@ export function ContractPreview({
           {contractStatus === 'EM_ELABORACAO' && (
             <>
               {isEditing ? (
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
-                  <X className="h-4 w-4 mr-1" />
-                  Cancelar Edição
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setIsEditing(false)} disabled={isSavingEdits}>
+                    <X className="h-4 w-4 mr-1" />
+                    Cancelar
+                  </Button>
+                  {onSaveEdits && (
+                    <Button size="sm" onClick={handleSaveEdits} disabled={isSavingEdits}>
+                      {isSavingEdits ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                      {isSavingEdits ? 'Salvando...' : 'Salvar Alterações'}
+                    </Button>
+                  )}
+                </div>
               ) : (
                 <Button variant="outline" size="sm" onClick={handleStartEditing}>
                   <Edit className="h-4 w-4 mr-1" />

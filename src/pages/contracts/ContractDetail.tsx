@@ -27,7 +27,7 @@ import { BeneficiaryData, BankAccountData, PaymentData } from '@/lib/generate-co
 import { SERVICE_INTEREST_LABELS as SIL } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
-import { ContractPreview } from '@/components/contracts/ContractPreview';
+import { ContractPreview, ContractPreviewEditData } from '@/components/contracts/ContractPreview';
 import { Eye } from 'lucide-react';
 export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
@@ -908,6 +908,14 @@ export default function ContractDetail() {
                 discount_type: (p as any).discount_type,
                 payment_form: (p as any).payment_form,
               } as PaymentData)) || []}
+              onSaveEdits={async (editData: ContractPreviewEditData) => {
+                await updateContract.mutateAsync({
+                  id: contract.id,
+                  contract_number: editData.contractNumber,
+                  installment_conditions: editData.installmentConditions,
+                });
+                toast({ title: 'Alterações salvas', description: 'As edições da pré-visualização foram salvas com sucesso.' });
+              }}
             />
           </CardContent>
         </Card>
