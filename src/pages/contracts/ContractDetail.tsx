@@ -184,44 +184,112 @@ export default function ContractDetail() {
   // Get assigned user name for display
   const assignedUser = profiles.find(p => p.id === (contract as any)?.assigned_to_user_id);
 
-  // Filter payment_notes from ALL linked contacts to only include services linked to this contract
+  const generatedPaymentDetails = useMemo(() => {
+    if (!contractPayments || contractPayments.length === 0) return '';
+
+    const currency = contract?.currency || 'EUR';
+    const formatMoney = (value?: number | null) => {
+      if (typeof value !== 'number' || Number.isNaN(value)) return null;
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency,
+      }).format(value);
+    };
+
+    return contractPayments
+      .map((payment: any) => {
+        const leadId = payment.opportunities?.leads?.id || payment.opportunities?.lead_id;
+        const linkedLead = contractLeadLinks?.find((cl: any) => cl.lead_id === leadId)?.leads;
+        const serviceName =
+          linkedLead?.service_types?.name ||
+          (linkedLead?.service_interest
+            ? SERVICE_INTEREST_LABELS[linkedLead.service_interest as keyof typeof SERVICE_INTEREST_LABELS]
+            : null) ||
+          'Serviço';
+
+        const lines: string[] = [];
+        const agreementDate = payment.created_at || payment.due_date;
+        if (agreementDate) {
+          lines.push(`Acordo de Pagamento — ${format(new Date(agreementDate), 'dd/MM/yyyy', { locale: ptBR })}`);
+        }
+
+        lines.push(`Serviço: ${serviceName}`);
+
+        const grossAmount = payment.gross_amount ?? payment.amount;
+        const formattedGrossAmount = formatMoney(grossAmount);
+        if (formattedGrossAmount) {
+          lines.push(`Valor Bruto: ${formattedGrossAmount}`);
+        }
+
+        const formattedVatAmount = formatMoney(payment.vat_amount);
+        if (formattedVatAmount) {
+          const vatLabel = payment.vat_rate ? `IVA (${payment.vat_rate}%): + ` : 'IVA: + ';
+          lines.push(`${vatLabel}${formattedVatAmount}`);
+        }
+
+        const formattedDiscount = formatMoney(payment.discount_value);
+        if (formattedDiscount) {
+          lines.push(`Desconto: - ${formattedDiscount}`);
+        }
+
+        const totalFinal = payment.amount ?? grossAmount;
+        const formattedTotalFinal = formatMoney(totalFinal);
+        if (formattedTotalFinal) {
+          lines.push(`Total Final: ${formattedTotalFinal}`);
+        }
+
+        if (payment.payment_method) {
+          lines.push(
+            `Método: ${PAYMENT_METHOD_LABELS[payment.payment_method as keyof typeof PAYMENT_METHOD_LABELS] || payment.payment_method}`
+          );
+        }
+
+        if (payment.payment_form) {
+          lines.push(
+            `Forma: ${PAYMENT_FORM_LABELS[payment.payment_form as keyof typeof PAYMENT_FORM_LABELS] || payment.payment_form}`
+          );
+        }
+
+        return lines.join('\n');
+      })
+      .join('\n---\n');
+  }, [contract?.currency, contractLeadLinks, contractPayments]);
+
+  // Fallback: filter payment_notes from linked contacts when there are no active payments yet
   const filteredPaymentNotes = useMemo(() => {
     if (!contract || !contractLeadLinks) return '';
 
-    // Get active service names from contract_leads
     const activeServiceNames = new Set<string>();
     contractLeadLinks.forEach((cl: any) => {
       const lead = cl.leads;
-      if (lead) {
-        const stName = lead.service_types?.name;
-        if (stName) activeServiceNames.add(stName);
+      if (lead?.service_types?.name) {
+        activeServiceNames.add(lead.service_types.name);
       }
     });
 
-    // Merge payment_notes from all linked contacts (titular + beneficiaries)
     const allNotes: string[] = [];
     (allLinkedContactNotes || []).forEach((contact: any) => {
       const rawNotes = contact.payment_notes || '';
-      if (rawNotes) {
-        const parts = rawNotes.split('\n---\n').filter(Boolean).map((p: string) => p.trim());
-        const filtered = parts.filter((block: string) => {
-          if (activeServiceNames.size === 0) return true;
-          const serviceMatch = block.match(/Serviço:\s*(.+?)(?:\n|$)/);
-          if (!serviceMatch) return true;
-          return activeServiceNames.has(serviceMatch[1].trim());
-        });
-        allNotes.push(...filtered);
-      }
+      if (!rawNotes) return;
+
+      const parts = rawNotes.split('\n---\n').filter(Boolean).map((p: string) => p.trim());
+      const filtered = parts.filter((block: string) => {
+        if (activeServiceNames.size === 0) return true;
+        const serviceMatch = block.match(/Serviço:\s*(.+?)(?:\n|$)/);
+        if (!serviceMatch) return true;
+        return activeServiceNames.has(serviceMatch[1].trim());
+      });
+
+      allNotes.push(...filtered);
     });
 
-    // Fallback: also check titular's payment_notes from the contract's opportunity
     if (allNotes.length === 0) {
       const c = contract as any;
-      const opp = c?.opportunities;
-      const leads = opp?.leads;
-      const contact_data = leads?.contacts;
-      const resolvedContact = Array.isArray(contact_data) ? contact_data[0] : contact_data;
+      const resolvedContact = Array.isArray(c?.opportunities?.leads?.contacts)
+        ? c.opportunities.leads.contacts[0]
+        : c?.opportunities?.leads?.contacts;
       const rawNotes = resolvedContact?.payment_notes || '';
+
       if (rawNotes) {
         const parts = rawNotes.split('\n---\n').filter(Boolean).map((p: string) => p.trim());
         const filtered = parts.filter((block: string) => {
@@ -241,7 +309,7 @@ export default function ContractDetail() {
   useEffect(() => {
     if (contract) {
       const c = contract as any;
-      const installmentConditions = contract.installment_conditions || filteredPaymentNotes || '';
+      const installmentConditions = contract.installment_conditions || generatedPaymentDetails || filteredPaymentNotes || '';
       
       setFormData({
         scope_summary: contract.scope_summary || '',
@@ -263,7 +331,7 @@ export default function ContractDetail() {
       });
       setSignedDocumentUrl(c.signed_document_url || null);
     }
-  }, [contract, filteredPaymentNotes]);
+  }, [contract, generatedPaymentDetails, filteredPaymentNotes]);
 
   // Auto-calculate installment amount when total or count changes
   useEffect(() => {
