@@ -12,8 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { PAYMENT_METHOD_LABELS, PAYMENT_FORM_LABELS } from '@/types/database';
-import { DollarSign, Plus, Trash2 } from 'lucide-react';
+import { DollarSign, Plus, Trash2, CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
+import { pt } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 import { ServiceTypeCombobox } from '@/components/ui/service-type-combobox';
 import { useServiceTypes } from '@/hooks/useServiceTypes';
 
@@ -27,6 +32,7 @@ export interface PaymentAgreementInitialData {
   discount_value?: number;
   gross_amount?: number;
   serviceTypeId?: string;
+  due_date?: string;
   installments?: { amount: string; due_date: string }[];
   notes?: string;
   fees?: { description: string; amount: string }[];
@@ -67,6 +73,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     discount_value: '',
     apply_vat: false,
     notes: '',
+    due_date: '',
     installment_count: 2,
     installments: [] as { amount: string; due_date: string }[],
     fees: [] as { description: string; amount: string }[],
@@ -85,6 +92,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
         apply_vat: initialData.apply_vat || false,
         discount_type: (initialData.discount_type || '') as '' | 'PERCENTUAL' | 'VALOR',
         discount_value: initialData.discount_value?.toString() || '',
+        due_date: initialData.due_date || '',
         installment_count: initialData.installments?.length || 2,
         installments: initialData.installments || [],
         notes: initialData.notes || '',
@@ -366,6 +374,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               discount_type: form.discount_type || null,
               discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
               beneficiary_contact_id: contactId,
+              due_date: form.due_date || null,
             });
             if (payError) {
               console.error('Error creating payment:', payError);
@@ -424,7 +433,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       amount: '', payment_method: 'TRANSFERENCIA', payment_form: 'UNICO',
       custom_payment_method: '', transfer_origin: '', payment_account_id: '',
       discount_type: '', discount_value: '', apply_vat: false, notes: '',
-      installment_count: 2, installments: [], fees: [],
+      due_date: '', installment_count: 2, installments: [], fees: [],
     });
 
     if (keepOpen) {
@@ -504,6 +513,36 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               />
             </div>
           </div>
+
+          {/* Due date for UNICO */}
+          {form.payment_form === 'UNICO' && (
+            <div>
+              <Label>Data de Vencimento</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !form.due_date && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {form.due_date ? format(new Date(form.due_date + 'T00:00:00'), 'dd/MM/yyyy') : 'Selecionar data (opcional)'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={form.due_date ? new Date(form.due_date + 'T00:00:00') : undefined}
+                    onSelect={(date) => setForm({ ...form, due_date: date ? format(date, 'yyyy-MM-dd') : '' })}
+                    locale={pt}
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
 
           {/* Installments when PARCELADO */}
           {form.payment_form === 'PARCELADO' && (
