@@ -240,50 +240,31 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     });
 
     // Create or reuse a lead for this contact with the selected service_type_id
-    let leadId: string | null = null;
-    if (selectedServiceTypeId) {
-      // When editing an existing agreement, reuse the existing lead
-      // When creating a new agreement, always create a new lead
-      if (initialData?.serviceTypeId === selectedServiceTypeId) {
-        const { data: existingLeads } = await supabase
-          .from('leads')
-          .select('id')
-          .eq('contact_id', contactId)
-          .eq('service_type_id', selectedServiceTypeId)
-          .order('created_at', { ascending: false })
-          .limit(1);
+    let leadId: string | null = initialData?.leadId || null;
+    if (selectedServiceTypeId && !leadId) {
+      // No leadId from initialData — find or create one
+      const { data: dupLeads } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('contact_id', contactId)
+        .eq('service_type_id', selectedServiceTypeId)
+        .not('status', 'in', '("ARQUIVADO_SEM_RETORNO","MESCLADO")')
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-        if (existingLeads?.length) {
-          leadId = existingLeads[0].id;
-        }
-      }
-
-      if (!leadId) {
-        // Check if there's already an active lead with same service for this contact
-        const { data: dupLeads } = await supabase
-          .from('leads')
-          .select('id')
-          .eq('contact_id', contactId)
-          .eq('service_type_id', selectedServiceTypeId)
-          .not('status', 'in', '("ARQUIVADO_SEM_RETORNO","MESCLADO")')
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (dupLeads?.length) {
-          // Reuse existing active lead with same service instead of creating duplicate
-          leadId = dupLeads[0].id;
+      if (dupLeads?.length) {
+        leadId = dupLeads[0].id;
+      } else {
+        const { data: newLead, error: leadError } = await supabase.from('leads').insert({
+          contact_id: contactId,
+          service_type_id: selectedServiceTypeId,
+          service_interest: 'OUTRO' as any,
+          status: 'NOVO',
+        }).select('id').single();
+        if (leadError) {
+          console.error('Error creating lead for service:', leadError);
         } else {
-          const { data: newLead, error: leadError } = await supabase.from('leads').insert({
-            contact_id: contactId,
-            service_type_id: selectedServiceTypeId,
-            service_interest: 'OUTRO' as any,
-            status: 'NOVO',
-          }).select('id').single();
-          if (leadError) {
-            console.error('Error creating lead for service:', leadError);
-          } else {
-            leadId = newLead.id;
-          }
+          leadId = newLead.id;
         }
       }
     }
