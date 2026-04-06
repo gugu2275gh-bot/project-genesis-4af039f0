@@ -108,6 +108,8 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     } else if (open && !initialData) {
       setForm(defaultForm);
       setSelectedServiceTypeId(serviceTypeId || '');
+      // Auto-select titular if only one available
+      setSelectedTitularId(titulares.length === 1 ? (titulares[0].contact_id || '') : '');
     }
   }, [open, initialData, serviceTypeId]);
 
