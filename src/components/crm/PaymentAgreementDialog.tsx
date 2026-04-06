@@ -271,21 +271,10 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
     // Create opportunity and payments if we have a lead and amount
     if (leadId && form.amount) {
-      const { data: existingOpp, error: oppQueryError } = await supabase
-        .from('opportunities')
-        .select('id')
-        .eq('lead_id', leadId)
-        .limit(1);
+      let opportunityId: string | null = initialData?.opportunityId || null;
 
-      if (oppQueryError) {
-        console.error('Error querying opportunities:', oppQueryError);
-        toast({ title: 'Erro ao buscar oportunidade', description: oppQueryError.message, variant: 'destructive' });
-      }
-
-      let opportunityId: string | null = null;
-
-      if (existingOpp?.length) {
-        opportunityId = existingOpp[0].id;
+      if (opportunityId) {
+        // Editing: update existing opportunity directly
         const { error: oppUpdateError } = await supabase.from('opportunities').update({
           total_amount: finalAmount,
           status: 'PAGAMENTO_PENDENTE',
@@ -295,16 +284,39 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
           toast({ title: 'Erro ao atualizar oportunidade', description: oppUpdateError.message, variant: 'destructive' });
         }
       } else {
-        const { data: newOpp, error: oppError } = await supabase.from('opportunities').insert({
-          lead_id: leadId,
-          total_amount: finalAmount,
-          status: 'PAGAMENTO_PENDENTE',
-        }).select('id').single();
-        if (oppError) {
-          console.error('Error creating opportunity:', oppError);
-          toast({ title: 'Erro ao criar oportunidade', description: oppError.message, variant: 'destructive' });
+        // Creating: find or create opportunity for this lead
+        const { data: existingOpp, error: oppQueryError } = await supabase
+          .from('opportunities')
+          .select('id')
+          .eq('lead_id', leadId)
+          .limit(1);
+
+        if (oppQueryError) {
+          console.error('Error querying opportunities:', oppQueryError);
+          toast({ title: 'Erro ao buscar oportunidade', description: oppQueryError.message, variant: 'destructive' });
+        }
+
+        if (existingOpp?.length) {
+          opportunityId = existingOpp[0].id;
+          const { error: oppUpdateError } = await supabase.from('opportunities').update({
+            total_amount: finalAmount,
+            status: 'PAGAMENTO_PENDENTE',
+          }).eq('id', opportunityId);
+          if (oppUpdateError) {
+            console.error('Error updating opportunity:', oppUpdateError);
+          }
         } else {
-          opportunityId = newOpp.id;
+          const { data: newOpp, error: oppError } = await supabase.from('opportunities').insert({
+            lead_id: leadId,
+            total_amount: finalAmount,
+            status: 'PAGAMENTO_PENDENTE',
+          }).select('id').single();
+          if (oppError) {
+            console.error('Error creating opportunity:', oppError);
+            toast({ title: 'Erro ao criar oportunidade', description: oppError.message, variant: 'destructive' });
+          } else {
+            opportunityId = newOpp.id;
+          }
         }
       }
 
