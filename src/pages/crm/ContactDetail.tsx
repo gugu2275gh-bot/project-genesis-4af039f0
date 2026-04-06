@@ -180,7 +180,8 @@ export default function ContactDetail() {
   const { data: serviceTypes } = useServiceTypes();
   const allServiceLeads = contactLeads.filter(l => l.service_type_id || confirmedLeadIds.includes(l.id));
   const { data: contactDocuments = [], isLoading: docsLoading } = useContactDocuments(id);
-  const { beneficiaries: contactBeneficiaries, titular: contactTitular, isLoading: benefLoading } = useContactBeneficiaries(id);
+  const { beneficiaries: contactBeneficiaries, titulares: contactTitulares, isLoading: benefLoading } = useContactBeneficiaries(id);
+  const hasTitulares = contactTitulares.length > 0;
   const { interactions } = useInteractions(id);
 
   const { data: beneficiaryServiceCases = [], isLoading: benefCasesLoading } = useQuery({
