@@ -57,7 +57,8 @@ import {
   Plus,
   Upload,
   Trash2,
-  Pencil
+  Pencil,
+  UserCheck
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -105,9 +106,30 @@ export default function ContactDetail() {
   const [newBeneficiaryPhone, setNewBeneficiaryPhone] = useState('');
   const [newBeneficiaryEmail, setNewBeneficiaryEmail] = useState('');
   const [isCreatingBeneficiary, setIsCreatingBeneficiary] = useState(false);
+  const [isPromotingToTitular, setIsPromotingToTitular] = useState(false);
   const queryClient = useQueryClient();
 
   const contactLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
+
+  const handlePromoteToTitular = async () => {
+    if (!id) return;
+    setIsPromotingToTitular(true);
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .update({ is_beneficiary: false, linked_principal_contact_id: null })
+        .eq('id', id);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['contact', id] });
+      queryClient.invalidateQueries({ queryKey: ['contact-titular', id] });
+      queryClient.invalidateQueries({ queryKey: ['contact-beneficiaries'] });
+      toast({ title: 'Contato promovido a titular', description: 'Este contato agora pode ter contratos próprios.' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao promover contato', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsPromotingToTitular(false);
+    }
+  };
 
   // Extract "Observações" from the last payment agreement block in payment_notes
   const extractLastNotes = (): string => {
@@ -1455,22 +1477,43 @@ export default function ContactDetail() {
               {benefLoading ? (
                 <Skeleton className="h-16" />
               ) : contactTitular ? (
-                <div
-                  className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => contactTitular.contact_id && navigate(`/crm/contacts/${contactTitular.contact_id}`)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <User className="h-5 w-5 text-primary" />
+                <div className="space-y-3">
+                  <div
+                    className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => contactTitular.contact_id && navigate(`/crm/contacts/${contactTitular.contact_id}`)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{contactTitular.full_name}</p>
+                        <p className="text-sm text-muted-foreground">Titular</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{contactTitular.full_name}</p>
-                      <p className="text-sm text-muted-foreground">Titular</p>
-                    </div>
+                    {contactTitular.contact_id && (
+                      <Badge variant="outline">Ver Ficha</Badge>
+                    )}
                   </div>
-                  {contactTitular.contact_id && (
-                    <Badge variant="outline">Ver Ficha</Badge>
-                  )}
+                  <div className="pt-3 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePromoteToTitular()}
+                      disabled={isPromotingToTitular}
+                      className="w-full"
+                    >
+                      {isPromotingToTitular ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <UserCheck className="h-4 w-4 mr-2" />
+                      )}
+                      Tornar Titular
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-1 text-center">
+                      Remove o vínculo de beneficiário e permite contratos próprios
+                    </p>
+                  </div>
                 </div>
               ) : contactBeneficiaries.length > 0 ? (
                 <div className="space-y-3">
