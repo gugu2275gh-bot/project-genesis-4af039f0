@@ -1516,6 +1516,7 @@ export default function ContactDetail() {
                   </div>
                 </div>
               ) : contactBeneficiaries.length > 0 ? (
+                <div className="space-y-3">
                   {contactBeneficiaries.map(ben => (
                     <div
                       key={ben.id}
