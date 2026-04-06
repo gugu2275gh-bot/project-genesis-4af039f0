@@ -47,19 +47,44 @@ export default function ContractDetail() {
     },
   });
 
-  // Fetch all leads linked to this contract via contract_leads (with service type names)
+  // Fetch all leads linked to this contract via contract_leads (with service type names and contact info)
   const { data: contractLeadLinks } = useQuery({
     queryKey: ['contract-lead-links', id],
     queryFn: async () => {
       if (!id) return [];
       const { data, error } = await supabase
         .from('contract_leads')
-        .select('lead_id, leads:lead_id(id, service_type_id, service_interest, service_types:service_type_id(name))')
+        .select('lead_id, leads:lead_id(id, contact_id, service_type_id, service_interest, service_types:service_type_id(name))')
         .eq('contract_id', id);
       if (error) throw error;
       return data || [];
     },
     enabled: !!id,
+  });
+
+  // Fetch payment_notes from all contacts linked to this contract's leads (titular + beneficiaries)
+  const allLinkedContactIds = useMemo(() => {
+    if (!contractLeadLinks) return [];
+    const ids = new Set<string>();
+    contractLeadLinks.forEach((cl: any) => {
+      const contactId = cl.leads?.contact_id;
+      if (contactId) ids.add(contactId);
+    });
+    return Array.from(ids);
+  }, [contractLeadLinks]);
+
+  const { data: allLinkedContactNotes } = useQuery({
+    queryKey: ['contract-linked-contact-notes', id, allLinkedContactIds],
+    queryFn: async () => {
+      if (allLinkedContactIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, payment_notes')
+        .in('id', allLinkedContactIds);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: allLinkedContactIds.length > 0,
   });
 
   // Fetch all opportunity IDs for linked leads
@@ -159,16 +184,9 @@ export default function ContractDetail() {
   // Get assigned user name for display
   const assignedUser = profiles.find(p => p.id === (contract as any)?.assigned_to_user_id);
 
-  // Filter payment_notes to only include services linked to this contract
+  // Filter payment_notes from ALL linked contacts to only include services linked to this contract
   const filteredPaymentNotes = useMemo(() => {
     if (!contract || !contractLeadLinks) return '';
-    const c = contract as any;
-    const opp = c?.opportunities;
-    const leads = opp?.leads;
-    const contact_data = leads?.contacts;
-    const resolvedContact = Array.isArray(contact_data) ? contact_data[0] : contact_data;
-    const rawNotes = resolvedContact?.payment_notes || '';
-    if (!rawNotes) return '';
 
     // Get active service names from contract_leads
     const activeServiceNames = new Set<string>();
@@ -180,18 +198,44 @@ export default function ContractDetail() {
       }
     });
 
-    if (activeServiceNames.size === 0) return rawNotes;
-
-    // Filter blocks: keep only those whose "Serviço:" matches an active service
-    const parts = rawNotes.split('\n---\n').filter(Boolean).map((p: string) => p.trim());
-    const filtered = parts.filter((block: string) => {
-      const serviceMatch = block.match(/Serviço:\s*(.+?)(?:\n|$)/);
-      if (!serviceMatch) return true; // keep blocks without service name
-      return activeServiceNames.has(serviceMatch[1].trim());
+    // Merge payment_notes from all linked contacts (titular + beneficiaries)
+    const allNotes: string[] = [];
+    (allLinkedContactNotes || []).forEach((contact: any) => {
+      const rawNotes = contact.payment_notes || '';
+      if (rawNotes) {
+        const parts = rawNotes.split('\n---\n').filter(Boolean).map((p: string) => p.trim());
+        const filtered = parts.filter((block: string) => {
+          if (activeServiceNames.size === 0) return true;
+          const serviceMatch = block.match(/Serviço:\s*(.+?)(?:\n|$)/);
+          if (!serviceMatch) return true;
+          return activeServiceNames.has(serviceMatch[1].trim());
+        });
+        allNotes.push(...filtered);
+      }
     });
 
-    return filtered.join('\n---\n');
-  }, [contract, contractLeadLinks]);
+    // Fallback: also check titular's payment_notes from the contract's opportunity
+    if (allNotes.length === 0) {
+      const c = contract as any;
+      const opp = c?.opportunities;
+      const leads = opp?.leads;
+      const contact_data = leads?.contacts;
+      const resolvedContact = Array.isArray(contact_data) ? contact_data[0] : contact_data;
+      const rawNotes = resolvedContact?.payment_notes || '';
+      if (rawNotes) {
+        const parts = rawNotes.split('\n---\n').filter(Boolean).map((p: string) => p.trim());
+        const filtered = parts.filter((block: string) => {
+          if (activeServiceNames.size === 0) return true;
+          const serviceMatch = block.match(/Serviço:\s*(.+?)(?:\n|$)/);
+          if (!serviceMatch) return true;
+          return activeServiceNames.has(serviceMatch[1].trim());
+        });
+        allNotes.push(...filtered);
+      }
+    }
+
+    return allNotes.join('\n---\n');
+  }, [contract, contractLeadLinks, allLinkedContactNotes]);
 
   // Initialize form data when contract loads
   useEffect(() => {
