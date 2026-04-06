@@ -250,30 +250,17 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     // Create or reuse a lead for this contact with the selected service_type_id
     let leadId: string | null = initialData?.leadId || null;
     if (selectedServiceTypeId && !leadId) {
-      // No leadId from initialData — find or create one
-      const { data: dupLeads } = await supabase
-        .from('leads')
-        .select('id')
-        .eq('contact_id', contactId)
-        .eq('service_type_id', selectedServiceTypeId)
-        .not('status', 'in', '("ARQUIVADO_SEM_RETORNO","MESCLADO")')
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (dupLeads?.length) {
-        leadId = dupLeads[0].id;
+      // Always create a new lead for new agreements — allows multiple services of the same type
+      const { data: newLead, error: leadError } = await supabase.from('leads').insert({
+        contact_id: contactId,
+        service_type_id: selectedServiceTypeId,
+        service_interest: 'OUTRO' as any,
+        status: 'NOVO',
+      }).select('id').single();
+      if (leadError) {
+        console.error('Error creating lead for service:', leadError);
       } else {
-        const { data: newLead, error: leadError } = await supabase.from('leads').insert({
-          contact_id: contactId,
-          service_type_id: selectedServiceTypeId,
-          service_interest: 'OUTRO' as any,
-          status: 'NOVO',
-        }).select('id').single();
-        if (leadError) {
-          console.error('Error creating lead for service:', leadError);
-        } else {
-          leadId = newLead.id;
-        }
+        leadId = newLead.id;
       }
     }
 
