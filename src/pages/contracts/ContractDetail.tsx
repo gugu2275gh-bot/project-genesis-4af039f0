@@ -908,6 +908,14 @@ export default function ContractDetail() {
                 discount_type: (p as any).discount_type,
                 payment_form: (p as any).payment_form,
               } as PaymentData)) || []}
+              onSaveEdits={async (editData: ContractPreviewEditData) => {
+                await updateContract.mutateAsync({
+                  id: contract.id,
+                  contract_number: editData.contractNumber,
+                  installment_conditions: editData.installmentConditions,
+                });
+                toast({ title: 'Alterações salvas', description: 'As edições da pré-visualização foram salvas com sucesso.' });
+              }}
             />
           </CardContent>
         </Card>
