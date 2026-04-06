@@ -433,8 +433,20 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     queryClient.invalidateQueries({ queryKey: ['beneficiary-contract-leads', contactId] });
     queryClient.invalidateQueries({ queryKey: ['beneficiary-payments-in-groups', contactId] });
     queryClient.invalidateQueries({ queryKey: ['contact-service-cases', contactId] });
+    // Also invalidate titular's queries if beneficiary flow
+    if (isBeneficiary && selectedTitularId) {
+      queryClient.invalidateQueries({ queryKey: ['contact-payments', selectedTitularId] });
+      queryClient.invalidateQueries({ queryKey: ['contact-contracts', selectedTitularId] });
+      queryClient.invalidateQueries({ queryKey: ['contract-leads', selectedTitularId] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed-lead-ids', selectedTitularId] });
+      queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', selectedTitularId] });
+    }
 
-    toast({ title: 'Acordo de pagamento salvo na ficha do cliente' });
+    const titularName = titulares.find(t => t.contact_id === selectedTitularId)?.full_name;
+    toast({ 
+      title: 'Acordo de pagamento salvo', 
+      description: isBeneficiary && titularName ? `Vinculado ao titular: ${titularName}` : undefined 
+    });
 
     const resetForm = () => setForm({
       amount: '', payment_method: 'TRANSFERENCIA', payment_form: 'UNICO',
