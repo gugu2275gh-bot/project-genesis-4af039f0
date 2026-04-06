@@ -47,19 +47,44 @@ export default function ContractDetail() {
     },
   });
 
-  // Fetch all leads linked to this contract via contract_leads (with service type names)
+  // Fetch all leads linked to this contract via contract_leads (with service type names and contact info)
   const { data: contractLeadLinks } = useQuery({
     queryKey: ['contract-lead-links', id],
     queryFn: async () => {
       if (!id) return [];
       const { data, error } = await supabase
         .from('contract_leads')
-        .select('lead_id, leads:lead_id(id, service_type_id, service_interest, service_types:service_type_id(name))')
+        .select('lead_id, leads:lead_id(id, contact_id, service_type_id, service_interest, service_types:service_type_id(name))')
         .eq('contract_id', id);
       if (error) throw error;
       return data || [];
     },
     enabled: !!id,
+  });
+
+  // Fetch payment_notes from all contacts linked to this contract's leads (titular + beneficiaries)
+  const allLinkedContactIds = useMemo(() => {
+    if (!contractLeadLinks) return [];
+    const ids = new Set<string>();
+    contractLeadLinks.forEach((cl: any) => {
+      const contactId = cl.leads?.contact_id;
+      if (contactId) ids.add(contactId);
+    });
+    return Array.from(ids);
+  }, [contractLeadLinks]);
+
+  const { data: allLinkedContactNotes } = useQuery({
+    queryKey: ['contract-linked-contact-notes', id, allLinkedContactIds],
+    queryFn: async () => {
+      if (allLinkedContactIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, payment_notes')
+        .in('id', allLinkedContactIds);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: allLinkedContactIds.length > 0,
   });
 
   // Fetch all opportunity IDs for linked leads
