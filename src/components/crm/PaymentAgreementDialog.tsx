@@ -458,6 +458,28 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             />
           </div>
 
+          {/* Titular selector for beneficiaries */}
+          {isBeneficiary && titulares.length > 0 && (
+            <div className="min-w-0">
+              <Label>Titular do Contrato *</Label>
+              <Select value={selectedTitularId} onValueChange={setSelectedTitularId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o titular..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {titulares.map((t, idx) => (
+                    <SelectItem key={t.contact_id || idx} value={t.contact_id || ''}>
+                      {t.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                O serviço será vinculado ao contrato deste titular
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Valor Bruto (€)</Label>
