@@ -807,17 +807,25 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             <Button
               variant="secondary"
               onClick={() => handleSave(true)}
-              disabled={!form.amount || updateContact.isPending || (form.payment_form === 'PARCELADO' && form.installments.some(i => !i.due_date))}
+              disabled={!form.amount || isSaving || (form.payment_form === 'PARCELADO' && form.installments.some(i => !i.due_date))}
             >
-              <Plus className="h-4 w-4 mr-2" />
+              {isSaving ? (
+                <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <Plus className="h-4 w-4 mr-2" />
+              )}
               Salvar e Adicionar Novo
             </Button>
             <Button
               onClick={() => handleSave(false)}
-              disabled={!form.amount || updateContact.isPending || (form.payment_form === 'PARCELADO' && form.installments.some(i => !i.due_date))}
+              disabled={!form.amount || isSaving || (form.payment_form === 'PARCELADO' && form.installments.some(i => !i.due_date))}
             >
-              <DollarSign className="h-4 w-4 mr-2" />
-              Salvar Acordo
+              {isSaving ? (
+                <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <DollarSign className="h-4 w-4 mr-2" />
+              )}
+              {isSaving ? 'Salvando...' : 'Salvar Acordo'}
             </Button>
           </div>
         </div>
