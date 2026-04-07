@@ -592,9 +592,15 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             <div>
               <Label>Valor Bruto (€)</Label>
               <Input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d*[.,]?\d*$/.test(val)) {
+                    setForm({ ...form, amount: val.replace(',', '.') });
+                  }
+                }}
                 placeholder="1500.00"
               />
             </div>
@@ -702,14 +708,17 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                     <div key={idx} className="grid grid-cols-[auto_1fr_1fr] gap-2 items-center">
                       <span className="w-8 text-sm text-muted-foreground font-medium">{idx + 1}</span>
                       <Input
-                        type="number"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         placeholder="0.00"
                         value={inst.amount}
                         onChange={(e) => {
-                          const updated = [...form.installments];
-                          updated[idx] = { ...updated[idx], amount: e.target.value };
-                          setForm({ ...form, installments: updated });
+                          const val = e.target.value;
+                          if (val === '' || /^\d*[.,]?\d*$/.test(val)) {
+                            const updated = [...form.installments];
+                            updated[idx] = { ...updated[idx], amount: val.replace(',', '.') };
+                            setForm({ ...form, installments: updated });
+                          }
                         }}
                       />
                       <Input
@@ -840,10 +849,15 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               <div>
                 <Label>{form.discount_type === 'PERCENTUAL' ? 'Desconto (%)' : 'Desconto (€)'}</Label>
                 <Input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={form.discount_value}
-                  onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || /^\d*[.,]?\d*$/.test(val)) {
+                      setForm({ ...form, discount_value: val.replace(',', '.') });
+                    }
+                  }}
                   placeholder={form.discount_type === 'PERCENTUAL' ? '10' : '100.00'}
                 />
               </div>
@@ -880,14 +894,17 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                 <div>
                   <Label className="text-xs">Valor (EUR) *</Label>
                   <Input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     className="w-28"
                     value={fee.amount}
                     onChange={(e) => {
-                      const updated = [...form.fees];
-                      updated[idx] = { ...updated[idx], amount: e.target.value };
-                      setForm({ ...form, fees: updated });
+                      const val = e.target.value;
+                      if (val === '' || /^\d*[.,]?\d*$/.test(val)) {
+                        const updated = [...form.fees];
+                        updated[idx] = { ...updated[idx], amount: val.replace(',', '.') };
+                        setForm({ ...form, fees: updated });
+                      }
                     }}
                     placeholder="150.00"
                   />
