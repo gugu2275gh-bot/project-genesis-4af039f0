@@ -276,25 +276,10 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     // For beneficiaries with a selected titular, the lead goes under the titular
     const leadOwnerContactId = (isBeneficiary && selectedTitularId) ? selectedTitularId : contactId;
 
-    // Append new agreement to existing payment_notes on the lead owner's contact
-    const { data: currentContact } = await supabase
-      .from('contacts')
-      .select('payment_notes')
-      .eq('id', leadOwnerContactId)
-      .single();
-
-    const existingNotes = currentContact?.payment_notes || '';
-    const separator = existingNotes ? '\n---\n\n' : '';
-
     // Add beneficiary name to summary when saving under titular
     const titularSummary = (isBeneficiary && selectedTitularId)
       ? `Beneficiário: ${contactName}\n` + summary
       : summary;
-
-    await updateContact.mutateAsync({
-      id: leadOwnerContactId,
-      payment_notes: existingNotes + separator + titularSummary,
-    });
 
     // Create or reuse a lead under the lead owner's contact
     let leadId: string | null = initialData?.leadId || null;
@@ -308,13 +293,19 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       }).select('id').single();
       if (leadError) {
         console.error('Error creating lead for service:', leadError);
-      } else {
-        leadId = newLead.id;
+        toast({ title: 'Erro ao criar serviço', description: leadError.message, variant: 'destructive' });
+        return;
       }
+      leadId = newLead.id;
+    }
+
+    if (!leadId) {
+      toast({ title: 'Selecione um tipo de serviço', variant: 'destructive' });
+      return;
     }
 
     // Create opportunity and payments if we have a lead and amount
-    if (leadId && form.amount) {
+    if (form.amount) {
       let opportunityId: string | null = initialData?.opportunityId || null;
 
       if (opportunityId) {
@@ -443,11 +434,22 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
           }
         }
       }
-    } else if (!leadId) {
-      console.error('Lead não criado - serviço de interesse não selecionado');
-    } else if (!form.amount) {
-      console.error('Valor bruto não preenchido');
     }
+
+    // Save payment notes ONLY after successful lead+payment creation
+    const { data: currentContact } = await supabase
+      .from('contacts')
+      .select('payment_notes')
+      .eq('id', leadOwnerContactId)
+      .single();
+
+    const existingNotes = currentContact?.payment_notes || '';
+    const separator = existingNotes ? '\n---\n\n' : '';
+
+    await updateContact.mutateAsync({
+      id: leadOwnerContactId,
+      payment_notes: existingNotes + separator + titularSummary,
+    });
 
     queryClient.invalidateQueries({ queryKey: ['leads'] });
     queryClient.invalidateQueries({ queryKey: ['beneficiary-pending-leads', contactId] });
