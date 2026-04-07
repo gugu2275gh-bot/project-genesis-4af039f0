@@ -592,9 +592,15 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             <div>
               <Label>Valor Bruto (€)</Label>
               <Input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d*[.,]?\d*$/.test(val)) {
+                    setForm({ ...form, amount: val.replace(',', '.') });
+                  }
+                }}
                 placeholder="1500.00"
               />
             </div>
