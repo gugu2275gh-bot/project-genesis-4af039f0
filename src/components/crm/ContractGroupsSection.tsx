@@ -899,21 +899,14 @@ export function ContractGroupsSection({
 
   const totalServices = allLeads.length;
 
-  // Show payment notes only for services in the latest pending group
-  // If the latest group is finalized, show nothing until a new group is created
+  // Build dynamic summary from actual lead + payment data (not static payment_notes text)
   const lastGroupNotes = useMemo(() => {
-    const notes = paymentNotes || '';
-    const parts = notes.split('\n---\n').filter(Boolean).map(p => p.trim());
-    if (parts.length === 0) return '';
-
     // Determine which leads belong to the "latest pending group"
-    // Priority: ungrouped leads first, then the latest draft contract group
     let relevantLeads: any[] = [];
 
     if (ungroupedLeads.length > 0) {
       relevantLeads = ungroupedLeads;
     } else {
-      // Check the latest contract group
       const sortedGroups = [...contractGroups].sort((a, b) => {
         const dateA = a.contract?.created_at ? new Date(a.contract.created_at).getTime() : 0;
         const dateB = b.contract?.created_at ? new Date(b.contract.created_at).getTime() : 0;
@@ -932,95 +925,65 @@ export function ContractGroupsSection({
 
     if (relevantLeads.length === 0) return '';
 
-    // Build set of service names using getLeadDisplayName for accurate matching
-    const activeServiceNames = new Set<string>();
-    relevantLeads.forEach((lead: any) => {
-      // Add display name (same logic used in UI)
+    // For each relevant lead, find its payments and build a summary block
+    const blocks: string[] = [];
+    for (const lead of relevantLeads) {
       const displayName = getLeadDisplayName(lead);
-      if (displayName) activeServiceNames.add(displayName);
-      // Also add raw service_type name for exact matching
-      if (lead.service_type_id) {
-        const st = serviceTypes?.find(s => s.id === lead.service_type_id);
-        if (st?.name) activeServiceNames.add(st.name);
-      }
-    });
+      const createdDate = lead.created_at ? format(new Date(lead.created_at), 'dd/MM/yyyy', { locale: ptBR }) : '';
 
-    if (activeServiceNames.size === 0) return '';
+      // Find payments for this lead via opportunities
+      const leadPayments = deduplicatedPayments.filter((p: any) => {
+        const pLeadId = p.opportunities?.leads?.id || p.opportunities?.lead_id;
+        return pLeadId === lead.id;
+      });
 
-    // Count how many leads per service name to limit matching blocks
-    const serviceNameCounts: Record<string, number> = {};
-    relevantLeads.forEach((lead: any) => {
-      const displayName = getLeadDisplayName(lead);
-      if (displayName) {
-        serviceNameCounts[displayName] = (serviceNameCounts[displayName] || 0) + 1;
-      }
-      if (lead.service_type_id) {
-        const st = serviceTypes?.find(s => s.id === lead.service_type_id);
-        if (st?.name && st.name !== displayName) {
-          serviceNameCounts[st.name] = (serviceNameCounts[st.name] || 0) + 1;
+      let block = `Acordo de Pagamento — ${createdDate}\n`;
+      block += `Serviço: ${displayName}\n`;
+
+      if (leadPayments.length === 0) {
+        block += `Sem pagamentos registrados`;
+      } else if (leadPayments.length === 1) {
+        const p = leadPayments[0];
+        const currency = p.currency || 'EUR';
+        const symbol = currency === 'EUR' ? '€' : currency;
+        block += `Valor Bruto: ${symbol} ${Number(p.gross_amount || p.amount).toFixed(2)}\n`;
+        if (p.vat_amount && Number(p.vat_amount) > 0) {
+          block += `IVA (${p.vat_rate || 21}%): + ${symbol} ${Number(p.vat_amount).toFixed(2)}\n`;
         }
-      }
-    });
-
-    // Match note blocks to leads by created_at date proximity
-    // Each lead should match at most one note block
-    const matchedLeadIds = new Set<string>();
-    const matchedBlockIndices = new Set<number>();
-
-    // Build lead info for matching
-    const leadInfos = relevantLeads.map((lead: any) => ({
-      id: lead.id,
-      displayName: getLeadDisplayName(lead),
-      rawName: lead.service_type_id ? serviceTypes?.find(s => s.id === lead.service_type_id)?.name : null,
-      createdAt: lead.created_at ? new Date(lead.created_at).getTime() : 0,
-    }));
-
-    // For each lead (sorted by creation date desc), find the best matching note block
-    const sortedLeadInfos = [...leadInfos].sort((a, b) => b.createdAt - a.createdAt);
-
-    for (const lead of sortedLeadInfos) {
-      if (matchedLeadIds.has(lead.id)) continue;
-
-      // Find best block: match by service name, prefer closest date, pick from end (most recent)
-      let bestBlockIdx = -1;
-      let bestDateDiff = Infinity;
-
-      for (let i = parts.length - 1; i >= 0; i--) {
-        if (matchedBlockIndices.has(i)) continue;
-        const serviceMatch = parts[i].match(/Serviço:\s*(.+?)(?:\n|$)/);
-        const serviceName = serviceMatch ? serviceMatch[1].trim() : null;
-        if (!serviceName) continue;
-        if (serviceName !== lead.displayName && serviceName !== lead.rawName) continue;
-
-        // Try to extract date from "Acordo de Pagamento — dd/MM/yyyy"
-        const dateMatch = parts[i].match(/Acordo de Pagamento\s*—\s*(\d{2})\/(\d{2})\/(\d{4})/);
-        if (dateMatch && lead.createdAt) {
-          const blockDate = new Date(`${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}T12:00:00`).getTime();
-          const diff = Math.abs(blockDate - lead.createdAt);
-          if (diff < bestDateDiff) {
-            bestDateDiff = diff;
-            bestBlockIdx = i;
-          }
-        } else if (bestBlockIdx === -1) {
-          bestBlockIdx = i;
+        if (p.discount_value && Number(p.discount_value) > 0) {
+          const discLabel = p.discount_type === 'PERCENTUAL' ? ` (${p.discount_value}%)` : '';
+          block += `Desconto: - ${symbol} ${Number(p.discount_value).toFixed(2)}${discLabel}\n`;
         }
+        block += `Total Final: ${symbol} ${Number(p.amount).toFixed(2)}\n`;
+        if (p.payment_method) {
+          const methodLabels: Record<string, string> = {
+            'TRANSFERENCIA': 'Transferência', 'PIX': 'PIX', 'CARTAO': 'Cartão',
+            'DINHEIRO': 'Dinheiro', 'MB_WAY': 'MB Way', 'BIZUM': 'Bizum', 'OUTRO': 'Outro'
+          };
+          block += `Método: ${methodLabels[p.payment_method] || p.payment_method}\n`;
+        }
+        if (p.payment_form) {
+          const formLabels: Record<string, string> = { 'UNICO': 'Pagamento Único', 'PARCELADO': 'Parcelado', 'RECORRENTE': 'Recorrente' };
+          block += `Forma: ${formLabels[p.payment_form] || p.payment_form}`;
+        }
+      } else {
+        // Multiple installments
+        const total = leadPayments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+        const currency = leadPayments[0]?.currency || 'EUR';
+        const symbol = currency === 'EUR' ? '€' : currency;
+        block += `Total Final: ${symbol} ${total.toFixed(2)}\n`;
+        block += `Parcelas: ${leadPayments.length}x\n`;
+        leadPayments.forEach((p: any, idx: number) => {
+          const dateStr = p.due_date ? format(new Date(p.due_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : 'A definir';
+          block += `  ${idx + 1}ª: ${symbol} ${Number(p.amount).toFixed(2)} — Venc: ${dateStr}\n`;
+        });
       }
 
-      if (bestBlockIdx !== -1) {
-        matchedLeadIds.add(lead.id);
-        matchedBlockIndices.add(bestBlockIdx);
-      }
+      blocks.push(block.trim());
     }
 
-    // Collect matched blocks in original order
-    const groupBlocks: string[] = [];
-    const sortedIndices = [...matchedBlockIndices].sort((a, b) => a - b);
-    for (const idx of sortedIndices) {
-      groupBlocks.push(parts[idx]);
-    }
-
-    return groupBlocks.join('\n\n');
-  }, [paymentNotes, contractGroups, ungroupedLeads, serviceTypes, getLeadDisplayName]);
+    return blocks.join('\n\n');
+  }, [contractGroups, ungroupedLeads, deduplicatedPayments, getLeadDisplayName]);
 
   return (
     <>
