@@ -230,12 +230,18 @@ export default function ContractsList() {
 
   const columns: Column<typeof contracts[0]>[] = [
     {
+      key: 'contract_number',
+      header: 'Nº',
+      cell: (contract) => (
+        <span className="font-medium text-sm">{contract.contract_number || '—'}</span>
+      ),
+    },
+    {
       key: 'client',
       header: 'Cliente',
       cell: (contract) => (
         <div>
           <div className="font-medium">{contract.opportunities?.leads?.contacts?.full_name}</div>
-          <div className="text-sm text-muted-foreground">{contract.opportunities?.leads?.contacts?.email}</div>
         </div>
       ),
     },
