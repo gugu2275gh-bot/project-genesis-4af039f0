@@ -947,14 +947,76 @@ export function ContractGroupsSection({
 
     if (activeServiceNames.size === 0) return '';
 
-    // Filter notes: only blocks whose "Serviço:" matches the relevant leads
-    const groupBlocks: string[] = [];
-    for (let i = parts.length - 1; i >= 0; i--) {
-      const serviceMatch = parts[i].match(/Serviço:\s*(.+?)(?:\n|$)/);
-      const serviceName = serviceMatch ? serviceMatch[1].trim() : null;
-      if (serviceName && activeServiceNames.has(serviceName)) {
-        groupBlocks.unshift(parts[i]);
+    // Count how many leads per service name to limit matching blocks
+    const serviceNameCounts: Record<string, number> = {};
+    relevantLeads.forEach((lead: any) => {
+      const displayName = getLeadDisplayName(lead);
+      if (displayName) {
+        serviceNameCounts[displayName] = (serviceNameCounts[displayName] || 0) + 1;
       }
+      if (lead.service_type_id) {
+        const st = serviceTypes?.find(s => s.id === lead.service_type_id);
+        if (st?.name && st.name !== displayName) {
+          serviceNameCounts[st.name] = (serviceNameCounts[st.name] || 0) + 1;
+        }
+      }
+    });
+
+    // Match note blocks to leads by created_at date proximity
+    // Each lead should match at most one note block
+    const matchedLeadIds = new Set<string>();
+    const matchedBlockIndices = new Set<number>();
+
+    // Build lead info for matching
+    const leadInfos = relevantLeads.map((lead: any) => ({
+      id: lead.id,
+      displayName: getLeadDisplayName(lead),
+      rawName: lead.service_type_id ? serviceTypes?.find(s => s.id === lead.service_type_id)?.name : null,
+      createdAt: lead.created_at ? new Date(lead.created_at).getTime() : 0,
+    }));
+
+    // For each lead (sorted by creation date desc), find the best matching note block
+    const sortedLeadInfos = [...leadInfos].sort((a, b) => b.createdAt - a.createdAt);
+
+    for (const lead of sortedLeadInfos) {
+      if (matchedLeadIds.has(lead.id)) continue;
+
+      // Find best block: match by service name, prefer closest date, pick from end (most recent)
+      let bestBlockIdx = -1;
+      let bestDateDiff = Infinity;
+
+      for (let i = parts.length - 1; i >= 0; i--) {
+        if (matchedBlockIndices.has(i)) continue;
+        const serviceMatch = parts[i].match(/Serviço:\s*(.+?)(?:\n|$)/);
+        const serviceName = serviceMatch ? serviceMatch[1].trim() : null;
+        if (!serviceName) continue;
+        if (serviceName !== lead.displayName && serviceName !== lead.rawName) continue;
+
+        // Try to extract date from "Acordo de Pagamento — dd/MM/yyyy"
+        const dateMatch = parts[i].match(/Acordo de Pagamento\s*—\s*(\d{2})\/(\d{2})\/(\d{4})/);
+        if (dateMatch && lead.createdAt) {
+          const blockDate = new Date(`${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}T12:00:00`).getTime();
+          const diff = Math.abs(blockDate - lead.createdAt);
+          if (diff < bestDateDiff) {
+            bestDateDiff = diff;
+            bestBlockIdx = i;
+          }
+        } else if (bestBlockIdx === -1) {
+          bestBlockIdx = i;
+        }
+      }
+
+      if (bestBlockIdx !== -1) {
+        matchedLeadIds.add(lead.id);
+        matchedBlockIndices.add(bestBlockIdx);
+      }
+    }
+
+    // Collect matched blocks in original order
+    const groupBlocks: string[] = [];
+    const sortedIndices = [...matchedBlockIndices].sort((a, b) => a - b);
+    for (const idx of sortedIndices) {
+      groupBlocks.push(parts[idx]);
     }
 
     return groupBlocks.join('\n\n');
