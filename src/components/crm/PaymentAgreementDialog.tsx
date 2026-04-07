@@ -894,14 +894,17 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                 <div>
                   <Label className="text-xs">Valor (EUR) *</Label>
                   <Input
-                    type="number"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     className="w-28"
                     value={fee.amount}
                     onChange={(e) => {
-                      const updated = [...form.fees];
-                      updated[idx] = { ...updated[idx], amount: e.target.value };
-                      setForm({ ...form, fees: updated });
+                      const val = e.target.value;
+                      if (val === '' || /^\d*[.,]?\d*$/.test(val)) {
+                        const updated = [...form.fees];
+                        updated[idx] = { ...updated[idx], amount: val.replace(',', '.') };
+                        setForm({ ...form, fees: updated });
+                      }
                     }}
                     placeholder="150.00"
                   />
