@@ -1091,7 +1091,7 @@ export function ContractGroupsSection({
                               .insert({
                                 opportunity_id: opps[0].id,
                                 service_type: firstLead?.service_interest || 'OUTRO',
-                                status: 'EM_ELABORACAO',
+                                status: 'APROVADO',
                                 created_by_user_id: user?.id,
                               })
                               .select()
@@ -1259,21 +1259,6 @@ export function ContractGroupsSection({
                       </div>
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                         <StatusBadge status={contract.status || 'EM_ELABORACAO'} label={statusLabel} />
-                        {isDraft && (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            disabled={isFinalizingContract || group.leads.length === 0}
-                            onClick={() => handleFinalizeContract(contract.id)}
-                          >
-                            {isFinalizingContract ? (
-                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                            ) : (
-                              <CheckCircle2 className="h-4 w-4 mr-1" />
-                            )}
-                            Concluir
-                          </Button>
-                        )}
                         {!isDraft && (
                           <Button
                             size="sm"
