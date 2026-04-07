@@ -529,7 +529,7 @@ export function ContractGroupsSection({
         .insert({
           opportunity_id: opps[0].id,
           service_type: firstLead?.service_interest || 'OUTRO',
-          status: 'APROVADO',
+          status: 'EM_ELABORACAO',
           created_by_user_id: user?.id,
         })
         .select()
@@ -1037,7 +1037,7 @@ export function ContractGroupsSection({
                               .insert({
                                 opportunity_id: opps[0].id,
                                 service_type: firstLead?.service_interest || 'OUTRO',
-                                status: 'APROVADO',
+                                status: 'EM_ELABORACAO',
                                 created_by_user_id: user?.id,
                               })
                               .select()
@@ -1220,8 +1220,7 @@ export function ContractGroupsSection({
                     {isExpanded && (
                       <div className="p-3 space-y-3">
                         {group.leads.map(lead => renderLeadItem(lead, { 
-                          contractId: isDraft ? contract.id : undefined,
-                          editable: isDraft,
+                          editable: false,
                         }))}
                       </div>
                     )}
