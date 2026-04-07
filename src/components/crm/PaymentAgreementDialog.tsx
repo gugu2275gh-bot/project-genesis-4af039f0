@@ -849,10 +849,15 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               <div>
                 <Label>{form.discount_type === 'PERCENTUAL' ? 'Desconto (%)' : 'Desconto (€)'}</Label>
                 <Input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={form.discount_value}
-                  onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '' || /^\d*[.,]?\d*$/.test(val)) {
+                      setForm({ ...form, discount_value: val.replace(',', '.') });
+                    }
+                  }}
                   placeholder={form.discount_type === 'PERCENTUAL' ? '10' : '100.00'}
                 />
               </div>
