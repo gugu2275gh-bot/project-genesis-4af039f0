@@ -16,5 +16,33 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: true,
   },
 });
+
+// Proactively refresh session when tab regains focus to prevent JWT expired errors
+let isRefreshing = false;
+const handleVisibilityChange = async () => {
+  if (document.visibilityState === 'visible' && !isRefreshing) {
+    isRefreshing = true;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
+        const now = Date.now();
+        // Refresh if token expires within the next 2 minutes
+        if (expiresAt - now < 120_000) {
+          await supabase.auth.refreshSession();
+        }
+      }
+    } catch (e) {
+      console.warn('Session refresh on focus failed:', e);
+    } finally {
+      isRefreshing = false;
+    }
+  }
+};
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+}
