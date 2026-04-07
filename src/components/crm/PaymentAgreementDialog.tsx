@@ -708,14 +708,17 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                     <div key={idx} className="grid grid-cols-[auto_1fr_1fr] gap-2 items-center">
                       <span className="w-8 text-sm text-muted-foreground font-medium">{idx + 1}</span>
                       <Input
-                        type="number"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         placeholder="0.00"
                         value={inst.amount}
                         onChange={(e) => {
-                          const updated = [...form.installments];
-                          updated[idx] = { ...updated[idx], amount: e.target.value };
-                          setForm({ ...form, installments: updated });
+                          const val = e.target.value;
+                          if (val === '' || /^\d*[.,]?\d*$/.test(val)) {
+                            const updated = [...form.installments];
+                            updated[idx] = { ...updated[idx], amount: val.replace(',', '.') };
+                            setForm({ ...form, installments: updated });
+                          }
                         }}
                       />
                       <Input
