@@ -529,7 +529,7 @@ export function ContractGroupsSection({
         .insert({
           opportunity_id: opps[0].id,
           service_type: firstLead?.service_interest || 'OUTRO',
-          status: 'EM_ELABORACAO',
+          status: 'APROVADO',
           created_by_user_id: user?.id,
         })
         .select()
