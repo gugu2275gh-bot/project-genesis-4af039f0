@@ -1118,7 +1118,9 @@ export function ContractGroupsSection({
                         ? standbyPayments.find((p: any) => p.beneficiary_contact_id && p.beneficiary_contact_id !== contactId)
                         : null;
                       const standbyBenefName = standbyBenefPayment
-                        ? beneficiaryContacts.find(b => b.id === standbyBenefPayment.beneficiary_contact_id)?.full_name || null
+                        ? (standbyBenefPayment as any).beneficiary?.full_name
+                          || beneficiaryContacts.find(b => b.id === standbyBenefPayment.beneficiary_contact_id)?.full_name
+                          || null
                         : null;
                       return (
                         <div key={lead.id} className="rounded-lg border border-amber-200 bg-background overflow-hidden">
