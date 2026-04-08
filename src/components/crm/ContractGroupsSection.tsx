@@ -152,7 +152,7 @@ export function ContractGroupsSection({
       if (!opps?.length) return [];
       const { data: payments } = await supabase
         .from('payments')
-        .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest))')
+        .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest)), beneficiary:beneficiary_contact_id(id, full_name)')
         .in('opportunity_id', opps.map(o => o.id))
         .order('due_date', { ascending: true });
       return payments || [];
