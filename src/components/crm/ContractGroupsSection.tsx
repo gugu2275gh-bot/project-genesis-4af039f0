@@ -783,7 +783,7 @@ export function ContractGroupsSection({
                 {displayName}
                 {(lead._isBeneficiary || beneficiaryNameFromPayment) && (
                   <Badge variant="outline" className="ml-2 text-xs border-primary/30 text-primary bg-primary/5">
-                    {lead._isBeneficiary ? lead._beneficiaryName : beneficiaryNameFromPayment}
+                    Beneficiário
                   </Badge>
                 )}
               </p>
@@ -1132,7 +1132,7 @@ export function ContractGroupsSection({
                               <p className="font-medium">{displayName}
                                 {((lead as any)._isBeneficiary || standbyBenefName) && (
                                   <Badge variant="outline" className="ml-2 text-xs border-primary/30 text-primary bg-primary/5">
-                                    {(lead as any)._isBeneficiary ? (lead as any)._beneficiaryName : standbyBenefName}
+                                    Beneficiário
                                   </Badge>
                                 )}
                               </p>
