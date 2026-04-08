@@ -1362,7 +1362,8 @@ export function ContractGroupsSection({
             const targetContactId = selectedBeneficiaryId || contactId;
             // If we were adding a service to a specific contract, link new leads
             if (addServiceToContractId) {
-              await new Promise(r => setTimeout(r, 500));
+              // Wait for query cache to settle before checking new leads
+              await queryClient.refetchQueries({ queryKey: ['leads'] });
               const { data: currentLinks } = await supabase
                 .from('contract_leads')
                 .select('lead_id')
@@ -1402,7 +1403,7 @@ export function ContractGroupsSection({
         contactId={selectedBeneficiaryId || contactId}
         contactName={selectedBeneficiaryName || contactName}
         initialData={editPaymentData}
-        isBeneficiary={isBeneficiary}
+        isBeneficiary={!!selectedBeneficiaryId || isBeneficiary}
         titulares={titulares}
       />
 
