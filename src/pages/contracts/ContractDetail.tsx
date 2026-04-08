@@ -116,7 +116,7 @@ export default function ContractDetail() {
       
       const { data, error } = await supabase
         .from('payments')
-        .select('*, contract_beneficiaries:beneficiary_contact_id(full_name)')
+        .select('*, contract_beneficiaries:beneficiary_contact_id(full_name), opportunities:opportunity_id(id, lead_id, leads:lead_id(id, service_type_id, service_interest))')
         .or(orConditions.join(','));
       
       if (error) throw error;
