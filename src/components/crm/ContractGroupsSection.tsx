@@ -143,19 +143,44 @@ export function ContractGroupsSection({
 
   // Fetch payments for this contact
   const { data: contactPayments = [] } = useQuery({
-    queryKey: ['contact-payments', contactId],
+    queryKey: ['contact-payments', contactId, isBeneficiary],
     queryFn: async () => {
       if (!contactId) return [];
+
+      // Payments via own leads → opportunities
+      let ownPayments: any[] = [];
       const { data: cLeads } = await supabase.from('leads').select('id').eq('contact_id', contactId);
-      if (!cLeads?.length) return [];
-      const { data: opps } = await supabase.from('opportunities').select('id').in('lead_id', cLeads.map(l => l.id));
-      if (!opps?.length) return [];
-      const { data: payments } = await supabase
-        .from('payments')
-        .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest)), beneficiary:beneficiary_contact_id(id, full_name)')
-        .in('opportunity_id', opps.map(o => o.id))
-        .order('due_date', { ascending: true });
-      return payments || [];
+      if (cLeads?.length) {
+        const { data: opps } = await supabase.from('opportunities').select('id').in('lead_id', cLeads.map(l => l.id));
+        if (opps?.length) {
+          const { data: payments } = await supabase
+            .from('payments')
+            .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest)), beneficiary:beneficiary_contact_id(id, full_name)')
+            .in('opportunity_id', opps.map(o => o.id))
+            .order('due_date', { ascending: true });
+          ownPayments = payments || [];
+        }
+      }
+
+      // If beneficiary, also fetch payments linked via beneficiary_contact_id
+      let benefPayments: any[] = [];
+      if (isBeneficiary) {
+        const { data: bPayments } = await supabase
+          .from('payments')
+          .select('*, contracts(contract_number, service_type), opportunities(id, lead_id, leads(id, service_type_id, service_interest)), beneficiary:beneficiary_contact_id(id, full_name)')
+          .eq('beneficiary_contact_id', contactId)
+          .order('due_date', { ascending: true });
+        benefPayments = bPayments || [];
+      }
+
+      // Merge and deduplicate
+      const allPayments = [...ownPayments, ...benefPayments];
+      const seen = new Set<string>();
+      return allPayments.filter(p => {
+        if (seen.has(p.id)) return false;
+        seen.add(p.id);
+        return true;
+      });
     },
     enabled: !!contactId,
   });
