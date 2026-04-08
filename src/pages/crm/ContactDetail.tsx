@@ -201,12 +201,17 @@ export default function ContactDetail() {
 
   // Leads que têm pelo menos um pagamento confirmado = serviços
   const { data: confirmedLeadIds = [] } = useQuery({
-    queryKey: ['confirmed-lead-ids', id],
+    queryKey: ['confirmed-lead-ids', id, beneficiaryLinkedLeads.map(l => l.id).join(',')],
     queryFn: async () => {
       if (!id) return [];
-      const { data: cLeads } = await supabase.from('leads').select('id').eq('contact_id', id);
-      if (!cLeads?.length) return [];
-      const { data: opps } = await supabase.from('opportunities').select('id, lead_id').in('lead_id', cLeads.map(l => l.id));
+      // Include both direct leads and beneficiary-linked leads
+      const allLeadIds = [
+        ...directLeads.map(l => l.id),
+        ...beneficiaryLinkedLeads.map(l => l.id),
+      ];
+      const uniqueLeadIds = [...new Set(allLeadIds)];
+      if (!uniqueLeadIds.length) return [];
+      const { data: opps } = await supabase.from('opportunities').select('id, lead_id').in('lead_id', uniqueLeadIds);
       if (!opps?.length) return [];
       const { data: payments } = await supabase.from('payments').select('opportunity_id').in('opportunity_id', opps.map(o => o.id)).eq('status', 'CONFIRMADO');
       if (!payments?.length) return [];
