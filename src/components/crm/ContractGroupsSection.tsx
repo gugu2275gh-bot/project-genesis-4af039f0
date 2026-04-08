@@ -759,7 +759,9 @@ export function ContractGroupsSection({
       ? leadPayments.find((p: any) => p.beneficiary_contact_id && p.beneficiary_contact_id !== contactId)
       : null;
     const beneficiaryNameFromPayment = beneficiaryPayment
-      ? beneficiaryContacts.find(b => b.id === beneficiaryPayment.beneficiary_contact_id)?.full_name || null
+      ? (beneficiaryPayment as any).beneficiary?.full_name
+        || beneficiaryContacts.find(b => b.id === beneficiaryPayment.beneficiary_contact_id)?.full_name
+        || null
       : null;
 
     return (
