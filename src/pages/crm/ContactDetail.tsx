@@ -109,7 +109,47 @@ export default function ContactDetail() {
   const [isPromotingToTitular, setIsPromotingToTitular] = useState(false);
   const queryClient = useQueryClient();
 
-  const contactLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
+  const directLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
+
+  // For beneficiaries: also fetch leads from titulares that have payments referencing this beneficiary
+  const { data: beneficiaryLinkedLeads = [] } = useQuery({
+    queryKey: ['beneficiary-linked-leads', id, contact?.is_beneficiary],
+    queryFn: async () => {
+      if (!id) return [];
+      // Find payments that reference this contact as beneficiary
+      const { data: payments, error: pErr } = await supabase
+        .from('payments')
+        .select('opportunity_id')
+        .eq('beneficiary_contact_id', id);
+      if (pErr || !payments?.length) return [];
+
+      const oppIds = [...new Set(payments.map(p => p.opportunity_id))];
+      // Find the leads linked to those opportunities
+      const { data: opps, error: oErr } = await supabase
+        .from('opportunities')
+        .select('lead_id')
+        .in('id', oppIds);
+      if (oErr || !opps?.length) return [];
+
+      const leadIds = [...new Set(opps.map(o => o.lead_id))];
+      const { data: linkedLeads, error: lErr } = await supabase
+        .from('leads')
+        .select('*, contacts(*)')
+        .in('id', leadIds)
+        .neq('status', 'ARQUIVADO_SEM_RETORNO');
+      if (lErr) return [];
+      return linkedLeads || [];
+    },
+    enabled: !!id && !!contact?.is_beneficiary,
+  });
+
+  // Merge direct leads + beneficiary-linked leads (deduplicated)
+  const contactLeads = useMemo(() => {
+    const map = new Map<string, any>();
+    directLeads.forEach(l => map.set(l.id, l));
+    beneficiaryLinkedLeads.forEach(l => map.set(l.id, l));
+    return Array.from(map.values());
+  }, [directLeads, beneficiaryLinkedLeads]);
 
   const handlePromoteToTitular = async () => {
     if (!id) return;
