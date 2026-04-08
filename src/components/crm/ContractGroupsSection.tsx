@@ -1108,6 +1108,16 @@ export function ContractGroupsSection({
                   <div className="p-3 space-y-3">
                     {standbyLeads.map(lead => {
                       const displayName = getLeadDisplayName(lead);
+                      const standbyPayments = deduplicatedPayments.filter((p: any) => {
+                        const pLeadId = p.opportunities?.leads?.id || p.opportunities?.lead_id;
+                        return pLeadId === lead.id;
+                      });
+                      const standbyBenefPayment = !(lead as any)._isBeneficiary
+                        ? standbyPayments.find((p: any) => p.beneficiary_contact_id && p.beneficiary_contact_id !== contactId)
+                        : null;
+                      const standbyBenefName = standbyBenefPayment
+                        ? beneficiaryContacts.find(b => b.id === standbyBenefPayment.beneficiary_contact_id)?.full_name || null
+                        : null;
                       return (
                         <div key={lead.id} className="rounded-lg border border-amber-200 bg-background overflow-hidden">
                           <div className="flex items-center justify-between p-3">
@@ -1116,9 +1126,9 @@ export function ContractGroupsSection({
                               onClick={() => navigate(`/crm/leads/${lead.id}`)}
                             >
                               <p className="font-medium">{displayName}
-                                {(lead as any)._isBeneficiary && (
+                                {((lead as any)._isBeneficiary || standbyBenefName) && (
                                   <Badge variant="outline" className="ml-2 text-xs border-primary/30 text-primary bg-primary/5">
-                                    {(lead as any)._beneficiaryName}
+                                    {(lead as any)._isBeneficiary ? (lead as any)._beneficiaryName : standbyBenefName}
                                   </Badge>
                                 )}
                               </p>
