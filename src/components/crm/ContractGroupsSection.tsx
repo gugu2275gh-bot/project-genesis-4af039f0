@@ -754,6 +754,14 @@ export function ContractGroupsSection({
     });
     const allPaymentsPaid = leadPayments.length > 0 && leadPayments.every((p: any) => p.status === 'CONFIRMADO');
 
+    // Detect if this lead serves a beneficiary (payment.beneficiary_contact_id differs from contactId)
+    const beneficiaryPayment = !lead._isBeneficiary
+      ? leadPayments.find((p: any) => p.beneficiary_contact_id && p.beneficiary_contact_id !== contactId)
+      : null;
+    const beneficiaryNameFromPayment = beneficiaryPayment
+      ? beneficiaryContacts.find(b => b.id === beneficiaryPayment.beneficiary_contact_id)?.full_name || null
+      : null;
+
     return (
       <div key={lead.id} className={`rounded-lg border overflow-hidden ${isServiceCompleted ? 'opacity-60' : ''}`}>
         <div className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors">
@@ -771,9 +779,9 @@ export function ContractGroupsSection({
             >
               <p className={`font-medium ${isServiceCompleted ? 'text-muted-foreground' : ''}`}>
                 {displayName}
-                {lead._isBeneficiary && (
+                {(lead._isBeneficiary || beneficiaryNameFromPayment) && (
                   <Badge variant="outline" className="ml-2 text-xs border-primary/30 text-primary bg-primary/5">
-                    {lead._beneficiaryName}
+                    {lead._isBeneficiary ? lead._beneficiaryName : beneficiaryNameFromPayment}
                   </Badge>
                 )}
               </p>
