@@ -2033,6 +2033,11 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
+                          {contact?.is_beneficiary && (
+                            <Badge variant="outline" className="text-xs text-purple-600 border-purple-300 bg-purple-50">
+                              Beneficiário
+                            </Badge>
+                          )}
                           {isCaseCompleted && (
                             <StatusBadge variant="success" label="Concluído" />
                           )}
