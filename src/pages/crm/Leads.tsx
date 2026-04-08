@@ -436,7 +436,6 @@ export default function Leads() {
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
             {Object.entries(LEAD_STATUS_LABELS)
-              .filter(([value]) => !['DADOS_INCOMPLETOS', 'INTERESSE_PENDENTE'].includes(value))
               .map(([value, label]) => (
                 <SelectItem key={value} value={value}>{label}</SelectItem>
               ))}
@@ -520,6 +519,11 @@ export default function Leads() {
                               status={lead.status || 'NOVO'}
                               label={LEAD_STATUS_LABELS[lead.status || 'NOVO']}
                             />
+                            {lead.contacts?.is_beneficiary && (
+                              <Badge variant="outline" className="text-purple-600 border-purple-200 bg-purple-50 dark:bg-purple-900/20 text-xs">
+                                Beneficiário
+                              </Badge>
+                            )}
                             {lead.interest_confirmed && (
                               <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 dark:bg-green-900/20 text-xs">
                                 Interesse Confirmado
