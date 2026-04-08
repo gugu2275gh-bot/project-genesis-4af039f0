@@ -1059,70 +1059,65 @@ export function ContractGroupsSection({
                         <Plus className="h-4 w-4 mr-1" />
                         Adicionar Serviço
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="default"
-                        disabled={isCreatingContract || ungroupedLeads.length === 0}
-                        onClick={async () => {
-                          const allIds = new Set(ungroupedLeads.map(l => l.id));
-                          setSelectedLeadIds(allIds);
-                          setIsCreatingContract(true);
-                          try {
-                            // If beneficiary, redirect to titular's contract
-                            if (isBeneficiary && titulares.length > 0) {
-                              await startBeneficiaryContractFlow(ungroupedLeads);
+                      {!isBeneficiary && (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          disabled={isCreatingContract || ungroupedLeads.length === 0}
+                          onClick={async () => {
+                            const allIds = new Set(ungroupedLeads.map(l => l.id));
+                            setSelectedLeadIds(allIds);
+                            setIsCreatingContract(true);
+                            try {
+                              const firstLead = ungroupedLeads[0];
+                              const { data: opps } = await supabase
+                                .from('opportunities')
+                                .select('id')
+                                .eq('lead_id', firstLead.id)
+                                .limit(1);
+                              if (!opps?.length) {
+                                toast({ title: 'Nenhuma oportunidade encontrada', variant: 'destructive' });
+                                return;
+                              }
+                              const { data: contract, error: contractError } = await supabase
+                                .from('contracts')
+                                .insert({
+                                  opportunity_id: opps[0].id,
+                                  service_type: firstLead?.service_interest || 'OUTRO',
+                                  status: 'EM_ELABORACAO',
+                                  created_by_user_id: user?.id,
+                                })
+                                .select()
+                                .single();
+                              if (contractError) throw contractError;
+                              const links = ungroupedLeads.map(l => ({
+                                contract_id: contract.id,
+                                lead_id: l.id,
+                              }));
+                              const { error: linkError } = await supabase
+                                .from('contract_leads')
+                                .insert(links);
+                              if (linkError) throw linkError;
                               setSelectedLeadIds(new Set());
-                              return;
+                              queryClient.invalidateQueries({ queryKey: ['contract-leads', contactId] });
+                              queryClient.invalidateQueries({ queryKey: ['contact-contracts', contactId] });
+                              queryClient.invalidateQueries({ queryKey: ['contracts'] });
+                              toast({ title: 'Contrato criado com os serviços selecionados' });
+                            } catch (error: any) {
+                              toast({ title: 'Erro ao criar contrato', description: error.message, variant: 'destructive' });
+                            } finally {
+                              setIsCreatingContract(false);
                             }
-
-                            const firstLead = ungroupedLeads[0];
-                            const { data: opps } = await supabase
-                              .from('opportunities')
-                              .select('id')
-                              .eq('lead_id', firstLead.id)
-                              .limit(1);
-                            if (!opps?.length) {
-                              toast({ title: 'Nenhuma oportunidade encontrada', variant: 'destructive' });
-                              return;
-                            }
-                            const { data: contract, error: contractError } = await supabase
-                              .from('contracts')
-                              .insert({
-                                opportunity_id: opps[0].id,
-                                service_type: firstLead?.service_interest || 'OUTRO',
-                                status: 'EM_ELABORACAO',
-                                created_by_user_id: user?.id,
-                              })
-                              .select()
-                              .single();
-                            if (contractError) throw contractError;
-                            const links = ungroupedLeads.map(l => ({
-                              contract_id: contract.id,
-                              lead_id: l.id,
-                            }));
-                            const { error: linkError } = await supabase
-                              .from('contract_leads')
-                              .insert(links);
-                            if (linkError) throw linkError;
-                            setSelectedLeadIds(new Set());
-                            queryClient.invalidateQueries({ queryKey: ['contract-leads', contactId] });
-                            queryClient.invalidateQueries({ queryKey: ['contact-contracts', contactId] });
-                            queryClient.invalidateQueries({ queryKey: ['contracts'] });
-                            toast({ title: 'Contrato criado com os serviços selecionados' });
-                          } catch (error: any) {
-                            toast({ title: 'Erro ao criar contrato', description: error.message, variant: 'destructive' });
-                          } finally {
-                            setIsCreatingContract(false);
-                          }
-                        }}
-                      >
-                        {isCreatingContract ? (
-                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                        ) : (
-                          <CheckCircle2 className="h-4 w-4 mr-1" />
-                        )}
-                        {isBeneficiary ? 'Vincular ao Titular' : 'Concluir'}
-                      </Button>
+                          }}
+                        >
+                          {isCreatingContract ? (
+                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4 mr-1" />
+                          )}
+                          Concluir
+                        </Button>
+                      )}
                     </div>
                   </div>
                   <div className="p-3 space-y-3">
