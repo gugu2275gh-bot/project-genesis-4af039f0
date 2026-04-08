@@ -291,40 +291,6 @@ export default function ContractsList() {
       },
     },
     {
-      key: 'paid_amount',
-      header: 'Pago',
-      cell: (contract) => {
-        const { paidAmount } = calculatePaymentStatus(contract);
-        return (
-          <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-            {formatCurrency(paidAmount, contract.currency || 'EUR')}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'balance',
-      header: 'Saldo',
-      cell: (contract) => {
-        const { balance } = calculatePaymentStatus(contract);
-        const isFullyPaid = balance <= 0;
-        const isOverdue = hasOverduePayments(contract);
-        return (
-          <div className="flex items-center gap-2">
-            <span className={isFullyPaid ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-amber-600 dark:text-amber-400 font-medium'}>
-              {isFullyPaid ? 'Quitado' : formatCurrency(balance, contract.currency || 'EUR')}
-            </span>
-            {isOverdue && !isFullyPaid && (
-              <Badge variant="destructive" className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Atraso
-              </Badge>
-            )}
-          </div>
-        );
-      },
-    },
-    {
       key: 'actions',
       header: '',
       cell: (contract) => (
