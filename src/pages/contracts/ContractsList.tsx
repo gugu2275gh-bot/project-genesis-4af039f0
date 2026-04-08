@@ -290,7 +290,6 @@ export default function ContractsList() {
         return totalFee > 0 ? formatCurrency(totalFee, contract.currency || 'EUR') : '-';
       },
     },
-    },
     {
       key: 'actions',
       header: '',
