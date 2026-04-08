@@ -2145,9 +2145,16 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
                             Criado em {format(new Date(lead.created_at), "dd/MM/yyyy", { locale: ptBR })}
                           </p>
                         </div>
-                        <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
-                          Aguardando Pagamento
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          {lead.contact_id !== id && (
+                            <Badge variant="outline" className="text-xs text-purple-600 border-purple-300 bg-purple-50">
+                              Beneficiário
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50">
+                            Aguardando Pagamento
+                          </Badge>
+                        </div>
                       </div>
                       {/* Payments for this pending lead */}
                       {leadPayments.length > 0 && (
