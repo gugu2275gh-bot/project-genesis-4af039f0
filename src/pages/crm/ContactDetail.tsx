@@ -1792,6 +1792,58 @@ export default function ContactDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Dialog Tornar Beneficiário */}
+      <Dialog open={showConvertToBeneficiaryDialog} onOpenChange={(open) => { setShowConvertToBeneficiaryDialog(open); if (!open) setTitularSearchQuery(''); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Tornar Beneficiário</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-muted-foreground">
+              Busque o titular ao qual este contato será vinculado como beneficiário.
+            </p>
+            <div>
+              <Label>Buscar Titular</Label>
+              <Input
+                value={titularSearchQuery}
+                onChange={(e) => setTitularSearchQuery(e.target.value)}
+                placeholder="Digite o nome do titular..."
+              />
+            </div>
+            {titularSearchResults.length > 0 && (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {titularSearchResults.map((c: any) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => handleConvertToBeneficiary(c.id)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{c.full_name}</p>
+                        {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-xs">Selecionar</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+            {titularSearchQuery.length >= 2 && titularSearchResults.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-2">Nenhum titular encontrado</p>
+            )}
+            {isConvertingToBeneficiary && (
+              <div className="flex items-center justify-center py-2">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </>
   );
 }
