@@ -455,6 +455,7 @@ export function ContractGroupsSection({
     grossAmount: number | null;
     totalFinal: number | null;
     usedIndexes: Set<number>;
+    preferLatest?: boolean;
   }) => {
     const normalize = (value: string) => value.trim().toLocaleLowerCase('pt-BR');
     const amountsMatch = (a: number | null, b: number | null) => a !== null && b !== null && Math.abs(a - b) < 0.01;
@@ -463,10 +464,12 @@ export function ContractGroupsSection({
       .map((block, index) => ({ block, index }))
       .filter(({ block, index }) => !params.usedIndexes.has(index) && normalize(block.serviceName) === normalize(params.serviceName));
 
-    return candidates.find(({ block }) => amountsMatch(block.grossAmount, params.grossAmount) && amountsMatch(block.totalFinal, params.totalFinal))
-      || candidates.find(({ block }) => amountsMatch(block.totalFinal, params.totalFinal))
-      || candidates.find(({ block }) => amountsMatch(block.grossAmount, params.grossAmount))
-      || candidates[0]
+    const orderedCandidates = params.preferLatest ? [...candidates].reverse() : candidates;
+
+    return orderedCandidates.find(({ block }) => amountsMatch(block.grossAmount, params.grossAmount) && amountsMatch(block.totalFinal, params.totalFinal))
+      || orderedCandidates.find(({ block }) => amountsMatch(block.totalFinal, params.totalFinal))
+      || orderedCandidates.find(({ block }) => amountsMatch(block.grossAmount, params.grossAmount))
+      || orderedCandidates[0]
       || null;
   }, [parsedPaymentNoteBlocks]);
 
@@ -475,6 +478,7 @@ export function ContractGroupsSection({
     grossAmount: number | null;
     totalFinal: number | null;
     usedIndexes: Set<number>;
+    preferLatest?: boolean;
   }) => {
     const match = findNoteBlockForLead(params);
     if (!match) return [] as { description: string; amount: string }[];
@@ -1081,14 +1085,32 @@ export function ContractGroupsSection({
 
     if (relevantLeads.length === 0) return '';
 
-    const usedNoteIndexes = new Set<number>();
-
     // For each relevant lead, find its payments and build a summary block
     const blocks: string[] = [];
     const sortedRelevantLeads = [...relevantLeads].sort((a, b) => {
       const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
       const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
       return timeA - timeB;
+    });
+
+    const usedNoteIndexes = new Set<number>();
+    const leadFeesById = new Map<string, { description: string; amount: string }[]>();
+
+    [...sortedRelevantLeads].reverse().forEach((lead) => {
+      const displayName = getLeadDisplayName(lead);
+      const leadPayments = deduplicatedPayments.filter((p: any) => {
+        const pLeadId = p.opportunities?.leads?.id || p.opportunities?.lead_id;
+        return pLeadId === lead.id;
+      });
+      const { grossAmount, totalFinal } = getLeadExpectedAmounts(leadPayments);
+
+      leadFeesById.set(lead.id, extractFeesFromNotes({
+        serviceName: displayName,
+        grossAmount,
+        totalFinal,
+        usedIndexes: usedNoteIndexes,
+        preferLatest: true,
+      }));
     });
 
     for (const lead of sortedRelevantLeads) {
@@ -1100,13 +1122,7 @@ export function ContractGroupsSection({
         const pLeadId = p.opportunities?.leads?.id || p.opportunities?.lead_id;
         return pLeadId === lead.id;
       });
-      const { grossAmount, totalFinal } = getLeadExpectedAmounts(leadPayments);
-      const leadFees = extractFeesFromNotes({
-        serviceName: displayName,
-        grossAmount,
-        totalFinal,
-        usedIndexes: usedNoteIndexes,
-      });
+      const leadFees = leadFeesById.get(lead.id) || [];
 
       let block = `Acordo de Pagamento — ${createdDate}\n`;
       block += `Serviço: ${displayName}\n`;
