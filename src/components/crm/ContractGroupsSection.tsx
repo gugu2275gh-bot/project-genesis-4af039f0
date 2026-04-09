@@ -1023,7 +1023,7 @@ export function ContractGroupsSection({
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => { setEditPaymentData(null); setShowPaymentAgreement(true); }}>
               <DollarSign className="h-4 w-4 mr-1" />
-              Forma de Pagamento
+              Novo Serviço
             </Button>
           </div>
         </CardHeader>
