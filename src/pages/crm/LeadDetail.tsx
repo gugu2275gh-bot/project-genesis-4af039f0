@@ -67,6 +67,21 @@ export default function LeadDetail() {
     },
     enabled: !!id,
   });
+
+  // Fetch the existing opportunity for this lead (to pass to PaymentAgreementDialog)
+  const { data: leadOpportunity } = useQuery({
+    queryKey: ['lead-opportunity', id],
+    queryFn: async () => {
+      if (!id) return null;
+      const { data } = await supabase
+        .from('opportunities')
+        .select('id')
+        .eq('lead_id', id)
+        .limit(1);
+      return data?.[0] || null;
+    },
+    enabled: !!id,
+  });
   const { updateContact } = useContacts();
   const { interactions, createInteraction, updateInteraction, deleteInteraction, isEditable } = useInteractions(lead?.contact_id, id);
   const { data: profiles } = useProfiles();
