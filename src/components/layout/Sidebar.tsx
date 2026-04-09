@@ -37,7 +37,6 @@ const navItems: NavItem[] = [
     roles: ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA', 'ATENCAO_CLIENTE', 'ATENDENTE_WHATSAPP', 'JURIDICO', 'EXPEDIENTE'],
     children: [
       { label: 'Leads', href: '/crm/leads' },
-      { label: 'Oportunidades', href: '/crm/opportunities' },
     ]
   },
   { label: 'Ficha do Cliente', href: '/crm/contacts', icon: FileText, roles: ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA', 'ATENCAO_CLIENTE', 'EXPEDIENTE'] },
