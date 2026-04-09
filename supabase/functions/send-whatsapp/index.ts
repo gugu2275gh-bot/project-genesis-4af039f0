@@ -124,18 +124,25 @@ serve(async (req) => {
     }
 
     // Send via Twilio WhatsApp Gateway
-    console.log('Sending via Twilio WhatsApp Gateway:', { phone: phoneStr })
+    console.log('Sending via Twilio WhatsApp Gateway:', { phone: phoneStr, hasContentSid: !!contentSid })
 
     const twilioParams: Record<string, string> = {
       To: `whatsapp:+${phoneStr}`,
       From: TWILIO_FROM_NUMBER,
-      Body: rawMessage,
     }
 
-    // Add media URL if provided
-    if (mediaUrl) {
-      twilioParams.MediaUrl = mediaUrl
-      console.log('Sending with media:', mediaUrl)
+    if (contentSid) {
+      // Template send - use ContentSid instead of Body
+      twilioParams.ContentSid = contentSid
+      twilioParams.ContentVariables = JSON.stringify({ "1": "Cliente" })
+      console.log('Sending template with ContentSid:', contentSid)
+    } else {
+      twilioParams.Body = rawMessage
+      // Add media URL if provided
+      if (mediaUrl) {
+        twilioParams.MediaUrl = mediaUrl
+        console.log('Sending with media:', mediaUrl)
+      }
     }
 
     const response = await fetch(`${GATEWAY_URL}/Messages.json`, {

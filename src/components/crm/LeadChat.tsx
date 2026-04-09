@@ -15,6 +15,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { supabase } from '@/integrations/supabase/client';
 import { useWhatsAppTemplates } from '@/hooks/useWhatsAppTemplates';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 
 interface LeadChatProps {
@@ -156,6 +158,7 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
   const { operationalTemplates } = useWhatsAppTemplates();
   const [newMessage, setNewMessage] = useState('');
   const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [transcribingIds, setTranscribingIds] = useState<Set<string>>(new Set());
@@ -330,13 +333,14 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
     try {
       const { error } = await supabase.functions.invoke('send-whatsapp', {
         body: {
-          to: String(contactPhone),
+          numero: String(contactPhone),
           contentSid: template.content_sid,
-          leadId,
+          contact_id: contactId,
         },
       });
       if (error) throw error;
       toast.success(`Template "${template.template_name}" enviado`);
+      setSelectedTemplate(null);
       queryClient.invalidateQueries({ queryKey: cacheKey });
     } catch (err: any) {
       toast.error('Erro ao enviar template: ' + (err.message || 'Erro desconhecido'));
@@ -664,40 +668,64 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
         {/* Input Area */}
         <div className="p-4 border-t bg-muted/30 flex-shrink-0">
           {windowStatus.isOutside ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center gap-2 text-xs text-destructive">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                <span>Janela de 24h expirada. Envie um template aprovado para reabrir a conversa.</span>
+                <span>Janela de 24h expirada. Selecione um template aprovado para reabrir a conversa.</span>
               </div>
               {operationalTemplates.length > 0 ? (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full gap-2 border-destructive/30 text-destructive hover:bg-destructive/10"
-                      disabled={sendingTemplate}
-                    >
-                      <LayoutTemplate className="h-4 w-4" />
-                      Selecionar Template Aprovado
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80 p-2" align="start">
-                    <p className="text-xs font-medium text-muted-foreground mb-2 px-2">Templates Operacionais Aprovados</p>
-                    <div className="space-y-1 max-h-[250px] overflow-y-auto">
+                <>
+                  <Select
+                    value={selectedTemplate?.id || ''}
+                    onValueChange={(id) => {
+                      const tpl = operationalTemplates.find(t => t.id === id);
+                      setSelectedTemplate(tpl || null);
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecione um template..." />
+                    </SelectTrigger>
+                    <SelectContent>
                       {operationalTemplates.map((tpl) => (
-                        <button
-                          key={tpl.id}
-                          className="w-full text-left px-3 py-2 rounded-md hover:bg-accent text-sm transition-colors"
-                          onClick={() => handleSendTemplate(tpl as any)}
+                        <SelectItem key={tpl.id} value={tpl.id}>
+                          {tpl.template_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedTemplate && (
+                    <>
+                      <Textarea
+                        value={selectedTemplate.body_text || ''}
+                        readOnly
+                        className="min-h-[80px] bg-muted/50 cursor-not-allowed text-sm"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedTemplate(null)}
                           disabled={sendingTemplate}
                         >
-                          <p className="font-medium text-xs">{tpl.template_name}</p>
-                          <p className="text-[11px] text-muted-foreground line-clamp-2">{tpl.body_text}</p>
-                        </button>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                          Limpar
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1 gap-2"
+                          onClick={() => handleSendTemplate(selectedTemplate as any)}
+                          disabled={sendingTemplate}
+                        >
+                          {sendingTemplate ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
+                          Enviar Template
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </>
               ) : (
                 <p className="text-xs text-muted-foreground text-center py-1">
                   Nenhum template operacional aprovado disponível. Crie e submeta templates em Configurações.
