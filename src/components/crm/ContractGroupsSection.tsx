@@ -374,6 +374,56 @@ export function ContractGroupsSection({
     return match ? match[1].trim() : '';
   };
 
+  const extractFeesFromNotes = useCallback((serviceName: string) => {
+    const notes = paymentNotes || '';
+    if (!notes) return [] as { description: string; amount: string }[];
+
+    const ignoredPrefixes = [
+      'Acordo de Pagamento',
+      'Serviço',
+      'Valor Bruto',
+      'IVA',
+      'Total',
+      'Total Final',
+      'Método',
+      'Forma',
+      'Parcelas',
+      'Origem',
+      'Conta',
+      'Detalhe',
+      'Observações',
+      'Desconto',
+      'Outros Custos',
+    ];
+
+    const blocks = notes.split('---');
+
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const block = blocks[i].trim();
+      if (serviceName && !block.includes(serviceName)) continue;
+
+      const feeLines: { description: string; amount: string }[] = [];
+      for (const line of block.split('\n')) {
+        const trimmedLine = line.trim();
+        const feeMatch = trimmedLine.match(/^(.+?):\s*\+\s*€\s*([\d.,]+)\s*$/);
+
+        if (!feeMatch) continue;
+
+        const desc = feeMatch[1].trim();
+        if (ignoredPrefixes.some(prefix => desc.startsWith(prefix))) continue;
+
+        feeLines.push({
+          description: desc,
+          amount: feeMatch[2].replace(',', '.'),
+        });
+      }
+
+      if (feeLines.length > 0) return feeLines;
+    }
+
+    return [] as { description: string; amount: string }[];
+  }, [paymentNotes]);
+
   // Helper: link beneficiary leads to a specific titular's draft or create new draft
   const linkLeadsToTitularContract = async (leadsToLink: any[], chosenTitularId: string, chosenTitularName?: string) => {
     if (!chosenTitularId || leadsToLink.length === 0) return;
@@ -958,6 +1008,7 @@ export function ContractGroupsSection({
     for (const lead of relevantLeads) {
       const displayName = getLeadDisplayName(lead);
       const createdDate = lead.created_at ? format(new Date(lead.created_at), 'dd/MM/yyyy', { locale: ptBR }) : '';
+      const leadFees = extractFeesFromNotes(displayName);
 
       // Find payments for this lead via opportunities
       const leadPayments = deduplicatedPayments.filter((p: any) => {
@@ -977,6 +1028,12 @@ export function ContractGroupsSection({
         block += `Valor Bruto: ${symbol} ${Number(p.gross_amount || p.amount).toFixed(2)}\n`;
         if (p.vat_amount && Number(p.vat_amount) > 0) {
           block += `IVA (${p.vat_rate || 21}%): + ${symbol} ${Number(p.vat_amount).toFixed(2)}\n`;
+        }
+        if (leadFees.length > 0) {
+          block += `Outros Custos:\n`;
+          leadFees.forEach(fee => {
+            block += `  ${fee.description}: + ${symbol} ${Number(fee.amount).toFixed(2)}\n`;
+          });
         }
         if (p.discount_value && Number(p.discount_value) > 0) {
           const discLabel = p.discount_type === 'PERCENTUAL' ? ` (${p.discount_value}%)` : '';
@@ -999,6 +1056,12 @@ export function ContractGroupsSection({
         const total = leadPayments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
         const currency = leadPayments[0]?.currency || 'EUR';
         const symbol = currency === 'EUR' ? '€' : currency;
+        if (leadFees.length > 0) {
+          block += `Outros Custos:\n`;
+          leadFees.forEach(fee => {
+            block += `  ${fee.description}: + ${symbol} ${Number(fee.amount).toFixed(2)}\n`;
+          });
+        }
         block += `Total Final: ${symbol} ${total.toFixed(2)}\n`;
         block += `Parcelas: ${leadPayments.length}x\n`;
         leadPayments.forEach((p: any, idx: number) => {
@@ -1011,7 +1074,7 @@ export function ContractGroupsSection({
     }
 
     return blocks.join('\n\n');
-  }, [contractGroups, ungroupedLeads, deduplicatedPayments, getLeadDisplayName]);
+  }, [contractGroups, ungroupedLeads, deduplicatedPayments, getLeadDisplayName, extractFeesFromNotes]);
 
   return (
     <>
