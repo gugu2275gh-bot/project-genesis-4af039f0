@@ -1,55 +1,33 @@
 
 
-# Fix: Template WhatsApp realmente executado pelo Twilio
+# Fix: Templates não aparecem no dropdown do chat
 
-## Problemas Identificados
+## Problema
 
-### Bug 1: Campo errado no frontend
-`handleSendTemplate` (LeadChat.tsx linha 333) envia `{ to: contactPhone }` mas a Edge Function espera `{ numero }`. Resultado: `numero` é `undefined` → erro 400.
+Todos os 12 templates aprovados no banco de dados têm `template_category = 'sla'`. O filtro `operationalTemplates` no hook `useWhatsAppTemplates.ts` exige `template_category === 'operational'`, resultando em lista vazia.
 
-### Bug 2: Edge Function ignora `contentSid` no envio Twilio
-A Edge Function (send-whatsapp) extrai `contentSid` do body mas nunca o usa nos parâmetros do Twilio. Sempre envia `Body: rawMessage` (que é vazio no caso de template). O Twilio recebe uma mensagem vazia em vez do template.
+## Solução
 
-## Correções
+Alterar a lógica do `LeadChat.tsx` para mostrar **todos** os templates aprovados e ativos no dropdown quando a janela de 24h estiver expirada, independentemente da categoria (`sla` ou `operational`). O operador precisa reabrir o contato e qualquer template aprovado serve para isso.
 
-### Arquivo 1: `src/components/crm/LeadChat.tsx`
+### Alterações
 
-Corrigir `handleSendTemplate` (linha 331-337) para enviar `numero` em vez de `to`:
+**Arquivo: `src/components/crm/LeadChat.tsx`**
 
+1. Extrair `templates` (lista completa) do hook `useWhatsAppTemplates` além de `operationalTemplates`
+2. Criar uma lista `availableTemplates` que filtra todos os templates aprovados e ativos (ignorando categoria)
+3. Usar `availableTemplates` no bloco da janela expirada (linhas 676-728) em vez de `operationalTemplates`
+4. Manter `operationalTemplates` no popover de templates dentro da janela normal (linha 760)
+
+**Lógica:**
 ```typescript
-const { error } = await supabase.functions.invoke('send-whatsapp', {
-  body: {
-    numero: String(contactPhone),
-    contentSid: template.content_sid,
-    contact_id: contactId,
-  },
-});
+const { templates, operationalTemplates } = useWhatsAppTemplates();
+
+const availableTemplates = useMemo(() => 
+  (templates || []).filter(t => t.status === 'approved' && t.is_active),
+  [templates]
+);
 ```
 
-Adicionar novo fluxo com Select dropdown + Textarea read-only + botão Enviar conforme solicitado anteriormente.
-
-### Arquivo 2: `supabase/functions/send-whatsapp/index.ts`
-
-Quando `contentSid` estiver presente, usar `ContentSid` nos parâmetros Twilio em vez de `Body`:
-
-```typescript
-const twilioParams: Record<string, string> = {
-  To: `whatsapp:+${phoneStr}`,
-  From: TWILIO_FROM_NUMBER,
-}
-
-if (contentSid) {
-  // Template send - use ContentSid instead of Body
-  twilioParams.ContentSid = contentSid
-  twilioParams.ContentVariables = JSON.stringify({ "1": "Cliente" })
-} else {
-  twilioParams.Body = rawMessage
-}
-```
-
-### Resultado
-
-- Template selecionado pelo operador será realmente enviado via Twilio usando `ContentSid`
-- Campo `numero` chegará corretamente na Edge Function
-- Interface com Select dropdown + texto read-only + confirmação antes do envio
+Nenhuma alteração de banco de dados necessária.
 
