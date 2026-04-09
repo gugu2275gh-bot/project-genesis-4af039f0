@@ -238,7 +238,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       summary += `Serviço: ${selectedServiceName}\n`;
     }
     summary += `Valor Bruto: € ${gross.toFixed(2)}\n`;
-    if (form.apply_vat) {
+    if (form.apply_vat && vatAmount > 0) {
       summary += `IVA (${defaultVatRate || 21}%): + € ${vatAmount.toFixed(2)}\n`;
     }
     const validFees = form.fees.filter(fee => parseFloat(fee.amount) > 0);
