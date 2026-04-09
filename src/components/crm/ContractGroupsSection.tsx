@@ -974,6 +974,21 @@ export function ContractGroupsSection({
                 </Badge>
               )
             )}
+            {!editable && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/crm/leads/${lead.id}`);
+                }}
+                title="Ver detalhes do serviço"
+              >
+                <Eye className="h-3.5 w-3.5 mr-1" />
+                Detalhes
+              </Button>
+            )}
             {editable && options?.contractId && (
               <Button
                 size="sm"
