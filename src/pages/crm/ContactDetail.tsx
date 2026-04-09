@@ -104,7 +104,7 @@ export default function ContactDetail() {
   const [showAddBeneficiaryDialog, setShowAddBeneficiaryDialog] = useState(false);
   const [newBeneficiaryName, setNewBeneficiaryName] = useState('');
   const [newBeneficiaryPhone, setNewBeneficiaryPhone] = useState('');
-  const [newBeneficiaryEmail, setNewBeneficiaryEmail] = useState('');
+  const [newBeneficiaryDocument, setNewBeneficiaryDocument] = useState('');
   const [isCreatingBeneficiary, setIsCreatingBeneficiary] = useState(false);
   const [isPromotingToTitular, setIsPromotingToTitular] = useState(false);
   const queryClient = useQueryClient();
@@ -1670,11 +1670,11 @@ export default function ContactDetail() {
                 />
               </div>
               <div>
-                <Label>E-mail</Label>
+                <Label>Documento</Label>
                 <Input
-                  value={newBeneficiaryEmail}
-                  onChange={(e) => setNewBeneficiaryEmail(e.target.value)}
-                  placeholder="email@exemplo.com"
+                  value={newBeneficiaryDocument}
+                  onChange={(e) => setNewBeneficiaryDocument(e.target.value)}
+                  placeholder="Nº do documento"
                 />
               </div>
             </div>
@@ -1694,7 +1694,7 @@ export default function ContactDetail() {
                     .insert({
                       full_name: newBeneficiaryName.trim(),
                       phone: newBeneficiaryPhone || null,
-                      email: newBeneficiaryEmail || null,
+                      document_number: newBeneficiaryDocument || null,
                       is_beneficiary: true,
                       linked_principal_contact_id: id,
                     })
@@ -1706,7 +1706,7 @@ export default function ContactDetail() {
                   setShowAddBeneficiaryDialog(false);
                   setNewBeneficiaryName('');
                   setNewBeneficiaryPhone('');
-                  setNewBeneficiaryEmail('');
+                  setNewBeneficiaryDocument('');
                 } catch (err: any) {
                   toast({ title: 'Erro ao criar beneficiário', description: err.message, variant: 'destructive' });
                 } finally {
