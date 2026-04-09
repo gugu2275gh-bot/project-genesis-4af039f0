@@ -52,9 +52,10 @@ interface PaymentAgreementDialogProps {
   initialData?: PaymentAgreementInitialData | null;
   isBeneficiary?: boolean;
   titulares?: TitularLink[];
+  readOnly?: boolean;
 }
 
-export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange, initialData, isBeneficiary = false, titulares = [] }: PaymentAgreementDialogProps) {
+export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange, initialData, isBeneficiary = false, titulares = [], readOnly = false }: PaymentAgreementDialogProps) {
   const { updateContact } = useContacts();
   const { data: serviceTypes } = useServiceTypes();
   const queryClient = useQueryClient();
