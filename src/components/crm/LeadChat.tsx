@@ -218,6 +218,8 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
     }
   }, [messages]);
 
+  const cacheKey = contactId ? ['lead-messages-contact', contactId] : ['lead-messages', leadId];
+
   // Realtime subscription for instant message updates
   useEffect(() => {
     if (!contactId && !leadId) return;
