@@ -1399,8 +1399,17 @@ export function ContractGroupsSection({
             setEditPaymentData(null);
             setSelectedBeneficiaryId(null);
             setSelectedBeneficiaryName('');
-            // Also invalidate beneficiary queries
-            queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', contactId] });
+            // Invalidate all relevant queries for beneficiary and titular views
+            queryClient.invalidateQueries({ queryKey: ['leads'] });
+            queryClient.invalidateQueries({ queryKey: ['contact-leads', contactId] });
+            queryClient.invalidateQueries({ queryKey: ['contact-payments', contactId] });
+            queryClient.invalidateQueries({ queryKey: ['contact-contracts', contactId] });
+            queryClient.invalidateQueries({ queryKey: ['contract-leads', contactId] });
+            queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups'] });
+            queryClient.invalidateQueries({ queryKey: ['beneficiary-contract-leads'] });
+            queryClient.invalidateQueries({ queryKey: ['beneficiary-payments-in-groups'] });
+            queryClient.invalidateQueries({ queryKey: ['titular-draft-contracts'] });
+            queryClient.invalidateQueries({ queryKey: ['opportunities'] });
           }
           setShowPaymentAgreement(open);
         }}
