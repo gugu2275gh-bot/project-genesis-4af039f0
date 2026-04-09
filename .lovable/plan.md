@@ -1,78 +1,55 @@
 
 
-# Fix: Sincronização de Status dos Templates WhatsApp com Twilio
+# Fix: Template WhatsApp realmente executado pelo Twilio
 
-## Problema Raiz Identificado
+## Problemas Identificados
 
-O bug está na Edge Function `submit-whatsapp-templates`. A resposta da API Twilio ApprovalRequests retorna:
+### Bug 1: Campo errado no frontend
+`handleSendTemplate` (LeadChat.tsx linha 333) envia `{ to: contactPhone }` mas a Edge Function espera `{ numero }`. Resultado: `numero` é `undefined` → erro 400.
 
-```text
-{
-  "whatsapp": { "status": "approved", "rejection_reason": "" },
-  "sid": "HX...",
-  "account_sid": "AC..."
-}
-```
+### Bug 2: Edge Function ignora `contentSid` no envio Twilio
+A Edge Function (send-whatsapp) extrai `contentSid` do body mas nunca o usa nos parâmetros do Twilio. Sempre envia `Body: rawMessage` (que é vazio no caso de template). O Twilio recebe uma mensagem vazia em vez do template.
 
-Mas o código espera um formato diferente (`data.data[0].status`). Como `data.data` é `undefined`, a lógica cai no fallback e define o status como `"unsubmitted"` — sobrescrevendo o status real dos templates que estão aprovados no Twilio.
+## Correções
 
-Este mesmo bug existe em dois lugares:
-1. **Ação `check_status`** (linha 320) — parsing errado da resposta
-2. **Ação `sync_from_twilio`** (linha 435) — mesmo parsing errado
+### Arquivo 1: `src/components/crm/LeadChat.tsx`
 
-## Correção
-
-### Arquivo: `supabase/functions/submit-whatsapp-templates/index.ts`
-
-**1. Corrigir parsing em `check_status` (linhas 316-332)**
-
-Substituir a lógica de parsing para usar `data.whatsapp?.status` em vez de `data.data?.[0]?.status`:
+Corrigir `handleSendTemplate` (linha 331-337) para enviar `numero` em vez de `to`:
 
 ```typescript
-let newStatus = template.status
-let rejectionReason = null
-
-// Twilio returns: { whatsapp: { status: "approved", rejection_reason: "..." } }
-if (data.whatsapp && data.whatsapp.status) {
-  const mappedStatus = data.whatsapp.status
-  if (['approved', 'rejected', 'pending', 'paused', 'disabled', 'received', 'unsubmitted'].includes(mappedStatus)) {
-    newStatus = mappedStatus
-  }
-  if (mappedStatus === 'rejected' && data.whatsapp.rejection_reason) {
-    rejectionReason = data.whatsapp.rejection_reason
-  }
-} else if (data.data && Array.isArray(data.data) && data.data.length > 0) {
-  // Fallback: legacy array format (kept for safety)
-  const approval = data.data[0]
-  const mappedStatus = approval.status || 'unknown'
-  if (['approved', 'rejected', 'pending', 'paused', 'disabled', 'received', 'unsubmitted'].includes(mappedStatus)) {
-    newStatus = mappedStatus
-  }
-  if (mappedStatus === 'rejected') {
-    rejectionReason = approval.rejection_reason || 'Rejected by Meta'
-  }
-} else if (response.ok) {
-  newStatus = 'unsubmitted'
-}
+const { error } = await supabase.functions.invoke('send-whatsapp', {
+  body: {
+    numero: String(contactPhone),
+    contentSid: template.content_sid,
+    contact_id: contactId,
+  },
+});
 ```
 
-**2. Corrigir parsing em `sync_from_twilio` (linhas 435-444)**
+Adicionar novo fluxo com Select dropdown + Textarea read-only + botão Enviar conforme solicitado anteriormente.
 
-Aplicar a mesma correção:
+### Arquivo 2: `supabase/functions/send-whatsapp/index.ts`
+
+Quando `contentSid` estiver presente, usar `ContentSid` nos parâmetros Twilio em vez de `Body`:
 
 ```typescript
-if (approvalData.whatsapp && approvalData.whatsapp.status) {
-  approvalStatus = approvalData.whatsapp.status
-  rejectionReason = approvalData.whatsapp.rejection_reason || null
-} else if (approvalData.data && Array.isArray(approvalData.data) && approvalData.data.length > 0) {
-  approvalStatus = approvalData.data[0].status || 'unknown'
-  rejectionReason = approvalData.data[0].rejection_reason || null
+const twilioParams: Record<string, string> = {
+  To: `whatsapp:+${phoneStr}`,
+  From: TWILIO_FROM_NUMBER,
+}
+
+if (contentSid) {
+  // Template send - use ContentSid instead of Body
+  twilioParams.ContentSid = contentSid
+  twilioParams.ContentVariables = JSON.stringify({ "1": "Cliente" })
 } else {
-  approvalStatus = 'not_submitted'
+  twilioParams.Body = rawMessage
 }
 ```
 
-### Resultado Esperado
+### Resultado
 
-Após deploy, ao clicar em "Verificar Status" ou "Sincronizar do Twilio" na tela de templates, os 12 templates serão corretamente atualizados para `approved` (ou `rejected` para os 2 que a Meta rejeitou) e automaticamente ativados (`is_active = true`).
+- Template selecionado pelo operador será realmente enviado via Twilio usando `ContentSid`
+- Campo `numero` chegará corretamente na Edge Function
+- Interface com Select dropdown + texto read-only + confirmação antes do envio
 
