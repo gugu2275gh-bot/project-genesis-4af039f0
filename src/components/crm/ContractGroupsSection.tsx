@@ -981,7 +981,7 @@ export function ContractGroupsSection({
                 className="h-7 px-2 text-xs"
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate(`/crm/leads/${lead.id}`);
+                  setViewDetailsLead({ ...lead, _payments: leadPayments, _displayName: displayName });
                 }}
                 title="Ver detalhes do serviço"
               >
