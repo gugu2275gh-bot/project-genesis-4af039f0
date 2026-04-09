@@ -1258,7 +1258,7 @@ export default function ContactDetail() {
               contactId={id!}
               contactName={contact.full_name}
               contactLeads={allServiceLeads}
-              paymentNotes={paymentNotes}
+              paymentNotes={contact.payment_notes ?? paymentNotes}
               confirmedLeadIds={confirmedLeadIds}
               navigate={navigate}
               beneficiaryContacts={contactBeneficiaries.map(b => ({
@@ -1274,7 +1274,7 @@ export default function ContactDetail() {
               contactId={id!}
               contactName={contact.full_name}
               contactLeads={allServiceLeads}
-              paymentNotes={paymentNotes}
+              paymentNotes={contact.payment_notes ?? paymentNotes}
               confirmedLeadIds={confirmedLeadIds}
               navigate={navigate}
               beneficiaryContacts={[]}
