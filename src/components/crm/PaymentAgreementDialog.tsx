@@ -240,11 +240,11 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     if (form.apply_vat) {
       summary += `IVA (${defaultVatRate || 21}%): + € ${vatAmount.toFixed(2)}\n`;
     }
-    if (form.fees.length > 0) {
-      form.fees.forEach(fee => {
-        if (parseFloat(fee.amount) > 0) {
-          summary += `${fee.description || 'Custo'}: + € ${parseFloat(fee.amount).toFixed(2)}\n`;
-        }
+    const validFees = form.fees.filter(fee => parseFloat(fee.amount) > 0);
+    if (validFees.length > 0) {
+      summary += `Outros Custos:\n`;
+      validFees.forEach(fee => {
+        summary += `  ${fee.description || 'Custo'}: + € ${parseFloat(fee.amount).toFixed(2)}\n`;
       });
     }
     const totalBeforeDiscount = calculatedAmounts.totalBeforeDiscount;
