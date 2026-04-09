@@ -33,7 +33,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
   }, [serviceTypes, search]);
 
   const selectedLabel = serviceTypes?.find(st => st.code === value)?.name;
-  const displaySelectedLabel = selectedLabel ? stripPrefix(selectedLabel) : undefined;
+  const displaySelectedLabel = selectedLabel || undefined;
 
   return (
     <Popover open={open} onOpenChange={setOpen} modal={true}>
@@ -85,7 +85,7 @@ export function ServiceTypeCombobox({ value, onValueChange, serviceTypes, placeh
                       value === st.code ? 'opacity-100' : 'opacity-0'
                     )}
                   />
-                  {stripPrefix(st.name)}
+                  {st.name}
                 </button>
               ))}
             </div>
