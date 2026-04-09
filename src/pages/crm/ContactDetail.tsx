@@ -1628,9 +1628,39 @@ export default function ContactDetail() {
                       )}
                     </div>
                   ))}
+                  <div className="pt-3 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowConvertToBeneficiaryDialog(true)}
+                      className="w-full"
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      Tornar Beneficiário
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-1 text-center">
+                      Vincula este contato como beneficiário de outro titular
+                    </p>
+                  </div>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">Nenhum beneficiário vinculado</p>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground text-center py-4">Nenhum beneficiário vinculado</p>
+                  <div className="pt-3 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowConvertToBeneficiaryDialog(true)}
+                      className="w-full"
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      Tornar Beneficiário
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-1 text-center">
+                      Vincula este contato como beneficiário de outro titular
+                    </p>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
