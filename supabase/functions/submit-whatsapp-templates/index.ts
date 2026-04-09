@@ -316,18 +316,28 @@ serve(async (req) => {
           let newStatus = template.status
           let rejectionReason = null
 
-          // Response format: { data: [{ status: "approved"|"rejected"|"pending"|"paused"|"disabled"|"received"|"unsubmitted", rejection_reason: "..." }] }
-          if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+          const VALID_STATUSES = ['approved', 'rejected', 'pending', 'paused', 'disabled', 'received', 'unsubmitted']
+
+          // Twilio ApprovalRequests returns: { whatsapp: { status: "approved", rejection_reason: "..." }, sid: "HX..." }
+          if (data.whatsapp && data.whatsapp.status) {
+            const mappedStatus = data.whatsapp.status
+            if (VALID_STATUSES.includes(mappedStatus)) {
+              newStatus = mappedStatus
+            }
+            if (mappedStatus === 'rejected' && data.whatsapp.rejection_reason) {
+              rejectionReason = data.whatsapp.rejection_reason
+            }
+          } else if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+            // Fallback: legacy array format
             const approval = data.data[0]
             const mappedStatus = approval.status || 'unknown'
-            if (['approved', 'rejected', 'pending', 'paused', 'disabled', 'received', 'unsubmitted'].includes(mappedStatus)) {
+            if (VALID_STATUSES.includes(mappedStatus)) {
               newStatus = mappedStatus
             }
             if (mappedStatus === 'rejected') {
               rejectionReason = approval.rejection_reason || 'Rejected by Meta'
             }
-          } else if (response.ok && (!data.data || data.data.length === 0)) {
-            // No approval request found — template was never submitted for approval
+          } else if (response.ok) {
             newStatus = 'unsubmitted'
           }
 
@@ -432,7 +442,10 @@ serve(async (req) => {
           })
           const approvalData = await approvalResponse.json()
 
-          if (approvalData.data && Array.isArray(approvalData.data) && approvalData.data.length > 0) {
+          if (approvalData.whatsapp && approvalData.whatsapp.status) {
+            approvalStatus = approvalData.whatsapp.status
+            rejectionReason = approvalData.whatsapp.rejection_reason || null
+          } else if (approvalData.data && Array.isArray(approvalData.data) && approvalData.data.length > 0) {
             approvalStatus = approvalData.data[0].status || 'unknown'
             rejectionReason = approvalData.data[0].rejection_reason || null
           } else {
