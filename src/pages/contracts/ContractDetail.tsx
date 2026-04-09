@@ -221,15 +221,19 @@ export default function ContractDetail() {
           lines.push(`Valor Bruto: ${formattedGrossAmount}`);
         }
 
-        const formattedVatAmount = formatMoney(payment.vat_amount);
-        if (formattedVatAmount) {
-          const vatLabel = payment.vat_rate ? `IVA (${payment.vat_rate}%): + ` : 'IVA: + ';
-          lines.push(`${vatLabel}${formattedVatAmount}`);
+        if (payment.vat_amount && Number(payment.vat_amount) > 0) {
+          const formattedVatAmount = formatMoney(payment.vat_amount);
+          if (formattedVatAmount) {
+            const vatLabel = payment.vat_rate ? `IVA (${payment.vat_rate}%): + ` : 'IVA: + ';
+            lines.push(`${vatLabel}${formattedVatAmount}`);
+          }
         }
 
-        const formattedDiscount = formatMoney(payment.discount_value);
-        if (formattedDiscount) {
-          lines.push(`Desconto: - ${formattedDiscount}`);
+        if (payment.discount_value && Number(payment.discount_value) > 0) {
+          const formattedDiscount = formatMoney(payment.discount_value);
+          if (formattedDiscount) {
+            lines.push(`Desconto: - ${formattedDiscount}`);
+          }
         }
 
         const totalFinal = payment.amount ?? grossAmount;
