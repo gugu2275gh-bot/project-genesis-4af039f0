@@ -409,6 +409,7 @@ export function useContracts() {
         .from('contracts')
         .update({
           status: 'REPROVADO' as any,
+          cancellation_reason: reason,
           updated_by_user_id: user?.id,
         })
         .eq('id', id)

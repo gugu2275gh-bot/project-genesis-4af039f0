@@ -847,8 +847,10 @@ export default function ContractDetail() {
               )}
               {contract.cancellation_reason && (
                 <div>
-                  <p className="text-sm text-muted-foreground">Motivo do Cancelamento</p>
-                  <p className="text-sm text-destructive">{contract.cancellation_reason}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {contract.status === 'REPROVADO' ? 'Motivo da Reprovação' : 'Motivo do Cancelamento'}
+                  </p>
+                  <p className="text-sm text-destructive whitespace-pre-wrap">{contract.cancellation_reason}</p>
                 </div>
               )}
               {contract.signed_at && (
