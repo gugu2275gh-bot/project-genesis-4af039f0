@@ -248,7 +248,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       });
     }
     const totalBeforeDiscount = calculatedAmounts.totalBeforeDiscount;
-    if (form.apply_vat || discountAmount > 0) {
+    if (form.apply_vat || discountAmount > 0 || validFees.length > 0) {
       summary += `Total: € ${totalBeforeDiscount.toFixed(2)}\n`;
     }
     if (discountAmount > 0) {
