@@ -77,7 +77,7 @@ export function ContractGroupsSection({
   const [pendingAddServiceContractId, setPendingAddServiceContractId] = useState<string | null | undefined>(undefined);
   const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<string | null>(null);
   const [selectedBeneficiaryName, setSelectedBeneficiaryName] = useState<string>('');
-
+  const [viewDetailsLead, setViewDetailsLead] = useState<any>(null);
   // Fetch contract_leads for this contact's leads
   const leadIds = contactLeads.map(l => l.id);
   
