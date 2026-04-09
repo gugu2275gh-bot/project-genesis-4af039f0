@@ -174,7 +174,45 @@ export default function ContactDetail() {
     }
   };
 
-  // Extract "Observações" from the last payment agreement block in payment_notes
+  // Search contacts for "Tornar Beneficiário" dialog
+  const { data: titularSearchResults = [] } = useQuery({
+    queryKey: ['titular-search', titularSearchQuery],
+    queryFn: async () => {
+      if (!titularSearchQuery || titularSearchQuery.length < 2) return [];
+      const { data } = await supabase
+        .from('contacts')
+        .select('id, full_name, phone')
+        .eq('is_beneficiary', false)
+        .neq('id', id!)
+        .ilike('full_name', `%${titularSearchQuery}%`)
+        .limit(10);
+      return data || [];
+    },
+    enabled: showConvertToBeneficiaryDialog && titularSearchQuery.length >= 2,
+  });
+
+  const handleConvertToBeneficiary = async (titularContactId: string) => {
+    if (!id) return;
+    setIsConvertingToBeneficiary(true);
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .update({ is_beneficiary: true, linked_principal_contact_id: titularContactId })
+        .eq('id', id);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['contact', id] });
+      queryClient.invalidateQueries({ queryKey: ['contact-beneficiaries'] });
+      setShowConvertToBeneficiaryDialog(false);
+      setTitularSearchQuery('');
+      toast({ title: 'Contato convertido a beneficiário', description: 'Este contato agora está vinculado ao titular selecionado.' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao converter contato', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsConvertingToBeneficiary(false);
+    }
+  };
+
+
   const extractLastNotes = (): string => {
     const notes = (contact as any)?.payment_notes || '';
     if (!notes) return '';
