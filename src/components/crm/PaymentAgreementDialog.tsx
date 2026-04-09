@@ -206,10 +206,12 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       toast({ title: 'Selecione o titular do contrato', variant: 'destructive' });
       return;
     }
+    savingRef.current = true;
     setIsSaving(true);
     try {
-    await handleSaveInner(keepOpen);
+      await handleSaveInner(keepOpen);
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
   };
