@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, Eye, UserPlus, Users, ChevronRight, ChevronDown, User, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Eye, UserPlus, Users, ChevronRight, ChevronDown, User, AlertTriangle, Info } from 'lucide-react';
 import { LEAD_STATUS_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Badge } from '@/components/ui/badge';
@@ -247,12 +247,12 @@ export default function Leads() {
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
-                Novo Lead
+                Novo Serviço
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Novo Lead</DialogTitle>
+                <DialogTitle>Novo Serviço</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 overflow-hidden">
                 <div className="flex gap-2">
@@ -384,6 +384,12 @@ export default function Leads() {
                     />
                   </div>
                 )}
+                <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
+                  <Info className="h-4 w-4 text-blue-500" />
+                  <AlertDescription className="text-sm text-blue-700 dark:text-blue-300">
+                    Após criar o serviço, configure o pagamento na ficha do cliente.
+                  </AlertDescription>
+                </Alert>
                 {duplicateWarning && (
                   <Alert className="border-warning/30 bg-warning/5">
                     <AlertTriangle className="h-4 w-4 text-warning" />
@@ -409,7 +415,7 @@ export default function Leads() {
                       onClick={() => handleCreate(false)}
                       disabled={createLead.isPending || (leadMode === 'new' && !newLead.full_name) || (leadMode === 'existing' && !selectedContactId)}
                     >
-                      {createLead.isPending ? 'Criando...' : 'Criar Lead'}
+                      {createLead.isPending ? 'Criando...' : 'Criar Serviço'}
                     </Button>
                   )}
                 </div>
