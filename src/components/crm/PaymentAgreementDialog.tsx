@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { TitularLink } from '@/hooks/useContactBeneficiaries';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -192,9 +192,10 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   }, [form.amount, form.discount_type, form.discount_value, form.apply_vat, defaultVatRate, totalFees]);
 
   const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const handleSave = async (keepOpen = false) => {
-    if (!form.amount || parseFloat(form.amount) <= 0 || isSaving) {
+    if (!form.amount || parseFloat(form.amount) <= 0 || isSaving || savingRef.current) {
       if (!form.amount || parseFloat(form.amount) <= 0) {
         toast({ title: 'Valor bruto é obrigatório', variant: 'destructive' });
       }
