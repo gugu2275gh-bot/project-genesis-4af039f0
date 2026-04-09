@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Separator } from '@/components/ui/separator';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { 
   Briefcase, CreditCard, DollarSign, Loader2, Plus, Pencil, Trash2, CheckCircle2, FileText, Package, ChevronRight, ChevronDown, User, Users, Clock, Play, Eye
