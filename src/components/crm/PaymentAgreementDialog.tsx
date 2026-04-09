@@ -508,9 +508,9 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
-          <DialogTitle>Forma de Pagamento — {contactName}</DialogTitle>
+          <DialogTitle>{readOnly ? 'Detalhes do Pagamento' : 'Forma de Pagamento'} — {contactName}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 min-w-0">
+        <div className={`space-y-4 min-w-0 ${readOnly ? 'pointer-events-none' : ''}`}>
           {/* Service Type Selection */}
           <div className="min-w-0">
             <Label>Serviço de Interesse</Label>
