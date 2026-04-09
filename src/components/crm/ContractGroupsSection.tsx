@@ -341,7 +341,11 @@ export function ContractGroupsSection({
       }
     });
 
-    return Object.values(groups);
+    return Object.values(groups).sort((a, b) => {
+      const dateA = a.contract?.created_at ? new Date(a.contract.created_at).getTime() : 0;
+      const dateB = b.contract?.created_at ? new Date(b.contract.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
   }, [allContractLeadLinks, contactContracts, allLeads, deduplicatedPayments]);
 
   // Ungrouped leads (not linked to any contract)
