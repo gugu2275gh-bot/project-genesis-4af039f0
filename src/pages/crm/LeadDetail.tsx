@@ -857,7 +857,8 @@ export default function LeadDetail() {
                           <SelectTrigger className="w-[160px]">
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent>
+                            <SelectContent>
+                            <SelectItem value="todos">Todos</SelectItem>
                             <SelectItem value="atendimento">Atendimento</SelectItem>
                             <SelectItem value="juridico">Jurídico</SelectItem>
                             <SelectItem value="financeiro">Financeiro</SelectItem>
