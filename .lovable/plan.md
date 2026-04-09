@@ -1,33 +1,34 @@
 
 
-# Fix: Templates não aparecem no dropdown do chat
+# Limpeza de dados de clientes para novos testes
 
-## Problema
+## Dados atuais no banco
+- 6 contatos
+- 13 leads
+- 9 oportunidades
+- 3 contratos
+- 10 pagamentos
+- 0 service_cases
 
-Todos os 12 templates aprovados no banco de dados têm `template_category = 'sla'`. O filtro `operationalTemplates` no hook `useWhatsAppTemplates.ts` exige `template_category === 'operational'`, resultando em lista vazia.
+## Ordem de exclusão (respeitando foreign keys)
 
-## Solução
+A limpeza precisa seguir a ordem correta para evitar erros de integridade referencial:
 
-Alterar a lógica do `LeadChat.tsx` para mostrar **todos** os templates aprovados e ativos no dropdown quando a janela de 24h estiver expirada, independentemente da categoria (`sla` ou `operational`). O operador precisa reabrir o contato e qualquer template aprovado serve para isso.
+1. `payments` (10 registros) — depende de contracts/opportunities
+2. `contract_beneficiaries` — depende de contracts
+3. `contract_leads` — depende de contracts/leads
+4. `contracts` (3 registros) — depende de opportunities
+5. `tasks` — depende de leads/opportunities
+6. `interactions` — depende de leads
+7. `mensagens_cliente` — depende de leads
+8. `service_documents` — depende de service_cases
+9. `service_cases` (0 registros) — depende de opportunities
+10. `opportunities` (9 registros) — depende de leads
+11. `leads` (13 registros) — depende de contacts
+12. `notifications` — pode referenciar diversos registros
+13. `contacts` (6 registros) — tabela base
 
-### Alterações
+## Execução
 
-**Arquivo: `src/components/crm/LeadChat.tsx`**
-
-1. Extrair `templates` (lista completa) do hook `useWhatsAppTemplates` além de `operationalTemplates`
-2. Criar uma lista `availableTemplates` que filtra todos os templates aprovados e ativos (ignorando categoria)
-3. Usar `availableTemplates` no bloco da janela expirada (linhas 676-728) em vez de `operationalTemplates`
-4. Manter `operationalTemplates` no popover de templates dentro da janela normal (linha 760)
-
-**Lógica:**
-```typescript
-const { templates, operationalTemplates } = useWhatsAppTemplates();
-
-const availableTemplates = useMemo(() => 
-  (templates || []).filter(t => t.status === 'approved' && t.is_active),
-  [templates]
-);
-```
-
-Nenhuma alteração de banco de dados necessária.
+Usarei a ferramenta de insert/delete do Supabase para executar DELETEs em cada tabela na ordem correta. Nenhuma alteração de schema é necessária.
 
