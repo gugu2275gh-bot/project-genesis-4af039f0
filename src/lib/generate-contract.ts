@@ -174,13 +174,18 @@ function buildHonorariosSection(data: ContractData): Paragraph[] {
   
   // Use paymentConditions text (from installment_conditions) as primary source
   if (data.paymentConditions) {
-    // Split by lines and render each line
+    // Split by lines and render each line, filtering out zero-value lines
     const lines = data.paymentConditions.split('\n').filter(l => l.trim());
     for (const line of lines) {
-      if (line.trim() === '---') {
+      const trimmed = line.trim();
+      if (trimmed === '---') {
         sections.push(emptyLine());
       } else {
-        sections.push(para(line.trim()));
+        // Skip lines with zero values (e.g., "IVA: + € 0,00" or "Desconto: - € 0,00")
+        const isZeroValueLine = /^(IVA|Desconto).*[€$]\s*0[,.]00/.test(trimmed);
+        if (!isZeroValueLine) {
+          sections.push(para(trimmed));
+        }
       }
     }
   } else if (data.feeAmount && data.vatRate !== undefined) {
