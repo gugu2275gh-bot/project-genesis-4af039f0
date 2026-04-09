@@ -795,6 +795,11 @@ export default function LeadDetail() {
                   onServiceTypeChange={async (serviceTypeId) => {
                     await updateLead.mutateAsync({ id: lead.id, service_type_id: serviceTypeId });
                   }}
+                  initialData={{
+                    leadId: lead.id,
+                    opportunityId: leadOpportunity?.id,
+                    serviceTypeId: lead.service_type_id || undefined,
+                  }}
                 />
               )}
             </div>
