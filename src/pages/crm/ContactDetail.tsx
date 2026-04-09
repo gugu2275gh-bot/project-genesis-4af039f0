@@ -107,6 +107,9 @@ export default function ContactDetail() {
   const [newBeneficiaryDocument, setNewBeneficiaryDocument] = useState('');
   const [isCreatingBeneficiary, setIsCreatingBeneficiary] = useState(false);
   const [isPromotingToTitular, setIsPromotingToTitular] = useState(false);
+  const [showConvertToBeneficiaryDialog, setShowConvertToBeneficiaryDialog] = useState(false);
+  const [titularSearchQuery, setTitularSearchQuery] = useState('');
+  const [isConvertingToBeneficiary, setIsConvertingToBeneficiary] = useState(false);
   const queryClient = useQueryClient();
 
   const directLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
