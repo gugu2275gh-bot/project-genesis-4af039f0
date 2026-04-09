@@ -783,7 +783,7 @@ export default function LeadDetail() {
                 onClick={() => setShowPaymentAgreement(true)}
               >
                 <DollarSign className="h-4 w-4 mr-2" />
-                Forma de Pagamento
+                Novo Serviço
               </Button>
               {lead.contact_id && (
                 <PaymentAgreementDialog
