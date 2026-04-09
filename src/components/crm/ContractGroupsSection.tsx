@@ -374,9 +374,16 @@ export function ContractGroupsSection({
     return match ? match[1].trim() : '';
   };
 
-  const extractFeesFromNotes = useCallback((serviceName: string) => {
+  const parsedPaymentNoteBlocks = useMemo(() => {
     const notes = paymentNotes || '';
-    if (!notes) return [] as { description: string; amount: string }[];
+    if (!notes) {
+      return [] as Array<{
+        serviceName: string;
+        grossAmount: number | null;
+        totalFinal: number | null;
+        fees: { description: string; amount: string }[];
+      }>;
+    }
 
     const ignoredPrefixes = [
       'Acordo de Pagamento',
@@ -396,33 +403,104 @@ export function ContractGroupsSection({
       'Outros Custos',
     ];
 
-    const blocks = notes.split('---');
+    const parseMoneyValue = (line: string, label: string) => {
+      const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const match = line.match(new RegExp(`^${escapedLabel}:\\s*(?:[+\\-]\\s*)?€\\s*([\\d.,]+)`, 'i'));
+      if (!match) return null;
+      return Number(match[1].replace(',', '.'));
+    };
 
-    for (let i = blocks.length - 1; i >= 0; i--) {
-      const block = blocks[i].trim();
-      if (serviceName && !block.includes(serviceName)) continue;
+    return notes
+      .split('---')
+      .map((rawBlock) => {
+        const block = rawBlock.trim();
+        if (!block) return null;
 
-      const feeLines: { description: string; amount: string }[] = [];
-      for (const line of block.split('\n')) {
-        const trimmedLine = line.trim();
-        const feeMatch = trimmedLine.match(/^(.+?):\s*\+\s*€\s*([\d.,]+)\s*$/);
+        const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
+        const serviceName = lines.find(line => line.startsWith('Serviço:'))?.replace('Serviço:', '').trim() || '';
+        const grossAmountLine = lines.find(line => line.startsWith('Valor Bruto:'));
+        const totalFinalLine = lines.find(line => line.startsWith('Total Final:'));
 
-        if (!feeMatch) continue;
+        const fees: { description: string; amount: string }[] = [];
+        for (const line of lines) {
+          const feeMatch = line.match(/^(.+?):\s*\+\s*€\s*([\d.,]+)\s*$/);
+          if (!feeMatch) continue;
 
-        const desc = feeMatch[1].trim();
-        if (ignoredPrefixes.some(prefix => desc.startsWith(prefix))) continue;
+          const desc = feeMatch[1].trim();
+          if (ignoredPrefixes.some(prefix => desc.startsWith(prefix))) continue;
 
-        feeLines.push({
-          description: desc,
-          amount: feeMatch[2].replace(',', '.'),
-        });
-      }
+          fees.push({
+            description: desc,
+            amount: feeMatch[2].replace(',', '.'),
+          });
+        }
 
-      if (feeLines.length > 0) return feeLines;
+        return {
+          serviceName,
+          grossAmount: grossAmountLine ? parseMoneyValue(grossAmountLine, 'Valor Bruto') : null,
+          totalFinal: totalFinalLine ? parseMoneyValue(totalFinalLine, 'Total Final') : null,
+          fees,
+        };
+      })
+      .filter((block): block is {
+        serviceName: string;
+        grossAmount: number | null;
+        totalFinal: number | null;
+        fees: { description: string; amount: string }[];
+      } => Boolean(block));
+  }, [paymentNotes]);
+
+  const findNoteBlockForLead = useCallback((params: {
+    serviceName: string;
+    grossAmount: number | null;
+    totalFinal: number | null;
+    usedIndexes: Set<number>;
+  }) => {
+    const normalize = (value: string) => value.trim().toLocaleLowerCase('pt-BR');
+    const amountsMatch = (a: number | null, b: number | null) => a !== null && b !== null && Math.abs(a - b) < 0.01;
+
+    const candidates = parsedPaymentNoteBlocks
+      .map((block, index) => ({ block, index }))
+      .filter(({ block, index }) => !params.usedIndexes.has(index) && normalize(block.serviceName) === normalize(params.serviceName));
+
+    return candidates.find(({ block }) => amountsMatch(block.grossAmount, params.grossAmount) && amountsMatch(block.totalFinal, params.totalFinal))
+      || candidates.find(({ block }) => amountsMatch(block.totalFinal, params.totalFinal))
+      || candidates.find(({ block }) => amountsMatch(block.grossAmount, params.grossAmount))
+      || candidates[0]
+      || null;
+  }, [parsedPaymentNoteBlocks]);
+
+  const extractFeesFromNotes = useCallback((params: {
+    serviceName: string;
+    grossAmount: number | null;
+    totalFinal: number | null;
+    usedIndexes: Set<number>;
+  }) => {
+    const match = findNoteBlockForLead(params);
+    if (!match) return [] as { description: string; amount: string }[];
+
+    params.usedIndexes.add(match.index);
+    return match.block.fees;
+  }, [findNoteBlockForLead]);
+
+  const getLeadExpectedAmounts = useCallback((leadPayments: any[]) => {
+    if (leadPayments.length === 0) {
+      return { grossAmount: null, totalFinal: null };
     }
 
-    return [] as { description: string; amount: string }[];
-  }, [paymentNotes]);
+    if (leadPayments.length === 1) {
+      const payment = leadPayments[0];
+      return {
+        grossAmount: Number(payment.gross_amount || payment.amount || 0),
+        totalFinal: Number(payment.amount || 0),
+      };
+    }
+
+    return {
+      grossAmount: null,
+      totalFinal: leadPayments.reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0),
+    };
+  }, []);
 
   // Helper: link beneficiary leads to a specific titular's draft or create new draft
   const linkLeadsToTitularContract = async (leadsToLink: any[], chosenTitularId: string, chosenTitularName?: string) => {
@@ -1003,17 +1081,31 @@ export function ContractGroupsSection({
 
     if (relevantLeads.length === 0) return '';
 
+    const usedNoteIndexes = new Set<number>();
+
     // For each relevant lead, find its payments and build a summary block
     const blocks: string[] = [];
-    for (const lead of relevantLeads) {
+    const sortedRelevantLeads = [...relevantLeads].sort((a, b) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return timeA - timeB;
+    });
+
+    for (const lead of sortedRelevantLeads) {
       const displayName = getLeadDisplayName(lead);
       const createdDate = lead.created_at ? format(new Date(lead.created_at), 'dd/MM/yyyy', { locale: ptBR }) : '';
-      const leadFees = extractFeesFromNotes(displayName);
 
       // Find payments for this lead via opportunities
       const leadPayments = deduplicatedPayments.filter((p: any) => {
         const pLeadId = p.opportunities?.leads?.id || p.opportunities?.lead_id;
         return pLeadId === lead.id;
+      });
+      const { grossAmount, totalFinal } = getLeadExpectedAmounts(leadPayments);
+      const leadFees = extractFeesFromNotes({
+        serviceName: displayName,
+        grossAmount,
+        totalFinal,
+        usedIndexes: usedNoteIndexes,
       });
 
       let block = `Acordo de Pagamento — ${createdDate}\n`;
@@ -1074,7 +1166,7 @@ export function ContractGroupsSection({
     }
 
     return blocks.join('\n\n');
-  }, [contractGroups, ungroupedLeads, deduplicatedPayments, getLeadDisplayName, extractFeesFromNotes]);
+  }, [contractGroups, ungroupedLeads, deduplicatedPayments, getLeadDisplayName, extractFeesFromNotes, getLeadExpectedAmounts]);
 
   return (
     <>
