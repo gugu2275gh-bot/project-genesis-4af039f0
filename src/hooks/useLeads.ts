@@ -41,6 +41,7 @@ export function useLeads() {
         .insert({
           ...lead,
           created_by_user_id: user?.id,
+          assigned_to_user_id: lead.assigned_to_user_id || user?.id,
         })
         .select()
         .single();
@@ -245,6 +246,7 @@ export function useLeads() {
           notes: notes || null,
           status: 'NOVO' as any,
           created_by_user_id: user?.id,
+          assigned_to_user_id: user?.id,
         })
         .select()
         .single();
