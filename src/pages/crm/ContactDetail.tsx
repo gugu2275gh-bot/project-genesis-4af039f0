@@ -107,6 +107,9 @@ export default function ContactDetail() {
   const [newBeneficiaryDocument, setNewBeneficiaryDocument] = useState('');
   const [isCreatingBeneficiary, setIsCreatingBeneficiary] = useState(false);
   const [isPromotingToTitular, setIsPromotingToTitular] = useState(false);
+  const [showConvertToBeneficiaryDialog, setShowConvertToBeneficiaryDialog] = useState(false);
+  const [titularSearchQuery, setTitularSearchQuery] = useState('');
+  const [isConvertingToBeneficiary, setIsConvertingToBeneficiary] = useState(false);
   const queryClient = useQueryClient();
 
   const directLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
@@ -171,7 +174,45 @@ export default function ContactDetail() {
     }
   };
 
-  // Extract "Observações" from the last payment agreement block in payment_notes
+  // Search contacts for "Tornar Beneficiário" dialog
+  const { data: titularSearchResults = [] } = useQuery({
+    queryKey: ['titular-search', titularSearchQuery],
+    queryFn: async () => {
+      if (!titularSearchQuery || titularSearchQuery.length < 2) return [];
+      const { data } = await supabase
+        .from('contacts')
+        .select('id, full_name, phone')
+        .eq('is_beneficiary', false)
+        .neq('id', id!)
+        .ilike('full_name', `%${titularSearchQuery}%`)
+        .limit(10);
+      return data || [];
+    },
+    enabled: showConvertToBeneficiaryDialog && titularSearchQuery.length >= 2,
+  });
+
+  const handleConvertToBeneficiary = async (titularContactId: string) => {
+    if (!id) return;
+    setIsConvertingToBeneficiary(true);
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .update({ is_beneficiary: true, linked_principal_contact_id: titularContactId })
+        .eq('id', id);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['contact', id] });
+      queryClient.invalidateQueries({ queryKey: ['contact-beneficiaries'] });
+      setShowConvertToBeneficiaryDialog(false);
+      setTitularSearchQuery('');
+      toast({ title: 'Contato convertido a beneficiário', description: 'Este contato agora está vinculado ao titular selecionado.' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao converter contato', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsConvertingToBeneficiary(false);
+    }
+  };
+
+
   const extractLastNotes = (): string => {
     const notes = (contact as any)?.payment_notes || '';
     if (!notes) return '';
@@ -1587,9 +1628,39 @@ export default function ContactDetail() {
                       )}
                     </div>
                   ))}
+                  <div className="pt-3 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowConvertToBeneficiaryDialog(true)}
+                      className="w-full"
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      Tornar Beneficiário
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-1 text-center">
+                      Vincula este contato como beneficiário de outro titular
+                    </p>
+                  </div>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">Nenhum beneficiário vinculado</p>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground text-center py-4">Nenhum beneficiário vinculado</p>
+                  <div className="pt-3 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowConvertToBeneficiaryDialog(true)}
+                      className="w-full"
+                    >
+                      <Users className="h-4 w-4 mr-2" />
+                      Tornar Beneficiário
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-1 text-center">
+                      Vincula este contato como beneficiário de outro titular
+                    </p>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -1718,6 +1789,58 @@ export default function ContactDetail() {
               Adicionar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Tornar Beneficiário */}
+      <Dialog open={showConvertToBeneficiaryDialog} onOpenChange={(open) => { setShowConvertToBeneficiaryDialog(open); if (!open) setTitularSearchQuery(''); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Tornar Beneficiário</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-muted-foreground">
+              Busque o titular ao qual este contato será vinculado como beneficiário.
+            </p>
+            <div>
+              <Label>Buscar Titular</Label>
+              <Input
+                value={titularSearchQuery}
+                onChange={(e) => setTitularSearchQuery(e.target.value)}
+                placeholder="Digite o nome do titular..."
+              />
+            </div>
+            {titularSearchResults.length > 0 && (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {titularSearchResults.map((c: any) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => handleConvertToBeneficiary(c.id)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{c.full_name}</p>
+                        {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-xs">Selecionar</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+            {titularSearchQuery.length >= 2 && titularSearchResults.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-2">Nenhum titular encontrado</p>
+            )}
+            {isConvertingToBeneficiary && (
+              <div className="flex items-center justify-center py-2">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
