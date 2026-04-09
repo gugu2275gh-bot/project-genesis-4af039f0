@@ -52,9 +52,10 @@ interface PaymentAgreementDialogProps {
   initialData?: PaymentAgreementInitialData | null;
   isBeneficiary?: boolean;
   titulares?: TitularLink[];
+  readOnly?: boolean;
 }
 
-export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange, initialData, isBeneficiary = false, titulares = [] }: PaymentAgreementDialogProps) {
+export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange, initialData, isBeneficiary = false, titulares = [], readOnly = false }: PaymentAgreementDialogProps) {
   const { updateContact } = useContacts();
   const { data: serviceTypes } = useServiceTypes();
   const queryClient = useQueryClient();
@@ -507,9 +508,9 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
-          <DialogTitle>Forma de Pagamento — {contactName}</DialogTitle>
+          <DialogTitle>{readOnly ? 'Detalhes do Pagamento' : 'Forma de Pagamento'} — {contactName}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 min-w-0">
+        <div className={`space-y-4 min-w-0 ${readOnly ? 'pointer-events-none' : ''}`}>
           {/* Service Type Selection */}
           <div className="min-w-0">
             <Label>Serviço de Interesse</Label>
@@ -982,34 +983,42 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             />
           </div>
 
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => handleSave(true)}
-              disabled={!form.amount || isSaving || (form.payment_form === 'PARCELADO' && form.installments.some(i => !i.due_date))}
-            >
-              {isSaving ? (
-                <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              ) : (
-                <Plus className="h-4 w-4 mr-2" />
-              )}
-              Salvar e Adicionar Novo
-            </Button>
-            <Button
-              onClick={() => handleSave(false)}
-              disabled={!form.amount || isSaving || (form.payment_form === 'PARCELADO' && form.installments.some(i => !i.due_date))}
-            >
-              {isSaving ? (
-                <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              ) : (
-                <DollarSign className="h-4 w-4 mr-2" />
-              )}
-              {isSaving ? 'Salvando...' : 'Salvar Acordo'}
-            </Button>
-          </div>
+          {readOnly ? (
+            <div className="flex justify-end pointer-events-auto">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Fechar
+              </Button>
+            </div>
+          ) : (
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancelar
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => handleSave(true)}
+                disabled={!form.amount || isSaving || (form.payment_form === 'PARCELADO' && form.installments.some(i => !i.due_date))}
+              >
+                {isSaving ? (
+                  <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <Plus className="h-4 w-4 mr-2" />
+                )}
+                Salvar e Adicionar Novo
+              </Button>
+              <Button
+                onClick={() => handleSave(false)}
+                disabled={!form.amount || isSaving || (form.payment_form === 'PARCELADO' && form.installments.some(i => !i.due_date))}
+              >
+                {isSaving ? (
+                  <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <DollarSign className="h-4 w-4 mr-2" />
+                )}
+                {isSaving ? 'Salvando...' : 'Salvar Acordo'}
+              </Button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

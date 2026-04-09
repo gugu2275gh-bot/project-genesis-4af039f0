@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Separator } from '@/components/ui/separator';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { 
   Briefcase, CreditCard, DollarSign, Loader2, Plus, Pencil, Trash2, CheckCircle2, FileText, Package, ChevronRight, ChevronDown, User, Users, Clock, Play, Eye
@@ -77,7 +77,8 @@ export function ContractGroupsSection({
   const [pendingAddServiceContractId, setPendingAddServiceContractId] = useState<string | null | undefined>(undefined);
   const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<string | null>(null);
   const [selectedBeneficiaryName, setSelectedBeneficiaryName] = useState<string>('');
-  const [viewDetailsLead, setViewDetailsLead] = useState<any>(null);
+  const [readOnlyPaymentData, setReadOnlyPaymentData] = useState<PaymentAgreementInitialData | null>(null);
+  const [showReadOnlyPayment, setShowReadOnlyPayment] = useState(false);
   // Fetch contract_leads for this contact's leads
   const leadIds = contactLeads.map(l => l.id);
   
@@ -981,7 +982,28 @@ export function ContractGroupsSection({
                 className="h-7 px-2 text-xs"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setViewDetailsLead({ ...lead, _payments: leadPayments, _displayName: displayName });
+                  const leadPayment = leadPayments[0];
+                  const groupPayments = leadPayments.filter((p: any) => p.payment_form === 'PARCELADO');
+                  const installments = groupPayments.length > 1
+                    ? groupPayments.map((p: any) => ({ amount: p.amount?.toString() || '', due_date: p.due_date || '' }))
+                    : [];
+                  setReadOnlyPaymentData({
+                    amount: leadPayment?.amount || 0,
+                    payment_method: leadPayment?.payment_method,
+                    payment_form: leadPayment?.payment_form,
+                    apply_vat: leadPayment?.apply_vat,
+                    vat_rate: leadPayment?.vat_rate,
+                    discount_type: leadPayment?.discount_type,
+                    discount_value: leadPayment?.discount_value,
+                    gross_amount: leadPayment?.gross_amount,
+                    serviceTypeId: lead.service_type_id || '',
+                    due_date: leadPayment?.due_date,
+                    installments,
+                    notes: '',
+                    leadId: lead.id,
+                    opportunityId: leadPayment?.opportunity_id,
+                  });
+                  setShowReadOnlyPayment(true);
                 }}
                 title="Ver detalhes do serviço"
               >
@@ -1685,124 +1707,20 @@ export function ContractGroupsSection({
         </DialogContent>
       </Dialog>
 
-      {/* View Service Details (Read-Only) */}
-      <Dialog open={!!viewDetailsLead} onOpenChange={(open) => !open && setViewDetailsLead(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Eye className="h-5 w-5" />
-              Detalhes do Serviço
-            </DialogTitle>
-          </DialogHeader>
-          {viewDetailsLead && (() => {
-            const lead = viewDetailsLead;
-            const payments: any[] = lead._payments || [];
-            const displayName = lead._displayName || '';
-
-            const METHOD_LABELS: Record<string, string> = {
-              'TRANSFERENCIA': 'Transferência', 'PIX': 'PIX', 'CARTAO': 'Cartão',
-              'DINHEIRO': 'Dinheiro', 'MB_WAY': 'MB Way', 'BIZUM': 'Bizum', 'OUTRO': 'Outro'
-            };
-            const FORM_LABELS: Record<string, string> = {
-              'UNICO': 'Pagamento Único', 'PARCELADO': 'Parcelado', 'RECORRENTE': 'Recorrente'
-            };
-
-            return (
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Serviço</span>
-                    <span className="text-sm font-medium">{displayName}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Criado em</span>
-                    <span className="text-sm">{lead.created_at ? format(new Date(lead.created_at), "dd/MM/yyyy", { locale: ptBR }) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Status</span>
-                    <StatusBadge status={lead.status || 'NOVO'} label={LEAD_STATUS_LABELS[lead.status || 'NOVO']} />
-                  </div>
-                </div>
-
-                {payments.length > 0 && (
-                  <>
-                    <Separator />
-                    <div className="space-y-3">
-                      <p className="text-sm font-semibold">
-                        {payments.length} Pagamento{payments.length > 1 ? 's' : ''}
-                      </p>
-                      {payments.map((p: any) => {
-                        const symbol = (p.currency || 'EUR') === 'EUR' ? '€' : p.currency;
-                        return (
-                          <div key={p.id} className="rounded-lg border p-3 space-y-2 bg-muted/20">
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm font-medium">
-                                {symbol} {Number(p.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                              </span>
-                              <StatusBadge
-                                status={p.status || 'PENDENTE'}
-                                label={PAYMENT_STATUS_LABELS[p.status as keyof typeof PAYMENT_STATUS_LABELS] || p.status}
-                              />
-                            </div>
-                            {p.installment_number && (
-                              <div className="flex justify-between">
-                                <span className="text-xs text-muted-foreground">Parcela</span>
-                                <span className="text-xs">{p.installment_number}</span>
-                              </div>
-                            )}
-                            {p.gross_amount && Number(p.gross_amount) > 0 && (
-                              <div className="flex justify-between">
-                                <span className="text-xs text-muted-foreground">Valor Bruto</span>
-                                <span className="text-xs">{symbol} {Number(p.gross_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                              </div>
-                            )}
-                            {p.due_date && (
-                              <div className="flex justify-between">
-                                <span className="text-xs text-muted-foreground">Vencimento</span>
-                                <span className="text-xs">{format(new Date(p.due_date + 'T12:00:00'), "dd/MM/yyyy")}</span>
-                              </div>
-                            )}
-                            {p.paid_at && (
-                              <div className="flex justify-between">
-                                <span className="text-xs text-muted-foreground">Pago em</span>
-                                <span className="text-xs">{format(new Date(p.paid_at), "dd/MM/yyyy")}</span>
-                              </div>
-                            )}
-                            {p.payment_method && (
-                              <div className="flex justify-between">
-                                <span className="text-xs text-muted-foreground">Método</span>
-                                <span className="text-xs">{METHOD_LABELS[p.payment_method] || p.payment_method}</span>
-                              </div>
-                            )}
-                            {p.payment_form && (
-                              <div className="flex justify-between">
-                                <span className="text-xs text-muted-foreground">Forma</span>
-                                <span className="text-xs">{FORM_LABELS[p.payment_form] || p.payment_form}</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-
-                {payments.length === 0 && (
-                  <>
-                    <Separator />
-                    <p className="text-sm text-muted-foreground text-center py-2">Nenhum pagamento registrado</p>
-                  </>
-                )}
-              </div>
-            );
-          })()}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setViewDetailsLead(null)}>
-              Fechar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Read-Only Payment Details Dialog */}
+      <PaymentAgreementDialog
+        open={showReadOnlyPayment}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowReadOnlyPayment(false);
+            setReadOnlyPaymentData(null);
+          }
+        }}
+        contactId={contactId}
+        contactName={contactName}
+        initialData={readOnlyPaymentData}
+        readOnly
+      />
     </>
   );
 }
