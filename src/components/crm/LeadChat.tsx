@@ -677,12 +677,12 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                 <AlertTriangle className="h-3.5 w-3.5" />
                 <span>Janela de 24h expirada. Selecione um template aprovado para reabrir a conversa.</span>
               </div>
-              {operationalTemplates.length > 0 ? (
+              {availableTemplates.length > 0 ? (
                 <>
                   <Select
                     value={selectedTemplate?.id || ''}
                     onValueChange={(id) => {
-                      const tpl = operationalTemplates.find(t => t.id === id);
+                      const tpl = availableTemplates.find(t => t.id === id);
                       setSelectedTemplate(tpl || null);
                     }}
                   >
@@ -690,7 +690,7 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                       <SelectValue placeholder="Selecione um template..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {operationalTemplates.map((tpl) => (
+                      {availableTemplates.map((tpl) => (
                         <SelectItem key={tpl.id} value={tpl.id}>
                           {tpl.template_name}
                         </SelectItem>
