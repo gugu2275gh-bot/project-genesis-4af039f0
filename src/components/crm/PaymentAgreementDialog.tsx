@@ -194,7 +194,12 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async (keepOpen = false) => {
-    if (!form.amount || isSaving) return;
+    if (!form.amount || parseFloat(form.amount) <= 0 || isSaving) {
+      if (!form.amount || parseFloat(form.amount) <= 0) {
+        toast({ title: 'Valor bruto é obrigatório', variant: 'destructive' });
+      }
+      return;
+    }
     // Validate titular selection for beneficiaries
     if (isBeneficiary && !selectedTitularId) {
       toast({ title: 'Selecione o titular do contrato', variant: 'destructive' });
@@ -590,7 +595,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Valor Bruto (€)</Label>
+              <Label>Valor Bruto (€) <span className="text-destructive">*</span></Label>
               <Input
                 type="text"
                 inputMode="decimal"
@@ -602,6 +607,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                   }
                 }}
                 placeholder="1500.00"
+                required
               />
             </div>
             <div>
