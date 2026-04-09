@@ -218,17 +218,34 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
     }
   }, [messages]);
 
-  // Auto-refresh messages every 60 seconds when user is not typing
-  const cacheKey = contactId ? ['lead-messages-contact', contactId] : ['lead-messages', leadId];
+  // Realtime subscription for instant message updates
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      if (!newMessage.trim()) {
-        queryClient.invalidateQueries({ queryKey: cacheKey });
-      }
-    }, 60000);
+    if (!contactId && !leadId) return;
 
-    return () => clearInterval(intervalId);
-  }, [newMessage, cacheKey, queryClient]);
+    const channel = supabase
+      .channel(`chat-messages-${contactId || leadId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'mensagens_cliente',
+        },
+        (payload) => {
+          // Only refresh if the message belongs to one of our lead IDs
+          const msgLeadId = payload.new?.id_lead;
+          if (msgLeadId) {
+            queryClient.invalidateQueries({ queryKey: cacheKey });
+            queryClient.invalidateQueries({ queryKey: ['chat-context', contactId] });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [contactId, leadId, cacheKey, queryClient]);
 
   const handleSend = async () => {
     if (!newMessage.trim() && !attachedFile) return;
