@@ -982,7 +982,28 @@ export function ContractGroupsSection({
                 className="h-7 px-2 text-xs"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setViewDetailsLead({ ...lead, _payments: leadPayments, _displayName: displayName });
+                  const leadPayment = leadPayments[0];
+                  const groupPayments = leadPayments.filter((p: any) => p.payment_form === 'PARCELADO');
+                  const installments = groupPayments.length > 1
+                    ? groupPayments.map((p: any) => ({ amount: p.amount?.toString() || '', due_date: p.due_date || '' }))
+                    : [];
+                  setReadOnlyPaymentData({
+                    amount: leadPayment?.amount || 0,
+                    payment_method: leadPayment?.payment_method,
+                    payment_form: leadPayment?.payment_form,
+                    apply_vat: leadPayment?.apply_vat,
+                    vat_rate: leadPayment?.vat_rate,
+                    discount_type: leadPayment?.discount_type,
+                    discount_value: leadPayment?.discount_value,
+                    gross_amount: leadPayment?.gross_amount,
+                    serviceTypeId: lead.service_type_id || '',
+                    due_date: leadPayment?.due_date,
+                    installments,
+                    notes: '',
+                    leadId: lead.id,
+                    opportunityId: leadPayment?.opportunity_id,
+                  });
+                  setShowReadOnlyPayment(true);
                 }}
                 title="Ver detalhes do serviço"
               >
