@@ -1,63 +1,78 @@
 
 
-## Problem
+# Fix: Sincronização de Status dos Templates WhatsApp com Twilio
 
-When a beneficiary has services, the system creates contracts in the beneficiary's name. This is wrong because:
-1. Beneficiaries can be minors
-2. Contracts must always be in the titular's name
-3. Beneficiary services should be added to the titular's open contract group, or a new group should be created on the titular's profile
+## Problema Raiz Identificado
 
-## Current Behavior
+O bug está na Edge Function `submit-whatsapp-templates`. A resposta da API Twilio ApprovalRequests retorna:
 
-- `ContactDetail.tsx` renders `ContractGroupsSection` for both titular and beneficiary contacts independently (lines 1188-1213)
-- When creating a contract group from a beneficiary's page, it creates a standalone contract linked to the beneficiary's leads/opportunities
-- There is no cross-linking to the titular's contract groups
+```text
+{
+  "whatsapp": { "status": "approved", "rejection_reason": "" },
+  "sid": "HX...",
+  "account_sid": "AC..."
+}
+```
 
-## Plan
+Mas o código espera um formato diferente (`data.data[0].status`). Como `data.data` é `undefined`, a lógica cai no fallback e define o status como `"unsubmitted"` — sobrescrevendo o status real dos templates que estão aprovados no Twilio.
 
-### 1. Redirect beneficiary contract group creation to the titular
+Este mesmo bug existe em dois lugares:
+1. **Ação `check_status`** (linha 320) — parsing errado da resposta
+2. **Ação `sync_from_twilio`** (linha 435) — mesmo parsing errado
 
-**File: `src/components/crm/ContractGroupsSection.tsx`**
+## Correção
 
-- Add new optional props: `isBeneficiary: boolean`, `titularContactId: string | null`
-- When `isBeneficiary` is true and user tries to create a contract group or add services:
-  - Fetch the titular's existing draft contracts (via titular's leads -> contract_leads -> contracts with status `EM_ELABORACAO`)
-  - If an open draft exists on the titular, add the beneficiary's selected leads to that draft
-  - If no open draft exists, create a new contract under the titular (using titular's first opportunity as `opportunity_id`) and link the beneficiary's leads to it
-  - Show a toast indicating the service was added to the titular's contract
-- Hide "Concluir" (finalize) button on beneficiary's view since finalization should happen from the titular's page
+### Arquivo: `supabase/functions/submit-whatsapp-templates/index.ts`
 
-### 2. Pass titular info from ContactDetail to ContractGroupsSection
+**1. Corrigir parsing em `check_status` (linhas 316-332)**
 
-**File: `src/pages/crm/ContactDetail.tsx`**
+Substituir a lógica de parsing para usar `data.whatsapp?.status` em vez de `data.data?.[0]?.status`:
 
-- For beneficiary contacts (line 1204-1213), pass additional props:
-  - `isBeneficiary={true}`
-  - `titularContactId={contactTitular?.contact_id}`
-  - `titularContactName={contactTitular?.full_name}`
+```typescript
+let newStatus = template.status
+let rejectionReason = null
 
-### 3. Fetch titular's contract groups in ContractGroupsSection when beneficiary
+// Twilio returns: { whatsapp: { status: "approved", rejection_reason: "..." } }
+if (data.whatsapp && data.whatsapp.status) {
+  const mappedStatus = data.whatsapp.status
+  if (['approved', 'rejected', 'pending', 'paused', 'disabled', 'received', 'unsubmitted'].includes(mappedStatus)) {
+    newStatus = mappedStatus
+  }
+  if (mappedStatus === 'rejected' && data.whatsapp.rejection_reason) {
+    rejectionReason = data.whatsapp.rejection_reason
+  }
+} else if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+  // Fallback: legacy array format (kept for safety)
+  const approval = data.data[0]
+  const mappedStatus = approval.status || 'unknown'
+  if (['approved', 'rejected', 'pending', 'paused', 'disabled', 'received', 'unsubmitted'].includes(mappedStatus)) {
+    newStatus = mappedStatus
+  }
+  if (mappedStatus === 'rejected') {
+    rejectionReason = approval.rejection_reason || 'Rejected by Meta'
+  }
+} else if (response.ok) {
+  newStatus = 'unsubmitted'
+}
+```
 
-**File: `src/components/crm/ContractGroupsSection.tsx`**
+**2. Corrigir parsing em `sync_from_twilio` (linhas 435-444)**
 
-- When `isBeneficiary` is true, add a query to fetch the titular's leads and their contract_leads
-- In `handleCreateContractGroup`:
-  - Look for titular's draft contracts first
-  - If found, use `handleAddToContract` logic to add beneficiary leads to that draft
-  - If not found, create a new contract using a titular lead's opportunity as the `opportunity_id`, then link both titular and beneficiary leads
-- Display a note on the beneficiary's page indicating contracts are managed via the titular
+Aplicar a mesma correção:
 
-### 4. Show beneficiary services on the titular's ContractGroupsSection
+```typescript
+if (approvalData.whatsapp && approvalData.whatsapp.status) {
+  approvalStatus = approvalData.whatsapp.status
+  rejectionReason = approvalData.whatsapp.rejection_reason || null
+} else if (approvalData.data && Array.isArray(approvalData.data) && approvalData.data.length > 0) {
+  approvalStatus = approvalData.data[0].status || 'unknown'
+  rejectionReason = approvalData.data[0].rejection_reason || null
+} else {
+  approvalStatus = 'not_submitted'
+}
+```
 
-**File: `src/pages/crm/ContactDetail.tsx`**
+### Resultado Esperado
 
-- For titular contacts (line 1188-1200), enhance `allServiceLeads` to also include leads from all beneficiaries
-- Fetch beneficiary leads and merge them into `contactLeads` passed to `ContractGroupsSection`
-- Mark beneficiary leads with a visual indicator (e.g., small badge with beneficiary name)
-
-### Technical Details
-
-- The `contract_leads` junction table already supports linking any lead to any contract, so beneficiary leads can be linked to titular's contracts without schema changes
-- The `opportunity_id` on the contract table must reference a valid opportunity; we'll use the titular's first available opportunity
-- No database migration needed -- this is purely frontend logic
+Após deploy, ao clicar em "Verificar Status" ou "Sincronizar do Twilio" na tela de templates, os 12 templates serão corretamente atualizados para `approved` (ou `rejected` para os 2 que a Meta rejeitou) e automaticamente ativados (`is_active = true`).
 
