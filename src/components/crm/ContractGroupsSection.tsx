@@ -14,7 +14,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { 
-  Briefcase, CreditCard, DollarSign, Loader2, Plus, Pencil, Trash2, CheckCircle2, FileText, Package, ChevronRight, ChevronDown, User, Users, Clock, Play
+  Briefcase, CreditCard, DollarSign, Loader2, Plus, Pencil, Trash2, CheckCircle2, FileText, Package, ChevronRight, ChevronDown, User, Users, Clock, Play, Eye
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -973,6 +973,21 @@ export function ContractGroupsSection({
                   Aguardando Pagamento
                 </Badge>
               )
+            )}
+            {!editable && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/crm/leads/${lead.id}`);
+                }}
+                title="Ver detalhes do serviço"
+              >
+                <Eye className="h-3.5 w-3.5 mr-1" />
+                Detalhes
+              </Button>
             )}
             {editable && options?.contractId && (
               <Button
