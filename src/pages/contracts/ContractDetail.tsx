@@ -957,14 +957,24 @@ export default function ContractDetail() {
                   <p className="font-medium">{PAYMENT_ACCOUNT_LABELS[(contract as any).payment_account as PaymentAccount] || (contract as any).payment_account}</p>
                 </div>
               )}
-              {(filteredPaymentNotes || generatedPaymentDetails) && (
-                <div className="border-t pt-4">
-                  <p className="text-sm text-muted-foreground mb-2">Observações dos Serviços</p>
-                  <pre className="text-sm font-medium whitespace-pre-wrap break-words bg-muted/50 rounded-md p-3">
-                    {filteredPaymentNotes || generatedPaymentDetails}
-                  </pre>
-                </div>
-              )}
+              {(() => {
+                const notes = filteredPaymentNotes || generatedPaymentDetails || '';
+                const obsLines = notes.split('\n')
+                  .filter((line: string) => line.startsWith('Observações:'))
+                  .map((line: string) => line.replace('Observações:', '').trim())
+                  .filter(Boolean);
+                if (obsLines.length === 0) return null;
+                return (
+                  <div className="border-t pt-4">
+                    <p className="text-sm text-muted-foreground mb-2">Observações</p>
+                    <div className="text-sm font-medium bg-muted/50 rounded-md p-3 space-y-1">
+                      {obsLines.map((obs: string, i: number) => (
+                        <p key={i}>{obs}</p>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </div>
