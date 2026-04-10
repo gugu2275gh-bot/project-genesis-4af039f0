@@ -3001,6 +3001,15 @@ export type Database = {
         }[]
       }
       is_superuser: { Args: { _user_id: string }; Returns: boolean }
+      merge_contacts: {
+        Args: {
+          p_source_contact_id: string
+          p_target_contact_id: string
+          p_update_email?: boolean
+          p_update_phone?: boolean
+        }
+        Returns: Json
+      }
     }
     Enums: {
       app_role:

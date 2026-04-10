@@ -58,7 +58,8 @@ import {
   Upload,
   Trash2,
   Pencil,
-  UserCheck
+  UserCheck,
+  GitMerge
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -110,6 +111,11 @@ export default function ContactDetail() {
   const [showConvertToBeneficiaryDialog, setShowConvertToBeneficiaryDialog] = useState(false);
   const [titularSearchQuery, setTitularSearchQuery] = useState('');
   const [isConvertingToBeneficiary, setIsConvertingToBeneficiary] = useState(false);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [mergeSearchQuery, setMergeSearchQuery] = useState('');
+  const [mergeUpdatePhone, setMergeUpdatePhone] = useState(true);
+  const [mergeUpdateEmail, setMergeUpdateEmail] = useState(false);
+  const [isMerging, setIsMerging] = useState(false);
   const queryClient = useQueryClient();
 
   const directLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
@@ -209,6 +215,46 @@ export default function ContactDetail() {
       toast({ title: 'Erro ao converter contato', description: err.message, variant: 'destructive' });
     } finally {
       setIsConvertingToBeneficiary(false);
+    }
+  };
+
+  // Search contacts for merge dialog
+  const { data: mergeSearchResults = [] } = useQuery({
+    queryKey: ['merge-search', mergeSearchQuery],
+    queryFn: async () => {
+      if (!mergeSearchQuery || mergeSearchQuery.length < 2) return [];
+      const { data } = await supabase
+        .from('contacts')
+        .select('id, full_name, phone, email')
+        .neq('id', id!)
+        .or(`full_name.ilike.%${mergeSearchQuery}%,phone.ilike.%${mergeSearchQuery}%`)
+        .limit(10);
+      return data || [];
+    },
+    enabled: showMergeDialog && mergeSearchQuery.length >= 2,
+  });
+
+  const handleMergeContacts = async (targetContactId: string, targetName: string) => {
+    if (!id || !contact) return;
+    setIsMerging(true);
+    try {
+      const { data, error } = await supabase.rpc('merge_contacts', {
+        p_source_contact_id: id,
+        p_target_contact_id: targetContactId,
+        p_update_phone: mergeUpdatePhone,
+        p_update_email: mergeUpdateEmail,
+      });
+      if (error) throw error;
+      const result = data as any;
+      toast({
+        title: 'Contatos mesclados com sucesso',
+        description: `${result.moved_leads} leads, ${result.moved_interactions} interações movidos para ${targetName}.`,
+      });
+      navigate(`/crm/contacts/${targetContactId}`);
+    } catch (err: any) {
+      toast({ title: 'Erro ao mesclar contatos', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsMerging(false);
     }
   };
 
@@ -1265,6 +1311,10 @@ export default function ContactDetail() {
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
+            <Button variant="outline" onClick={() => setShowMergeDialog(true)}>
+              <GitMerge className="h-4 w-4 mr-2" />
+              Mesclar
+            </Button>
             {!isEditing && (
               <Button onClick={handleStartEdit}>
                 Editar
@@ -1838,6 +1888,90 @@ export default function ContactDetail() {
             {isConvertingToBeneficiary && (
               <div className="flex items-center justify-center py-2">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Mesclar Contatos */}
+      <Dialog open={showMergeDialog} onOpenChange={(open) => { setShowMergeDialog(open); if (!open) { setMergeSearchQuery(''); setMergeUpdatePhone(true); setMergeUpdateEmail(false); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitMerge className="h-5 w-5" />
+              Mesclar Contatos
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+              <p className="font-medium text-destructive">⚠️ Ação irreversível</p>
+              <p className="text-muted-foreground mt-1">
+                Todos os dados deste contato (<strong>{contact?.full_name}</strong>) serão transferidos para o contato selecionado. Este contato será excluído permanentemente.
+              </p>
+            </div>
+            <div>
+              <Label>Buscar contato de destino</Label>
+              <Input
+                value={mergeSearchQuery}
+                onChange={(e) => setMergeSearchQuery(e.target.value)}
+                placeholder="Digite o nome ou telefone..."
+              />
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="merge-phone"
+                  checked={mergeUpdatePhone}
+                  onCheckedChange={(v) => setMergeUpdatePhone(!!v)}
+                />
+                <Label htmlFor="merge-phone" className="text-sm">Atualizar telefone</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="merge-email"
+                  checked={mergeUpdateEmail}
+                  onCheckedChange={(v) => setMergeUpdateEmail(!!v)}
+                />
+                <Label htmlFor="merge-email" className="text-sm">Atualizar e-mail</Label>
+              </div>
+            </div>
+            {mergeSearchResults.length > 0 && (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {mergeSearchResults.map((c: any) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => {
+                      if (confirm(`Tem certeza que deseja mesclar "${contact?.full_name}" com "${c.full_name}"? Esta ação é irreversível.`)) {
+                        handleMergeContacts(c.id, c.full_name);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{c.full_name}</p>
+                        <div className="flex gap-2 text-xs text-muted-foreground">
+                          {c.phone && <span>{c.phone}</span>}
+                          {c.email && <span>• {c.email}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-xs">Mesclar aqui</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+            {mergeSearchQuery.length >= 2 && mergeSearchResults.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-2">Nenhum contato encontrado</p>
+            )}
+            {isMerging && (
+              <div className="flex items-center justify-center gap-2 py-2">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">Mesclando contatos...</span>
               </div>
             )}
           </div>
