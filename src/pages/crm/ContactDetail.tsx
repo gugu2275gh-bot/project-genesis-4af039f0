@@ -1311,6 +1311,10 @@ export default function ContactDetail() {
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
             </Button>
+            <Button variant="outline" onClick={() => setShowMergeDialog(true)}>
+              <GitMerge className="h-4 w-4 mr-2" />
+              Mesclar
+            </Button>
             {!isEditing && (
               <Button onClick={handleStartEdit}>
                 Editar
