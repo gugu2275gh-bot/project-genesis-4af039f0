@@ -343,6 +343,16 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
         },
       });
       if (error) throw error;
+
+      // Insert template message into mensagens_cliente so it appears in chat
+      const templateText = `📋 *Template: ${template.template_name}*\n${template.body_text}`;
+      await supabase.from('mensagens_cliente').insert({
+        id_lead: leadId,
+        mensagem_IA: templateText,
+        origem: 'SISTEMA',
+        setor: null,
+      });
+
       toast.success(`Template "${template.template_name}" enviado`);
       setSelectedTemplate(null);
       queryClient.invalidateQueries({ queryKey: cacheKey });
