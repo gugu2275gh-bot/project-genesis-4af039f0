@@ -58,7 +58,8 @@ import {
   Upload,
   Trash2,
   Pencil,
-  UserCheck
+  UserCheck,
+  GitMerge
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
