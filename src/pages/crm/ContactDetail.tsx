@@ -111,6 +111,11 @@ export default function ContactDetail() {
   const [showConvertToBeneficiaryDialog, setShowConvertToBeneficiaryDialog] = useState(false);
   const [titularSearchQuery, setTitularSearchQuery] = useState('');
   const [isConvertingToBeneficiary, setIsConvertingToBeneficiary] = useState(false);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [mergeSearchQuery, setMergeSearchQuery] = useState('');
+  const [mergeUpdatePhone, setMergeUpdatePhone] = useState(true);
+  const [mergeUpdateEmail, setMergeUpdateEmail] = useState(false);
+  const [isMerging, setIsMerging] = useState(false);
   const queryClient = useQueryClient();
 
   const directLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
