@@ -525,7 +525,7 @@ export default function ContractDetail() {
   const canReject = contract.status === 'EM_ELABORACAO';
   const canSign = contract.status === 'APROVADO';
   const canDownloadContract = contract.status === 'APROVADO' || contract.status === 'ASSINADO';
-  const canCancel = contract.status !== 'CANCELADO';
+  const canCancel = contract.status !== 'CANCELADO' && contract.status !== 'REPROVADO';
   const canSuspend = contract.status === 'ASSINADO' && !isSuspended;
   const canReactivate = isSuspended;
 
