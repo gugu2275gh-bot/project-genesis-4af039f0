@@ -1153,7 +1153,8 @@ export function ContractGroupsSection({
       }));
     });
 
-    for (const lead of sortedRelevantLeads) {
+    for (let i = 0; i < sortedRelevantLeads.length; i++) {
+      const lead = sortedRelevantLeads[i];
       const displayName = getLeadDisplayName(lead);
       const createdDate = lead.created_at ? format(new Date(lead.created_at), 'dd/MM/yyyy', { locale: ptBR }) : '';
 
@@ -1164,8 +1165,8 @@ export function ContractGroupsSection({
       });
       const leadFees = leadFeesById.get(lead.id) || [];
 
-      let block = `Acordo de Pagamento — ${createdDate}\n`;
-      block += `Serviço: ${displayName}\n`;
+      let block = `${i + 1}. Serviço: ${displayName}\n`;
+      block += `Acordo de Pagamento — ${createdDate}\n`;
 
       if (leadPayments.length === 0) {
         block += `Sem pagamentos registrados`;
