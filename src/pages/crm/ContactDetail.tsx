@@ -218,6 +218,46 @@ export default function ContactDetail() {
     }
   };
 
+  // Search contacts for merge dialog
+  const { data: mergeSearchResults = [] } = useQuery({
+    queryKey: ['merge-search', mergeSearchQuery],
+    queryFn: async () => {
+      if (!mergeSearchQuery || mergeSearchQuery.length < 2) return [];
+      const { data } = await supabase
+        .from('contacts')
+        .select('id, full_name, phone, email')
+        .neq('id', id!)
+        .or(`full_name.ilike.%${mergeSearchQuery}%,phone.ilike.%${mergeSearchQuery}%`)
+        .limit(10);
+      return data || [];
+    },
+    enabled: showMergeDialog && mergeSearchQuery.length >= 2,
+  });
+
+  const handleMergeContacts = async (targetContactId: string, targetName: string) => {
+    if (!id || !contact) return;
+    setIsMerging(true);
+    try {
+      const { data, error } = await supabase.rpc('merge_contacts', {
+        p_source_contact_id: id,
+        p_target_contact_id: targetContactId,
+        p_update_phone: mergeUpdatePhone,
+        p_update_email: mergeUpdateEmail,
+      });
+      if (error) throw error;
+      const result = data as any;
+      toast({
+        title: 'Contatos mesclados com sucesso',
+        description: `${result.moved_leads} leads, ${result.moved_interactions} interações movidos para ${targetName}.`,
+      });
+      navigate(`/crm/contacts/${targetContactId}`);
+    } catch (err: any) {
+      toast({ title: 'Erro ao mesclar contatos', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsMerging(false);
+    }
+  };
+
 
   const extractLastNotes = (): string => {
     const notes = (contact as any)?.payment_notes || '';
