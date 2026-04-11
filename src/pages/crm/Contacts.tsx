@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useContacts, ContactInsert } from '@/hooks/useContacts';
+import { supabase } from '@/integrations/supabase/client';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,12 @@ export default function Contacts() {
         is_beneficiary: isBeneficiary,
         linked_principal_contact_id: isBeneficiary ? principalContactId : null,
       } as ContactInsert);
+      // Also insert into beneficiary_titular_links
+      if (isBeneficiary && principalContactId && created?.id) {
+        await supabase
+          .from('beneficiary_titular_links')
+          .insert({ beneficiary_contact_id: created.id, titular_contact_id: principalContactId });
+      }
       setIsDialogOpen(false);
       navigate(`/crm/contacts/${created.id}`);
     } finally {
