@@ -476,8 +476,15 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     queryClient.invalidateQueries({ queryKey: ['contact-service-cases', contactId] });
     queryClient.invalidateQueries({ queryKey: ['beneficiary-linked-leads', contactId] });
     queryClient.invalidateQueries({ queryKey: ['beneficiary-service-cases', contactId] });
-    // Also invalidate titular's queries if beneficiary flow
+    // Also create beneficiary-titular link and invalidate titular's queries if beneficiary flow
     if (isBeneficiary && selectedTitularId) {
+      await supabase
+        .from('beneficiary_titular_links')
+        .upsert(
+          { beneficiary_contact_id: contactId, titular_contact_id: selectedTitularId },
+          { onConflict: 'beneficiary_contact_id,titular_contact_id' }
+        );
+      queryClient.invalidateQueries({ queryKey: ['contact-titulares', contactId] });
       queryClient.invalidateQueries({ queryKey: ['contact-payments', selectedTitularId] });
       queryClient.invalidateQueries({ queryKey: ['contact-contracts', selectedTitularId] });
       queryClient.invalidateQueries({ queryKey: ['contract-leads', selectedTitularId] });
