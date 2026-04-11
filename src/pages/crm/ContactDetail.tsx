@@ -164,6 +164,11 @@ export default function ContactDetail() {
     if (!id) return;
     setIsPromotingToTitular(true);
     try {
+      // Remove all titular links
+      await supabase
+        .from('beneficiary_titular_links')
+        .delete()
+        .eq('beneficiary_contact_id', id);
       const { error } = await supabase
         .from('contacts')
         .update({ is_beneficiary: false, linked_principal_contact_id: null })
@@ -171,6 +176,7 @@ export default function ContactDetail() {
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ['contact', id] });
       queryClient.invalidateQueries({ queryKey: ['contact-titular', id] });
+      queryClient.invalidateQueries({ queryKey: ['contact-titulares', id] });
       queryClient.invalidateQueries({ queryKey: ['contact-beneficiaries'] });
       toast({ title: 'Contato promovido a titular', description: 'Este contato agora pode ter contratos próprios.' });
     } catch (err: any) {
@@ -206,8 +212,13 @@ export default function ContactDetail() {
         .update({ is_beneficiary: true, linked_principal_contact_id: titularContactId })
         .eq('id', id);
       if (error) throw error;
+      // Also insert into beneficiary_titular_links
+      await supabase
+        .from('beneficiary_titular_links')
+        .upsert({ beneficiary_contact_id: id, titular_contact_id: titularContactId }, { onConflict: 'beneficiary_contact_id,titular_contact_id' });
       queryClient.invalidateQueries({ queryKey: ['contact', id] });
       queryClient.invalidateQueries({ queryKey: ['contact-beneficiaries'] });
+      queryClient.invalidateQueries({ queryKey: ['contact-titulares', id] });
       setShowConvertToBeneficiaryDialog(false);
       setTitularSearchQuery('');
       toast({ title: 'Contato convertido a beneficiário', description: 'Este contato agora está vinculado ao titular selecionado.' });
@@ -1822,6 +1833,12 @@ export default function ContactDetail() {
                     .select()
                     .single();
                   if (error) throw error;
+                  // Also insert into beneficiary_titular_links
+                  if (newContact) {
+                    await supabase
+                      .from('beneficiary_titular_links')
+                      .insert({ beneficiary_contact_id: newContact.id, titular_contact_id: id });
+                  }
                   toast({ title: 'Beneficiário adicionado com sucesso' });
                   queryClient.invalidateQueries({ queryKey: ['contact-beneficiaries', id] });
                   setShowAddBeneficiaryDialog(false);
