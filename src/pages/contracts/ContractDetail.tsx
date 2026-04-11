@@ -207,13 +207,18 @@ export default function ContractDetail() {
             : null) ||
           'Serviço';
 
+        const beneficiaryName = payment.contract_beneficiaries?.full_name;
+        const serviceLabel = beneficiaryName
+          ? `${serviceName} para ${beneficiaryName}`
+          : serviceName;
+
         const lines: string[] = [];
         const agreementDate = payment.created_at || payment.due_date;
         if (agreementDate) {
           lines.push(`Acordo de Pagamento — ${format(new Date(agreementDate), 'dd/MM/yyyy', { locale: ptBR })}`);
         }
 
-        lines.push(`Serviço: ${serviceName}`);
+        lines.push(`Serviço: ${serviceLabel}`);
 
         const grossAmount = payment.gross_amount ?? payment.amount;
         const formattedGrossAmount = formatMoney(grossAmount);
