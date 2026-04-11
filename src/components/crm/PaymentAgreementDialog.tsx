@@ -461,6 +461,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     });
 
     queryClient.invalidateQueries({ queryKey: ['leads'] });
+    queryClient.invalidateQueries({ queryKey: ['contacts'] });
     queryClient.invalidateQueries({ queryKey: ['beneficiary-pending-leads', contactId] });
     queryClient.invalidateQueries({ queryKey: ['confirmed-lead-ids', contactId] });
     queryClient.invalidateQueries({ queryKey: ['payments'] });
@@ -473,6 +474,8 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     queryClient.invalidateQueries({ queryKey: ['beneficiary-contract-leads', contactId] });
     queryClient.invalidateQueries({ queryKey: ['beneficiary-payments-in-groups', contactId] });
     queryClient.invalidateQueries({ queryKey: ['contact-service-cases', contactId] });
+    queryClient.invalidateQueries({ queryKey: ['beneficiary-linked-leads', contactId] });
+    queryClient.invalidateQueries({ queryKey: ['beneficiary-service-cases', contactId] });
     // Also invalidate titular's queries if beneficiary flow
     if (isBeneficiary && selectedTitularId) {
       queryClient.invalidateQueries({ queryKey: ['contact-payments', selectedTitularId] });
@@ -480,6 +483,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       queryClient.invalidateQueries({ queryKey: ['contract-leads', selectedTitularId] });
       queryClient.invalidateQueries({ queryKey: ['confirmed-lead-ids', selectedTitularId] });
       queryClient.invalidateQueries({ queryKey: ['beneficiary-leads-in-groups', selectedTitularId] });
+      queryClient.invalidateQueries({ queryKey: ['beneficiary-linked-leads', selectedTitularId] });
     }
 
     const titularName = selectedTitularName;
