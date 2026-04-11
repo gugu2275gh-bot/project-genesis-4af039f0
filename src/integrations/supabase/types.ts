@@ -47,6 +47,42 @@ export type Database = {
         }
         Relationships: []
       }
+      beneficiary_titular_links: {
+        Row: {
+          beneficiary_contact_id: string
+          created_at: string
+          id: string
+          titular_contact_id: string
+        }
+        Insert: {
+          beneficiary_contact_id: string
+          created_at?: string
+          id?: string
+          titular_contact_id: string
+        }
+        Update: {
+          beneficiary_contact_id?: string
+          created_at?: string
+          id?: string
+          titular_contact_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "beneficiary_titular_links_beneficiary_contact_id_fkey"
+            columns: ["beneficiary_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "beneficiary_titular_links_titular_contact_id_fkey"
+            columns: ["titular_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       case_notes: {
         Row: {
           created_at: string | null

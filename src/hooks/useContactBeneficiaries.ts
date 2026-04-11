@@ -73,7 +73,7 @@ export function useContactBeneficiaries(contactId?: string) {
     enabled: !!contactId,
   });
 
-  // Query: find ALL titulars (contract-based + direct) — supports multiple titulars
+  // Query: find ALL titulars from beneficiary_titular_links + contract_beneficiaries
   const titularesQuery = useQuery({
     queryKey: ['contact-titulares', contactId],
     queryFn: async () => {
@@ -82,22 +82,22 @@ export function useContactBeneficiaries(contactId?: string) {
       const results: TitularLink[] = [];
       const seenIds = new Set<string>();
 
-      // 1) Direct titular via linked_principal_contact_id
-      const { data: self } = await supabase
-        .from('contacts')
-        .select('is_beneficiary, linked_principal_contact_id')
-        .eq('id', contactId)
-        .single();
+      // 1) Direct links from beneficiary_titular_links table
+      const { data: directLinks } = await supabase
+        .from('beneficiary_titular_links')
+        .select('titular_contact_id')
+        .eq('beneficiary_contact_id', contactId);
 
-      if (self?.is_beneficiary && self?.linked_principal_contact_id) {
-        const { data: titular } = await supabase
+      if (directLinks && directLinks.length > 0) {
+        const titularIds = directLinks.map(l => l.titular_contact_id);
+        const { data: titulars } = await supabase
           .from('contacts')
           .select('id, full_name')
-          .eq('id', self.linked_principal_contact_id)
-          .single();
-        if (titular) {
-          seenIds.add(titular.id);
-          results.push({ full_name: titular.full_name, contact_id: titular.id });
+          .in('id', titularIds);
+
+        for (const t of titulars || []) {
+          seenIds.add(t.id);
+          results.push({ full_name: t.full_name, contact_id: t.id });
         }
       }
 
