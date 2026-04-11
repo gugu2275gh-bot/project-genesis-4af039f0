@@ -90,7 +90,7 @@ export default function Settings() {
                 className={activeTab === 'service-types' ? 'bg-accent' : ''}
               >
                 <Briefcase className="h-4 w-4 mr-2" />
-                Tipos de Serviço
+                Serviços
               </DropdownMenuItem>
               <DropdownMenuItem 
                 onClick={() => handleTableTabSelect('payment-settings')}
