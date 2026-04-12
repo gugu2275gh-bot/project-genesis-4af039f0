@@ -840,7 +840,7 @@ export default function LeadDetail() {
                       discount_type: existingPayment.discount_type || undefined,
                       discount_value: existingPayment.discount_value ?? undefined,
                       due_date: existingPayment.due_date || undefined,
-                      notes: existingPayment.notes || undefined,
+                      
                     } : {}),
                   }}
                   readOnly={!!isGroupFinalized}
