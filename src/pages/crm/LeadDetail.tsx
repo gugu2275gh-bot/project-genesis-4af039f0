@@ -97,6 +97,22 @@ export default function LeadDetail() {
     },
     enabled: !!id,
   });
+
+  // Fetch existing payment data for read-only mode
+  const { data: existingPayment } = useQuery({
+    queryKey: ['lead-payment-details', leadOpportunity?.id],
+    queryFn: async () => {
+      if (!leadOpportunity?.id) return null;
+      const { data } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('opportunity_id', leadOpportunity.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      return data?.[0] || null;
+    },
+    enabled: !!leadOpportunity?.id && !!isGroupFinalized,
+  });
   const { updateContact } = useContacts();
   const { interactions, createInteraction, updateInteraction, deleteInteraction, isEditable } = useInteractions(lead?.contact_id, id);
   const { data: profiles } = useProfiles();
