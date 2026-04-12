@@ -563,6 +563,11 @@ export default function Leads() {
                                 Beneficiário
                               </Badge>
                             )}
+                            {!lead.contacts?.is_beneficiary && leadBeneficiaryMap?.[lead.id] && (
+                              <Badge variant="outline" className="text-purple-600 border-purple-200 bg-purple-50 dark:bg-purple-900/20 text-xs">
+                                Beneficiário - {leadBeneficiaryMap[lead.id]}
+                              </Badge>
+                            )}
                             {lead.interest_confirmed && (
                               <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 dark:bg-green-900/20 text-xs">
                                 Interesse Confirmado
