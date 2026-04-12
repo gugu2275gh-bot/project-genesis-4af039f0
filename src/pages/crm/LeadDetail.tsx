@@ -68,20 +68,17 @@ export default function LeadDetail() {
     enabled: !!id,
   });
 
-  // Check if lead belongs to a finalized contract group (not EM_ELABORACAO)
+  // Check if lead belongs to a finalized contract group (any contract linked)
   const { data: isGroupFinalized } = useQuery({
     queryKey: ['lead-group-finalized', id],
     queryFn: async () => {
       if (!id) return false;
       const { data } = await supabase
         .from('contract_leads')
-        .select('contract_id, contracts:contract_id(status)')
-        .eq('lead_id', id);
-      if (!data?.length) return false;
-      return data.some((cl: any) => {
-        const status = cl.contracts?.status;
-        return status && status !== 'EM_ELABORACAO';
-      });
+        .select('contract_id')
+        .eq('lead_id', id)
+        .limit(1);
+      return (data?.length ?? 0) > 0;
     },
     enabled: !!id,
   });
