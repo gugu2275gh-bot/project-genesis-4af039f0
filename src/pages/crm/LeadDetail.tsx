@@ -801,7 +801,7 @@ export default function LeadDetail() {
                 onClick={() => setShowPaymentAgreement(true)}
               >
                 <DollarSign className="h-4 w-4 mr-2" />
-                Novo Serviço
+                {isGroupFinalized ? 'Detalhes' : 'Novo Serviço'}
               </Button>
               {lead.contact_id && (
                 <PaymentAgreementDialog
@@ -818,6 +818,7 @@ export default function LeadDetail() {
                     opportunityId: leadOpportunity?.id,
                     serviceTypeId: lead.service_type_id || undefined,
                   }}
+                  readOnly={!!isGroupFinalized}
                 />
               )}
             </div>
