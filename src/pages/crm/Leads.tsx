@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useLeads } from '@/hooks/useLeads';
 import { supabase } from '@/integrations/supabase/client';
 import { useContacts } from '@/hooks/useContacts';
@@ -28,6 +29,28 @@ export default function Leads() {
   const { contacts, createContact } = useContacts();
   const { data: serviceTypes } = useServiceTypes();
   useLeadSLAAlerts();
+
+  // Fetch beneficiary names per lead (lead → opportunity → payment with beneficiary_contact_id)
+  const { data: leadBeneficiaryMap } = useQuery({
+    queryKey: ['lead-beneficiary-map'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('opportunity_id, beneficiary_contact_id, contacts:beneficiary_contact_id(full_name), opportunities!inner(lead_id)')
+        .not('beneficiary_contact_id', 'is', null)
+        .not('opportunity_id', 'is', null);
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      for (const row of data || []) {
+        const leadId = (row.opportunities as any)?.lead_id;
+        const benName = (row.contacts as any)?.full_name;
+        if (leadId && benName && !map[leadId]) {
+          map[leadId] = benName;
+        }
+      }
+      return map;
+    },
+  });
 
   const serviceTypeMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -518,8 +541,18 @@ export default function Leads() {
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            <span className="text-sm font-medium truncate max-w-[200px]" title={(lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) || serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro'}>
-                              {(lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) || serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro'}
+                            <span className="text-sm font-medium truncate max-w-[300px]" title={
+                              (() => {
+                                const baseName = (lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) || serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro';
+                                const benName = leadBeneficiaryMap?.[lead.id];
+                                return benName ? `${baseName} para ${benName}` : baseName;
+                              })()
+                            }>
+                              {(() => {
+                                const baseName = (lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) || serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro';
+                                const benName = leadBeneficiaryMap?.[lead.id];
+                                return benName ? `${baseName} para ${benName}` : baseName;
+                              })()}
                             </span>
                             <StatusBadge
                               status={lead.status || 'NOVO'}
