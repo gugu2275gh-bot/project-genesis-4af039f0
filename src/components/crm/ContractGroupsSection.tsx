@@ -1290,6 +1290,19 @@ export function ContractGroupsSection({
                           {ungroupedLeads.length} serviço{ungroupedLeads.length !== 1 ? 's' : ''}
                         </p>
                       </div>
+                      {(() => {
+                        const ungroupedTotal = ungroupedPayments
+                          .filter(p => {
+                            const pLeadId = (p as any).opportunities?.leads?.id || (p as any).opportunities?.lead_id;
+                            return ungroupedLeads.some(l => l.id === pLeadId);
+                          })
+                          .reduce((sum, p) => sum + Number((p as any).amount || 0), 0);
+                        return ungroupedTotal > 0 ? (
+                          <span className="text-sm font-bold text-muted-foreground ml-2">
+                            € {ungroupedTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
@@ -1500,9 +1513,18 @@ export function ContractGroupsSection({
                           </p>
                           <p className="text-sm text-muted-foreground">
                             {group.leads.length} serviço{group.leads.length !== 1 ? 's' : ''}
-                            {contract.total_fee ? ` • € ${Number(contract.total_fee).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''}
                           </p>
                         </div>
+                        {(() => {
+                          const groupTotal = contract.total_fee
+                            ? Number(contract.total_fee)
+                            : group.payments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+                          return groupTotal > 0 ? (
+                            <span className="text-sm font-bold ml-2">
+                              € {groupTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </span>
+                          ) : null;
+                        })()}
                       </div>
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                         <StatusBadge status={contract.status || 'EM_ELABORACAO'} label={statusLabel} />
