@@ -15,7 +15,7 @@ export interface TitularLink {
 }
 
 export function useContactBeneficiaries(contactId?: string) {
-  // Single query: find all beneficiaries (contract-based + direct)
+  // Single query: find all beneficiaries from multiple sources
   const beneficiariesQuery = useQuery({
     queryKey: ['contact-beneficiaries', contactId],
     queryFn: async () => {
@@ -24,7 +24,15 @@ export function useContactBeneficiaries(contactId?: string) {
       const results: BeneficiaryLink[] = [];
       const seenIds = new Set<string>();
 
-      // 1) Contract-based beneficiaries
+      const addBeneficiary = (b: BeneficiaryLink) => {
+        const key = b.contact_id || b.id;
+        if (!seenIds.has(key)) {
+          seenIds.add(key);
+          results.push(b);
+        }
+      };
+
+      // 1) Contract-based beneficiaries (contract_beneficiaries table)
       const { data: primaryEntries } = await supabase
         .from('contract_beneficiaries')
         .select('contract_id')
@@ -40,11 +48,7 @@ export function useContactBeneficiaries(contactId?: string) {
           .eq('is_primary', false);
 
         for (const d of dependents || []) {
-          const key = d.contact_id || d.id;
-          if (!seenIds.has(key)) {
-            seenIds.add(key);
-            results.push(d as BeneficiaryLink);
-          }
+          addBeneficiary(d as BeneficiaryLink);
         }
       }
 
@@ -56,9 +60,50 @@ export function useContactBeneficiaries(contactId?: string) {
         .eq('linked_principal_contact_id', contactId);
 
       for (const c of directBens || []) {
-        if (!seenIds.has(c.id)) {
-          seenIds.add(c.id);
-          results.push({
+        addBeneficiary({
+          id: c.id,
+          full_name: c.full_name,
+          relationship: null,
+          contact_id: c.id,
+          is_primary: false,
+        });
+      }
+
+      // 3) Beneficiaries via beneficiary_titular_links
+      const { data: titularLinks } = await supabase
+        .from('beneficiary_titular_links')
+        .select('beneficiary_contact_id')
+        .eq('titular_contact_id', contactId);
+
+      if (titularLinks && titularLinks.length > 0) {
+        const benIds = titularLinks.map(l => l.beneficiary_contact_id);
+        const { data: linkedBens } = await supabase
+          .from('contacts')
+          .select('id, full_name')
+          .in('id', benIds);
+
+        for (const c of linkedBens || []) {
+          addBeneficiary({
+            id: c.id,
+            full_name: c.full_name,
+            relationship: null,
+            contact_id: c.id,
+            is_primary: false,
+          });
+        }
+      }
+
+      // 4) Beneficiaries via payments.beneficiary_contact_id on this contact's leads
+      const { data: paymentBens } = await supabase
+        .from('payments')
+        .select('beneficiary_contact_id, contacts:beneficiary_contact_id(id, full_name), opportunities!inner(leads!inner(contact_id))')
+        .not('beneficiary_contact_id', 'is', null)
+        .eq('opportunities.leads.contact_id', contactId);
+
+      for (const p of paymentBens || []) {
+        const c = p.contacts as unknown as { id: string; full_name: string } | null;
+        if (c) {
+          addBeneficiary({
             id: c.id,
             full_name: c.full_name,
             relationship: null,
