@@ -830,6 +830,18 @@ export default function LeadDetail() {
                     leadId: lead.id,
                     opportunityId: leadOpportunity?.id,
                     serviceTypeId: lead.service_type_id || undefined,
+                    ...(isGroupFinalized && existingPayment ? {
+                      gross_amount: existingPayment.gross_amount ?? existingPayment.amount,
+                      amount: existingPayment.amount,
+                      payment_method: existingPayment.payment_method || undefined,
+                      payment_form: existingPayment.payment_form || undefined,
+                      apply_vat: existingPayment.apply_vat || false,
+                      vat_rate: existingPayment.vat_rate ? existingPayment.vat_rate * 100 : undefined,
+                      discount_type: existingPayment.discount_type || undefined,
+                      discount_value: existingPayment.discount_value ?? undefined,
+                      due_date: existingPayment.due_date || undefined,
+                      notes: existingPayment.notes || undefined,
+                    } : {}),
                   }}
                   readOnly={!!isGroupFinalized}
                 />
