@@ -541,8 +541,18 @@ export default function Leads() {
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            <span className="text-sm font-medium truncate max-w-[200px]" title={(lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) || serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro'}>
-                              {(lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) || serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro'}
+                            <span className="text-sm font-medium truncate max-w-[300px]" title={
+                              (() => {
+                                const baseName = (lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) || serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro';
+                                const benName = leadBeneficiaryMap?.[lead.id];
+                                return benName ? `${baseName} para ${benName}` : baseName;
+                              })()
+                            }>
+                              {(() => {
+                                const baseName = (lead.service_type_id && serviceTypeIdMap[lead.service_type_id]) || serviceTypeMap[lead.service_interest || 'OUTRO'] || lead.service_interest || 'Outro';
+                                const benName = leadBeneficiaryMap?.[lead.id];
+                                return benName ? `${baseName} para ${benName}` : baseName;
+                              })()}
                             </span>
                             <StatusBadge
                               status={lead.status || 'NOVO'}
