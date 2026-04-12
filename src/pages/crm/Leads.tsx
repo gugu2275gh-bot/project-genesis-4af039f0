@@ -30,6 +30,28 @@ export default function Leads() {
   const { data: serviceTypes } = useServiceTypes();
   useLeadSLAAlerts();
 
+  // Fetch beneficiary names per lead (lead → opportunity → payment with beneficiary_contact_id)
+  const { data: leadBeneficiaryMap } = useQuery({
+    queryKey: ['lead-beneficiary-map'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('opportunity_id, beneficiary_contact_id, contacts:beneficiary_contact_id(full_name), opportunities!inner(lead_id)')
+        .not('beneficiary_contact_id', 'is', null)
+        .not('opportunity_id', 'is', null);
+      if (error) throw error;
+      const map: Record<string, string> = {};
+      for (const row of data || []) {
+        const leadId = (row.opportunities as any)?.lead_id;
+        const benName = (row.contacts as any)?.full_name;
+        if (leadId && benName && !map[leadId]) {
+          map[leadId] = benName;
+        }
+      }
+      return map;
+    },
+  });
+
   const serviceTypeMap = useMemo(() => {
     const map: Record<string, string> = {};
     serviceTypes?.forEach(st => { map[st.code] = st.name; });
