@@ -485,6 +485,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
           { onConflict: 'beneficiary_contact_id,titular_contact_id' }
         );
       queryClient.invalidateQueries({ queryKey: ['contact-titulares', contactId] });
+      queryClient.invalidateQueries({ queryKey: ['contact-beneficiaries', selectedTitularId] });
       queryClient.invalidateQueries({ queryKey: ['contact-payments', selectedTitularId] });
       queryClient.invalidateQueries({ queryKey: ['contact-contracts', selectedTitularId] });
       queryClient.invalidateQueries({ queryKey: ['contract-leads', selectedTitularId] });
