@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useLeads } from '@/hooks/useLeads';
 import { supabase } from '@/integrations/supabase/client';
 import { useContacts } from '@/hooks/useContacts';
