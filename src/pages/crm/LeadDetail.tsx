@@ -97,6 +97,22 @@ export default function LeadDetail() {
     },
     enabled: !!id,
   });
+
+  // Fetch existing payment data for read-only mode
+  const { data: existingPayment } = useQuery({
+    queryKey: ['lead-payment-details', leadOpportunity?.id],
+    queryFn: async () => {
+      if (!leadOpportunity?.id) return null;
+      const { data } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('opportunity_id', leadOpportunity.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      return data?.[0] || null;
+    },
+    enabled: !!leadOpportunity?.id && !!isGroupFinalized,
+  });
   const { updateContact } = useContacts();
   const { interactions, createInteraction, updateInteraction, deleteInteraction, isEditable } = useInteractions(lead?.contact_id, id);
   const { data: profiles } = useProfiles();
@@ -814,6 +830,18 @@ export default function LeadDetail() {
                     leadId: lead.id,
                     opportunityId: leadOpportunity?.id,
                     serviceTypeId: lead.service_type_id || undefined,
+                    ...(isGroupFinalized && existingPayment ? {
+                      gross_amount: existingPayment.gross_amount ?? existingPayment.amount,
+                      amount: existingPayment.amount,
+                      payment_method: existingPayment.payment_method || undefined,
+                      payment_form: existingPayment.payment_form || undefined,
+                      apply_vat: existingPayment.apply_vat || false,
+                      vat_rate: existingPayment.vat_rate ? existingPayment.vat_rate * 100 : undefined,
+                      discount_type: existingPayment.discount_type || undefined,
+                      discount_value: existingPayment.discount_value ?? undefined,
+                      due_date: existingPayment.due_date || undefined,
+                      
+                    } : {}),
                   }}
                   readOnly={!!isGroupFinalized}
                 />
