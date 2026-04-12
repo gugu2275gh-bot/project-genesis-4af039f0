@@ -1651,7 +1651,11 @@ export function ContractGroupsSection({
         contactName={selectedBeneficiaryName || contactName}
         initialData={editPaymentData}
         isBeneficiary={!!selectedBeneficiaryId || isBeneficiary}
-        titulares={titulares}
+        titulares={
+          selectedBeneficiaryId && !isBeneficiary
+            ? [{ full_name: contactName, contact_id: contactId }]
+            : titulares
+        }
       />
 
       {/* Delete/Archive Confirmation */}
