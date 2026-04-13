@@ -987,6 +987,18 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                       />
                     </div>
                   ))}
+                  {/* Installments total indicator */}
+                  {(() => {
+                    const instTotal = form.installments.reduce((sum, inst) => sum + (parseFloat(inst.amount) || 0), 0);
+                    const maxAllowed = calculatedAmounts.finalAmount;
+                    const exceeds = Math.round(instTotal * 100) > Math.round(maxAllowed * 100);
+                    return (
+                      <div className={`flex justify-between text-sm font-medium pt-1 border-t ${exceeds ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        <span>Soma das parcelas:</span>
+                        <span>€ {instTotal.toFixed(2)} / € {maxAllowed.toFixed(2)}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
