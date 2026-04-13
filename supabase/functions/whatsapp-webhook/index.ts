@@ -1634,15 +1634,41 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
 
         console.log(`Knowledge base context: ${knowledgeContext.length} chars, consolidated message length: ${messageForAI.length}`)
 
-        // Generate AI response
-        const aiResponse = await generateAIResponse(
-          history,
-          messageForAI,
-          systemPrompt.replace('{nome}', contact.full_name),
-          geminiApiKey,
-          knowledgeContext,
-          detectedChatLanguage
-        )
+        // Generate AI response (Gemini primary, OpenAI fallback)
+        let aiResponse = ''
+        const resolvedSystemPrompt = systemPrompt.replace('{nome}', contact.full_name)
+        
+        try {
+          aiResponse = await generateAIResponse(
+            history,
+            messageForAI,
+            resolvedSystemPrompt,
+            geminiApiKey,
+            knowledgeContext,
+            detectedChatLanguage
+          )
+        } catch (geminiError) {
+          console.error('Gemini failed, trying OpenAI fallback:', geminiError instanceof Error ? geminiError.message : geminiError)
+        }
+
+        // Fallback to OpenAI if Gemini returned empty or failed
+        if (!aiResponse) {
+          console.log('Primary AI (Gemini) returned empty/failed — invoking OpenAI fallback')
+          try {
+            aiResponse = await generateAIResponseOpenAI(
+              history,
+              messageForAI,
+              resolvedSystemPrompt,
+              knowledgeContext,
+              detectedChatLanguage
+            )
+            if (aiResponse) {
+              console.log('OpenAI fallback succeeded, response length:', aiResponse.length)
+            }
+          } catch (openaiError) {
+            console.error('OpenAI fallback also failed:', openaiError instanceof Error ? openaiError.message : openaiError)
+          }
+        }
 
         if (aiResponse) {
           // Send AI response via Twilio
@@ -1693,6 +1719,8 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
           } catch (sendErr) {
             console.error('Failed to send AI response via Twilio:', sendErr instanceof Error ? sendErr.message : sendErr)
           }
+        } else {
+          console.error('Both Gemini and OpenAI failed to generate a response for lead:', lead.id)
         }
       } catch (aiError) {
         console.error('AI agent error (non-blocking):', aiError instanceof Error ? aiError.message : aiError)
