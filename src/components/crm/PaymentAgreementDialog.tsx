@@ -424,27 +424,61 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             }
           }
         } else {
-          // Update existing pending payments with new values
+          // Recreate pending payments to match current form
           const paymentMethod = form.payment_method as any;
           const pendingPayments = existingPayments.filter(p => p.status === 'PENDENTE');
 
+          // Delete all existing pending payments first
           if (pendingPayments.length) {
-            for (const pp of pendingPayments) {
-              const { error: updateError } = await supabase.from('payments').update({
-                amount: finalAmount,
-                gross_amount: gross,
-                payment_method: paymentMethod,
-                payment_form: form.payment_form as any,
-                apply_vat: form.apply_vat,
-                vat_rate: form.apply_vat ? (defaultVatRate || 21) / 100 : 0,
-                vat_amount: vatAmount,
-                discount_type: form.discount_type || null,
-                discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
-              }).eq('id', pp.id);
-              if (updateError) {
-                console.error('Error updating payment:', updateError);
-                toast({ title: 'Erro ao atualizar pagamento', description: updateError.message, variant: 'destructive' });
-              }
+            const pendingIds = pendingPayments.map(p => p.id);
+            const { error: delError } = await supabase.from('payments').delete().in('id', pendingIds);
+            if (delError) {
+              console.error('Error deleting old pending payments:', delError);
+              toast({ title: 'Erro ao atualizar pagamentos', description: delError.message, variant: 'destructive' });
+            }
+          }
+
+          // Insert new payments matching the current form
+          if (form.payment_form === 'PARCELADO' && form.installments.length > 0) {
+            const paymentInserts = form.installments.map((inst, idx) => ({
+              opportunity_id: opportunityId!,
+              amount: Math.round((parseFloat(inst.amount) || 0) * 100) / 100,
+              due_date: inst.due_date || null,
+              installment_number: idx + 1,
+              payment_method: paymentMethod,
+              payment_form: 'PARCELADO' as any,
+              status: 'PENDENTE' as any,
+              gross_amount: gross,
+              apply_vat: form.apply_vat,
+              vat_rate: form.apply_vat ? (defaultVatRate || 21) / 100 : 0,
+              discount_type: form.discount_type || null,
+              discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
+              beneficiary_contact_id: isBeneficiary ? contactId : null,
+            }));
+            const { error: payError } = await supabase.from('payments').insert(paymentInserts);
+            if (payError) {
+              console.error('Error creating installment payments:', payError);
+              toast({ title: 'Erro ao criar parcelas', description: payError.message, variant: 'destructive' });
+            }
+          } else {
+            const { error: payError } = await supabase.from('payments').insert({
+              opportunity_id: opportunityId!,
+              amount: finalAmount,
+              payment_method: paymentMethod,
+              payment_form: 'UNICO' as any,
+              status: 'PENDENTE' as any,
+              gross_amount: gross,
+              apply_vat: form.apply_vat,
+              vat_rate: form.apply_vat ? (defaultVatRate || 21) / 100 : 0,
+              vat_amount: vatAmount,
+              discount_type: form.discount_type || null,
+              discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
+              beneficiary_contact_id: isBeneficiary ? contactId : null,
+              due_date: form.due_date || null,
+            });
+            if (payError) {
+              console.error('Error creating payment:', payError);
+              toast({ title: 'Erro ao criar pagamento', description: payError.message, variant: 'destructive' });
             }
           }
         }
