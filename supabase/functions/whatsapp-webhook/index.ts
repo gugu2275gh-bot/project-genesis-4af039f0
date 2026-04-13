@@ -656,6 +656,80 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
   throw new Error('Gemini API failed after all retries')
 }
 
+/** Fallback: Call OpenAI API when Gemini fails */
+async function generateAIResponseOpenAI(
+  conversationHistory: Array<{ role: string; content: string }>,
+  currentMessage: string,
+  systemPrompt: string,
+  knowledgeContext: string,
+  forcedLanguage: ChatLanguage
+): Promise<string> {
+  const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
+  if (!openaiApiKey) {
+    console.error('OpenAI fallback: OPENAI_API_KEY not configured')
+    return ''
+  }
+
+  console.log('OpenAI fallback: Generating response with gpt-4o-mini...')
+
+  let fullSystemPrompt = `${systemPrompt}\n\n## IDIOMA OBRIGATÓRIO NESTA CONVERSA\n${getLanguageDirective(forcedLanguage)}`
+
+  if (knowledgeContext) {
+    fullSystemPrompt += `\n\n--- BASE DE CONHECIMENTO ---\nAs informações abaixo são sua ÚNICA fonte de verdade. Responda EXCLUSIVAMENTE com base neste conteúdo.
+Se a pergunta do cliente NÃO puder ser respondida com as informações abaixo, diga educadamente que não possui essa informação no momento e sugira que entre em contato diretamente com a equipe da CB Asesoria para mais detalhes.
+NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está documentado aqui:\n\n${knowledgeContext}\n--- FIM DA BASE DE CONHECIMENTO ---`
+  } else {
+    fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
+  }
+
+  const messages = [
+    { role: 'system', content: fullSystemPrompt },
+    ...conversationHistory.map(m => ({ role: m.role === 'assistant' ? 'assistant' as const : 'user' as const, content: m.content })),
+    { role: 'user' as const, content: currentMessage },
+  ]
+
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages,
+        max_tokens: 1000,
+      }),
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('OpenAI fallback error:', response.status, errorText)
+      return ''
+    }
+
+    const data = await response.json()
+    const result = data?.choices?.[0]?.message?.content?.trim() || ''
+
+    if (!result) {
+      console.warn('OpenAI fallback returned empty content')
+      return ''
+    }
+
+    console.log('OpenAI fallback response received, length:', result.length)
+    return result
+  } catch (err) {
+    console.error('OpenAI fallback exception:', err instanceof Error ? err.message : err)
+    return ''
+  }
+}
+
 /** Send WhatsApp message via Twilio Gateway */
 async function sendWhatsAppMessage(
   phone: string,
@@ -1560,15 +1634,41 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
 
         console.log(`Knowledge base context: ${knowledgeContext.length} chars, consolidated message length: ${messageForAI.length}`)
 
-        // Generate AI response
-        const aiResponse = await generateAIResponse(
-          history,
-          messageForAI,
-          systemPrompt.replace('{nome}', contact.full_name),
-          geminiApiKey,
-          knowledgeContext,
-          detectedChatLanguage
-        )
+        // Generate AI response (Gemini primary, OpenAI fallback)
+        let aiResponse = ''
+        const resolvedSystemPrompt = systemPrompt.replace('{nome}', contact.full_name)
+        
+        try {
+          aiResponse = await generateAIResponse(
+            history,
+            messageForAI,
+            resolvedSystemPrompt,
+            geminiApiKey,
+            knowledgeContext,
+            detectedChatLanguage
+          )
+        } catch (geminiError) {
+          console.error('Gemini failed, trying OpenAI fallback:', geminiError instanceof Error ? geminiError.message : geminiError)
+        }
+
+        // Fallback to OpenAI if Gemini returned empty or failed
+        if (!aiResponse) {
+          console.log('Primary AI (Gemini) returned empty/failed — invoking OpenAI fallback')
+          try {
+            aiResponse = await generateAIResponseOpenAI(
+              history,
+              messageForAI,
+              resolvedSystemPrompt,
+              knowledgeContext,
+              detectedChatLanguage
+            )
+            if (aiResponse) {
+              console.log('OpenAI fallback succeeded, response length:', aiResponse.length)
+            }
+          } catch (openaiError) {
+            console.error('OpenAI fallback also failed:', openaiError instanceof Error ? openaiError.message : openaiError)
+          }
+        }
 
         if (aiResponse) {
           // Send AI response via Twilio
@@ -1619,6 +1719,8 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
           } catch (sendErr) {
             console.error('Failed to send AI response via Twilio:', sendErr instanceof Error ? sendErr.message : sendErr)
           }
+        } else {
+          console.error('Both Gemini and OpenAI failed to generate a response for lead:', lead.id)
         }
       } catch (aiError) {
         console.error('AI agent error (non-blocking):', aiError instanceof Error ? aiError.message : aiError)
