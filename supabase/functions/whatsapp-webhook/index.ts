@@ -1485,11 +1485,36 @@ serve(async (req) => {
         const currentCustomerMessage = String(message.body || '')
         // R5: Use preferred_language from contact as initial hint for language detection
         const preferredLangMap: Record<string, ChatLanguage> = { 'pt': 'pt-BR', 'pt-BR': 'pt-BR', 'es': 'es', 'en': 'en', 'fr': 'fr' }
+        const langCodeMap: Record<ChatLanguage, string> = { 'pt-BR': 'pt', 'es': 'es', 'en': 'en', 'fr': 'fr' }
         const langHint = contact.preferred_language ? preferredLangMap[contact.preferred_language] : null
         const detectedFromText = detectChatLanguage(currentCustomerMessage)
-        // If text detection returns default (pt-BR) but contact has a different preferred language, use the hint
-        const detectedChatLanguage: ChatLanguage = (detectedFromText === 'pt-BR' && langHint && langHint !== 'pt-BR') ? langHint : detectedFromText
-        console.log('Detected chat language:', detectedChatLanguage, 'hint:', contact.preferred_language, 'message sample:', currentCustomerMessage.slice(0, 80))
+        
+        // Language decision logic:
+        // 1. If text detection found a NON-default language (es/en/fr), trust it and persist
+        // 2. If text detection returned default (pt-BR) AND contact has a saved language, use the saved one
+        //    (handles ambiguous messages like names, "ok", "sim" which default to pt-BR)
+        // 3. If text detection returned pt-BR and no saved language, use pt-BR
+        let detectedChatLanguage: ChatLanguage
+        if (detectedFromText !== 'pt-BR') {
+          // Confident non-Portuguese detection — use it
+          detectedChatLanguage = detectedFromText
+        } else if (langHint && langHint !== 'pt-BR') {
+          // Ambiguous message but contact has a saved non-Portuguese language — keep it
+          detectedChatLanguage = langHint
+        } else {
+          detectedChatLanguage = 'pt-BR'
+        }
+        
+        // Persist detected language on contact if it changed or was never set
+        const currentLangCode = langCodeMap[detectedChatLanguage]
+        if (contact.preferred_language !== currentLangCode && detectedFromText !== 'pt-BR') {
+          // Only persist when we have a confident (non-default) detection
+          await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
+          contact.preferred_language = currentLangCode
+          console.log('Persisted detected language on contact:', currentLangCode)
+        }
+        
+        console.log('Detected chat language:', detectedChatLanguage, 'hint:', contact.preferred_language, 'fromText:', detectedFromText, 'message sample:', currentCustomerMessage.slice(0, 80))
 
         // Build system prompt with structured conversational flow
         const defaultSystemPrompt = `Você é a assistente virtual da CB Asesoría, uma empresa especializada em assessoria de imigração na Espanha.
