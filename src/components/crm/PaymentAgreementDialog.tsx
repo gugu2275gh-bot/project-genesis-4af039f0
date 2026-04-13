@@ -219,11 +219,17 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
   const handleSaveInner = async (keepOpen = false) => {
 
-    // Validate installment dates when PARCELADO
+    // Validate installment dates and total when PARCELADO
     if (form.payment_form === 'PARCELADO' && form.installments.length > 0) {
       const missingDates = form.installments.some(inst => !inst.due_date);
       if (missingDates) {
         toast({ title: 'Preencha todas as datas de vencimento das parcelas', variant: 'destructive' });
+        return;
+      }
+      const installmentsTotal = form.installments.reduce((sum, inst) => sum + (parseFloat(inst.amount) || 0), 0);
+      const maxAllowed = calculatedAmounts.finalAmount;
+      if (Math.round(installmentsTotal * 100) > Math.round(maxAllowed * 100)) {
+        toast({ title: 'A soma das parcelas não pode ultrapassar o valor total do serviço (€' + maxAllowed.toFixed(2) + ')', variant: 'destructive' });
         return;
       }
     }
@@ -981,6 +987,18 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                       />
                     </div>
                   ))}
+                  {/* Installments total indicator */}
+                  {(() => {
+                    const instTotal = form.installments.reduce((sum, inst) => sum + (parseFloat(inst.amount) || 0), 0);
+                    const maxAllowed = calculatedAmounts.finalAmount;
+                    const exceeds = Math.round(instTotal * 100) > Math.round(maxAllowed * 100);
+                    return (
+                      <div className={`flex justify-between text-sm font-medium pt-1 border-t ${exceeds ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        <span>Soma das parcelas:</span>
+                        <span>€ {instTotal.toFixed(2)} / € {maxAllowed.toFixed(2)}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
