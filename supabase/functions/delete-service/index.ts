@@ -211,18 +211,14 @@ serve(async (req) => {
       await deleteWhereIn("opportunities", "id", opportunityIds);
     }
 
-    // Preserve the lead but reset its service state
-    const { error: resetLeadError } = await supabaseAdmin
+    // Delete the lead entirely
+    const { error: deleteLeadError } = await supabaseAdmin
       .from("leads")
-      .update({
-        interest_confirmed: false,
-        status: "NOVO",
-        updated_by_user_id: userData.user.id,
-      })
+      .delete()
       .eq("id", lead_id);
 
-    if (resetLeadError) {
-      throw new Error(`Erro ao resetar serviço: ${resetLeadError.message}`);
+    if (deleteLeadError) {
+      throw new Error(`Erro ao excluir serviço: ${deleteLeadError.message}`);
     }
 
     return new Response(
