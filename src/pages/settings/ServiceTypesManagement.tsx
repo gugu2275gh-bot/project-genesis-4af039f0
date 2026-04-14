@@ -119,7 +119,7 @@ export default function ServiceTypesManagement() {
                   <Input
                     id="code"
                     value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase().replace(/\s/g, '_') })}
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '') })}
                     placeholder="VISTO_ESTUDANTE"
                     required
                   />
