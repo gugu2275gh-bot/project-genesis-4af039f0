@@ -286,6 +286,58 @@ export function ContractGroupsSection({
     enabled: beneficiaryContactIds.length > 0,
   });
 
+  // Fetch titular names for contracts when viewing a beneficiary's profile
+  const allContractIds = useMemo(() => {
+    const ids = new Set<string>();
+    contractLeadLinks.forEach((cl: any) => ids.add(cl.contract_id));
+    beneficiaryContractLeadLinks.forEach((cl: any) => ids.add(cl.contract_id));
+    contactContracts.forEach((c: any) => ids.add(c.id));
+    return Array.from(ids);
+  }, [contractLeadLinks, beneficiaryContractLeadLinks, contactContracts]);
+
+  const { data: contractTitularMap = {} } = useQuery({
+    queryKey: ['contract-titular-names', contactId, allContractIds],
+    queryFn: async () => {
+      if (!allContractIds.length) return {};
+      // Get all contract_leads for these contracts
+      const { data: allCLs } = await supabase
+        .from('contract_leads')
+        .select('contract_id, lead_id, leads:lead_id(contact_id, contacts:contact_id(full_name))')
+        .in('contract_id', allContractIds);
+      if (!allCLs) return {};
+      
+      const map: Record<string, string> = {};
+      allContractIds.forEach(cId => {
+        const contractCLs = allCLs.filter((cl: any) => cl.contract_id === cId);
+        // Find leads that don't belong to this beneficiary contact
+        const titularCL = contractCLs.find((cl: any) => {
+          const leadContactId = (cl.leads as any)?.contact_id;
+          return leadContactId && leadContactId !== contactId;
+        });
+        if (titularCL) {
+          map[cId] = (titularCL.leads as any)?.contacts?.full_name || '';
+        }
+      });
+      return map;
+    },
+    enabled: isBeneficiary && allContractIds.length > 0,
+  });
+
+  // Helper to get titular name for a lead
+  const getTitularNameForLead = useCallback((lead: any, contractId?: string) => {
+    if (!isBeneficiary) return undefined;
+    if (contractId && contractTitularMap[contractId]) {
+      return contractTitularMap[contractId];
+    }
+    if (titulares.length === 1) return titulares[0].full_name;
+    const combinedLinks = [...contractLeadLinks, ...beneficiaryContractLeadLinks];
+    const leadContractLink = combinedLinks.find((cl: any) => cl.lead_id === lead.id);
+    if (leadContractLink && contractTitularMap[leadContractLink.contract_id]) {
+      return contractTitularMap[leadContractLink.contract_id];
+    }
+    return titulares.length > 0 ? titulares[0].full_name : undefined;
+  }, [isBeneficiary, contractTitularMap, titulares, contractLeadLinks, beneficiaryContractLeadLinks]);
+
   // Combine all leads (titular + beneficiary)
   const allLeads = [...contactLeads, ...beneficiaryLeads];
   const allContractLeadLinks = [...contractLeadLinks, ...beneficiaryContractLeadLinks];
@@ -905,7 +957,7 @@ export function ContractGroupsSection({
     </div>
   );
 
-  const renderLeadItem = (lead: any, options?: { showCheckbox?: boolean; showDelete?: boolean; contractId?: string; editable?: boolean }) => {
+  const renderLeadItem = (lead: any, options?: { showCheckbox?: boolean; showDelete?: boolean; contractId?: string; editable?: boolean; titularName?: string }) => {
     const displayName = getLeadDisplayName(lead);
     const isConfirmed = confirmedLeadIds.includes(lead.id);
     const serviceCase = contactServiceCases.find((sc: any) => sc.lead_id === lead.id);
@@ -949,6 +1001,12 @@ export function ContractGroupsSection({
                 {(lead._isBeneficiary || beneficiaryNameFromPayment) && (
                   <Badge variant="outline" className="ml-2 text-xs border-primary/30 text-primary bg-primary/5">
                     Beneficiário - {lead._beneficiaryName || beneficiaryNameFromPayment || ''}
+                  </Badge>
+                )}
+                {isBeneficiary && options?.titularName && (
+                  <Badge variant="outline" className="ml-2 text-xs border-amber-400 text-amber-700 bg-amber-50">
+                    <User className="h-3 w-3 mr-1" />
+                    Titular - {options.titularName}
                   </Badge>
                 )}
               </p>
@@ -1382,6 +1440,7 @@ export function ContractGroupsSection({
                     {ungroupedLeads.map(lead => renderLeadItem(lead, { 
                       showDelete: true,
                       editable: true,
+                      titularName: getTitularNameForLead(lead),
                     }))}
                   </div>
                 </div>
@@ -1431,6 +1490,12 @@ export function ContractGroupsSection({
                                     Beneficiário - {(lead as any)._beneficiaryName || standbyBenefName || ''}
                                   </Badge>
                                 )}
+                                {isBeneficiary && (() => { const tn = getTitularNameForLead(lead); return tn ? (
+                                  <Badge variant="outline" className="ml-2 text-xs border-amber-400 text-amber-700 bg-amber-50">
+                                    <User className="h-3 w-3 mr-1" />
+                                    Titular - {tn}
+                                  </Badge>
+                                ) : null; })()}
                               </p>
                               <p className="text-sm text-muted-foreground">
                                 Criado em {format(new Date(lead.created_at!), "dd/MM/yyyy", { locale: ptBR })}
@@ -1548,6 +1613,7 @@ export function ContractGroupsSection({
                       <div className="p-3 space-y-3">
                         {group.leads.map(lead => renderLeadItem(lead, { 
                           editable: false,
+                          titularName: getTitularNameForLead(lead, group.contract?.id),
                         }))}
                       </div>
                     )}
