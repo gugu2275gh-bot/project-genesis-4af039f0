@@ -326,19 +326,17 @@ export function ContractGroupsSection({
   // Helper to get titular name for a lead
   const getTitularNameForLead = useCallback((lead: any, contractId?: string) => {
     if (!isBeneficiary) return undefined;
-    // Try from contract
     if (contractId && contractTitularMap[contractId]) {
       return contractTitularMap[contractId];
     }
-    // Fallback: if only one titular, use it
     if (titulares.length === 1) return titulares[0].full_name;
-    // Fallback: check all contracts this lead is in
-    const leadContractLink = allContractLeadLinks.find((cl: any) => cl.lead_id === lead.id);
+    const combinedLinks = [...contractLeadLinks, ...beneficiaryContractLeadLinks];
+    const leadContractLink = combinedLinks.find((cl: any) => cl.lead_id === lead.id);
     if (leadContractLink && contractTitularMap[leadContractLink.contract_id]) {
       return contractTitularMap[leadContractLink.contract_id];
     }
     return titulares.length > 0 ? titulares[0].full_name : undefined;
-  }, [isBeneficiary, contractTitularMap, titulares, allContractLeadLinks, contactId]);
+  }, [isBeneficiary, contractTitularMap, titulares, contractLeadLinks, beneficiaryContractLeadLinks]);
 
   // Combine all leads (titular + beneficiary)
   const allLeads = [...contactLeads, ...beneficiaryLeads];
