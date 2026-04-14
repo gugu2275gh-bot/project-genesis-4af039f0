@@ -1607,6 +1607,7 @@ export function ContractGroupsSection({
                       <div className="p-3 space-y-3">
                         {group.leads.map(lead => renderLeadItem(lead, { 
                           editable: false,
+                          titularName: getTitularNameForLead(lead, group.contract?.id),
                         }))}
                       </div>
                     )}
