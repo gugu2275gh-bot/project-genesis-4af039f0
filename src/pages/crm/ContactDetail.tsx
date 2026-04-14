@@ -1864,7 +1864,7 @@ export default function ContactDetail() {
       </Dialog>
 
       {/* Dialog Tornar Beneficiário */}
-      <Dialog open={showConvertToBeneficiaryDialog} onOpenChange={(open) => { setShowConvertToBeneficiaryDialog(open); if (!open) setTitularSearchQuery(''); }}>
+      <Dialog open={showConvertToBeneficiaryDialog} onOpenChange={(open) => { setShowConvertToBeneficiaryDialog(open); if (!open) { setTitularSearchQuery(''); setSelectedTitularId(null); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Tornar Beneficiário</DialogTitle>
@@ -1874,43 +1874,60 @@ export default function ContactDetail() {
               Selecione o titular ao qual este contato será vinculado como beneficiário.
             </p>
             <div>
-              <Label>Buscar Titular</Label>
-              <Input
-                value={titularSearchQuery}
-                onChange={(e) => setTitularSearchQuery(e.target.value)}
-                placeholder="Filtrar por nome..."
-                className="mb-2"
-              />
-            </div>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {filteredTitulares.length > 0 ? (
-                filteredTitulares.map((c: any) => (
-                  <div
-                    key={c.id}
-                    className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => handleConvertToBeneficiary(c.id)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="h-4 w-4 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm">{c.full_name}</p>
-                        {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-xs">Selecionar</Badge>
+              <Label>Titular</Label>
+              <Popover open={titularPopoverOpen} onOpenChange={setTitularPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" className="w-full justify-between font-normal">
+                    {selectedTitularId
+                      ? allTitularContacts.find((c: any) => c.id === selectedTitularId)?.full_name || 'Selecione...'
+                      : 'Selecione o titular...'}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <div className="p-2">
+                    <Input
+                      value={titularSearchQuery}
+                      onChange={(e) => setTitularSearchQuery(e.target.value)}
+                      placeholder="Buscar titular..."
+                      className="h-9"
+                    />
                   </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-2">Nenhum titular encontrado</p>
-              )}
+                  <ScrollArea className="max-h-60">
+                    <div className="p-1">
+                      {filteredTitulares.length > 0 ? (
+                        filteredTitulares.map((c: any) => (
+                          <div
+                            key={c.id}
+                            className={cn(
+                              "flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer text-sm hover:bg-muted/50 transition-colors",
+                              selectedTitularId === c.id && "bg-muted"
+                            )}
+                            onClick={() => { setSelectedTitularId(c.id); setTitularPopoverOpen(false); }}
+                          >
+                            <Check className={cn("h-4 w-4 shrink-0", selectedTitularId === c.id ? "opacity-100" : "opacity-0")} />
+                            <div>
+                              <p className="font-medium">{c.full_name}</p>
+                              {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center py-3">Nenhum titular encontrado</p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
             </div>
-            {isConvertingToBeneficiary && (
-              <div className="flex items-center justify-center py-2">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
-              </div>
-            )}
+            <Button
+              className="w-full"
+              disabled={!selectedTitularId || isConvertingToBeneficiary}
+              onClick={() => selectedTitularId && handleConvertToBeneficiary(selectedTitularId)}
+            >
+              {isConvertingToBeneficiary ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Confirmar
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
