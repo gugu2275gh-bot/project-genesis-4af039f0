@@ -232,6 +232,10 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
         toast({ title: 'A soma das parcelas não pode ultrapassar o valor total do serviço (€' + maxAllowed.toFixed(2) + ')', variant: 'destructive' });
         return;
       }
+      if (Math.round(installmentsTotal * 100) < Math.round(maxAllowed * 100)) {
+        toast({ title: 'A soma das parcelas não pode ser inferior ao valor total do serviço (€' + maxAllowed.toFixed(2) + ')', variant: 'destructive' });
+        return;
+      }
     }
 
     const { finalAmount, gross, discountAmount, vatAmount } = calculatedAmounts;
@@ -1025,9 +1029,9 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                   {(() => {
                     const instTotal = form.installments.reduce((sum, inst) => sum + (parseFloat(inst.amount) || 0), 0);
                     const maxAllowed = calculatedAmounts.finalAmount;
-                    const exceeds = Math.round(instTotal * 100) > Math.round(maxAllowed * 100);
+                    const mismatch = Math.round(instTotal * 100) !== Math.round(maxAllowed * 100);
                     return (
-                      <div className={`flex justify-between text-sm font-medium pt-1 border-t ${exceeds ? 'text-destructive' : 'text-muted-foreground'}`}>
+                      <div className={`flex justify-between text-sm font-medium pt-1 border-t ${mismatch ? 'text-destructive' : 'text-muted-foreground'}`}>
                         <span>Soma das parcelas:</span>
                         <span>€ {instTotal.toFixed(2)} / € {maxAllowed.toFixed(2)}</span>
                       </div>
