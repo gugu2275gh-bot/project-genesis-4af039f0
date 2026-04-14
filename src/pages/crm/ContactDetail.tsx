@@ -186,22 +186,26 @@ export default function ContactDetail() {
     }
   };
 
-  // Search contacts for "Tornar Beneficiário" dialog
-  const { data: titularSearchResults = [] } = useQuery({
-    queryKey: ['titular-search', titularSearchQuery],
+  // Load all titular contacts for combobox
+  const { data: allTitularContacts = [] } = useQuery({
+    queryKey: ['titular-contacts-list', id],
     queryFn: async () => {
-      if (!titularSearchQuery || titularSearchQuery.length < 2) return [];
       const { data } = await supabase
         .from('contacts')
         .select('id, full_name, phone')
         .eq('is_beneficiary', false)
         .neq('id', id!)
-        .ilike('full_name', `%${titularSearchQuery}%`)
-        .limit(10);
+        .order('full_name');
       return data || [];
     },
-    enabled: showConvertToBeneficiaryDialog && titularSearchQuery.length >= 2,
+    enabled: showConvertToBeneficiaryDialog,
   });
+
+  const filteredTitulares = useMemo(() => {
+    if (!titularSearchQuery || titularSearchQuery.length < 1) return allTitularContacts;
+    const q = titularSearchQuery.toLowerCase();
+    return allTitularContacts.filter((c: any) => c.full_name?.toLowerCase().includes(q));
+  }, [allTitularContacts, titularSearchQuery]);
 
   const handleConvertToBeneficiary = async (titularContactId: string) => {
     if (!id) return;
