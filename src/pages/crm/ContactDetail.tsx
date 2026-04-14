@@ -59,7 +59,9 @@ import {
   Trash2,
   Pencil,
   UserCheck,
-  GitMerge
+  GitMerge,
+  ChevronsUpDown,
+  Check
 } from 'lucide-react';
 import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -73,6 +75,9 @@ import {
   LEGAL_GUARDIAN_RELATIONSHIP_LABELS,
 } from '@/types/database';
 import { useToast } from '@/hooks/use-toast';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 function calculateAge(birthDate: string | null | undefined): string | null {
   if (!birthDate) return null;
@@ -111,6 +116,8 @@ export default function ContactDetail() {
   const [showConvertToBeneficiaryDialog, setShowConvertToBeneficiaryDialog] = useState(false);
   const [titularSearchQuery, setTitularSearchQuery] = useState('');
   const [isConvertingToBeneficiary, setIsConvertingToBeneficiary] = useState(false);
+  const [selectedTitularId, setSelectedTitularId] = useState<string | null>(null);
+  const [titularPopoverOpen, setTitularPopoverOpen] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [mergeSearchQuery, setMergeSearchQuery] = useState('');
   const [mergeUpdatePhone, setMergeUpdatePhone] = useState(true);
