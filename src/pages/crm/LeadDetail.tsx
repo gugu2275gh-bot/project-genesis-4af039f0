@@ -874,7 +874,7 @@ export default function LeadDetail() {
             </TabsList>
             
             <TabsContent value="chat" className="mt-4">
-              <LeadChat leadId={lead.id} contactPhone={lead.contacts?.phone || null} contactId={lead.contact_id} />
+              <LeadChat leadId={lead.id} contactPhone={lead.contacts?.phone || null} contactId={lead.contact_id} contactName={lead.contacts?.full_name || undefined} />
             </TabsContent>
             
             <TabsContent value="interactions" className="mt-4">

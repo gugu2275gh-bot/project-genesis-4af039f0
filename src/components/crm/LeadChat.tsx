@@ -23,6 +23,7 @@ interface LeadChatProps {
   leadId: string;
   contactPhone: string | number | null;
   contactId?: string;
+  contactName?: string;
 }
 
 // Parse WhatsApp interactive messages (multiple formats)
@@ -153,7 +154,7 @@ function parseWhatsAppFlowMessage(content: string) {
   return null;
 }
 
-export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
+export function LeadChat({ leadId, contactPhone, contactId, contactName }: LeadChatProps) {
   const { messages, isLoading, sendMessage, resumeAI, userSectorName, hasGlobalView } = useLeadMessages(leadId, contactPhone, contactId);
   const { templates, operationalTemplates } = useWhatsAppTemplates();
   const availableTemplates = useMemo(() => 
@@ -693,7 +694,15 @@ export function LeadChat({ leadId, contactPhone, contactId }: LeadChatProps) {
                     value={selectedTemplate?.id || ''}
                     onValueChange={(id) => {
                       const tpl = availableTemplates.find(t => t.id === id);
-                      setSelectedTemplate(tpl || null);
+                      if (tpl) {
+                        const firstName = contactName?.split(' ')[0] || 'cliente';
+                        setSelectedTemplate({
+                          ...tpl,
+                          body_text: tpl.body_text?.replace(/\{\{1\}\}/g, firstName),
+                        });
+                      } else {
+                        setSelectedTemplate(null);
+                      }
                     }}
                   >
                     <SelectTrigger className="w-full">
