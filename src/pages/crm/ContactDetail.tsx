@@ -186,22 +186,26 @@ export default function ContactDetail() {
     }
   };
 
-  // Search contacts for "Tornar Beneficiário" dialog
-  const { data: titularSearchResults = [] } = useQuery({
-    queryKey: ['titular-search', titularSearchQuery],
+  // Load all titular contacts for combobox
+  const { data: allTitularContacts = [] } = useQuery({
+    queryKey: ['titular-contacts-list', id],
     queryFn: async () => {
-      if (!titularSearchQuery || titularSearchQuery.length < 2) return [];
       const { data } = await supabase
         .from('contacts')
         .select('id, full_name, phone')
         .eq('is_beneficiary', false)
         .neq('id', id!)
-        .ilike('full_name', `%${titularSearchQuery}%`)
-        .limit(10);
+        .order('full_name');
       return data || [];
     },
-    enabled: showConvertToBeneficiaryDialog && titularSearchQuery.length >= 2,
+    enabled: showConvertToBeneficiaryDialog,
   });
+
+  const filteredTitulares = useMemo(() => {
+    if (!titularSearchQuery || titularSearchQuery.length < 1) return allTitularContacts;
+    const q = titularSearchQuery.toLowerCase();
+    return allTitularContacts.filter((c: any) => c.full_name?.toLowerCase().includes(q));
+  }, [allTitularContacts, titularSearchQuery]);
 
   const handleConvertToBeneficiary = async (titularContactId: string) => {
     if (!id) return;
@@ -1867,19 +1871,20 @@ export default function ContactDetail() {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <p className="text-sm text-muted-foreground">
-              Busque o titular ao qual este contato será vinculado como beneficiário.
+              Selecione o titular ao qual este contato será vinculado como beneficiário.
             </p>
             <div>
               <Label>Buscar Titular</Label>
               <Input
                 value={titularSearchQuery}
                 onChange={(e) => setTitularSearchQuery(e.target.value)}
-                placeholder="Digite o nome do titular..."
+                placeholder="Filtrar por nome..."
+                className="mb-2"
               />
             </div>
-            {titularSearchResults.length > 0 && (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {titularSearchResults.map((c: any) => (
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {filteredTitulares.length > 0 ? (
+                filteredTitulares.map((c: any) => (
                   <div
                     key={c.id}
                     className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
@@ -1896,12 +1901,11 @@ export default function ContactDetail() {
                     </div>
                     <Badge variant="outline" className="text-xs">Selecionar</Badge>
                   </div>
-                ))}
-              </div>
-            )}
-            {titularSearchQuery.length >= 2 && titularSearchResults.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-2">Nenhum titular encontrado</p>
-            )}
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-2">Nenhum titular encontrado</p>
+              )}
+            </div>
             {isConvertingToBeneficiary && (
               <div className="flex items-center justify-center py-2">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
