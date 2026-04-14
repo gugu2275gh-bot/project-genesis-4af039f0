@@ -342,7 +342,7 @@ export function ContractGroupsSection({
 
   // Combine all leads (titular + beneficiary)
   const allLeads = [...contactLeads, ...beneficiaryLeads];
-  const allContractLeadLinks2 = [...contractLeadLinks, ...beneficiaryContractLeadLinks];
+  const allContractLeadLinks = [...contractLeadLinks, ...beneficiaryContractLeadLinks];
   const allPayments = [...contactPayments, ...beneficiaryPayments];
   // Deduplicate payments
   const seenPaymentIds = new Set<string>();
