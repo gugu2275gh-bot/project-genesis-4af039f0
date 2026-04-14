@@ -1871,19 +1871,20 @@ export default function ContactDetail() {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <p className="text-sm text-muted-foreground">
-              Busque o titular ao qual este contato será vinculado como beneficiário.
+              Selecione o titular ao qual este contato será vinculado como beneficiário.
             </p>
             <div>
               <Label>Buscar Titular</Label>
               <Input
                 value={titularSearchQuery}
                 onChange={(e) => setTitularSearchQuery(e.target.value)}
-                placeholder="Digite o nome do titular..."
+                placeholder="Filtrar por nome..."
+                className="mb-2"
               />
             </div>
-            {titularSearchResults.length > 0 && (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {titularSearchResults.map((c: any) => (
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {filteredTitulares.length > 0 ? (
+                filteredTitulares.map((c: any) => (
                   <div
                     key={c.id}
                     className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
@@ -1900,12 +1901,11 @@ export default function ContactDetail() {
                     </div>
                     <Badge variant="outline" className="text-xs">Selecionar</Badge>
                   </div>
-                ))}
-              </div>
-            )}
-            {titularSearchQuery.length >= 2 && titularSearchResults.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-2">Nenhum titular encontrado</p>
-            )}
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-2">Nenhum titular encontrado</p>
+              )}
+            </div>
             {isConvertingToBeneficiary && (
               <div className="flex items-center justify-center py-2">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
