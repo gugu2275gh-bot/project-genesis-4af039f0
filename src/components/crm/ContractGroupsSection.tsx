@@ -1440,6 +1440,7 @@ export function ContractGroupsSection({
                     {ungroupedLeads.map(lead => renderLeadItem(lead, { 
                       showDelete: true,
                       editable: true,
+                      titularName: getTitularNameForLead(lead),
                     }))}
                   </div>
                 </div>
