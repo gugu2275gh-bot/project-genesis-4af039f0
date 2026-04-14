@@ -1128,6 +1128,10 @@ export function ContractGroupsSection({
     // For each relevant lead, find its payments and build a summary block
     const blocks: string[] = [];
     const sortedRelevantLeads = [...relevantLeads].sort((a, b) => {
+      // Titular leads first, beneficiary leads after
+      const aIsBen = a._isBeneficiary ? 1 : 0;
+      const bIsBen = b._isBeneficiary ? 1 : 0;
+      if (aIsBen !== bIsBen) return aIsBen - bIsBen;
       const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
       const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
       return timeA - timeB;

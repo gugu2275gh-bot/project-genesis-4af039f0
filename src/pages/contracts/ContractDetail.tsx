@@ -196,7 +196,15 @@ export default function ContractDetail() {
       }).format(value);
     };
 
-    return contractPayments
+    // Sort: titular payments first (no beneficiary_contact_id), then beneficiaries
+    const sortedPayments = [...contractPayments].sort((a: any, b: any) => {
+      const aIsBen = !!a.beneficiary_contact_id;
+      const bIsBen = !!b.beneficiary_contact_id;
+      if (aIsBen !== bIsBen) return aIsBen ? 1 : -1;
+      return 0;
+    });
+
+    return sortedPayments
       .map((payment: any) => {
         const leadId = payment.opportunities?.leads?.id || payment.opportunities?.lead_id;
         const linkedLead = contractLeadLinks?.find((cl: any) => cl.lead_id === leadId)?.leads;
