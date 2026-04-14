@@ -905,7 +905,7 @@ export function ContractGroupsSection({
     </div>
   );
 
-  const renderLeadItem = (lead: any, options?: { showCheckbox?: boolean; showDelete?: boolean; contractId?: string; editable?: boolean }) => {
+  const renderLeadItem = (lead: any, options?: { showCheckbox?: boolean; showDelete?: boolean; contractId?: string; editable?: boolean; titularName?: string }) => {
     const displayName = getLeadDisplayName(lead);
     const isConfirmed = confirmedLeadIds.includes(lead.id);
     const serviceCase = contactServiceCases.find((sc: any) => sc.lead_id === lead.id);
