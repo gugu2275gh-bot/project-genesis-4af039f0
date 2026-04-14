@@ -951,6 +951,12 @@ export function ContractGroupsSection({
                     Beneficiário - {lead._beneficiaryName || beneficiaryNameFromPayment || ''}
                   </Badge>
                 )}
+                {isBeneficiary && options?.titularName && (
+                  <Badge variant="outline" className="ml-2 text-xs border-amber-400 text-amber-700 bg-amber-50">
+                    <User className="h-3 w-3 mr-1" />
+                    Titular - {options.titularName}
+                  </Badge>
+                )}
               </p>
               <p className="text-sm text-muted-foreground">
                 Criado em {format(new Date(lead.created_at!), "dd/MM/yyyy", { locale: ptBR })}
