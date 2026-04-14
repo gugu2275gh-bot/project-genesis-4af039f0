@@ -286,9 +286,63 @@ export function ContractGroupsSection({
     enabled: beneficiaryContactIds.length > 0,
   });
 
+  // Fetch titular names for contracts when viewing a beneficiary's profile
+  const allContractIds = useMemo(() => {
+    const ids = new Set<string>();
+    contractLeadLinks.forEach((cl: any) => ids.add(cl.contract_id));
+    beneficiaryContractLeadLinks.forEach((cl: any) => ids.add(cl.contract_id));
+    contactContracts.forEach((c: any) => ids.add(c.id));
+    return Array.from(ids);
+  }, [contractLeadLinks, beneficiaryContractLeadLinks, contactContracts]);
+
+  const { data: contractTitularMap = {} } = useQuery({
+    queryKey: ['contract-titular-names', contactId, allContractIds],
+    queryFn: async () => {
+      if (!allContractIds.length) return {};
+      // Get all contract_leads for these contracts
+      const { data: allCLs } = await supabase
+        .from('contract_leads')
+        .select('contract_id, lead_id, leads:lead_id(contact_id, contacts:contact_id(full_name))')
+        .in('contract_id', allContractIds);
+      if (!allCLs) return {};
+      
+      const map: Record<string, string> = {};
+      allContractIds.forEach(cId => {
+        const contractCLs = allCLs.filter((cl: any) => cl.contract_id === cId);
+        // Find leads that don't belong to this beneficiary contact
+        const titularCL = contractCLs.find((cl: any) => {
+          const leadContactId = (cl.leads as any)?.contact_id;
+          return leadContactId && leadContactId !== contactId;
+        });
+        if (titularCL) {
+          map[cId] = (titularCL.leads as any)?.contacts?.full_name || '';
+        }
+      });
+      return map;
+    },
+    enabled: isBeneficiary && allContractIds.length > 0,
+  });
+
+  // Helper to get titular name for a lead
+  const getTitularNameForLead = useCallback((lead: any, contractId?: string) => {
+    if (!isBeneficiary) return undefined;
+    // Try from contract
+    if (contractId && contractTitularMap[contractId]) {
+      return contractTitularMap[contractId];
+    }
+    // Fallback: if only one titular, use it
+    if (titulares.length === 1) return titulares[0].full_name;
+    // Fallback: check all contracts this lead is in
+    const leadContractLink = allContractLeadLinks.find((cl: any) => cl.lead_id === lead.id);
+    if (leadContractLink && contractTitularMap[leadContractLink.contract_id]) {
+      return contractTitularMap[leadContractLink.contract_id];
+    }
+    return titulares.length > 0 ? titulares[0].full_name : undefined;
+  }, [isBeneficiary, contractTitularMap, titulares, allContractLeadLinks, contactId]);
+
   // Combine all leads (titular + beneficiary)
   const allLeads = [...contactLeads, ...beneficiaryLeads];
-  const allContractLeadLinks = [...contractLeadLinks, ...beneficiaryContractLeadLinks];
+  const allContractLeadLinks2 = [...contractLeadLinks, ...beneficiaryContractLeadLinks];
   const allPayments = [...contactPayments, ...beneficiaryPayments];
   // Deduplicate payments
   const seenPaymentIds = new Set<string>();
