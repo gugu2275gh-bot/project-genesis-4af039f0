@@ -1952,7 +1952,7 @@ export default function ContactDetail() {
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
               <p className="font-medium text-destructive">⚠️ Ação irreversível</p>
               <p className="text-muted-foreground mt-1">
-                Todos os dados deste contato (<strong>{contact?.full_name}</strong>) serão transferidos para o contato selecionado. Este contato será excluído permanentemente.
+                Todos os dados deste contato (<strong>{contact?.full_name}</strong>) serão transferidos para o contato selecionado. Esta ficha será excluída permanentemente.
               </p>
             </div>
             <div>
