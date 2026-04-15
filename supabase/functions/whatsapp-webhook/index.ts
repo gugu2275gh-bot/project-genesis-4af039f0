@@ -1629,6 +1629,13 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
           }
         }
 
+        // ========== AI DATA EXTRACTION FOR SUGGESTIONS ==========
+        try {
+          await extractAndSuggestContactData(supabase, contact.id, String(message.body || ''), geminiApiKey)
+        } catch (extractErr) {
+          console.error('Data extraction error (non-blocking):', extractErr instanceof Error ? extractErr.message : extractErr)
+        }
+
         // ========== CONSOLIDATE BUFFERED MESSAGES ==========
         // Collect all unanswered client messages (no AI response yet) for this lead
         const { data: unansweredMsgs } = await supabase
