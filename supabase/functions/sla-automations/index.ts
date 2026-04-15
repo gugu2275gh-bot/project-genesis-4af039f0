@@ -804,7 +804,7 @@ serve(async (req) => {
             // Client WhatsApp reminder
             if (contact?.phone) {
               const msg = templateMap.template_document_reminder_urgent.replace('{nome}', clientName)
-              await sendWhatsApp(contact.phone, msg, leadId)
+              await sendWhatsApp(contact.phone, msg, leadId, 'document_reminder', { nombre: clientName, documento: pendingDocSummary })
             }
             await recordDocReminder(sc.id, reminderKey, 'CLIENT')
             
@@ -878,7 +878,7 @@ serve(async (req) => {
             if (!(await docReminderSent(sc.id, clientReminderKey))) {
               if (contact?.phone) {
                 const msg = templateMap.template_document_reminder_normal.replace('{nome}', clientName)
-                await sendWhatsApp(contact.phone, msg, leadId)
+                await sendWhatsApp(contact.phone, msg, leadId, 'document_reminder', { nombre: clientName, documento: pendingDocSummary })
               }
               
               if (sc.client_user_id) {
@@ -917,7 +917,7 @@ serve(async (req) => {
                 const msg = templateMap.template_document_waiting
                   .replace('{nome}', clientName)
                   .replace('{dias}', String(daysUntilProtocol))
-                await sendWhatsApp(contact.phone, msg, leadId)
+                await sendWhatsApp(contact.phone, msg, leadId, 'document_reminder', { nombre: clientName, documento: pendingDocSummary })
               }
               
               if (sc.client_user_id) {
@@ -939,7 +939,7 @@ serve(async (req) => {
             if (!(await docReminderSent(sc.id, urgentWaitingKey))) {
               if (contact?.phone) {
                 const msg = templateMap.template_document_reminder_urgent.replace('{nome}', clientName)
-                await sendWhatsApp(contact.phone, msg, leadId)
+                await sendWhatsApp(contact.phone, msg, leadId, 'document_reminder', { nombre: clientName, documento: pendingDocSummary })
               }
               
               // Alert technician about approaching deadline
