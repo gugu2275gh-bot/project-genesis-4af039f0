@@ -758,18 +758,25 @@ serve(async (req) => {
       console.log(`Found ${casesWithPendingDocs?.length || 0} cases awaiting documents`)
       
       for (const sc of casesWithPendingDocs || []) {
-        // Check pending documents count
-        const { count: pendingCount } = await supabase
+        // Check pending documents count and get first pending doc name
+        const { data: pendingDocs, count: pendingCount } = await supabase
           .from('service_documents')
-          .select('*', { count: 'exact', head: true })
+          .select('document_name', { count: 'exact' })
           .eq('service_case_id', sc.id)
           .in('status', ['NAO_ENVIADO', 'REJEITADO'])
+          .limit(3)
         
         // If no pending docs, all were submitted - trigger completion
         if (!pendingCount || pendingCount === 0) {
           await handleDocumentsComplete(sc)
           continue
         }
+        
+        // Build a summary of pending document names for template {{2}}
+        const pendingDocNames = pendingDocs?.map((d: any) => d.document_name).filter(Boolean) || []
+        const pendingDocSummary = pendingDocNames.length > 0
+          ? (pendingDocNames.length === 1 ? pendingDocNames[0] : `${pendingDocNames[0]} (+${pendingDocNames.length - 1} más)`)
+          : 'documentos pendientes'
         
         const contact = (sc.opportunities as any)?.leads?.contacts
         const leadId = (sc.opportunities as any)?.leads?.id
