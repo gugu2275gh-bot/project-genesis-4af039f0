@@ -1576,6 +1576,7 @@ export default function ContactDetail() {
 
         {/* Sidebar */}
         <div className="space-y-6">
+          <DataSuggestionsPanel contactId={id!} />
           <Card>
             <CardHeader>
               <CardTitle>Resumo</CardTitle>
