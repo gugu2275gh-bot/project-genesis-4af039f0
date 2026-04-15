@@ -121,9 +121,9 @@ export default function ContactDetail() {
   const [titularPopoverOpen, setTitularPopoverOpen] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [mergeSearchQuery, setMergeSearchQuery] = useState('');
-  const [mergeUpdatePhone, setMergeUpdatePhone] = useState(true);
-  const [mergeUpdateEmail, setMergeUpdateEmail] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
+  const [selectedMergeContact, setSelectedMergeContact] = useState<any>(null);
+  const [mergePopoverOpen, setMergePopoverOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const directLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
@@ -264,8 +264,6 @@ export default function ContactDetail() {
       const { data, error } = await supabase.rpc('merge_contacts', {
         p_source_contact_id: id,
         p_target_contact_id: targetContactId,
-        p_update_phone: mergeUpdatePhone,
-        p_update_email: mergeUpdateEmail,
       });
       if (error) throw error;
       const result = data as any;
@@ -1942,7 +1940,7 @@ export default function ContactDetail() {
       </Dialog>
 
       {/* Dialog Mesclar Contatos */}
-      <Dialog open={showMergeDialog} onOpenChange={(open) => { setShowMergeDialog(open); if (!open) { setMergeSearchQuery(''); setMergeUpdatePhone(true); setMergeUpdateEmail(false); } }}>
+      <Dialog open={showMergeDialog} onOpenChange={(open) => { setShowMergeDialog(open); if (!open) { setMergeSearchQuery(''); setSelectedMergeContact(null); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1958,63 +1956,68 @@ export default function ContactDetail() {
               </p>
             </div>
             <div>
-              <Label>Buscar contato de destino</Label>
-              <Input
-                value={mergeSearchQuery}
-                onChange={(e) => setMergeSearchQuery(e.target.value)}
-                placeholder="Digite o nome ou telefone..."
-              />
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="merge-phone"
-                  checked={mergeUpdatePhone}
-                  onCheckedChange={(v) => setMergeUpdatePhone(!!v)}
-                />
-                <Label htmlFor="merge-phone" className="text-sm">Atualizar telefone</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="merge-email"
-                  checked={mergeUpdateEmail}
-                  onCheckedChange={(v) => setMergeUpdateEmail(!!v)}
-                />
-                <Label htmlFor="merge-email" className="text-sm">Atualizar e-mail</Label>
-              </div>
-            </div>
-            {mergeSearchResults.length > 0 && (
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {mergeSearchResults.map((c: any) => (
-                  <div
-                    key={c.id}
-                    className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors"
-                    onClick={() => {
-                      if (confirm(`Tem certeza que deseja mesclar "${contact?.full_name}" com "${c.full_name}"? Esta ação é irreversível.`)) {
-                        handleMergeContacts(c.id, c.full_name);
-                      }
-                    }}
+              <Label>Contato de destino</Label>
+              <Popover open={mergePopoverOpen} onOpenChange={setMergePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={mergePopoverOpen}
+                    className="w-full justify-between font-normal mt-1"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
-                        <User className="h-4 w-4 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm">{c.full_name}</p>
-                        <div className="flex gap-2 text-xs text-muted-foreground">
-                          {c.phone && <span>{c.phone}</span>}
-                          {c.email && <span>• {c.email}</span>}
-                        </div>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-xs">Mesclar aqui</Badge>
+                    {selectedMergeContact ? (
+                      <span className="truncate">{selectedMergeContact.full_name} {selectedMergeContact.phone ? `• ${selectedMergeContact.phone}` : ''}</span>
+                    ) : (
+                      <span className="text-muted-foreground">Selecione o contato de destino...</span>
+                    )}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <div className="p-2 border-b">
+                    <Input
+                      value={mergeSearchQuery}
+                      onChange={(e) => setMergeSearchQuery(e.target.value)}
+                      placeholder="Buscar por nome ou telefone..."
+                      className="h-8"
+                      autoFocus
+                    />
                   </div>
-                ))}
-              </div>
-            )}
-            {mergeSearchQuery.length >= 2 && mergeSearchResults.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-2">Nenhum contato encontrado</p>
-            )}
+                  <ScrollArea className="max-h-60">
+                    {mergeSearchQuery.length < 2 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">Digite ao menos 2 caracteres...</p>
+                    ) : mergeSearchResults.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">Nenhum contato encontrado</p>
+                    ) : (
+                      <div className="p-1">
+                        {mergeSearchResults.map((c: any) => (
+                          <div
+                            key={c.id}
+                            className={cn(
+                              "flex items-center gap-2 p-2 rounded cursor-pointer hover:bg-muted/50 transition-colors text-sm",
+                              selectedMergeContact?.id === c.id && "bg-primary/10"
+                            )}
+                            onClick={() => {
+                              setSelectedMergeContact(c);
+                              setMergePopoverOpen(false);
+                            }}
+                          >
+                            <Check className={cn("h-4 w-4 shrink-0", selectedMergeContact?.id === c.id ? "opacity-100 text-primary" : "opacity-0")} />
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{c.full_name}</p>
+                              <div className="flex gap-2 text-xs text-muted-foreground">
+                                {c.phone && <span>{c.phone}</span>}
+                                {c.email && <span>• {c.email}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
+            </div>
             {isMerging && (
               <div className="flex items-center justify-center gap-2 py-2">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -2022,6 +2025,20 @@ export default function ContactDetail() {
               </div>
             )}
           </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMergeDialog(false)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={!selectedMergeContact || isMerging}
+              onClick={() => {
+                if (selectedMergeContact && confirm(`Tem certeza que deseja mesclar "${contact?.full_name}" com "${selectedMergeContact.full_name}"? Esta ação é irreversível.`)) {
+                  handleMergeContacts(selectedMergeContact.id, selectedMergeContact.full_name);
+                }
+              }}
+            >
+              {isMerging ? 'Mesclando...' : 'Confirmar mesclagem'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
