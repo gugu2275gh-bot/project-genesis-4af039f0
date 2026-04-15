@@ -329,6 +329,53 @@ export type Database = {
           },
         ]
       }
+      contact_data_suggestions: {
+        Row: {
+          contact_id: string
+          created_at: string
+          current_value: string | null
+          field_name: string
+          id: string
+          reviewed_at: string | null
+          reviewed_by_user_id: string | null
+          source: string | null
+          status: string
+          suggested_value: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          current_value?: string | null
+          field_name: string
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          source?: string | null
+          status?: string
+          suggested_value: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          current_value?: string | null
+          field_name?: string
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          source?: string | null
+          status?: string
+          suggested_value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_data_suggestions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           address: string | null

@@ -3,6 +3,7 @@ import { PaymentAgreementDialog, PaymentAgreementInitialData } from '@/component
 import { ContractGroupsSection } from '@/components/crm/ContractGroupsSection';
 import PendingItemsSection from '@/components/contacts/PendingItemsSection';
 import ReactivationLogSection from '@/components/contacts/ReactivationLogSection';
+import DataSuggestionsPanel from '@/components/contacts/DataSuggestionsPanel';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
@@ -1575,6 +1576,7 @@ export default function ContactDetail() {
 
         {/* Sidebar */}
         <div className="space-y-6">
+          <DataSuggestionsPanel contactId={id!} />
           <Card>
             <CardHeader>
               <CardTitle>Resumo</CardTitle>

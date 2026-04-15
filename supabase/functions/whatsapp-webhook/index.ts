@@ -770,6 +770,131 @@ async function sendWhatsAppMessage(
   console.log('Message sent successfully via Twilio')
 }
 
+/** Extract structured contact data from a chat message using Gemini */
+async function extractAndSuggestContactData(
+  supabase: ReturnType<typeof createClient>,
+  contactId: string,
+  messageText: string,
+  apiKey: string
+): Promise<void> {
+  if (!messageText || messageText.length < 5) return
+
+  // Skip generic/short messages
+  if (/^(ok|sim|não|nao|obrigad|oi|olá|hola|hello|bonjour|👍|✅)[\s!?.]*$/i.test(messageText.trim())) return
+
+  const prompt = `Analise a mensagem do cliente e extraia APENAS dados pessoais explicitamente mencionados.
+Retorne um JSON com SOMENTE os campos que foram claramente informados na mensagem. Não invente dados.
+
+Campos possíveis:
+- full_name (nome completo)
+- nationality (nacionalidade)
+- country_of_origin (país de origem)
+- birth_date (data de nascimento, formato YYYY-MM-DD)
+- civil_status (solteiro, casado, divorciado, viuvo, uniao_estavel)
+- profession (profissão)
+- email (e-mail)
+- address (endereço)
+- spain_arrival_date (data de chegada na Espanha, formato YYYY-MM-DD)
+- education_level (escolaridade)
+- birth_city (cidade natal)
+- birth_state (estado natal)
+- is_empadronado (true/false)
+- empadronamiento_city (cidade do empadronamiento)
+- empadronamiento_since (data desde quando, formato YYYY-MM-DD)
+- has_job_offer (true/false)
+- works_remotely (true/false)
+- has_eu_family_member (true/false)
+
+Se a mensagem não contém nenhum dado pessoal extraível, retorne: {}
+
+Mensagem do cliente: "${messageText}"
+
+Responda APENAS com o JSON, sem markdown, sem explicação.`
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 500 },
+        }),
+      }
+    )
+
+    if (!response.ok) return
+
+    const data = await response.json()
+    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
+    
+    // Parse JSON from response (handle markdown code blocks)
+    const jsonMatch = rawText.replace(/```json?\s*/g, '').replace(/```/g, '').trim()
+    if (!jsonMatch || jsonMatch === '{}') return
+
+    let extracted: Record<string, string>
+    try {
+      extracted = JSON.parse(jsonMatch)
+    } catch {
+      console.warn('Failed to parse extraction JSON:', rawText.substring(0, 200))
+      return
+    }
+
+    if (Object.keys(extracted).length === 0) return
+
+    // Get current contact data to compare
+    const { data: currentContact } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('id', contactId)
+      .single()
+
+    if (!currentContact) return
+
+    const suggestions: Array<{ contact_id: string; field_name: string; suggested_value: string; current_value: string | null }> = []
+
+    for (const [field, value] of Object.entries(extracted)) {
+      if (!value || typeof value !== 'string' && typeof value !== 'boolean' && typeof value !== 'number') continue
+      const strValue = String(value)
+      const currentValue = (currentContact as Record<string, any>)[field]
+      const currentStr = currentValue != null ? String(currentValue) : null
+
+      // Skip if same value or if name starts with WhatsApp (auto-generated)
+      if (currentStr === strValue) continue
+      if (field === 'full_name' && currentStr && !currentStr.startsWith('WhatsApp ')) continue
+      // Skip email if already set (handled separately by existing logic)
+      if (field === 'email' && currentStr) continue
+
+      suggestions.push({
+        contact_id: contactId,
+        field_name: field,
+        suggested_value: strValue,
+        current_value: currentStr,
+      })
+    }
+
+    if (suggestions.length > 0) {
+      // Check for existing pending suggestions with same field to avoid duplicates
+      const { data: existingPending } = await supabase
+        .from('contact_data_suggestions')
+        .select('field_name, suggested_value')
+        .eq('contact_id', contactId)
+        .eq('status', 'pending')
+
+      const existingSet = new Set((existingPending || []).map(e => `${e.field_name}:${e.suggested_value}`))
+      const newSuggestions = suggestions.filter(s => !existingSet.has(`${s.field_name}:${s.suggested_value}`))
+
+      if (newSuggestions.length > 0) {
+        await supabase.from('contact_data_suggestions').insert(newSuggestions)
+        console.log(`Inserted ${newSuggestions.length} data suggestions for contact ${contactId}`)
+      }
+    }
+  } catch (err) {
+    console.error('Data extraction failed:', err instanceof Error ? err.message : err)
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -1627,6 +1752,13 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
             await supabase.from('contacts').update(updateData).eq('id', contact.id)
             console.log('Contact updated with extracted data:', updateData)
           }
+        }
+
+        // ========== AI DATA EXTRACTION FOR SUGGESTIONS ==========
+        try {
+          await extractAndSuggestContactData(supabase, contact.id, String(message.body || ''), geminiApiKey)
+        } catch (extractErr) {
+          console.error('Data extraction error (non-blocking):', extractErr instanceof Error ? extractErr.message : extractErr)
         }
 
         // ========== CONSOLIDATE BUFFERED MESSAGES ==========
