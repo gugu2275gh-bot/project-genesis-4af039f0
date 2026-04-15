@@ -334,7 +334,7 @@ serve(async (req) => {
             origin_bot: true,
           })
 
-          await sendWhatsApp(contact.phone, message, lead.id, 'welcome', { nome: contact.full_name })
+          await sendWhatsApp(contact.phone, message, lead.id, 'welcome', { nombre: contact.full_name })
           results.welcomeMessages++
         }
       }
@@ -377,7 +377,7 @@ serve(async (req) => {
             origin_bot: true,
           })
 
-          await sendWhatsApp(contact.phone, message, lead.id, 'reengagement', { nome: contact.full_name })
+          await sendWhatsApp(contact.phone, message, lead.id, 'reengagement', { nombre: contact.full_name })
           results.reengagements++
         }
       }
@@ -440,7 +440,7 @@ serve(async (req) => {
           if (!(await reminderAlreadySent('contract_reminders', contract.id, 'D1'))) {
             await supabase.from('contract_reminders').insert({ contract_id: contract.id, reminder_type: 'D1' })
             if (contact?.phone) {
-              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId, 'contract_reminder', { nome: contact.full_name })
+              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId, 'contract_reminder', { nombre: contact.full_name })
             }
             results.contractReminders++
           }
@@ -451,7 +451,7 @@ serve(async (req) => {
           if (!(await reminderAlreadySent('contract_reminders', contract.id, 'D2'))) {
             await supabase.from('contract_reminders').insert({ contract_id: contract.id, reminder_type: 'D2' })
             if (contact?.phone) {
-              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId, 'contract_reminder', { nome: contact.full_name })
+              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId, 'contract_reminder', { nombre: contact.full_name })
             }
             results.contractReminders++
           }
@@ -462,7 +462,7 @@ serve(async (req) => {
           if (!(await reminderAlreadySent('contract_reminders', contract.id, 'D3'))) {
             await supabase.from('contract_reminders').insert({ contract_id: contract.id, reminder_type: 'D3' })
             if (contact?.phone) {
-              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId, 'contract_reminder', { nome: contact.full_name })
+              await sendWhatsApp(contact.phone, templateMap.template_contract_reminder.replace('{nome}', contact.full_name), leadId, 'contract_reminder', { nombre: contact.full_name })
             }
             results.contractReminders++
           }
@@ -517,7 +517,7 @@ serve(async (req) => {
               .replace('{nome}', contact.full_name)
               .replace('{valor}', String(payment.amount))
               .replace('{data}', payment.due_date)
-            await sendWhatsApp(contact.phone, msg, leadId, 'payment_pre_7d', { nome: contact.full_name, valor: String(payment.amount), data: payment.due_date })
+            await sendWhatsApp(contact.phone, msg, leadId, 'payment_pre_7d', { nombre: contact.full_name, valor: String(payment.amount), fecha: payment.due_date })
             results.paymentPreReminders++
           }
         }
@@ -530,7 +530,7 @@ serve(async (req) => {
               .replace('{nome}', contact.full_name)
               .replace('{valor}', String(payment.amount))
               .replace('{data}', payment.due_date)
-            await sendWhatsApp(contact.phone, msg, leadId, 'payment_pre_48h', { nome: contact.full_name, valor: String(payment.amount), data: payment.due_date })
+            await sendWhatsApp(contact.phone, msg, leadId, 'payment_pre_48h', { nombre: contact.full_name, valor: String(payment.amount), fecha: payment.due_date })
             
             // Notify FINANCEIRO team about upcoming payment
             const { data: financeUsers } = await supabase
@@ -558,7 +558,7 @@ serve(async (req) => {
             const msg = templateMap.template_payment_due_today
               .replace('{nome}', contact.full_name)
               .replace('{valor}', String(payment.amount))
-            await sendWhatsApp(contact.phone, msg, leadId, 'payment_due_today', { nome: contact.full_name, valor: String(payment.amount) })
+            await sendWhatsApp(contact.phone, msg, leadId, 'payment_due_today', { nombre: contact.full_name, valor: String(payment.amount) })
             results.paymentPreReminders++
           }
         }
@@ -595,7 +595,7 @@ serve(async (req) => {
               const msg = templateMap.template_payment_reminder
                 .replace('{nome}', contact.full_name)
                 .replace('{valor}', String(payment.amount))
-              await sendWhatsApp(contact.phone, msg, leadId, 'payment_post_d1', { nome: contact.full_name, valor: String(payment.amount) })
+              await sendWhatsApp(contact.phone, msg, leadId, 'payment_post_d1', { nombre: contact.full_name, valor: String(payment.amount) })
             }
             results.paymentPostReminders++
           }
@@ -609,7 +609,7 @@ serve(async (req) => {
               const msg = templateMap.template_payment_reminder
                 .replace('{nome}', contact.full_name)
                 .replace('{valor}', String(payment.amount))
-              await sendWhatsApp(contact.phone, msg, leadId, 'payment_post_d3', { nome: contact.full_name, valor: String(payment.amount) })
+              await sendWhatsApp(contact.phone, msg, leadId, 'payment_post_d3', { nombre: contact.full_name, valor: String(payment.amount) })
             }
             // Alert managers
             const { data: managers } = await supabase.from('user_roles').select('user_id').eq('role', 'MANAGER')
@@ -758,18 +758,25 @@ serve(async (req) => {
       console.log(`Found ${casesWithPendingDocs?.length || 0} cases awaiting documents`)
       
       for (const sc of casesWithPendingDocs || []) {
-        // Check pending documents count
-        const { count: pendingCount } = await supabase
+        // Check pending documents count and get first pending doc name
+        const { data: pendingDocs, count: pendingCount } = await supabase
           .from('service_documents')
-          .select('*', { count: 'exact', head: true })
+          .select('document_name', { count: 'exact' })
           .eq('service_case_id', sc.id)
           .in('status', ['NAO_ENVIADO', 'REJEITADO'])
+          .limit(3)
         
         // If no pending docs, all were submitted - trigger completion
         if (!pendingCount || pendingCount === 0) {
           await handleDocumentsComplete(sc)
           continue
         }
+        
+        // Build a summary of pending document names for template {{2}}
+        const pendingDocNames = pendingDocs?.map((d: any) => d.document_name).filter(Boolean) || []
+        const pendingDocSummary = pendingDocNames.length > 0
+          ? (pendingDocNames.length === 1 ? pendingDocNames[0] : `${pendingDocNames[0]} (+${pendingDocNames.length - 1} más)`)
+          : 'documentos pendientes'
         
         const contact = (sc.opportunities as any)?.leads?.contacts
         const leadId = (sc.opportunities as any)?.leads?.id
@@ -797,7 +804,7 @@ serve(async (req) => {
             // Client WhatsApp reminder
             if (contact?.phone) {
               const msg = templateMap.template_document_reminder_urgent.replace('{nome}', clientName)
-              await sendWhatsApp(contact.phone, msg, leadId)
+              await sendWhatsApp(contact.phone, msg, leadId, 'document_reminder', { nombre: clientName, documento: pendingDocSummary })
             }
             await recordDocReminder(sc.id, reminderKey, 'CLIENT')
             
@@ -871,7 +878,7 @@ serve(async (req) => {
             if (!(await docReminderSent(sc.id, clientReminderKey))) {
               if (contact?.phone) {
                 const msg = templateMap.template_document_reminder_normal.replace('{nome}', clientName)
-                await sendWhatsApp(contact.phone, msg, leadId)
+                await sendWhatsApp(contact.phone, msg, leadId, 'document_reminder', { nombre: clientName, documento: pendingDocSummary })
               }
               
               if (sc.client_user_id) {
@@ -910,7 +917,7 @@ serve(async (req) => {
                 const msg = templateMap.template_document_waiting
                   .replace('{nome}', clientName)
                   .replace('{dias}', String(daysUntilProtocol))
-                await sendWhatsApp(contact.phone, msg, leadId)
+                await sendWhatsApp(contact.phone, msg, leadId, 'document_reminder', { nombre: clientName, documento: pendingDocSummary })
               }
               
               if (sc.client_user_id) {
@@ -932,7 +939,7 @@ serve(async (req) => {
             if (!(await docReminderSent(sc.id, urgentWaitingKey))) {
               if (contact?.phone) {
                 const msg = templateMap.template_document_reminder_urgent.replace('{nome}', clientName)
-                await sendWhatsApp(contact.phone, msg, leadId)
+                await sendWhatsApp(contact.phone, msg, leadId, 'document_reminder', { nombre: clientName, documento: pendingDocSummary })
               }
               
               // Alert technician about approaching deadline
