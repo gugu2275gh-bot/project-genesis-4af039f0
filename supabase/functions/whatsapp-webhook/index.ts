@@ -1995,6 +1995,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
         const lastAssistantQuestion = extractLastQuestion(lastAssistantMessage)
         const shouldBindReplyToLastQuestion = lastAssistantQuestion
           && (isStructuredQuestionAnswer(rawCustomerMessage)
+            || (isQuestionAboutInterest(lastAssistantQuestion) && isPotentialInterestAnswer(rawCustomerMessage))
             || (isQuestionAboutSpainEntryDate(lastAssistantQuestion) && isPotentialEntryDateAnswer(rawCustomerMessage)))
 
         if (shouldBindReplyToLastQuestion) {
@@ -2043,6 +2044,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
           }
         }
 
+        aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
         aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
 
         if (aiResponse && isLikelyQuestionLoop(history, rawCustomerMessage, aiResponse)) {
@@ -2056,6 +2058,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
               knowledgeContext,
               detectedChatLanguage,
             )
+            aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
             aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
           } catch (retryError) {
             console.error('Anti-repeat retry failed:', retryError instanceof Error ? retryError.message : retryError)
