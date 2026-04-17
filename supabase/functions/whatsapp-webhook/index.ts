@@ -447,6 +447,48 @@ function normalizeForLanguageChecks(text: string): string {
     .trim()
 }
 
+function extractLastQuestion(text: string): string {
+  const matches = text.match(/[^?\n]*\?/g)
+  return matches?.map((item) => item.trim()).filter(Boolean).at(-1) || ''
+}
+
+function isShortConfirmationReply(text: string): boolean {
+  const sample = normalizeForLanguageChecks(text)
+  if (!sample || sample.length > 40) return false
+
+  return [
+    'sim', 'si', 's', 'yes', 'yep', 'ok', 'okay', 'claro', 'correto', 'isso', 'perfeito',
+    'nao', 'não', 'no', 'not', 'talvez', 'acho que sim', 'acho que nao', 'acho que não',
+  ].includes(sample)
+}
+
+function areQuestionsEquivalent(first: string, second: string): boolean {
+  const normalizedFirst = normalizeForLanguageChecks(first)
+  const normalizedSecond = normalizeForLanguageChecks(second)
+
+  if (!normalizedFirst || !normalizedSecond) return false
+
+  return normalizedFirst === normalizedSecond
+    || normalizedFirst.includes(normalizedSecond)
+    || normalizedSecond.includes(normalizedFirst)
+}
+
+function isLikelyQuestionLoop(
+  conversationHistory: Array<{ role: string; content: string }>,
+  currentMessage: string,
+  aiResponse: string,
+): boolean {
+  if (!isShortConfirmationReply(currentMessage)) return false
+
+  const lastAssistantMessage = [...conversationHistory].reverse().find((msg) => msg.role === 'assistant')?.content || ''
+  const previousQuestion = extractLastQuestion(lastAssistantMessage)
+  const nextQuestion = extractLastQuestion(aiResponse)
+
+  if (!previousQuestion || !nextQuestion) return false
+
+  return areQuestionsEquivalent(previousQuestion, nextQuestion)
+}
+
 function looksPortuguese(text: string): boolean {
   const sample = normalizeForLanguageChecks(text)
   if (!sample) return false
@@ -1766,12 +1808,26 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
 
         // ========== CONSOLIDATE BUFFERED MESSAGES ==========
         // Collect all unanswered client messages (no AI response yet) for this lead
-        const { data: unansweredMsgs } = await supabase
+        const { data: lastOutboundBeforeReply } = await supabase
+          .from('mensagens_cliente')
+          .select('created_at')
+          .eq('id_lead', lead.id)
+          .not('mensagem_IA', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        let unansweredQuery = supabase
           .from('mensagens_cliente')
           .select('mensagem_cliente, media_type')
           .eq('id_lead', lead.id)
           .not('mensagem_cliente', 'is', null)
-          .is('mensagem_IA', null)
+
+        const lastOutboundAt = lastOutboundBeforeReply?.[0]?.created_at
+        if (lastOutboundAt) {
+          unansweredQuery = unansweredQuery.gt('created_at', lastOutboundAt)
+        }
+
+        const { data: unansweredMsgs } = await unansweredQuery
           .order('created_at', { ascending: true })
 
         // Build consolidated message from all unanswered messages
@@ -1827,6 +1883,22 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
             }
           } catch (openaiError) {
             console.error('OpenAI fallback also failed:', openaiError instanceof Error ? openaiError.message : openaiError)
+          }
+        }
+
+        if (aiResponse && isLikelyQuestionLoop(history, messageForAI, aiResponse)) {
+          console.warn('Detected repeated-question loop, retrying with anti-repeat instruction')
+          try {
+            aiResponse = await generateAIResponse(
+              history,
+              messageForAI,
+              `${resolvedSystemPrompt}\n\n## INSTRUÇÃO CRÍTICA ANTI-REPETIÇÃO\nO cliente acabou de responder à sua ÚLTIMA pergunta. NÃO repita a mesma pergunta novamente. Confirme brevemente a resposta recebida e avance para a próxima pergunta ou próxima etapa do fluxo.`,
+              geminiApiKey,
+              knowledgeContext,
+              detectedChatLanguage,
+            )
+          } catch (retryError) {
+            console.error('Anti-repeat retry failed:', retryError instanceof Error ? retryError.message : retryError)
           }
         }
 
