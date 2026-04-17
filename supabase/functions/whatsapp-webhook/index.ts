@@ -564,13 +564,16 @@ function isLikelyQuestionLoop(
   currentMessage: string,
   aiResponse: string,
 ): boolean {
-  if (!isStructuredQuestionAnswer(currentMessage)) return false
-
   const lastAssistantMessage = [...conversationHistory].reverse().find((msg) => msg.role === 'assistant')?.content || ''
   const previousQuestion = extractLastQuestion(lastAssistantMessage)
   const nextQuestion = extractLastQuestion(aiResponse)
 
   if (!previousQuestion || !nextQuestion) return false
+
+  const isValidAnswer = isStructuredQuestionAnswer(currentMessage)
+    || (isQuestionAboutSpainEntryDate(previousQuestion) && isPotentialEntryDateAnswer(currentMessage))
+
+  if (!isValidAnswer) return false
 
   return areQuestionsEquivalent(previousQuestion, nextQuestion)
 }
