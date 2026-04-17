@@ -211,7 +211,7 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
 async function getConversationHistory(
   supabase: ReturnType<typeof createClient>,
   leadId: string,
-  limit = 10
+  limit = 20
 ): Promise<Array<{ role: string; content: string }>> {
   // Fetch the N MOST RECENT messages (descending), then reverse to chronological order
   const { data: recentMessages } = await supabase
