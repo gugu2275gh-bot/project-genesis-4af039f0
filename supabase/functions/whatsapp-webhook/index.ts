@@ -1847,17 +1847,16 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
           messageForAI = message.body || (mediaType ? getMediaPlaceholder(mediaType, detectedChatLanguage) : '')
         }
 
+        const history = await getConversationHistory(supabase, lead.id)
         const lastAssistantMessage = [...history].reverse().find((msg) => msg.role === 'assistant')?.content || ''
         const lastAssistantQuestion = extractLastQuestion(lastAssistantMessage)
         if (lastAssistantQuestion && isStructuredQuestionAnswer(messageForAI)) {
           messageForAI = `O cliente respondeu à última pergunta \"${lastAssistantQuestion}\" com: ${messageForAI}`
         }
-        
-        // Get conversation history and knowledge base context
-        const [history, knowledgeContext] = await Promise.all([
-          getConversationHistory(supabase, lead.id),
-          messageForAI ? getKnowledgeBaseContext(supabase, messageForAI) : Promise.resolve(''),
-        ])
+
+        const knowledgeContext = messageForAI
+          ? await getKnowledgeBaseContext(supabase, messageForAI)
+          : ''
 
         console.log(`Knowledge base context: ${knowledgeContext.length} chars, consolidated message length: ${messageForAI.length}`)
 
