@@ -498,6 +498,56 @@ function isStructuredQuestionAnswer(text: string): boolean {
   ].includes(sample) || isShortFreeText
 }
 
+function isQuestionAboutSpainEntryDate(question: string): boolean {
+  const normalized = normalizeForLanguageChecks(question)
+  return normalized.includes('data exata da sua entrada na espanha')
+    || normalized.includes('entrada na espanha')
+    || normalized.includes('fecha exacta de tu entrada a espana')
+    || normalized.includes('date of your entry into spain')
+    || normalized.includes('date exacte de votre entree en espagne')
+}
+
+function isPotentialEntryDateAnswer(text: string): boolean {
+  const raw = text.trim()
+  const normalized = normalizeForLanguageChecks(text)
+
+  if (!raw || normalized.includes('?')) return false
+
+  const hasSingleDate = /(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2})/.test(raw)
+  const hasDateRange = /(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2}).{0,20}(ate|até|a|to|-).{0,20}(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2})/i.test(raw)
+  const hasMonthName = /\b(janeiro|fevereiro|marco|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|january|february|march|april|may|june|july|august|september|october|november|december|janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\b/.test(normalized)
+  const hasMonthYear = /\b\d{4}\b/.test(normalized) && hasMonthName
+
+  return hasDateRange || hasSingleDate || hasMonthYear || hasMonthName
+}
+
+function getEmpadronadoQuestion(language: ChatLanguage): string {
+  if (language === 'es') return 'Perfecto. ¿Estás empadronado?'
+  if (language === 'en') return 'Got it. Are you registered at the town hall (empadronado)?'
+  if (language === 'fr') return 'D’accord. Êtes-vous empadronado ?'
+  return 'Perfeito. Você está empadronado?'
+}
+
+function forceAdvanceFromEntryDateQuestion(
+  previousAssistantMessage: string,
+  currentMessage: string,
+  aiResponse: string,
+  language: ChatLanguage,
+): string {
+  const previousQuestion = extractLastQuestion(previousAssistantMessage)
+  const nextQuestion = extractLastQuestion(aiResponse)
+
+  if (!isQuestionAboutSpainEntryDate(previousQuestion) || !isPotentialEntryDateAnswer(currentMessage)) {
+    return aiResponse
+  }
+
+  if (nextQuestion && areQuestionsEquivalent(previousQuestion, nextQuestion)) {
+    return getEmpadronadoQuestion(language)
+  }
+
+  return aiResponse
+}
+
 function areQuestionsEquivalent(first: string, second: string): boolean {
   const normalizedFirst = normalizeForLanguageChecks(first)
   const normalizedSecond = normalizeForLanguageChecks(second)
