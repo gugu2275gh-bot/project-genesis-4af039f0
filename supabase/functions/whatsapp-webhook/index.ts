@@ -211,16 +211,19 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
 async function getConversationHistory(
   supabase: ReturnType<typeof createClient>,
   leadId: string,
-  limit = 10
+  limit = 20
 ): Promise<Array<{ role: string; content: string }>> {
-  const { data: messages } = await supabase
+  // Fetch the N MOST RECENT messages (descending), then reverse to chronological order
+  const { data: recentMessages } = await supabase
     .from('mensagens_cliente')
     .select('mensagem_cliente, mensagem_IA, origem, created_at')
     .eq('id_lead', leadId)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(limit)
 
-  if (!messages?.length) return []
+  if (!recentMessages?.length) return []
+
+  const messages = [...recentMessages].reverse()
 
   const history: Array<{ role: string; content: string }> = []
   for (const msg of messages) {
