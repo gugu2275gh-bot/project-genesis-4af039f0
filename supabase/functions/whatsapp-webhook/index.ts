@@ -521,6 +521,38 @@ function isPotentialEntryDateAnswer(text: string): boolean {
   return hasDateRange || hasSingleDate || hasMonthYear || hasMonthName
 }
 
+function isQuestionAboutInterest(question: string): boolean {
+  const normalized = normalizeForLanguageChecks(question)
+  return normalized.includes('o que voce busca hoje')
+    || normalized.includes('que voce busca hoje')
+    || normalized.includes('que busca hoy')
+    || normalized.includes('what are you looking for today')
+    || normalized.includes('ce que vous recherchez aujourd hui')
+}
+
+function isPotentialInterestAnswer(text: string): boolean {
+  const normalized = normalizeForLanguageChecks(text)
+
+  if (!normalized || normalized.includes('?')) return false
+  if (normalized.length < 4) return false
+
+  const interestKeywords = [
+    'resid', 'residir', 'morar', 'viver', 'espanha', 'espanha', 'nacional', 'cidad', 'arraigo',
+    'document', 'nie', 'tie', 'estudo', 'estudar', 'homologa', 'antecedente', 'reagrupa',
+    'trabalh', 'trabalho', 'family', 'famil', 'mae', 'madre', 'mãe', 'visa', 'visto',
+  ]
+
+  return normalized.split(' ').length >= 1
+    && interestKeywords.some((keyword) => normalized.includes(keyword))
+}
+
+function getLocationQuestion(language: ChatLanguage): string {
+  if (language === 'es') return 'Perfecto. ¿Hoy ya estás en España o todavía estás en otro país?'
+  if (language === 'en') return 'Perfect. Are you already in Spain today, or are you still in another country?'
+  if (language === 'fr') return 'Parfait. Êtes-vous déjà en Espagne aujourd’hui ou êtes-vous encore dans un autre pays ?'
+  return 'Perfeito. Hoje você já está na Espanha ou ainda está em outro país?'
+}
+
 function getEmpadronadoQuestion(language: ChatLanguage): string {
   if (language === 'es') return 'Perfecto. ¿Estás empadronado?'
   if (language === 'en') return 'Got it. Are you registered at the town hall (empadronado)?'
@@ -543,6 +575,26 @@ function forceAdvanceFromEntryDateQuestion(
 
   if (nextQuestion && areQuestionsEquivalent(previousQuestion, nextQuestion)) {
     return getEmpadronadoQuestion(language)
+  }
+
+  return aiResponse
+}
+
+function forceAdvanceFromInterestQuestion(
+  previousAssistantMessage: string,
+  currentMessage: string,
+  aiResponse: string,
+  language: ChatLanguage,
+): string {
+  const previousQuestion = extractLastQuestion(previousAssistantMessage)
+  const nextQuestion = extractLastQuestion(aiResponse)
+
+  if (!isQuestionAboutInterest(previousQuestion) || !isPotentialInterestAnswer(currentMessage)) {
+    return aiResponse
+  }
+
+  if (nextQuestion && areQuestionsEquivalent(previousQuestion, nextQuestion)) {
+    return getLocationQuestion(language)
   }
 
   return aiResponse
@@ -571,6 +623,7 @@ function isLikelyQuestionLoop(
   if (!previousQuestion || !nextQuestion) return false
 
   const isValidAnswer = isStructuredQuestionAnswer(currentMessage)
+    || (isQuestionAboutInterest(previousQuestion) && isPotentialInterestAnswer(currentMessage))
     || (isQuestionAboutSpainEntryDate(previousQuestion) && isPotentialEntryDateAnswer(currentMessage))
 
   if (!isValidAnswer) return false
@@ -1942,6 +1995,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
         const lastAssistantQuestion = extractLastQuestion(lastAssistantMessage)
         const shouldBindReplyToLastQuestion = lastAssistantQuestion
           && (isStructuredQuestionAnswer(rawCustomerMessage)
+            || (isQuestionAboutInterest(lastAssistantQuestion) && isPotentialInterestAnswer(rawCustomerMessage))
             || (isQuestionAboutSpainEntryDate(lastAssistantQuestion) && isPotentialEntryDateAnswer(rawCustomerMessage)))
 
         if (shouldBindReplyToLastQuestion) {
@@ -1990,6 +2044,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
           }
         }
 
+        aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
         aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
 
         if (aiResponse && isLikelyQuestionLoop(history, rawCustomerMessage, aiResponse)) {
@@ -2003,6 +2058,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
               knowledgeContext,
               detectedChatLanguage,
             )
+            aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
             aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
           } catch (retryError) {
             console.error('Anti-repeat retry failed:', retryError instanceof Error ? retryError.message : retryError)
