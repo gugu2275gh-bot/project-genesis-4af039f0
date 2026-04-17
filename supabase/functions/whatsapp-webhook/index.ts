@@ -1937,10 +1937,15 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
         }
 
         const history = await getConversationHistory(supabase, lead.id)
+        const rawCustomerMessage = messageForAI
         const lastAssistantMessage = [...history].reverse().find((msg) => msg.role === 'assistant')?.content || ''
         const lastAssistantQuestion = extractLastQuestion(lastAssistantMessage)
-        if (lastAssistantQuestion && isStructuredQuestionAnswer(messageForAI)) {
-          messageForAI = `O cliente respondeu à última pergunta \"${lastAssistantQuestion}\" com: ${messageForAI}`
+        const shouldBindReplyToLastQuestion = lastAssistantQuestion
+          && (isStructuredQuestionAnswer(rawCustomerMessage)
+            || (isQuestionAboutSpainEntryDate(lastAssistantQuestion) && isPotentialEntryDateAnswer(rawCustomerMessage)))
+
+        if (shouldBindReplyToLastQuestion) {
+          messageForAI = `O cliente respondeu à última pergunta \"${lastAssistantQuestion}\" com: ${rawCustomerMessage}`
         }
 
         const knowledgeContext = messageForAI
@@ -1985,7 +1990,9 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
           }
         }
 
-        if (aiResponse && isLikelyQuestionLoop(history, messageForAI, aiResponse)) {
+        aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
+
+        if (aiResponse && isLikelyQuestionLoop(history, rawCustomerMessage, aiResponse)) {
           console.warn('Detected repeated-question loop, retrying with anti-repeat instruction')
           try {
             aiResponse = await generateAIResponse(
@@ -1996,6 +2003,7 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
               knowledgeContext,
               detectedChatLanguage,
             )
+            aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
           } catch (retryError) {
             console.error('Anti-repeat retry failed:', retryError instanceof Error ? retryError.message : retryError)
           }
