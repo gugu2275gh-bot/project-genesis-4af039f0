@@ -452,14 +452,19 @@ function extractLastQuestion(text: string): string {
   return matches?.map((item) => item.trim()).filter(Boolean).at(-1) || ''
 }
 
-function isShortConfirmationReply(text: string): boolean {
+function isStructuredQuestionAnswer(text: string): boolean {
   const sample = normalizeForLanguageChecks(text)
   if (!sample || sample.length > 40) return false
 
-  return [
+  const raw = text.trim()
+  const isDateLike = /^(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2})$/.test(raw)
+  const isNumericLike = /^\d{1,4}$/.test(sample)
+  const isShortFreeText = sample.length <= 20 && !sample.includes('?')
+
+  return isDateLike || isNumericLike || [
     'sim', 'si', 's', 'yes', 'yep', 'ok', 'okay', 'claro', 'correto', 'isso', 'perfeito',
     'nao', 'não', 'no', 'not', 'talvez', 'acho que sim', 'acho que nao', 'acho que não',
-  ].includes(sample)
+  ].includes(sample) || isShortFreeText
 }
 
 function areQuestionsEquivalent(first: string, second: string): boolean {
@@ -478,7 +483,7 @@ function isLikelyQuestionLoop(
   currentMessage: string,
   aiResponse: string,
 ): boolean {
-  if (!isShortConfirmationReply(currentMessage)) return false
+  if (!isStructuredQuestionAnswer(currentMessage)) return false
 
   const lastAssistantMessage = [...conversationHistory].reverse().find((msg) => msg.role === 'assistant')?.content || ''
   const previousQuestion = extractLastQuestion(lastAssistantMessage)
@@ -1840,6 +1845,12 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
             .join('\n')
         } else {
           messageForAI = message.body || (mediaType ? getMediaPlaceholder(mediaType, detectedChatLanguage) : '')
+        }
+
+        const lastAssistantMessage = [...history].reverse().find((msg) => msg.role === 'assistant')?.content || ''
+        const lastAssistantQuestion = extractLastQuestion(lastAssistantMessage)
+        if (lastAssistantQuestion && isStructuredQuestionAnswer(messageForAI)) {
+          messageForAI = `O cliente respondeu à última pergunta \"${lastAssistantQuestion}\" com: ${messageForAI}`
         }
         
         // Get conversation history and knowledge base context
