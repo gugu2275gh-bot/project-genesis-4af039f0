@@ -452,6 +452,37 @@ function extractLastQuestion(text: string): string {
   return matches?.map((item) => item.trim()).filter(Boolean).at(-1) || ''
 }
 
+function extractTextBeforeLastQuestion(text: string): string {
+  const lastQuestion = extractLastQuestion(text)
+  if (!lastQuestion) return text.trim()
+
+  const questionIndex = text.lastIndexOf(lastQuestion)
+  if (questionIndex === -1) return text.trim()
+
+  return text.slice(0, questionIndex).trim()
+}
+
+function removeRepeatedQuestionIntro(
+  previousAssistantMessage: string,
+  aiResponse: string,
+): string {
+  const previousQuestion = extractLastQuestion(previousAssistantMessage)
+  const nextQuestion = extractLastQuestion(aiResponse)
+
+  if (!previousQuestion || !nextQuestion || areQuestionsEquivalent(previousQuestion, nextQuestion)) {
+    return aiResponse
+  }
+
+  const previousIntro = extractTextBeforeLastQuestion(previousAssistantMessage)
+  const nextIntro = extractTextBeforeLastQuestion(aiResponse)
+
+  if (!previousIntro || !nextIntro) return aiResponse
+
+  if (!areQuestionsEquivalent(previousIntro, nextIntro)) return aiResponse
+
+  return aiResponse.slice(aiResponse.lastIndexOf(nextQuestion)).trim()
+}
+
 function isStructuredQuestionAnswer(text: string): boolean {
   const sample = normalizeForLanguageChecks(text)
   if (!sample || sample.length > 40) return false
@@ -1763,7 +1794,8 @@ Após coletar todas as informações:
 3. Se o cliente fizer uma pergunta fora do fluxo, responda brevemente usando a base de conhecimento e retome o fluxo.
 4. Se o cliente já forneceu alguma informação anteriormente (ex: nome no perfil do WhatsApp), reconheça e pule essa etapa.
 5. Nas etapas 6A e 6B, faça as perguntas uma de cada vez, NÃO todas juntas.
-6. Após completar a etapa 8 (Handoff), NÃO continue respondendo. O atendente humano assumirá.`
+6. A frase introdutória da etapa 6A ("Vou te fazer perguntas rápidas...") e da etapa 6B ("Agora preciso entender...") deve aparecer SOMENTE uma vez, na abertura do bloco. Nas perguntas seguintes da mesma etapa, envie apenas a próxima pergunta, sem repetir a introdução.
+7. Após completar a etapa 8 (Handoff), NÃO continue respondendo. O atendente humano assumirá.`
 
         // Always use the structured flow as base prompt; custom prompt is appended as extra guidelines
         let systemPrompt = defaultSystemPrompt
@@ -1913,6 +1945,8 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
         }
 
         if (aiResponse) {
+          aiResponse = removeRepeatedQuestionIntro(lastAssistantMessage, aiResponse)
+
           // Send AI response via Twilio
           try {
             await sendWhatsAppMessage(phoneNumber, aiResponse)
