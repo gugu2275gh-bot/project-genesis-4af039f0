@@ -978,17 +978,48 @@ export default function ContractDetail() {
               )}
               {(() => {
                 const notes = filteredPaymentNotes || generatedPaymentDetails || '';
-                const obsLines = notes.split('\n')
-                  .filter((line: string) => line.startsWith('Observações:'))
-                  .map((line: string) => line.replace('Observações:', '').trim())
-                  .filter(Boolean);
-                if (obsLines.length === 0) return null;
+                if (!notes) return null;
+
+                const blocks = notes.split('\n---\n').map((b: string) => b.trim()).filter(Boolean);
+                const items: { service: string; obs: string }[] = [];
+
+                blocks.forEach((block: string) => {
+                  const serviceMatch = block.match(/Serviço:\s*(.+?)(?:\n|$)/);
+                  const service = serviceMatch ? serviceMatch[1].trim() : 'Serviço';
+                  block.split('\n').forEach((line: string) => {
+                    if (line.startsWith('Observações:')) {
+                      const obs = line.replace('Observações:', '').trim();
+                      if (obs) items.push({ service, obs });
+                    }
+                  });
+                });
+
+                if (items.length === 0) return null;
+
+                // Group by service
+                const grouped = items.reduce((acc: Record<string, string[]>, { service, obs }) => {
+                  if (!acc[service]) acc[service] = [];
+                  acc[service].push(obs);
+                  return acc;
+                }, {});
+
+                const serviceNames = Object.keys(grouped);
+
                 return (
                   <div className="border-t pt-4">
                     <p className="text-sm text-muted-foreground mb-2">Observações</p>
-                    <div className="text-sm font-medium bg-muted/50 rounded-md p-3 space-y-1">
-                      {obsLines.map((obs: string, i: number) => (
-                        <p key={i}>{obs}</p>
+                    <div className="text-sm bg-muted/50 rounded-md p-3 space-y-3">
+                      {serviceNames.map((service, i) => (
+                        <div key={i} className={i > 0 ? 'pt-3 border-t border-border/50' : ''}>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                            {service}
+                          </p>
+                          <div className="space-y-1">
+                            {grouped[service].map((obs, j) => (
+                              <p key={j} className="font-medium">{obs}</p>
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
