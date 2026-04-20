@@ -16,7 +16,9 @@ export type ContractLeadService = {
     id: string;
     service_interest: string | null;
     service_type_id: string | null;
+    contact_id: string | null;
     service_types: { id: string; name: string } | null;
+    contacts: { id: string; full_name: string; is_beneficiary: boolean } | null;
   };
 };
 
