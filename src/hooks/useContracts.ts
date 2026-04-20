@@ -16,7 +16,9 @@ export type ContractLeadService = {
     id: string;
     service_interest: string | null;
     service_type_id: string | null;
+    contact_id: string | null;
     service_types: { id: string; name: string } | null;
+    contacts: { id: string; full_name: string; is_beneficiary: boolean } | null;
   };
 };
 
@@ -66,9 +68,12 @@ export function useContracts() {
           contract_leads (
             id, lead_id,
             leads (
-              id, service_interest, service_type_id,
+              id, service_interest, service_type_id, contact_id,
               service_types (
                 id, name
+              ),
+              contacts (
+                id, full_name, is_beneficiary
               )
             )
           ),
