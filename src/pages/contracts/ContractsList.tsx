@@ -176,21 +176,40 @@ export default function ContractsList() {
   const getContractServices = (contract: typeof contracts[0]): string[] => {
     const contractLeads = contract.contract_leads || [];
     const titularName = contract.opportunities?.leads?.contacts?.full_name;
+    const titularContactId = contract.opportunities?.leads?.contacts?.id;
+
+    // Build map: opportunity_id -> beneficiary name (from payments)
+    const beneficiaryByOpp = new Map<string, string>();
+    for (const p of contract.payments || []) {
+      const benefId = (p as any).beneficiary_contact_id;
+      const benefName = (p as any).beneficiary?.full_name;
+      if (p.opportunity_id && benefId && benefId !== titularContactId && benefName) {
+        beneficiaryByOpp.set(p.opportunity_id, benefName);
+      }
+    }
+    const fallbackBeneficiary = beneficiaryByOpp.values().next().value as string | undefined;
+
     if (contractLeads.length > 0) {
       return contractLeads.map(cl => {
         const name = cl.leads?.service_types?.name;
         const serviceName = name
           || (cl.leads?.service_interest ? (SERVICE_INTEREST_LABELS[cl.leads.service_interest] || cl.leads.service_interest) : 'Serviço');
         const contact = cl.leads?.contacts;
+        // Lead's contact is the actual beneficiary
         if (contact?.is_beneficiary && contact.full_name && contact.full_name !== titularName) {
           return `${contact.full_name}: ${serviceName}`;
+        }
+        // Fallback: payments mark a different beneficiary for this opportunity
+        if (fallbackBeneficiary) {
+          return `${fallbackBeneficiary}: ${serviceName}`;
         }
         return serviceName;
       });
     }
     // Fallback to primary lead service
     const dynamicName = contract.opportunities?.leads?.service_types?.name;
-    return [dynamicName || SERVICE_INTEREST_LABELS[contract.service_type || 'OUTRO']];
+    const serviceName = dynamicName || SERVICE_INTEREST_LABELS[contract.service_type || 'OUTRO'];
+    return [fallbackBeneficiary ? `${fallbackBeneficiary}: ${serviceName}` : serviceName];
   };
 
   const calculatePaymentStatus = (contract: typeof contracts[0]) => {
