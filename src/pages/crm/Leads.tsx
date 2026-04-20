@@ -100,7 +100,7 @@ export default function Leads() {
       l.contacts?.email?.toLowerCase().includes(search.toLowerCase()) ||
       l.contacts?.phone?.toString().includes(search);
     const matchesStatus = statusFilter === 'all' || l.status === statusFilter;
-    const matchesService = serviceFilter === 'all' || l.service_interest === serviceFilter;
+    const matchesService = serviceFilter === 'all' || l.service_type_id === serviceFilter || l.service_interest === serviceFilter;
     return matchesSearch && matchesStatus && matchesService;
   });
 
@@ -478,8 +478,8 @@ export default function Leads() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os serviços</SelectItem>
-            {Object.entries(SERVICE_INTEREST_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>{label}</SelectItem>
+            {serviceTypes?.map((st) => (
+              <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
