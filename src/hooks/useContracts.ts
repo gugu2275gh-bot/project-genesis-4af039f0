@@ -68,9 +68,12 @@ export function useContracts() {
           contract_leads (
             id, lead_id,
             leads (
-              id, service_interest, service_type_id,
+              id, service_interest, service_type_id, contact_id,
               service_types (
                 id, name
+              ),
+              contacts (
+                id, full_name, is_beneficiary
               )
             )
           ),
