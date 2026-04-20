@@ -38,6 +38,8 @@ export type ContractWithOpportunity = Contract & {
     installment_number: number | null;
     due_date: string | null;
     opportunity_id: string | null;
+    beneficiary_contact_id?: string | null;
+    beneficiary?: { id: string; full_name: string } | null;
   }>;
 };
 
