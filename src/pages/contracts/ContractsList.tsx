@@ -173,7 +173,7 @@ export default function ContractsList() {
     }
   };
 
-  const getContractServices = (contract: typeof contracts[0]): string[] => {
+  const getContractServices = (contract: typeof contracts[0]): Array<{ name: string; beneficiary?: string }> => {
     const contractLeads = contract.contract_leads || [];
     const titularName = contract.opportunities?.leads?.contacts?.full_name;
     const titularContactId = contract.opportunities?.leads?.contacts?.id;
@@ -195,21 +195,18 @@ export default function ContractsList() {
         const serviceName = name
           || (cl.leads?.service_interest ? (SERVICE_INTEREST_LABELS[cl.leads.service_interest] || cl.leads.service_interest) : 'Serviço');
         const contact = cl.leads?.contacts;
-        // Lead's contact is the actual beneficiary
         if (contact?.is_beneficiary && contact.full_name && contact.full_name !== titularName) {
-          return `${contact.full_name}: ${serviceName}`;
+          return { name: serviceName, beneficiary: contact.full_name };
         }
-        // Fallback: payments mark a different beneficiary for this opportunity
         if (fallbackBeneficiary) {
-          return `${fallbackBeneficiary}: ${serviceName}`;
+          return { name: serviceName, beneficiary: fallbackBeneficiary };
         }
-        return serviceName;
+        return { name: serviceName };
       });
     }
-    // Fallback to primary lead service
     const dynamicName = contract.opportunities?.leads?.service_types?.name;
     const serviceName = dynamicName || SERVICE_INTEREST_LABELS[contract.service_type || 'OUTRO'];
-    return [fallbackBeneficiary ? `${fallbackBeneficiary}: ${serviceName}` : serviceName];
+    return [{ name: serviceName, beneficiary: fallbackBeneficiary }];
   };
 
   const calculatePaymentStatus = (contract: typeof contracts[0]) => {
@@ -275,10 +272,19 @@ export default function ContractsList() {
       cell: (contract) => {
         const services = getContractServices(contract);
         return (
-          <div className="max-w-[260px]">
-            {services.map((name, idx) => (
-              <div key={idx} className="truncate text-sm" title={name}>
-                {services.length > 1 ? `• ${name}` : name}
+          <div className="max-w-[280px] space-y-1">
+            {services.map((s, idx) => (
+              <div key={idx} className="flex items-start gap-1.5 text-sm">
+                <span className="text-muted-foreground mt-0.5">•</span>
+                <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
+                  <span className="truncate" title={s.name}>{s.name}</span>
+                  {s.beneficiary && (
+                    <Badge variant="outline" className="text-xs font-normal py-0 px-1.5 h-5 shrink-0">
+                      <Users className="h-2.5 w-2.5 mr-1" />
+                      {s.beneficiary}
+                    </Badge>
+                  )}
+                </div>
               </div>
             ))}
           </div>
