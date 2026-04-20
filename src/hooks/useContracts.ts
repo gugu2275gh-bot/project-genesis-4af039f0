@@ -37,6 +37,7 @@ export type ContractWithOpportunity = Contract & {
     paid_at: string | null;
     installment_number: number | null;
     due_date: string | null;
+    contract_id?: string | null;
     opportunity_id: string | null;
     beneficiary_contact_id?: string | null;
     beneficiary?: { id: string; full_name: string } | null;
@@ -87,7 +88,45 @@ export function useContracts() {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data as ContractWithOpportunity[];
+
+      const contracts = (data || []) as ContractWithOpportunity[];
+      const opportunityIds = [...new Set(contracts.map(contract => contract.opportunity_id).filter(Boolean))];
+
+      if (opportunityIds.length === 0) {
+        return contracts;
+      }
+
+      const { data: opportunityPayments, error: paymentsError } = await supabase
+        .from('payments')
+        .select(`
+          id, amount, status, paid_at, installment_number, due_date, contract_id, opportunity_id, beneficiary_contact_id,
+          beneficiary:contacts!payments_beneficiary_contact_id_fkey ( id, full_name )
+        `)
+        .in('opportunity_id', opportunityIds);
+
+      if (paymentsError) throw paymentsError;
+
+      const paymentsByOpportunity = new Map<string, NonNullable<ContractWithOpportunity['payments']>>();
+
+      for (const payment of opportunityPayments || []) {
+        if (!payment.opportunity_id) continue;
+        const currentPayments = paymentsByOpportunity.get(payment.opportunity_id) || [];
+        currentPayments.push(payment);
+        paymentsByOpportunity.set(payment.opportunity_id, currentPayments);
+      }
+
+      return contracts.map((contract) => {
+        const directPayments = contract.payments || [];
+        const relatedPayments = paymentsByOpportunity.get(contract.opportunity_id) || [];
+        const mergedPayments = [...directPayments, ...relatedPayments].filter(
+          (payment, index, array) => array.findIndex((item) => item.id === payment.id) === index
+        );
+
+        return {
+          ...contract,
+          payments: mergedPayments,
+        };
+      });
     },
   });
 
