@@ -38,6 +38,8 @@ export type ContractWithOpportunity = Contract & {
     installment_number: number | null;
     due_date: string | null;
     opportunity_id: string | null;
+    beneficiary_contact_id?: string | null;
+    beneficiary?: { id: string; full_name: string } | null;
   }>;
 };
 
@@ -78,7 +80,8 @@ export function useContracts() {
             )
           ),
           payments (
-            id, amount, status, paid_at, installment_number, due_date, opportunity_id
+            id, amount, status, paid_at, installment_number, due_date, opportunity_id, beneficiary_contact_id,
+            beneficiary:contacts!payments_beneficiary_contact_id_fkey ( id, full_name )
           )
         `)
         .order('created_at', { ascending: false });
