@@ -66,6 +66,7 @@ export default function Leads() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [serviceFilter, setServiceFilter] = useState<string>('all');
   const [expandedClients, setExpandedClients] = useState<Set<string> | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [leadMode, setLeadMode] = useState<'new' | 'existing'>('new');
@@ -99,7 +100,8 @@ export default function Leads() {
       l.contacts?.email?.toLowerCase().includes(search.toLowerCase()) ||
       l.contacts?.phone?.toString().includes(search);
     const matchesStatus = statusFilter === 'all' || l.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesService = serviceFilter === 'all' || l.service_interest === serviceFilter;
+    return matchesSearch && matchesStatus && matchesService;
   });
 
   // Group leads by contact
