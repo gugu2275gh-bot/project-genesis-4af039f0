@@ -175,12 +175,17 @@ export default function ContractsList() {
 
   const getContractServices = (contract: typeof contracts[0]): string[] => {
     const contractLeads = contract.contract_leads || [];
+    const titularName = contract.opportunities?.leads?.contacts?.full_name;
     if (contractLeads.length > 0) {
       return contractLeads.map(cl => {
         const name = cl.leads?.service_types?.name;
-        if (name) return name;
-        const interest = cl.leads?.service_interest;
-        return interest ? (SERVICE_INTEREST_LABELS[interest] || interest) : 'Serviço';
+        const serviceName = name
+          || (cl.leads?.service_interest ? (SERVICE_INTEREST_LABELS[cl.leads.service_interest] || cl.leads.service_interest) : 'Serviço');
+        const contact = cl.leads?.contacts;
+        if (contact?.is_beneficiary && contact.full_name && contact.full_name !== titularName) {
+          return `${contact.full_name}: ${serviceName}`;
+        }
+        return serviceName;
       });
     }
     // Fallback to primary lead service
