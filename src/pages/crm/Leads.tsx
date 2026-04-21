@@ -7,6 +7,7 @@ import { useContacts } from '@/hooks/useContacts';
 import { useLeadSLAAlerts } from '@/hooks/useLeadSLAAlerts';
 import { useServiceTypes } from '@/hooks/useServiceTypes';
 import { ServiceTypeCombobox } from '@/components/ui/service-type-combobox';
+import { ServiceFilterCombobox } from '@/components/ui/service-filter-combobox';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -472,17 +473,11 @@ export default function Leads() {
               ))}
           </SelectContent>
         </Select>
-        <Select value={serviceFilter} onValueChange={setServiceFilter}>
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Serviço" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os serviços</SelectItem>
-            {serviceTypes?.map((st) => (
-              <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ServiceFilterCombobox
+          value={serviceFilter}
+          onValueChange={setServiceFilter}
+          serviceTypes={serviceTypes}
+        />
       </div>
 
       {isLoading ? (
