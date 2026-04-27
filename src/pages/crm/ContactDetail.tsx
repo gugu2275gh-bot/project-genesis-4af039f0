@@ -328,10 +328,11 @@ export default function ContactDetail() {
     },
     enabled: !!id,
   });
-  const confirmedLeads = contactLeads.filter(l => confirmedLeadIds.includes(l.id));
-  const pendingPaymentLeads = contactLeads.filter(l => l.service_type_id && !confirmedLeadIds.includes(l.id));
   const { data: serviceTypes } = useServiceTypes();
-  const allServiceLeads = contactLeads.filter(l => l.service_type_id || confirmedLeadIds.includes(l.id));
+  const semServicoId = serviceTypes?.find(st => st.code === 'SEM_SERVICO')?.id;
+  const confirmedLeads = contactLeads.filter(l => confirmedLeadIds.includes(l.id));
+  const pendingPaymentLeads = contactLeads.filter(l => l.service_type_id && l.service_type_id !== semServicoId && !confirmedLeadIds.includes(l.id));
+  const allServiceLeads = contactLeads.filter(l => (l.service_type_id && l.service_type_id !== semServicoId) || confirmedLeadIds.includes(l.id));
   const { data: contactDocuments = [], isLoading: docsLoading } = useContactDocuments(id);
   const { beneficiaries: contactBeneficiaries, titulares: contactTitulares, isLoading: benefLoading } = useContactBeneficiaries(id);
   const hasTitulares = contactTitulares.length > 0;
