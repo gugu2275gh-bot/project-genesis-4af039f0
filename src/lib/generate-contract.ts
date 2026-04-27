@@ -170,6 +170,17 @@ function buildHonorariosSection(data: ContractData): Paragraph[] {
   const sections: Paragraph[] = [];
   
   sections.push(heading('SEGUNDA. Honorarios y Forma de Pago'));
+
+  // Total contract value (shown before fees breakdown)
+  const computedTotal = data.totalAmount
+    ?? (data.payments && data.payments.length > 0
+      ? data.payments.reduce((sum, p) => sum + (p.amount || 0), 0)
+      : undefined);
+  if (computedTotal && computedTotal > 0) {
+    sections.push(para(`Valor total del contrato: ${formatCurrency(computedTotal, currency)}`, { bold: true }));
+    sections.push(emptyLine());
+  }
+
   sections.push(para('Honorarios profesionales:', { bold: true }));
   
   // Use paymentConditions text (from installment_conditions) as primary source
