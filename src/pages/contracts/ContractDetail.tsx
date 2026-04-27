@@ -216,8 +216,13 @@ export default function ContractDetail() {
           'Serviço';
 
         const beneficiaryName = payment.beneficiary_contact?.full_name;
+        const beneficiaryDocType = payment.beneficiary_contact?.document_type;
+        const beneficiaryDocNumber = payment.beneficiary_contact?.document_number;
+        const beneficiaryDocLabel = beneficiaryDocNumber
+          ? ` (${beneficiaryDocType ? `${beneficiaryDocType}: ` : ''}${beneficiaryDocNumber})`
+          : '';
         const serviceLabel = beneficiaryName
-          ? `${serviceName} para ${beneficiaryName}`
+          ? `${serviceName} para ${beneficiaryName}${beneficiaryDocLabel}`
           : serviceName;
 
         const lines: string[] = [];
