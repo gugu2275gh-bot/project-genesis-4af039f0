@@ -77,7 +77,7 @@ export default function Leads() {
     full_name: '',
     email: '',
     phone: '',
-    service_interest: 'VISTO_ESTUDANTE' as any,
+    service_interest: 'SEM_SERVICO' as any,
     service_interest_other: '',
     origin_channel: 'WHATSAPP' as OriginChannel,
     referral_name: '',
