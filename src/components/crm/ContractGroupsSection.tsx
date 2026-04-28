@@ -1153,6 +1153,18 @@ export function ContractGroupsSection({
           </div>
         </div>
 
+        {/* Observation for this service (from payment_notes) */}
+        {leadObservationsById.get(lead.id) && (
+          <div className="border-t bg-amber-50/60 dark:bg-amber-900/10 px-3 py-2">
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-200 uppercase tracking-wide mb-1">
+              Observação
+            </p>
+            <p className="text-sm text-foreground whitespace-pre-wrap">
+              {leadObservationsById.get(lead.id)}
+            </p>
+          </div>
+        )}
+
         {/* Payments for this lead */}
         {leadPayments.length > 0 && (
           <div className="border-t bg-muted/10 px-3 py-2 space-y-2">
