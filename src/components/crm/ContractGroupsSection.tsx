@@ -435,6 +435,7 @@ export function ContractGroupsSection({
         grossAmount: number | null;
         totalFinal: number | null;
         fees: { description: string; amount: string }[];
+        observation: string;
       }>;
     }
 
