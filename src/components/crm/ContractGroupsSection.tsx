@@ -578,6 +578,32 @@ export function ContractGroupsSection({
     };
   }, []);
 
+  // Map of observation per lead id (extracted from payment_notes)
+  const leadObservationsById = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!paymentNotes) return map;
+
+    const usedIndexes = new Set<number>();
+    // Iterate in reverse (latest first) to prefer most recent matching block per lead
+    [...allLeads].reverse().forEach((lead) => {
+      const displayName = getLeadDisplayName(lead);
+      const leadPayments = deduplicatedPayments.filter((p: any) => {
+        const pLeadId = p.opportunities?.leads?.id || p.opportunities?.lead_id;
+        return pLeadId === lead.id;
+      });
+      const { grossAmount, totalFinal } = getLeadExpectedAmounts(leadPayments);
+      const { observation } = extractNoteDataFromNotes({
+        serviceName: displayName,
+        grossAmount,
+        totalFinal,
+        usedIndexes,
+        preferLatest: true,
+      });
+      if (observation) map.set(lead.id, observation);
+    });
+    return map;
+  }, [paymentNotes, allLeads, deduplicatedPayments, getLeadDisplayName, getLeadExpectedAmounts, extractNoteDataFromNotes]);
+
   // Helper: link beneficiary leads to a specific titular's draft or create new draft
   const linkLeadsToTitularContract = async (leadsToLink: any[], chosenTitularId: string, chosenTitularName?: string) => {
     if (!chosenTitularId || leadsToLink.length === 0) return;
