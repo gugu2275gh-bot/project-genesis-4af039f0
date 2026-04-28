@@ -474,6 +474,8 @@ export function ContractGroupsSection({
         const serviceName = lines.find(line => line.startsWith('Serviço:'))?.replace('Serviço:', '').trim() || '';
         const grossAmountLine = lines.find(line => line.startsWith('Valor Bruto:'));
         const totalFinalLine = lines.find(line => line.startsWith('Total Final:'));
+        const observationLine = lines.find(line => line.startsWith('Observações:'));
+        const observation = observationLine ? observationLine.replace('Observações:', '').trim() : '';
 
         const fees: { description: string; amount: string }[] = [];
         for (const line of lines) {
@@ -494,6 +496,7 @@ export function ContractGroupsSection({
           grossAmount: grossAmountLine ? parseMoneyValue(grossAmountLine, 'Valor Bruto') : null,
           totalFinal: totalFinalLine ? parseMoneyValue(totalFinalLine, 'Total Final') : null,
           fees,
+          observation,
         };
       })
       .filter((block): block is {
@@ -501,6 +504,7 @@ export function ContractGroupsSection({
         grossAmount: number | null;
         totalFinal: number | null;
         fees: { description: string; amount: string }[];
+        observation: string;
       } => Boolean(block));
   }, [paymentNotes]);
 
