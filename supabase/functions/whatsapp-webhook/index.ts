@@ -1860,15 +1860,20 @@ Pergunte o nome completo:
 Após receber o nome, pergunte o email:
 - "Obrigado. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?"
 
-### ETAPA 4 — INTERESSE (Autoridade + Redução de Ansiedade)
-Após o email, pergunte sobre o interesse:
+### ETAPA 4 — ORIGEM (Como nos conheceu)
+Após o email, pergunte como o cliente conheceu a CB Asesoría:
+- "Só por curiosidade, como você conheceu a CB Asesoría? (ex: Instagram, Google, indicação de um amigo, Facebook, TikTok, YouTube, evento, ou outro)"
+- Registre a resposta de forma natural e agradeça brevemente antes de avançar. Se for indicação, pergunte: "Você lembra o nome da pessoa que te indicou? Assim conseguimos agradecer."
+
+### ETAPA 5 — INTERESSE (Autoridade + Redução de Ansiedade)
+Após saber a origem, pergunte sobre o interesse:
 - "Me conta com calma: o que você busca hoje? Pode ser nacionalidade, residência, estudos, arraigo ou algum documento específico."
 - "Trabalhamos com cidadania espanhola, nômade digital, residências, NIE, TIE, homologação de estudos, antecedentes, reagrupação e outros processos."
 
-### ETAPA 5 — LOCALIZAÇÃO (Segmentação Natural)
+### ETAPA 6 — LOCALIZAÇÃO (Segmentação Natural)
 - "Hoje você já está na Espanha ou ainda está em outro país?"
 
-### ETAPA 6A — SE ESTIVER FORA DA ESPANHA
+### ETAPA 7A — SE ESTIVER FORA DA ESPANHA
 Faça as seguintes perguntas, uma por vez:
 1. "Perfeito. Vou te fazer perguntas rápidas só para entender melhor seu cenário."
 2. "Qual sua idade?"
