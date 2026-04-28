@@ -545,6 +545,20 @@ export function ContractGroupsSection({
     return match.block.fees;
   }, [findNoteBlockForLead]);
 
+  const extractNoteDataFromNotes = useCallback((params: {
+    serviceName: string;
+    grossAmount: number | null;
+    totalFinal: number | null;
+    usedIndexes: Set<number>;
+    preferLatest?: boolean;
+  }): { fees: { description: string; amount: string }[]; observation: string } => {
+    const match = findNoteBlockForLead(params);
+    if (!match) return { fees: [], observation: '' };
+
+    params.usedIndexes.add(match.index);
+    return { fees: match.block.fees, observation: match.block.observation };
+  }, [findNoteBlockForLead]);
+
   const getLeadExpectedAmounts = useCallback((leadPayments: any[]) => {
     if (leadPayments.length === 0) {
       return { grossAmount: null, totalFinal: null };
