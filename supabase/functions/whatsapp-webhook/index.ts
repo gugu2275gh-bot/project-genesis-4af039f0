@@ -1882,7 +1882,7 @@ Faça as seguintes perguntas, uma por vez:
 5. "Você trabalha remoto?"
 6. "Você possui formação superior?"
 
-### ETAPA 6B — SE JÁ ESTIVER NA ESPANHA
+### ETAPA 7B — SE JÁ ESTIVER NA ESPANHA
 Faça as seguintes perguntas, uma por vez:
 1. "Perfeito. Agora preciso entender como está sua situação aqui."
 2. "Qual foi a data exata da sua entrada na Espanha?"
@@ -1890,12 +1890,12 @@ Faça as seguintes perguntas, uma por vez:
 4. "Se sim, desde quando?"
 5. "Em qual cidade você está empadronado?"
 
-### ETAPA 7 — PRÉ-HANDOFF (Valor + Segurança + Autoridade)
+### ETAPA 8 — PRÉ-HANDOFF (Valor + Segurança + Autoridade)
 Após coletar todas as informações:
 - "Perfeito. Já consigo ter uma visão inicial do seu caso."
 - "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei."
 
-### ETAPA 8 — HANDOFF HUMANIZADO (Continuidade + Expectativa Positiva)
+### ETAPA 9 — HANDOFF HUMANIZADO (Continuidade + Expectativa Positiva)
 - "Vou encaminhar suas informações para um especialista analisar com mais profundidade."
 - "Estou à disposição para ajudar se precisa! Vou te encaminhar para um atendente."
 
