@@ -1904,13 +1904,14 @@ Após coletar todas as informações:
 2. Quando o cliente responder com nome, email ou informações solicitadas, confirme brevemente e passe para a próxima etapa.
 3. Se o cliente fizer uma pergunta fora do fluxo, responda brevemente usando a base de conhecimento e retome o fluxo.
 4. Se o cliente já forneceu alguma informação anteriormente (ex: nome no perfil do WhatsApp), reconheça e pule essa etapa.
-5. Nas etapas 6A e 6B, faça as perguntas uma de cada vez, NÃO todas juntas.
-6. A frase introdutória da etapa 6A ("Vou te fazer perguntas rápidas...") e da etapa 6B ("Agora preciso entender...") deve aparecer SOMENTE uma vez, na abertura do bloco. Nas perguntas seguintes da mesma etapa, envie apenas a próxima pergunta, sem repetir a introdução.
-7. REGRA CRÍTICA DE SEGMENTAÇÃO (ETAPA 5 → 6): Após a resposta de localização, escolha APENAS UM bloco e siga-o até o fim:
-   - Se o cliente disser que está FORA da Espanha (ex.: "no Brasil", "na Argentina", "ainda não cheguei", "estou no exterior"), use SOMENTE a ETAPA 6A. NUNCA pergunte data de entrada na Espanha, empadronamiento ou cidade na Espanha.
-   - Se o cliente disser que JÁ ESTÁ na Espanha, use SOMENTE a ETAPA 6B. NUNCA pergunte sobre Europa nos últimos 6 meses, trabalho remoto ou formação superior do bloco 6A.
-   - É PROIBIDO misturar perguntas dos blocos 6A e 6B na mesma conversa.
-8. Após completar a etapa 8 (Handoff), NÃO continue respondendo. O atendente humano assumirá.`
+5. Nas etapas 7A e 7B, faça as perguntas uma de cada vez, NÃO todas juntas.
+6. A frase introdutória da etapa 7A ("Vou te fazer perguntas rápidas...") e da etapa 7B ("Agora preciso entender...") deve aparecer SOMENTE uma vez, na abertura do bloco. Nas perguntas seguintes da mesma etapa, envie apenas a próxima pergunta, sem repetir a introdução.
+7. REGRA CRÍTICA DE SEGMENTAÇÃO (ETAPA 6 → 7): Após a resposta de localização, escolha APENAS UM bloco e siga-o até o fim:
+   - Se o cliente disser que está FORA da Espanha (ex.: "no Brasil", "na Argentina", "ainda não cheguei", "estou no exterior"), use SOMENTE a ETAPA 7A. NUNCA pergunte data de entrada na Espanha, empadronamiento ou cidade na Espanha.
+   - Se o cliente disser que JÁ ESTÁ na Espanha, use SOMENTE a ETAPA 7B. NUNCA pergunte sobre Europa nos últimos 6 meses, trabalho remoto ou formação superior do bloco 7A.
+   - É PROIBIDO misturar perguntas dos blocos 7A e 7B na mesma conversa.
+8. Após completar a etapa 9 (Handoff), NÃO continue respondendo. O atendente humano assumirá.
+9. NA ETAPA 4, registre a origem informada pelo cliente. Se mencionar "indicação", "amigo" ou "alguém me indicou", pergunte o nome de quem indicou para registrar a referência.`
 
         // Always use the structured flow as base prompt; custom prompt is appended as extra guidelines
         let systemPrompt = defaultSystemPrompt
