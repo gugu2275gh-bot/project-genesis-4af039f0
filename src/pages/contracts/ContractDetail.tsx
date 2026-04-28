@@ -204,9 +204,43 @@ export default function ContractDetail() {
       return 0;
     });
 
-    return sortedPayments
-      .map((payment: any) => {
-        const leadId = payment.opportunities?.leads?.id || payment.opportunities?.lead_id;
+    // Group payments that belong to the same agreement (same lead + beneficiary + payment_form)
+    // so installments of a parcelado plan are rendered together as ONE block, not as separate sales.
+    const groupKey = (p: any) => {
+      const leadId = p.opportunities?.leads?.id || p.opportunities?.lead_id || 'no-lead';
+      const benId = p.beneficiary_contact_id || 'titular';
+      const form = p.payment_form || 'UNICO';
+      return `${leadId}::${benId}::${form}`;
+    };
+
+    const groupsMap = new Map<string, any[]>();
+    const groupOrder: string[] = [];
+    for (const p of sortedPayments) {
+      const k = groupKey(p);
+      if (!groupsMap.has(k)) {
+        groupsMap.set(k, []);
+        groupOrder.push(k);
+      }
+      groupsMap.get(k)!.push(p);
+    }
+
+    return groupOrder
+      .map((key) => {
+        const groupPayments = groupsMap.get(key)!;
+        // Sort installments by number, then due date
+        groupPayments.sort((a: any, b: any) => {
+          const an = a.installment_number ?? 9999;
+          const bn = b.installment_number ?? 9999;
+          if (an !== bn) return an - bn;
+          const ad = a.due_date ? new Date(a.due_date).getTime() : 0;
+          const bd = b.due_date ? new Date(b.due_date).getTime() : 0;
+          return ad - bd;
+        });
+
+        const first = groupPayments[0];
+        const isInstallments = groupPayments.length > 1 || first.payment_form === 'PARCELADO';
+
+        const leadId = first.opportunities?.leads?.id || first.opportunities?.lead_id;
         const linkedLead = contractLeadLinks?.find((cl: any) => cl.lead_id === leadId)?.leads;
         const serviceName =
           linkedLead?.service_types?.name ||
@@ -215,9 +249,9 @@ export default function ContractDetail() {
             : null) ||
           'Serviço';
 
-        const beneficiaryName = payment.beneficiary_contact?.full_name;
-        const beneficiaryDocType = payment.beneficiary_contact?.document_type;
-        const beneficiaryDocNumber = payment.beneficiary_contact?.document_number;
+        const beneficiaryName = first.beneficiary_contact?.full_name;
+        const beneficiaryDocType = first.beneficiary_contact?.document_type;
+        const beneficiaryDocNumber = first.beneficiary_contact?.document_number;
         const beneficiaryDocLabel = beneficiaryDocNumber
           ? ` (${beneficiaryDocType ? `${beneficiaryDocType}: ` : ''}${beneficiaryDocNumber})`
           : '';
@@ -226,50 +260,67 @@ export default function ContractDetail() {
           : serviceName;
 
         const lines: string[] = [];
-        const agreementDate = payment.created_at || payment.due_date;
+        const agreementDate = first.created_at || first.due_date;
         if (agreementDate) {
           lines.push(`Acordo de Pagamento — ${format(new Date(agreementDate), 'dd/MM/yyyy', { locale: ptBR })}`);
         }
-
         lines.push(`Serviço: ${serviceLabel}`);
 
-        const grossAmount = payment.gross_amount ?? payment.amount;
+        // Gross / VAT / Discount: take from first installment (same agreement)
+        const grossAmount = first.gross_amount ?? first.amount;
         const formattedGrossAmount = formatMoney(grossAmount);
         if (formattedGrossAmount) {
           lines.push(`Valor Bruto: ${formattedGrossAmount}`);
         }
 
-        if (payment.vat_amount && Number(payment.vat_amount) > 0) {
-          const formattedVatAmount = formatMoney(payment.vat_amount);
+        if (first.vat_amount && Number(first.vat_amount) > 0) {
+          const formattedVatAmount = formatMoney(first.vat_amount);
           if (formattedVatAmount) {
-            const vatLabel = payment.vat_rate ? `IVA (${payment.vat_rate}%): + ` : 'IVA: + ';
+            const vatLabel = first.vat_rate ? `IVA (${first.vat_rate}%): + ` : 'IVA: + ';
             lines.push(`${vatLabel}${formattedVatAmount}`);
           }
         }
 
-        if (payment.discount_value && Number(payment.discount_value) > 0) {
-          const formattedDiscount = formatMoney(payment.discount_value);
+        if (first.discount_value && Number(first.discount_value) > 0) {
+          const formattedDiscount = formatMoney(first.discount_value);
           if (formattedDiscount) {
             lines.push(`Desconto: - ${formattedDiscount}`);
           }
         }
 
-        const totalFinal = payment.amount ?? grossAmount;
+        // Total Final: sum of all installment amounts when grouped
+        const totalFinal = groupPayments.reduce(
+          (sum: number, p: any) => sum + Number(p.amount ?? 0),
+          0
+        );
         const formattedTotalFinal = formatMoney(totalFinal);
         if (formattedTotalFinal) {
           lines.push(`Total Final: ${formattedTotalFinal}`);
         }
 
-        if (payment.payment_method) {
+        if (first.payment_method) {
           lines.push(
-            `Método: ${PAYMENT_METHOD_LABELS[payment.payment_method as keyof typeof PAYMENT_METHOD_LABELS] || payment.payment_method}`
+            `Método: ${PAYMENT_METHOD_LABELS[first.payment_method as keyof typeof PAYMENT_METHOD_LABELS] || first.payment_method}`
           );
         }
 
-        if (payment.payment_form) {
+        if (first.payment_form) {
           lines.push(
-            `Forma: ${PAYMENT_FORM_LABELS[payment.payment_form as keyof typeof PAYMENT_FORM_LABELS] || payment.payment_form}`
+            `Forma: ${PAYMENT_FORM_LABELS[first.payment_form as keyof typeof PAYMENT_FORM_LABELS] || first.payment_form}`
           );
+        }
+
+        // Installment breakdown (only when there's more than one installment)
+        if (isInstallments && groupPayments.length > 1) {
+          lines.push(`Parcelas: ${groupPayments.length}x`);
+          groupPayments.forEach((p: any, idx: number) => {
+            const num = p.installment_number ?? idx + 1;
+            const dueStr = p.due_date
+              ? format(new Date(`${p.due_date}T12:00:00`), 'dd/MM/yyyy', { locale: ptBR })
+              : 'A definir';
+            const amountStr = formatMoney(p.amount) || '';
+            lines.push(`  • Parcela ${num} — Venc: ${dueStr} — ${amountStr}`);
+          });
         }
 
         return lines.join('\n');
