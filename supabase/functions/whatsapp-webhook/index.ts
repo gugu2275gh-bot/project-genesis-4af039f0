@@ -992,6 +992,25 @@ Campos possíveis:
 - works_remotely (true/false)
 - has_eu_family_member (true/false)
 
+REGRAS DE NORMALIZAÇÃO DE DATAS (MUITO IMPORTANTE):
+Sempre converta QUALQUER formato de data informado pelo cliente para o padrão YYYY-MM-DD.
+Aceite e interprete variações em português, espanhol, inglês e francês, incluindo:
+- Numéricas: "02/05/1990", "2-5-90", "02.05.1990", "1990/05/02", "5/2/1990" (assuma DD/MM quando ambíguo, pois clientes são PT/ES)
+- Por extenso: "2 de maio de 1990", "dois de maio de mil novecentos e noventa", "02 de mayo de 1990", "May 2nd 1990", "2 mai 1990"
+- Abreviadas: "2 mai 90", "02-mai-1990", "2/mai/90"
+- Relativas (use a data de hoje = ${new Date().toISOString().slice(0,10)} como referência):
+  * "hoje" → data de hoje
+  * "ontem" → data de hoje - 1
+  * "amanhã" / "mañana" → data de hoje + 1
+  * "semana passada" → data de hoje - 7
+  * "mês passado" → mesmo dia, mês anterior
+  * "no mês que vem dia 10" → próximo mês, dia 10
+  * "cheguei há 3 meses" → data de hoje - 3 meses (use o dia 1)
+- Anos com 2 dígitos: se ≤ ano atual atual (ex.: "90") assuma 19YY para datas de nascimento; para datas recentes/futuras assuma 20YY.
+- Meses por nome (PT/ES/EN/FR): janeiro/enero/january/janvier=01, fevereiro/febrero/february/février=02, março/marzo/march/mars=03, abril/abril/april/avril=04, maio/mayo/may/mai=05, junho/junio/june/juin=06, julho/julio/july/juillet=07, agosto/agosto/august/août=08, setembro/septiembre/september/septembre=09, outubro/octubre/october/octobre=10, novembro/noviembre/november/novembre=11, dezembro/diciembre/december/décembre=12.
+
+Se faltar o ANO em uma data de nascimento, NÃO inclua o campo (peça de novo depois). Para outras datas, se faltar ano, assuma o ano atual; se a data resultante já passou e o contexto for futuro (chegada/agendamento), assuma o próximo ano.
+
 Se a mensagem não contém nenhum dado pessoal extraível, retorne: {}
 
 Mensagem do cliente: "${messageText}"
