@@ -435,6 +435,7 @@ export function ContractGroupsSection({
         grossAmount: number | null;
         totalFinal: number | null;
         fees: { description: string; amount: string }[];
+        observation: string;
       }>;
     }
 
@@ -473,6 +474,8 @@ export function ContractGroupsSection({
         const serviceName = lines.find(line => line.startsWith('Serviço:'))?.replace('Serviço:', '').trim() || '';
         const grossAmountLine = lines.find(line => line.startsWith('Valor Bruto:'));
         const totalFinalLine = lines.find(line => line.startsWith('Total Final:'));
+        const observationLine = lines.find(line => line.startsWith('Observações:'));
+        const observation = observationLine ? observationLine.replace('Observações:', '').trim() : '';
 
         const fees: { description: string; amount: string }[] = [];
         for (const line of lines) {
@@ -493,6 +496,7 @@ export function ContractGroupsSection({
           grossAmount: grossAmountLine ? parseMoneyValue(grossAmountLine, 'Valor Bruto') : null,
           totalFinal: totalFinalLine ? parseMoneyValue(totalFinalLine, 'Total Final') : null,
           fees,
+          observation,
         };
       })
       .filter((block): block is {
@@ -500,6 +504,7 @@ export function ContractGroupsSection({
         grossAmount: number | null;
         totalFinal: number | null;
         fees: { description: string; amount: string }[];
+        observation: string;
       } => Boolean(block));
   }, [paymentNotes]);
 
@@ -540,6 +545,20 @@ export function ContractGroupsSection({
     return match.block.fees;
   }, [findNoteBlockForLead]);
 
+  const extractNoteDataFromNotes = useCallback((params: {
+    serviceName: string;
+    grossAmount: number | null;
+    totalFinal: number | null;
+    usedIndexes: Set<number>;
+    preferLatest?: boolean;
+  }): { fees: { description: string; amount: string }[]; observation: string } => {
+    const match = findNoteBlockForLead(params);
+    if (!match) return { fees: [], observation: '' };
+
+    params.usedIndexes.add(match.index);
+    return { fees: match.block.fees, observation: match.block.observation };
+  }, [findNoteBlockForLead]);
+
   const getLeadExpectedAmounts = useCallback((leadPayments: any[]) => {
     if (leadPayments.length === 0) {
       return { grossAmount: null, totalFinal: null };
@@ -558,6 +577,32 @@ export function ContractGroupsSection({
       totalFinal: leadPayments.reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0),
     };
   }, []);
+
+  // Map of observation per lead id (extracted from payment_notes)
+  const leadObservationsById = useMemo(() => {
+    const map = new Map<string, string>();
+    if (!paymentNotes) return map;
+
+    const usedIndexes = new Set<number>();
+    // Iterate in reverse (latest first) to prefer most recent matching block per lead
+    [...allLeads].reverse().forEach((lead) => {
+      const displayName = getLeadDisplayName(lead);
+      const leadPayments = deduplicatedPayments.filter((p: any) => {
+        const pLeadId = p.opportunities?.leads?.id || p.opportunities?.lead_id;
+        return pLeadId === lead.id;
+      });
+      const { grossAmount, totalFinal } = getLeadExpectedAmounts(leadPayments);
+      const { observation } = extractNoteDataFromNotes({
+        serviceName: displayName,
+        grossAmount,
+        totalFinal,
+        usedIndexes,
+        preferLatest: true,
+      });
+      if (observation) map.set(lead.id, observation);
+    });
+    return map;
+  }, [paymentNotes, allLeads, deduplicatedPayments, getLeadDisplayName, getLeadExpectedAmounts, extractNoteDataFromNotes]);
 
   // Helper: link beneficiary leads to a specific titular's draft or create new draft
   const linkLeadsToTitularContract = async (leadsToLink: any[], chosenTitularId: string, chosenTitularName?: string) => {
@@ -1107,6 +1152,18 @@ export function ContractGroupsSection({
             )}
           </div>
         </div>
+
+        {/* Observation for this service (from payment_notes) */}
+        {leadObservationsById.get(lead.id) && (
+          <div className="border-t bg-amber-50/60 dark:bg-amber-900/10 px-3 py-2">
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-200 uppercase tracking-wide mb-1">
+              Observação
+            </p>
+            <p className="text-sm text-foreground whitespace-pre-wrap">
+              {leadObservationsById.get(lead.id)}
+            </p>
+          </div>
+        )}
 
         {/* Payments for this lead */}
         {leadPayments.length > 0 && (
