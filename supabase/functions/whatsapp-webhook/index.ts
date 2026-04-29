@@ -878,6 +878,14 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
   }
 
+  // CRÍTICO: regras anti-repetição posicionadas no FINAL do prompt para máximo peso
+  fullSystemPrompt += `\n\n## ⛔ REGRAS FINAIS INVIOLÁVEIS (LEIA ANTES DE RESPONDER)
+1. Olhe o histórico. Se você JÁ se apresentou antes, está PROIBIDA de se apresentar de novo.
+2. Se você JÁ disse "Te ayudaré a entender" antes, NÃO repita.
+3. Se o cliente deu uma informação, reconheça com UMA palavra curta e faça a PRÓXIMA pergunta. NUNCA refaça o acolhimento.
+4. NÃO comece com saudação se já houve mensagens anteriores. Comece direto com o conteúdo.
+5. Cada resposta deve AVANÇAR a conversa.`
+
   const messages = [
     { role: 'system', content: fullSystemPrompt },
     ...conversationHistory.map(m => ({ role: m.role === 'assistant' ? 'assistant' as const : 'user' as const, content: m.content })),
