@@ -139,8 +139,6 @@ export default function LeadDetail() {
   const [editingInteractionId, setEditingInteractionId] = useState<string | null>(null);
   const [editingInteractionContent, setEditingInteractionContent] = useState('');
   const [editingInteractionChannel, setEditingInteractionChannel] = useState<string>('WHATSAPP');
-  const [followUpDate, setFollowUpDate] = useState('');
-  const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
   const [editForm, setEditForm] = useState({
     full_name: '',
