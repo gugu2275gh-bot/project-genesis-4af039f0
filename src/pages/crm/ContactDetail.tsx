@@ -256,14 +256,17 @@ export default function ContactDetail() {
   });
 
   const mergeSearchResults = (() => {
-    const q = mergeSearchQuery.trim().toLowerCase();
+    const normalize = (s: string) =>
+      (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const q = normalize(mergeSearchQuery.trim());
     if (!q) return allMergeContacts;
     return allMergeContacts.filter((c: any) =>
-      (c.full_name || '').toLowerCase().includes(q) ||
-      (c.phone || '').toLowerCase().includes(q) ||
-      (c.email || '').toLowerCase().includes(q)
+      normalize(c.full_name).includes(q) ||
+      normalize(c.phone).includes(q) ||
+      normalize(c.email).includes(q)
     );
   })();
+
 
 
   const handleMergeContacts = async (targetContactId: string, targetName: string) => {
