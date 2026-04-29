@@ -55,7 +55,7 @@ export default function ContractDetail() {
       if (!id) return [];
       const { data, error } = await supabase
         .from('contract_leads')
-        .select('lead_id, leads:lead_id(id, contact_id, service_type_id, service_interest, service_types:service_type_id(name))')
+        .select('lead_id, leads:lead_id(id, contact_id, service_type_id, service_interest, notes, service_types:service_type_id(name))')
         .eq('contract_id', id);
       if (error) throw error;
       return data || [];
