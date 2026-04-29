@@ -299,33 +299,51 @@ export default function ContractDetail() {
       const lines: string[] = [];
       lines.push(`Serviço: ${serviceLabel}`);
 
-      // For installments, gross/vat/discount are typically stored only on installment #1.
-      // Sum across all parcelas to be resilient to either layout.
+      // For installments, gross/vat/discount are stored on each parcel (replicated, not split).
+      // Use the value from the first parcel for PARCELADO; for UNICO sum is equivalent.
       const sumField = (field: string) =>
         groupPayments.reduce((s: number, p: any) => s + Number(p[field] ?? 0), 0);
+      const pickField = (field: string) => {
+        if (isInstallments) {
+          const v = Number(first[field] ?? 0);
+          if (v > 0) return v;
+          const found = groupPayments.find((p: any) => Number(p[field] ?? 0) > 0);
+          return found ? Number(found[field]) : 0;
+        }
+        return sumField(field);
+      };
 
-      const grossSum = sumField('gross_amount');
-      const grossAmount = grossSum > 0 ? grossSum : (first.gross_amount ?? first.amount);
+      const grossAmount = pickField('gross_amount') || (first.gross_amount ?? first.amount);
       const formattedGrossAmount = formatMoney(grossAmount);
       if (formattedGrossAmount) {
         lines.push(`Valor Bruto: ${formattedGrossAmount}`);
       }
 
-      const vatSum = sumField('vat_amount');
-      if (vatSum > 0) {
-        const formattedVatAmount = formatMoney(vatSum);
+      // IVA: prefer stored vat_amount; if 0 but apply_vat + vat_rate exist, compute from gross
+      const rawVatRate = Number(first.vat_rate ?? groupPayments.find((p: any) => p.vat_rate)?.vat_rate ?? 0);
+      // vat_rate may be stored as decimal (0.21) or percent (21). Normalize to percent for display.
+      const vatRatePercent = rawVatRate > 0 && rawVatRate <= 1 ? rawVatRate * 100 : rawVatRate;
+      const vatRateMultiplier = rawVatRate > 1 ? rawVatRate / 100 : rawVatRate;
+      const applyVat = first.apply_vat ?? groupPayments.some((p: any) => p.apply_vat);
+      let vatAmount = pickField('vat_amount');
+      if (!(vatAmount > 0) && applyVat && vatRateMultiplier > 0 && grossAmount > 0) {
+        vatAmount = Number(grossAmount) * vatRateMultiplier;
+      }
+      if (vatAmount > 0) {
+        const formattedVatAmount = formatMoney(vatAmount);
         if (formattedVatAmount) {
-          const vatRate = first.vat_rate || groupPayments.find((p: any) => p.vat_rate)?.vat_rate;
-          const vatLabel = vatRate ? `IVA (${vatRate}%): + ` : 'IVA: + ';
-          lines.push(`${vatLabel}${formattedVatAmount}`);
+          const rateLabel = vatRatePercent > 0 ? `IVA (${vatRatePercent}%): + ` : 'IVA: + ';
+          lines.push(`${rateLabel}${formattedVatAmount}`);
         }
       }
 
-      const discountSum = sumField('discount_value');
-      if (discountSum > 0) {
-        const formattedDiscount = formatMoney(discountSum);
+      const discountAmount = pickField('discount_value');
+      if (discountAmount > 0) {
+        const formattedDiscount = formatMoney(discountAmount);
         if (formattedDiscount) {
-          lines.push(`Desconto: - ${formattedDiscount}`);
+          const dType = first.discount_type || groupPayments.find((p: any) => p.discount_type)?.discount_type;
+          const label = dType === 'PERCENTAGE' || dType === 'PERCENT' ? `Desconto (${discountAmount}%): - ` : 'Desconto: - ';
+          lines.push(`${label}${formattedDiscount}`);
         }
       }
 
