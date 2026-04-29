@@ -821,7 +821,7 @@ export default function LeadDetail() {
                     leadId: lead.id,
                     opportunityId: leadOpportunity?.id,
                     serviceTypeId: lead.service_type_id || undefined,
-                    ...(isGroupFinalized && existingPayment ? {
+                    ...(existingPayment ? {
                       gross_amount: existingPayment.gross_amount ?? existingPayment.amount,
                       amount: existingPayment.amount,
                       payment_method: existingPayment.payment_method || undefined,
