@@ -1616,9 +1616,15 @@ export function ContractGroupsSection({
                           const groupTotal = contract.total_fee
                             ? Number(contract.total_fee)
                             : group.payments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
-                          const concludedDate = !isDraft
-                            ? (contract.signed_at || contract.updated_at || contract.created_at)
-                            : null;
+                          // Group is concluded when all of its leads are in a final state (FECHADA_GANHA)
+                          const FINAL_LEAD_STATUSES = ['FECHADA_GANHA'];
+                          const allLeadsFinal = group.leads.length > 0 && group.leads.every((l: any) => FINAL_LEAD_STATUSES.includes(l.status));
+                          const groupConcludedAt = allLeadsFinal
+                            ? group.leads.reduce((max: number, l: any) => {
+                                const t = l.updated_at ? new Date(l.updated_at).getTime() : 0;
+                                return t > max ? t : max;
+                              }, 0)
+                            : 0;
                           return (
                             <div className="flex items-center gap-3 ml-2">
                               {groupTotal > 0 && (
@@ -1626,9 +1632,9 @@ export function ContractGroupsSection({
                                   € {groupTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                 </span>
                               )}
-                              {concludedDate && (
+                              {groupConcludedAt > 0 && (
                                 <span className="text-xs text-muted-foreground">
-                                  Concluído em {format(new Date(concludedDate), "dd/MM/yyyy", { locale: ptBR })}
+                                  Concluído em {format(new Date(groupConcludedAt), "dd/MM/yyyy", { locale: ptBR })}
                                 </span>
                               )}
                             </div>
