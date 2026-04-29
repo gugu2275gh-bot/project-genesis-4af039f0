@@ -139,8 +139,6 @@ export default function LeadDetail() {
   const [editingInteractionId, setEditingInteractionId] = useState<string | null>(null);
   const [editingInteractionContent, setEditingInteractionContent] = useState('');
   const [editingInteractionChannel, setEditingInteractionChannel] = useState<string>('WHATSAPP');
-  const [followUpDate, setFollowUpDate] = useState('');
-  const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   const [showPaymentAgreement, setShowPaymentAgreement] = useState(false);
   const [editForm, setEditForm] = useState({
     full_name: '',
@@ -263,26 +261,11 @@ export default function LeadDetail() {
   };
 
   const handleStatusChange = async (status: string) => {
-    if (status === 'FOLLOW_UP') {
-      setFollowUpDate(lead.follow_up_date || '');
-      setShowFollowUpDialog(true);
-      return;
-    }
     if (status === 'INTERESSE_CONFIRMADO' && !lead.interest_confirmed) {
       await handleConfirmInterest();
     } else {
-      await updateLead.mutateAsync({ id: lead.id, status: status as any, follow_up_date: null });
+      await updateLead.mutateAsync({ id: lead.id, status: status as any });
     }
-  };
-
-  const handleConfirmFollowUp = async () => {
-    if (!followUpDate) return;
-    await updateLead.mutateAsync({ 
-      id: lead.id, 
-      status: 'FOLLOW_UP' as any, 
-      follow_up_date: followUpDate 
-    });
-    setShowFollowUpDialog(false);
   };
 
   const handleDeleteLead = async () => {
@@ -711,7 +694,7 @@ export default function LeadDetail() {
                 </SelectTrigger>
                 <SelectContent>
                   {Object.entries(LEAD_STATUS_LABELS)
-                    .filter(([value]) => !['DADOS_INCOMPLETOS', 'INTERESSE_PENDENTE', 'MESCLADO'].includes(value))
+                    .filter(([value]) => !['DADOS_INCOMPLETOS', 'INTERESSE_PENDENTE', 'MESCLADO', 'FOLLOW_UP'].includes(value))
                     .map(([value, label]) => (
                       <SelectItem key={value} value={value}>{label}</SelectItem>
                     ))}
@@ -751,43 +734,28 @@ export default function LeadDetail() {
               </div>
             )}
 
-            {lead.status === 'FOLLOW_UP' && lead.follow_up_date && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
-                <p className="text-sm text-blue-700 dark:text-blue-400 font-medium flex items-center gap-2">
-                  <CalendarClock className="h-4 w-4" />
-                  Follow-up: {format(new Date(lead.follow_up_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
+            <div>
+              <Label htmlFor="follow-up-date" className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
+                <CalendarClock className="h-4 w-4" />
+                Follow-up
+              </Label>
+              <Input
+                id="follow-up-date"
+                type="date"
+                value={lead.follow_up_date || ''}
+                onChange={async (e) => {
+                  await updateLead.mutateAsync({
+                    id: lead.id,
+                    follow_up_date: e.target.value || null,
+                  } as any);
+                }}
+              />
+              {lead.follow_up_date && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Retomar em {format(new Date(lead.follow_up_date + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR })}
                 </p>
-              </div>
-            )}
-
-            {/* Follow-up date dialog */}
-            <Dialog open={showFollowUpDialog} onOpenChange={setShowFollowUpDialog}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Definir Data de Follow-up</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 pt-4">
-                  <div>
-                    <Label htmlFor="follow-up-date">Data prevista para retorno *</Label>
-                    <Input
-                      id="follow-up-date"
-                      type="date"
-                      value={followUpDate}
-                      onChange={(e) => setFollowUpDate(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setShowFollowUpDialog(false)}>
-                      Cancelar
-                    </Button>
-                    <Button onClick={handleConfirmFollowUp} disabled={!followUpDate}>
-                      Confirmar
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+              )}
+            </div>
 
             <div>
               <p className="text-sm text-muted-foreground mb-2 flex items-center gap-2">
