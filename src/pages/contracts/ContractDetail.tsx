@@ -224,108 +224,147 @@ export default function ContractDetail() {
       groupsMap.get(k)!.push(p);
     }
 
-    return groupOrder
-      .map((key) => {
-        const groupPayments = groupsMap.get(key)!;
-        // Sort installments by number, then due date
-        groupPayments.sort((a: any, b: any) => {
-          const an = a.installment_number ?? 9999;
-          const bn = b.installment_number ?? 9999;
-          if (an !== bn) return an - bn;
-          const ad = a.due_date ? new Date(a.due_date).getTime() : 0;
-          const bd = b.due_date ? new Date(b.due_date).getTime() : 0;
-          return ad - bd;
-        });
+    // Pre-sort each group's installments
+    for (const key of groupOrder) {
+      const gp = groupsMap.get(key)!;
+      gp.sort((a: any, b: any) => {
+        const an = a.installment_number ?? 9999;
+        const bn = b.installment_number ?? 9999;
+        if (an !== bn) return an - bn;
+        const ad = a.due_date ? new Date(a.due_date).getTime() : 0;
+        const bd = b.due_date ? new Date(b.due_date).getTime() : 0;
+        return ad - bd;
+      });
+    }
 
-        const first = groupPayments[0];
-        const isInstallments = groupPayments.length > 1 || first.payment_form === 'PARCELADO';
+    // Build consolidated due-date summary across ALL groups: sum amounts when multiple
+    // installments share the same due date (only show entries that consolidate 2+ payments).
+    const dueMap = new Map<string, { total: number; count: number; date: Date }>();
+    for (const key of groupOrder) {
+      const gp = groupsMap.get(key)!;
+      // only consider when group is installments (PARCELADO or >1 payments)
+      const first = gp[0];
+      const isInst = gp.length > 1 || first.payment_form === 'PARCELADO';
+      if (!isInst) continue;
+      for (const p of gp) {
+        if (!p.due_date) continue;
+        const dateKey = p.due_date as string;
+        const cur = dueMap.get(dateKey) || { total: 0, count: 0, date: new Date(`${dateKey}T12:00:00`) };
+        cur.total += Number(p.amount ?? 0);
+        cur.count += 1;
+        dueMap.set(dateKey, cur);
+      }
+    }
 
-        const leadId = first.opportunities?.leads?.id || first.opportunities?.lead_id;
-        const linkedLead = contractLeadLinks?.find((cl: any) => cl.lead_id === leadId)?.leads;
-        const serviceName =
-          linkedLead?.service_types?.name ||
-          (linkedLead?.service_interest
-            ? SERVICE_INTEREST_LABELS[linkedLead.service_interest as keyof typeof SERVICE_INTEREST_LABELS]
-            : null) ||
-          'Serviço';
+    const consolidatedEntries = Array.from(dueMap.entries())
+      .filter(([, v]) => v.count > 1)
+      .sort((a, b) => a[1].date.getTime() - b[1].date.getTime());
 
-        const beneficiaryName = first.beneficiary_contact?.full_name;
-        const beneficiaryDocType = first.beneficiary_contact?.document_type;
-        const beneficiaryDocNumber = first.beneficiary_contact?.document_number;
-        const beneficiaryDocLabel = beneficiaryDocNumber
-          ? ` (${beneficiaryDocType ? `${beneficiaryDocType}: ` : ''}${beneficiaryDocNumber})`
-          : '';
-        const serviceLabel = beneficiaryName
-          ? `${serviceName} para ${beneficiaryName}${beneficiaryDocLabel}`
-          : serviceName;
+    const summaryBlock: string[] = [];
+    if (consolidatedEntries.length > 0) {
+      summaryBlock.push('Resumo de Vencimentos Consolidados:');
+      summaryBlock.push('(parcelas de serviços diferentes que vencem na mesma data)');
+      for (const [, v] of consolidatedEntries) {
+        const dateStr = format(v.date, 'dd/MM/yyyy', { locale: ptBR });
+        const amountStr = formatMoney(v.total) || '';
+        summaryBlock.push(`  • ${dateStr} — Total a pagar: ${amountStr} (${v.count} parcelas)`);
+      }
+    }
 
-        const lines: string[] = [];
-        const agreementDate = first.created_at || first.due_date;
-        if (agreementDate) {
-          lines.push(`Acordo de Pagamento — ${format(new Date(agreementDate), 'dd/MM/yyyy', { locale: ptBR })}`);
+    const groupBlocks = groupOrder.map((key) => {
+      const groupPayments = groupsMap.get(key)!;
+      const first = groupPayments[0];
+      const isInstallments = groupPayments.length > 1 || first.payment_form === 'PARCELADO';
+
+      const leadId = first.opportunities?.leads?.id || first.opportunities?.lead_id;
+      const linkedLead = contractLeadLinks?.find((cl: any) => cl.lead_id === leadId)?.leads;
+      const serviceName =
+        linkedLead?.service_types?.name ||
+        (linkedLead?.service_interest
+          ? SERVICE_INTEREST_LABELS[linkedLead.service_interest as keyof typeof SERVICE_INTEREST_LABELS]
+          : null) ||
+        'Serviço';
+
+      const beneficiaryName = first.beneficiary_contact?.full_name;
+      const beneficiaryDocType = first.beneficiary_contact?.document_type;
+      const beneficiaryDocNumber = first.beneficiary_contact?.document_number;
+      const beneficiaryDocLabel = beneficiaryDocNumber
+        ? ` (${beneficiaryDocType ? `${beneficiaryDocType}: ` : ''}${beneficiaryDocNumber})`
+        : '';
+      const serviceLabel = beneficiaryName
+        ? `${serviceName} para ${beneficiaryName}${beneficiaryDocLabel}`
+        : serviceName;
+
+      const lines: string[] = [];
+      const agreementDate = first.created_at || first.due_date;
+      if (agreementDate) {
+        lines.push(`Acordo de Pagamento — ${format(new Date(agreementDate), 'dd/MM/yyyy', { locale: ptBR })}`);
+      }
+      lines.push(`Serviço: ${serviceLabel}`);
+
+      const grossAmount = first.gross_amount ?? first.amount;
+      const formattedGrossAmount = formatMoney(grossAmount);
+      if (formattedGrossAmount) {
+        lines.push(`Valor Bruto: ${formattedGrossAmount}`);
+      }
+
+      if (first.vat_amount && Number(first.vat_amount) > 0) {
+        const formattedVatAmount = formatMoney(first.vat_amount);
+        if (formattedVatAmount) {
+          const vatLabel = first.vat_rate ? `IVA (${first.vat_rate}%): + ` : 'IVA: + ';
+          lines.push(`${vatLabel}${formattedVatAmount}`);
         }
-        lines.push(`Serviço: ${serviceLabel}`);
+      }
 
-        // Gross / VAT / Discount: take from first installment (same agreement)
-        const grossAmount = first.gross_amount ?? first.amount;
-        const formattedGrossAmount = formatMoney(grossAmount);
-        if (formattedGrossAmount) {
-          lines.push(`Valor Bruto: ${formattedGrossAmount}`);
+      if (first.discount_value && Number(first.discount_value) > 0) {
+        const formattedDiscount = formatMoney(first.discount_value);
+        if (formattedDiscount) {
+          lines.push(`Desconto: - ${formattedDiscount}`);
         }
+      }
 
-        if (first.vat_amount && Number(first.vat_amount) > 0) {
-          const formattedVatAmount = formatMoney(first.vat_amount);
-          if (formattedVatAmount) {
-            const vatLabel = first.vat_rate ? `IVA (${first.vat_rate}%): + ` : 'IVA: + ';
-            lines.push(`${vatLabel}${formattedVatAmount}`);
-          }
-        }
+      const totalFinal = groupPayments.reduce(
+        (sum: number, p: any) => sum + Number(p.amount ?? 0),
+        0
+      );
+      const formattedTotalFinal = formatMoney(totalFinal);
+      if (formattedTotalFinal) {
+        lines.push(`Total Final: ${formattedTotalFinal}`);
+      }
 
-        if (first.discount_value && Number(first.discount_value) > 0) {
-          const formattedDiscount = formatMoney(first.discount_value);
-          if (formattedDiscount) {
-            lines.push(`Desconto: - ${formattedDiscount}`);
-          }
-        }
-
-        // Total Final: sum of all installment amounts when grouped
-        const totalFinal = groupPayments.reduce(
-          (sum: number, p: any) => sum + Number(p.amount ?? 0),
-          0
+      if (first.payment_method) {
+        lines.push(
+          `Método: ${PAYMENT_METHOD_LABELS[first.payment_method as keyof typeof PAYMENT_METHOD_LABELS] || first.payment_method}`
         );
-        const formattedTotalFinal = formatMoney(totalFinal);
-        if (formattedTotalFinal) {
-          lines.push(`Total Final: ${formattedTotalFinal}`);
-        }
+      }
 
-        if (first.payment_method) {
-          lines.push(
-            `Método: ${PAYMENT_METHOD_LABELS[first.payment_method as keyof typeof PAYMENT_METHOD_LABELS] || first.payment_method}`
-          );
-        }
+      if (first.payment_form) {
+        lines.push(
+          `Forma: ${PAYMENT_FORM_LABELS[first.payment_form as keyof typeof PAYMENT_FORM_LABELS] || first.payment_form}`
+        );
+      }
 
-        if (first.payment_form) {
-          lines.push(
-            `Forma: ${PAYMENT_FORM_LABELS[first.payment_form as keyof typeof PAYMENT_FORM_LABELS] || first.payment_form}`
-          );
-        }
+      if (isInstallments && groupPayments.length > 1) {
+        lines.push(`Parcelas: ${groupPayments.length}x (em ordem de vencimento)`);
+        groupPayments.forEach((p: any, idx: number) => {
+          const num = p.installment_number ?? idx + 1;
+          const dueStr = p.due_date
+            ? format(new Date(`${p.due_date}T12:00:00`), 'dd/MM/yyyy', { locale: ptBR })
+            : 'A definir';
+          const amountStr = formatMoney(p.amount) || '';
+          lines.push(`  • Parcela ${num} — Venc: ${dueStr} — ${amountStr}`);
+        });
+      }
 
-        // Installment breakdown (only when there's more than one installment)
-        if (isInstallments && groupPayments.length > 1) {
-          lines.push(`Parcelas: ${groupPayments.length}x`);
-          groupPayments.forEach((p: any, idx: number) => {
-            const num = p.installment_number ?? idx + 1;
-            const dueStr = p.due_date
-              ? format(new Date(`${p.due_date}T12:00:00`), 'dd/MM/yyyy', { locale: ptBR })
-              : 'A definir';
-            const amountStr = formatMoney(p.amount) || '';
-            lines.push(`  • Parcela ${num} — Venc: ${dueStr} — ${amountStr}`);
-          });
-        }
+      return lines.join('\n');
+    });
 
-        return lines.join('\n');
-      })
-      .join('\n---\n');
+    const allBlocks: string[] = [];
+    if (summaryBlock.length > 0) {
+      allBlocks.push(summaryBlock.join('\n'));
+    }
+    allBlocks.push(...groupBlocks);
+    return allBlocks.join('\n---\n');
   }, [contract?.currency, contractLeadLinks, contractPayments]);
 
   // Fallback: filter payment_notes from linked contacts when there are no active payments yet
