@@ -111,7 +111,7 @@ export default function LeadDetail() {
         .limit(1);
       return data?.[0] || null;
     },
-    enabled: !!leadOpportunity?.id && !!isGroupFinalized,
+    enabled: !!leadOpportunity?.id,
   });
   const { updateContact } = useContacts();
   const { interactions, createInteraction, updateInteraction, deleteInteraction, isEditable } = useInteractions(lead?.contact_id, id);
