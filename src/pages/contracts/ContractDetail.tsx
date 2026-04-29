@@ -1014,6 +1014,19 @@ export default function ContractDetail() {
                   label={CONTRACT_STATUS_LABELS[contract.status || 'EM_ELABORACAO']} 
                 />
               </div>
+              {serviceObservations.length > 0 && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Observações dos Serviços</p>
+                  <div className="space-y-2">
+                    {serviceObservations.map((item, idx) => (
+                      <div key={idx} className="rounded-md border bg-muted/40 p-2">
+                        <p className="text-xs font-semibold text-foreground">{item.service}</p>
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap mt-1">{item.observation}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {assignedUser && (
                 <div>
                   <p className="text-sm text-muted-foreground">Responsável</p>
