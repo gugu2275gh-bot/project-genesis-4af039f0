@@ -405,7 +405,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               vat_rate: form.apply_vat ? (defaultVatRate || 21) / 100 : 0,
               discount_type: form.discount_type || null,
               discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
-              beneficiary_contact_id: isBeneficiary ? contactId : null,
+              beneficiary_contact_id: beneficiaryIdToUse,
             }));
             const { error: payError } = await supabase.from('payments').insert(paymentInserts);
             if (payError) {
@@ -425,7 +425,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               vat_amount: vatAmount,
               discount_type: form.discount_type || null,
               discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
-              beneficiary_contact_id: isBeneficiary ? contactId : null,
+              beneficiary_contact_id: beneficiaryIdToUse,
               due_date: form.due_date || null,
             });
             if (payError) {
@@ -463,7 +463,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               vat_rate: form.apply_vat ? (defaultVatRate || 21) / 100 : 0,
               discount_type: form.discount_type || null,
               discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
-              beneficiary_contact_id: isBeneficiary ? contactId : null,
+              beneficiary_contact_id: beneficiaryIdToUse,
             }));
             const { error: payError } = await supabase.from('payments').insert(paymentInserts);
             if (payError) {
@@ -483,7 +483,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               vat_amount: vatAmount,
               discount_type: form.discount_type || null,
               discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
-              beneficiary_contact_id: isBeneficiary ? contactId : null,
+              beneficiary_contact_id: beneficiaryIdToUse,
               due_date: form.due_date || null,
             });
             if (payError) {
