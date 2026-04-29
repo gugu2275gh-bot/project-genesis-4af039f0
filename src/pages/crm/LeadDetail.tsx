@@ -805,7 +805,7 @@ export default function LeadDetail() {
                 onClick={() => setShowPaymentAgreement(true)}
               >
                 <DollarSign className="h-4 w-4 mr-2" />
-                {isGroupFinalized ? 'Detalhes' : 'Novo Serviço'}
+                {isGroupFinalized ? 'Detalhes' : (lead.service_interest ? 'Editar Serviço' : 'Novo Serviço')}
               </Button>
               {lead.contact_id && (
                 <PaymentAgreementDialog
