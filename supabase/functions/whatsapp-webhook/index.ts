@@ -754,6 +754,15 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
   }
 
+  // CRÍTICO: regras anti-repetição posicionadas no FINAL do prompt para máximo peso no modelo
+  fullSystemPrompt += `\n\n## ⛔ REGRAS FINAIS INVIOLÁVEIS (LEIA ANTES DE RESPONDER)
+1. Olhe o histórico acima. Se você JÁ se apresentou em qualquer mensagem anterior (qualquer "Hola", "Olá", "Soy la asistente", "Sou a assistente"), está PROIBIDA de se apresentar de novo. Vá direto ao ponto.
+2. Se você JÁ disse "Te ayudaré a entender tus caminos legales" ou "Te ajudarei a entender" antes, está PROIBIDA de repetir. Apenas continue de onde parou.
+3. Se o cliente acabou de te dar uma informação (nome, e-mail, origem, interesse), reconheça com UMA palavra curta ("¡Perfecto!", "Anotado", "Genial") e faça a PRÓXIMA pergunta do fluxo. NUNCA refaça o acolhimento.
+4. NÃO comece a resposta com saudação se já houve mensagens anteriores. Comece direto com o conteúdo.
+5. Cada resposta deve AVANÇAR a conversa. Nunca volte uma etapa.
+6. Releia as últimas 3 mensagens do histórico antes de escrever. Se sua próxima resposta soa parecida com algo que você já disse, REESCREVA de outro jeito.`
+
   const effectiveHistory = forcedLanguage === 'pt-BR'
     ? conversationHistory
     : conversationHistory.filter((msg) => msg.role === 'user' || !looksPortuguese(msg.content))
