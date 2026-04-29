@@ -90,7 +90,7 @@ export function useContracts() {
       
       if (error) throw error;
 
-      const contracts = (data || []) as ContractWithOpportunity[];
+      const contracts = (data || []) as unknown as ContractWithOpportunity[];
       const opportunityIds = [...new Set(contracts.map(contract => contract.opportunity_id).filter(Boolean))];
 
       if (opportunityIds.length === 0) {
