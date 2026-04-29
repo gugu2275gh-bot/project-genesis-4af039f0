@@ -1104,33 +1104,38 @@ export function ContractGroupsSection({
                     e.stopPropagation();
                     const leadPayment = leadPayments[0];
                     if (leadPayment) {
-                      const groupPayments = leadPayments.filter((p: any) => p.payment_form === 'PARCELADO');
-                      const installments = groupPayments.length > 1
-                        ? groupPayments.map((p: any) => ({ amount: p.amount?.toString() || '', due_date: p.due_date || '' }))
-                        : [];
-                      setEditPaymentData({
-                        amount: leadPayment.amount,
-                        payment_method: leadPayment.payment_method,
-                        payment_form: leadPayment.payment_form,
-                        apply_vat: leadPayment.apply_vat,
-                        vat_rate: leadPayment.vat_rate,
-                        discount_type: leadPayment.discount_type,
-                        discount_value: leadPayment.discount_value,
-                        gross_amount: leadPayment.gross_amount,
-                        serviceTypeId: lead.service_type_id || '',
-                        installments,
-                        notes: paymentNotes || '',
-                        leadId: lead.id,
-                        opportunityId: leadPayment.opportunity_id,
-                      });
-                    } else {
-                      setEditPaymentData({
-                        amount: 0,
-                        serviceTypeId: lead.service_type_id || '',
-                        notes: paymentNotes || '',
-                        leadId: lead.id,
-                      });
-                    }
+                   const groupPayments = leadPayments.filter((p: any) => p.payment_form === 'PARCELADO');
+                   const installments = groupPayments.length > 1
+                     ? groupPayments.map((p: any) => ({ amount: p.amount?.toString() || '', due_date: p.due_date || '' }))
+                     : [];
+                   const leadServiceName = getLeadDisplayName(lead);
+                   const matchedBlock = parsedPaymentNoteBlocks.find(b => b.serviceName === leadServiceName);
+                   const observationOnly = matchedBlock?.observation || '';
+                   setEditPaymentData({
+                     amount: leadPayment.amount,
+                     payment_method: leadPayment.payment_method,
+                     payment_form: leadPayment.payment_form,
+                     apply_vat: leadPayment.apply_vat,
+                     vat_rate: leadPayment.vat_rate,
+                     discount_type: leadPayment.discount_type,
+                     discount_value: leadPayment.discount_value,
+                     gross_amount: leadPayment.gross_amount,
+                     serviceTypeId: lead.service_type_id || '',
+                     installments,
+                     notes: observationOnly,
+                     leadId: lead.id,
+                     opportunityId: leadPayment.opportunity_id,
+                   });
+                 } else {
+                   const leadServiceName = getLeadDisplayName(lead);
+                   const matchedBlock = parsedPaymentNoteBlocks.find(b => b.serviceName === leadServiceName);
+                   setEditPaymentData({
+                     amount: 0,
+                     serviceTypeId: lead.service_type_id || '',
+                     notes: matchedBlock?.observation || '',
+                     leadId: lead.id,
+                   });
+                 }
                     setShowPaymentAgreement(true);
                   }}
                   title="Editar serviço"
