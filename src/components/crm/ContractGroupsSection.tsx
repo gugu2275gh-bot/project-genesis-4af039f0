@@ -1294,11 +1294,25 @@ export function ContractGroupsSection({
         const total = leadPayments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
         const currency = leadPayments[0]?.currency || 'EUR';
         const symbol = currency === 'EUR' ? '€' : currency;
+        const first = leadPayments[0] as any;
+        const grossTotal = leadPayments.reduce((sum: number, p: any) => sum + Number(p.gross_amount || 0), 0);
+        const vatTotal = leadPayments.reduce((sum: number, p: any) => sum + Number(p.vat_amount || 0), 0);
+        const discountTotal = leadPayments.reduce((sum: number, p: any) => sum + Number(p.discount_value || 0), 0);
+        if (grossTotal > 0) {
+          block += `Valor Bruto: ${symbol} ${grossTotal.toFixed(2)}\n`;
+        }
+        if (vatTotal > 0) {
+          block += `IVA (${first?.vat_rate || 21}%): + ${symbol} ${vatTotal.toFixed(2)}\n`;
+        }
         if (leadFees.length > 0) {
           block += `Outros Custos:\n`;
           leadFees.forEach(fee => {
             block += `  ${fee.description}: + ${symbol} ${Number(fee.amount).toFixed(2)}\n`;
           });
+        }
+        if (discountTotal > 0) {
+          const discLabel = first?.discount_type === 'PERCENTUAL' ? ` (${first?.discount_value}%)` : '';
+          block += `Desconto: - ${symbol} ${discountTotal.toFixed(2)}${discLabel}\n`;
         }
         block += `Total Final: ${symbol} ${total.toFixed(2)}\n`;
         block += `Parcelas: ${leadPayments.length}x\n`;
