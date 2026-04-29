@@ -2001,9 +2001,7 @@ export default function ContactDetail() {
                     />
                   </div>
                   <ScrollArea className="max-h-60">
-                    {mergeSearchQuery.length < 2 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">Digite ao menos 2 caracteres...</p>
-                    ) : mergeSearchResults.length === 0 ? (
+                    {mergeSearchResults.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">Nenhum contato encontrado</p>
                     ) : (
                       <div className="p-1">
