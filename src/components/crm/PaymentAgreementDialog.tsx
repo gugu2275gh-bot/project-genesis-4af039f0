@@ -378,8 +378,14 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
         // Check if payments already exist for this opportunity
         const { data: existingPayments } = await supabase
           .from('payments')
-          .select('id, status')
+          .select('id, status, beneficiary_contact_id')
           .eq('opportunity_id', opportunityId);
+
+        // Preserve existing beneficiary link when editing from titular's profile.
+        // If isBeneficiary=false (editing under titular) but a previous payment had a beneficiary, keep it.
+        const preservedBeneficiaryId =
+          existingPayments?.find(p => p.beneficiary_contact_id)?.beneficiary_contact_id ?? null;
+        const beneficiaryIdToUse = isBeneficiary ? contactId : preservedBeneficiaryId;
 
         // Only create payments if none exist yet; otherwise update existing pending ones
         if (!existingPayments?.length) {
