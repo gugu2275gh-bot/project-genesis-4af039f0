@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { PaymentAgreementDialog, PaymentAgreementInitialData } from '@/components/crm/PaymentAgreementDialog';
 import { ContractGroupsSection } from '@/components/crm/ContractGroupsSection';
 import PendingItemsSection from '@/components/contacts/PendingItemsSection';
-import ReactivationLogSection from '@/components/contacts/ReactivationLogSection';
+import { UnifiedHistoryPanel } from '@/components/audit/UnifiedHistoryPanel';
 import { UnifiedHistoryPanel } from '@/components/audit/UnifiedHistoryPanel';
 import DataSuggestionsPanel from '@/components/contacts/DataSuggestionsPanel';
 import { useParams, useNavigate } from 'react-router-dom';
