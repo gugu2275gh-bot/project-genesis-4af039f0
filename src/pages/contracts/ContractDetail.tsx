@@ -440,6 +440,46 @@ export default function ContractDetail() {
     return allNotes.join('\n---\n');
   }, [contract, contractLeadLinks, allLinkedContactNotes]);
 
+  // Observations per service extracted from payment_notes blocks
+  const serviceObservations = useMemo(() => {
+    if (!contract || !contractLeadLinks) return [] as { service: string; observation: string }[];
+
+    const activeServiceNames = new Set<string>();
+    (contractLeadLinks || []).forEach((cl: any) => {
+      const name = cl.leads?.service_types?.name || cl.leads?.service_interest;
+      if (name) activeServiceNames.add(name);
+    });
+
+    const sources: string[] = [];
+    (allLinkedContactNotes || []).forEach((c: any) => {
+      if (c?.payment_notes) sources.push(c.payment_notes);
+    });
+    const c = contract as any;
+    const resolvedContact = Array.isArray(c?.opportunities?.leads?.contacts)
+      ? c.opportunities.leads.contacts[0]
+      : c?.opportunities?.leads?.contacts;
+    if (resolvedContact?.payment_notes) sources.push(resolvedContact.payment_notes);
+
+    const seen = new Set<string>();
+    const result: { service: string; observation: string }[] = [];
+    sources.forEach((raw) => {
+      raw.split('\n---\n').forEach((block: string) => {
+        const serviceMatch = block.match(/Serviço:\s*(.+?)(?:\n|$)/);
+        const obsMatch = block.match(/Observações:\s*([\s\S]+?)(?:\n[A-ZÀ-Ú][^\n:]*:|$)/);
+        if (!serviceMatch || !obsMatch) return;
+        const service = serviceMatch[1].trim();
+        const observation = obsMatch[1].trim();
+        if (!observation) return;
+        if (activeServiceNames.size > 0 && !activeServiceNames.has(service)) return;
+        const key = `${service}::${observation}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        result.push({ service, observation });
+      });
+    });
+    return result;
+  }, [contract, contractLeadLinks, allLinkedContactNotes]);
+
   // Initialize form data when contract loads
   useEffect(() => {
     if (contract) {
@@ -974,6 +1014,19 @@ export default function ContractDetail() {
                   label={CONTRACT_STATUS_LABELS[contract.status || 'EM_ELABORACAO']} 
                 />
               </div>
+              {serviceObservations.length > 0 && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Observações dos Serviços</p>
+                  <div className="space-y-2">
+                    {serviceObservations.map((item, idx) => (
+                      <div key={idx} className="rounded-md border bg-muted/40 p-2">
+                        <p className="text-xs font-semibold text-foreground">{item.service}</p>
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap mt-1">{item.observation}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {assignedUser && (
                 <div>
                   <p className="text-sm text-muted-foreground">Responsável</p>
