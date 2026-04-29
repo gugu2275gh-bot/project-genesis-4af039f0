@@ -2,8 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { PaymentAgreementDialog, PaymentAgreementInitialData } from '@/components/crm/PaymentAgreementDialog';
 import { ContractGroupsSection } from '@/components/crm/ContractGroupsSection';
 import PendingItemsSection from '@/components/contacts/PendingItemsSection';
-import ReactivationLogSection from '@/components/contacts/ReactivationLogSection';
-import { AuditHistoryPanel } from '@/components/audit/AuditHistoryPanel';
+import { UnifiedHistoryPanel } from '@/components/audit/UnifiedHistoryPanel';
 import DataSuggestionsPanel from '@/components/contacts/DataSuggestionsPanel';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -1400,24 +1399,6 @@ export default function ContactDetail() {
           {/* Pendências por Setor */}
           <PendingItemsSection contactId={id!} />
 
-          {/* Log de Reativações */}
-          <ReactivationLogSection contactId={id!} />
-
-          {/* Histórico de Alterações (auditoria) */}
-          <AuditHistoryPanel
-            tableName="contacts"
-            recordId={id!}
-            title="Histórico da Ficha"
-            description="Mesclagens e alterações registradas neste contato."
-          />
-          {contactLeads.length > 0 && (
-            <AuditHistoryPanel
-              tableName="leads"
-              recordIds={contactLeads.map(l => l.id)}
-              title="Histórico de Status dos Serviços"
-              description="Mudanças de status nos serviços/leads deste contato."
-            />
-          )}
 
           <Card>
             <CardHeader>
@@ -2060,6 +2041,12 @@ export default function ContactDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Histórico unificado (auditoria + reativações) — sempre no fim da página */}
+      <UnifiedHistoryPanel
+        contactId={id!}
+        leadIds={contactLeads.map(l => l.id)}
+      />
+
     </>
   );
 }
@@ -2559,6 +2546,7 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
           )}
         </CardContent>
       </Card>
+
 
       {/* Payment Agreement Dialog */}
       <PaymentAgreementDialog
