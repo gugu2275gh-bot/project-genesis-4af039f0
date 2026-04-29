@@ -242,20 +242,29 @@ export default function ContactDetail() {
   };
 
   // Search contacts for merge dialog
-  const { data: mergeSearchResults = [] } = useQuery({
-    queryKey: ['merge-search', mergeSearchQuery],
+  const { data: allMergeContacts = [] } = useQuery({
+    queryKey: ['merge-all-contacts', id],
     queryFn: async () => {
-      if (!mergeSearchQuery || mergeSearchQuery.length < 2) return [];
       const { data } = await supabase
         .from('contacts')
         .select('id, full_name, phone, email')
         .neq('id', id!)
-        .or(`full_name.ilike.%${mergeSearchQuery}%,phone.ilike.%${mergeSearchQuery}%`)
-        .limit(10);
+        .order('full_name', { ascending: true });
       return data || [];
     },
-    enabled: showMergeDialog && mergeSearchQuery.length >= 2,
+    enabled: showMergeDialog,
   });
+
+  const mergeSearchResults = (() => {
+    const q = mergeSearchQuery.trim().toLowerCase();
+    if (!q) return allMergeContacts;
+    return allMergeContacts.filter((c: any) =>
+      (c.full_name || '').toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q)
+    );
+  })();
+
 
   const handleMergeContacts = async (targetContactId: string, targetName: string) => {
     if (!id || !contact) return;
