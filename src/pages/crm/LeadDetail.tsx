@@ -720,11 +720,34 @@ export default function LeadDetail() {
             </div>
 
             {lead.status === 'STANDBY' && (
-              <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
+              <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800 space-y-2">
                 <p className="text-sm text-amber-700 dark:text-amber-400 font-medium flex items-center gap-2">
                   <Pause className="h-4 w-4" />
-                  Standby — Prazos pausados
+                  Stand-by — Prazos pausados
                 </p>
+                <div>
+                  <Label htmlFor="standby-return" className="text-xs text-amber-700 dark:text-amber-400">
+                    Data e hora previstas para retorno
+                  </Label>
+                  <Input
+                    id="standby-return"
+                    type="datetime-local"
+                    className="mt-1 bg-background"
+                    value={(lead as any).standby_return_at ? format(new Date((lead as any).standby_return_at), "yyyy-MM-dd'T'HH:mm") : ''}
+                    onChange={async (e) => {
+                      const val = e.target.value;
+                      await updateLead.mutateAsync({
+                        id: lead.id,
+                        standby_return_at: val ? new Date(val).toISOString() : null,
+                      } as any);
+                    }}
+                  />
+                  {(lead as any).standby_return_at && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                      Retomar em {format(new Date((lead as any).standby_return_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 
