@@ -271,6 +271,9 @@ export default function ContactDetail() {
         title: 'Contatos mesclados com sucesso',
         description: `${result.moved_leads} leads, ${result.moved_interactions} interações movidos para ${targetName}.`,
       });
+      setShowMergeDialog(false);
+      setMergeSearchQuery('');
+      setMergePopoverOpen(false);
       navigate(`/crm/contacts/${targetContactId}`);
     } catch (err: any) {
       toast({ title: 'Erro ao mesclar contatos', description: err.message, variant: 'destructive' });
