@@ -88,7 +88,7 @@ export function ContractGroupsSection({
       if (!leadIds.length) return [];
       const { data, error } = await supabase
         .from('contract_leads')
-        .select('*, contracts(id, contract_number, status, total_fee, service_type, created_at, opportunity_id)')
+        .select('*, contracts(id, contract_number, status, total_fee, service_type, created_at, signed_at, opportunity_id)')
         .in('lead_id', leadIds);
       if (error) throw error;
       return data || [];
@@ -259,7 +259,7 @@ export function ContractGroupsSection({
       if (!beneficiaryLeadIds.length) return [];
       const { data, error } = await supabase
         .from('contract_leads')
-        .select('*, contracts(id, contract_number, status, total_fee, service_type, created_at, opportunity_id)')
+        .select('*, contracts(id, contract_number, status, total_fee, service_type, created_at, signed_at, opportunity_id)')
         .in('lead_id', beneficiaryLeadIds);
       if (error) throw error;
       return data || [];
@@ -1616,11 +1616,23 @@ export function ContractGroupsSection({
                           const groupTotal = contract.total_fee
                             ? Number(contract.total_fee)
                             : group.payments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
-                          return groupTotal > 0 ? (
-                            <span className="text-sm font-bold ml-2">
-                              € {groupTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </span>
-                          ) : null;
+                          const concludedDate = !isDraft
+                            ? (contract.signed_at || contract.updated_at || contract.created_at)
+                            : null;
+                          return (
+                            <div className="flex items-center gap-3 ml-2">
+                              {groupTotal > 0 && (
+                                <span className="text-sm font-bold">
+                                  € {groupTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </span>
+                              )}
+                              {concludedDate && (
+                                <span className="text-xs text-muted-foreground">
+                                  Concluído em {format(new Date(concludedDate), "dd/MM/yyyy", { locale: ptBR })}
+                                </span>
+                              )}
+                            </div>
+                          );
                         })()}
                       </div>
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
