@@ -88,7 +88,7 @@ export function ContractGroupsSection({
       if (!leadIds.length) return [];
       const { data, error } = await supabase
         .from('contract_leads')
-        .select('*, contracts(id, contract_number, status, total_fee, service_type, created_at, opportunity_id)')
+        .select('*, contracts(id, contract_number, status, total_fee, service_type, created_at, signed_at, opportunity_id)')
         .in('lead_id', leadIds);
       if (error) throw error;
       return data || [];
