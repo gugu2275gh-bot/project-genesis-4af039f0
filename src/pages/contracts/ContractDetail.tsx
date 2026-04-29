@@ -257,18 +257,17 @@ export default function ContractDetail() {
       }
     }
 
-    const consolidatedEntries = Array.from(dueMap.entries())
-      .filter(([, v]) => v.count > 1)
+    const allDueEntries = Array.from(dueMap.entries())
       .sort((a, b) => a[1].date.getTime() - b[1].date.getTime());
 
     const summaryBlock: string[] = [];
-    if (consolidatedEntries.length > 0) {
-      summaryBlock.push('Resumo de Vencimentos Consolidados:');
-      summaryBlock.push('(parcelas de serviços diferentes que vencem na mesma data)');
-      for (const [, v] of consolidatedEntries) {
+    if (allDueEntries.length > 0) {
+      summaryBlock.push('Resumo de Vencimentos:');
+      for (const [, v] of allDueEntries) {
         const dateStr = format(v.date, 'dd/MM/yyyy', { locale: ptBR });
         const amountStr = formatMoney(v.total) || '';
-        summaryBlock.push(`  • ${dateStr} — Total a pagar: ${amountStr} (${v.count} parcelas)`);
+        const parcelaLabel = v.count > 1 ? `${v.count} parcelas` : `1 parcela`;
+        summaryBlock.push(`  • ${dateStr} — Total a pagar: ${amountStr} (${parcelaLabel})`);
       }
     }
 
