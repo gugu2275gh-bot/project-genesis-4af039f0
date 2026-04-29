@@ -3,7 +3,7 @@ import { PaymentAgreementDialog, PaymentAgreementInitialData } from '@/component
 import { ContractGroupsSection } from '@/components/crm/ContractGroupsSection';
 import PendingItemsSection from '@/components/contacts/PendingItemsSection';
 import ReactivationLogSection from '@/components/contacts/ReactivationLogSection';
-import { AuditHistoryPanel } from '@/components/audit/AuditHistoryPanel';
+import { UnifiedHistoryPanel } from '@/components/audit/UnifiedHistoryPanel';
 import DataSuggestionsPanel from '@/components/contacts/DataSuggestionsPanel';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
