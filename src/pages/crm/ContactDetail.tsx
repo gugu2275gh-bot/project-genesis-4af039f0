@@ -2542,11 +2542,6 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
         </CardContent>
       </Card>
 
-      {/* Histórico unificado (auditoria + reativações) */}
-      <UnifiedHistoryPanel
-        contactId={id!}
-        leadIds={contactLeads.map(l => l.id)}
-      />
 
       {/* Payment Agreement Dialog */}
       <PaymentAgreementDialog
