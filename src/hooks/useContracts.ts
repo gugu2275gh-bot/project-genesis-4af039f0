@@ -101,7 +101,8 @@ export function useContracts() {
         .from('payments')
         .select(`
           id, amount, status, paid_at, installment_number, due_date, contract_id, opportunity_id, beneficiary_contact_id,
-          beneficiary:contacts!payments_beneficiary_contact_id_fkey ( id, full_name )
+          beneficiary:contacts!payments_beneficiary_contact_id_fkey ( id, full_name ),
+          opportunities ( id, lead_id )
         `)
         .in('opportunity_id', opportunityIds);
 
