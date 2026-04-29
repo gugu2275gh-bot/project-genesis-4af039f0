@@ -1256,7 +1256,6 @@ export function ContractGroupsSection({
       const leadFees = leadFeesById.get(lead.id) || [];
 
       let block = `${i + 1}. Serviço: ${displayName}\n`;
-      block += `Acordo de Pagamento — ${createdDate}\n`;
 
       if (leadPayments.length === 0) {
         block += `Sem pagamentos registrados`;
