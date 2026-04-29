@@ -1094,7 +1094,29 @@ export default function ContractDetail() {
                   <p className="font-medium">{PAYMENT_ACCOUNT_LABELS[(contract as any).payment_account as PaymentAccount] || (contract as any).payment_account}</p>
                 </div>
               )}
-              {/* Observações ficam apenas na ficha do cliente, não aqui no contrato. */}
+              {/* Observações por serviço (do lead) */}
+              {(() => {
+                const items = (contractLeadLinks || [])
+                  .map((cl: any) => ({
+                    name: cl.leads?.service_types?.name || cl.leads?.service_interest || 'Serviço',
+                    notes: (cl.leads?.notes || '').trim(),
+                  }))
+                  .filter((i: any) => i.notes);
+                if (items.length === 0) return null;
+                return (
+                  <div className="pt-2 border-t">
+                    <p className="text-sm text-muted-foreground mb-2">Observações dos Serviços</p>
+                    <div className="space-y-2">
+                      {items.map((i: any, idx: number) => (
+                        <div key={idx} className="text-sm">
+                          <p className="font-medium">{i.name}</p>
+                          <p className="text-muted-foreground whitespace-pre-wrap">{i.notes}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </div>
