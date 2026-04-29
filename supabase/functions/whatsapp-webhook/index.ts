@@ -754,6 +754,15 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
   }
 
+  // CRÍTICO: regras anti-repetição posicionadas no FINAL do prompt para máximo peso no modelo
+  fullSystemPrompt += `\n\n## ⛔ REGRAS FINAIS INVIOLÁVEIS (LEIA ANTES DE RESPONDER)
+1. Olhe o histórico acima. Se você JÁ se apresentou em qualquer mensagem anterior (qualquer "Hola", "Olá", "Soy la asistente", "Sou a assistente"), está PROIBIDA de se apresentar de novo. Vá direto ao ponto.
+2. Se você JÁ disse "Te ayudaré a entender tus caminos legales" ou "Te ajudarei a entender" antes, está PROIBIDA de repetir. Apenas continue de onde parou.
+3. Se o cliente acabou de te dar uma informação (nome, e-mail, origem, interesse), reconheça com UMA palavra curta ("¡Perfecto!", "Anotado", "Genial") e faça a PRÓXIMA pergunta do fluxo. NUNCA refaça o acolhimento.
+4. NÃO comece a resposta com saudação se já houve mensagens anteriores. Comece direto com o conteúdo.
+5. Cada resposta deve AVANÇAR a conversa. Nunca volte uma etapa.
+6. Releia as últimas 3 mensagens do histórico antes de escrever. Se sua próxima resposta soa parecida com algo que você já disse, REESCREVA de outro jeito.`
+
   const effectiveHistory = forcedLanguage === 'pt-BR'
     ? conversationHistory
     : conversationHistory.filter((msg) => msg.role === 'user' || !looksPortuguese(msg.content))
@@ -783,7 +792,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -868,6 +877,14 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
   } else {
     fullSystemPrompt += `\n\nATENÇÃO: Não há informações na base de conhecimento no momento. Responda de forma genérica e cordial, orientando o cliente a entrar em contato com a equipe da CB Asesoria para informações detalhadas.`
   }
+
+  // CRÍTICO: regras anti-repetição posicionadas no FINAL do prompt para máximo peso
+  fullSystemPrompt += `\n\n## ⛔ REGRAS FINAIS INVIOLÁVEIS (LEIA ANTES DE RESPONDER)
+1. Olhe o histórico. Se você JÁ se apresentou antes, está PROIBIDA de se apresentar de novo.
+2. Se você JÁ disse "Te ayudaré a entender" antes, NÃO repita.
+3. Se o cliente deu uma informação, reconheça com UMA palavra curta e faça a PRÓXIMA pergunta. NUNCA refaça o acolhimento.
+4. NÃO comece com saudação se já houve mensagens anteriores. Comece direto com o conteúdo.
+5. Cada resposta deve AVANÇAR a conversa.`
 
   const messages = [
     { role: 'system', content: fullSystemPrompt },
@@ -1996,6 +2013,34 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
 
         if (shouldBindReplyToLastQuestion) {
           messageForAI = `O cliente respondeu à última pergunta \"${lastAssistantQuestion}\" com: ${rawCustomerMessage}`
+        }
+
+        // Build dynamic conversation state to prevent repetitions
+        const assistantMsgs = history.filter(m => m.role === 'assistant')
+        const userMsgs = history.filter(m => m.role === 'user')
+        const alreadyGreeted = assistantMsgs.some(m =>
+          /\b(hola|olá|ol[áa]|hi|hello|bonjour)\b/i.test(m.content) ||
+          /soy la asistente|sou a assistente|asistente virtual|assistente virtual/i.test(m.content)
+        )
+        const alreadySaidSlogan = assistantMsgs.some(m =>
+          /te ayudar[ée] a entender|te ajudarei a entender|gracias por hablar con cb|gracias por contactar con cb|bem-vind[oa] à cb/i.test(m.content)
+        )
+        const knownEmail = contact.email || ''
+        const knownName = contact.full_name || ''
+        const turnsCount = assistantMsgs.length
+
+        if (turnsCount > 0) {
+          const stateLines: string[] = []
+          stateLines.push(`[ESTADO DA CONVERSA — leia antes de responder]`)
+          stateLines.push(`- Já houve ${turnsCount} resposta(s) sua(s) e ${userMsgs.length} mensagem(ns) do cliente.`)
+          if (alreadyGreeted) stateLines.push(`- ⛔ Você JÁ se apresentou. NÃO se apresente de novo. NÃO use "Hola"/"Olá" como abertura.`)
+          if (alreadySaidSlogan) stateLines.push(`- ⛔ Você JÁ disse a frase institucional ("Te ayudaré a entender..."). NÃO repita.`)
+          if (knownName) stateLines.push(`- Nome do cliente já conhecido: ${knownName}. NÃO pergunte o nome de novo.`)
+          if (knownEmail) stateLines.push(`- E-mail já conhecido: ${knownEmail}. NÃO peça o e-mail de novo.`)
+          stateLines.push(`- Avance para a PRÓXIMA etapa do fluxo. Reconheça curto e siga em frente.`)
+          stateLines.push(`[FIM DO ESTADO]\n`)
+          stateLines.push(`Mensagem atual do cliente: ${messageForAI}`)
+          messageForAI = stateLines.join('\n')
         }
 
         const knowledgeContext = messageForAI
