@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { AuditHistoryPanel } from '@/components/audit/AuditHistoryPanel';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useContract, useContracts } from '@/hooks/useContracts';
 import { useQuery } from '@tanstack/react-query';
@@ -1157,6 +1158,14 @@ export default function ContractDetail() {
 
       {/* Notes Section - Histórico de Acordos */}
       <ContractNotesSection contractId={contract.id} />
+
+      {/* Histórico de Alterações (auditoria) */}
+      <AuditHistoryPanel
+        tableName="contracts"
+        recordId={contract.id}
+        title="Histórico do Contrato"
+        description="Criação, mudanças de status e demais alterações registradas."
+      />
     </div>
   );
 }

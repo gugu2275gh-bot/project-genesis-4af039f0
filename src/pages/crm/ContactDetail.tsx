@@ -3,6 +3,7 @@ import { PaymentAgreementDialog, PaymentAgreementInitialData } from '@/component
 import { ContractGroupsSection } from '@/components/crm/ContractGroupsSection';
 import PendingItemsSection from '@/components/contacts/PendingItemsSection';
 import ReactivationLogSection from '@/components/contacts/ReactivationLogSection';
+import { AuditHistoryPanel } from '@/components/audit/AuditHistoryPanel';
 import DataSuggestionsPanel from '@/components/contacts/DataSuggestionsPanel';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -1401,6 +1402,22 @@ export default function ContactDetail() {
 
           {/* Log de Reativações */}
           <ReactivationLogSection contactId={id!} />
+
+          {/* Histórico de Alterações (auditoria) */}
+          <AuditHistoryPanel
+            tableName="contacts"
+            recordId={id!}
+            title="Histórico da Ficha"
+            description="Mesclagens e alterações registradas neste contato."
+          />
+          {contactLeads.length > 0 && (
+            <AuditHistoryPanel
+              tableName="leads"
+              recordIds={contactLeads.map(l => l.id)}
+              title="Histórico de Status dos Serviços"
+              description="Mudanças de status nos serviços/leads deste contato."
+            />
+          )}
 
           <Card>
             <CardHeader>
