@@ -1158,6 +1158,14 @@ export default function ContractDetail() {
 
       {/* Notes Section - Histórico de Acordos */}
       <ContractNotesSection contractId={contract.id} />
+
+      {/* Histórico de Alterações (auditoria) */}
+      <AuditHistoryPanel
+        tableName="contracts"
+        recordId={contract.id}
+        title="Histórico do Contrato"
+        description="Criação, mudanças de status e demais alterações registradas."
+      />
     </div>
   );
 }
