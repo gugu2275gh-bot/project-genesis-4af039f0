@@ -111,7 +111,7 @@ export default function LeadDetail() {
         .limit(1);
       return data?.[0] || null;
     },
-    enabled: !!leadOpportunity?.id && !!isGroupFinalized,
+    enabled: !!leadOpportunity?.id,
   });
   const { updateContact } = useContacts();
   const { interactions, createInteraction, updateInteraction, deleteInteraction, isEditable } = useInteractions(lead?.contact_id, id);
@@ -821,7 +821,7 @@ export default function LeadDetail() {
                     leadId: lead.id,
                     opportunityId: leadOpportunity?.id,
                     serviceTypeId: lead.service_type_id || undefined,
-                    ...(isGroupFinalized && existingPayment ? {
+                    ...(existingPayment ? {
                       gross_amount: existingPayment.gross_amount ?? existingPayment.amount,
                       amount: existingPayment.amount,
                       payment_method: existingPayment.payment_method || undefined,
