@@ -297,28 +297,33 @@ export default function ContractDetail() {
         : serviceName;
 
       const lines: string[] = [];
-      const agreementDate = first.created_at || first.due_date;
-      if (agreementDate) {
-        lines.push(`Acordo de Pagamento — ${format(new Date(agreementDate), 'dd/MM/yyyy', { locale: ptBR })}`);
-      }
       lines.push(`Serviço: ${serviceLabel}`);
 
-      const grossAmount = first.gross_amount ?? first.amount;
+      // For installments, gross/vat/discount are typically stored only on installment #1.
+      // Sum across all parcelas to be resilient to either layout.
+      const sumField = (field: string) =>
+        groupPayments.reduce((s: number, p: any) => s + Number(p[field] ?? 0), 0);
+
+      const grossSum = sumField('gross_amount');
+      const grossAmount = grossSum > 0 ? grossSum : (first.gross_amount ?? first.amount);
       const formattedGrossAmount = formatMoney(grossAmount);
       if (formattedGrossAmount) {
         lines.push(`Valor Bruto: ${formattedGrossAmount}`);
       }
 
-      if (first.vat_amount && Number(first.vat_amount) > 0) {
-        const formattedVatAmount = formatMoney(first.vat_amount);
+      const vatSum = sumField('vat_amount');
+      if (vatSum > 0) {
+        const formattedVatAmount = formatMoney(vatSum);
         if (formattedVatAmount) {
-          const vatLabel = first.vat_rate ? `IVA (${first.vat_rate}%): + ` : 'IVA: + ';
+          const vatRate = first.vat_rate || groupPayments.find((p: any) => p.vat_rate)?.vat_rate;
+          const vatLabel = vatRate ? `IVA (${vatRate}%): + ` : 'IVA: + ';
           lines.push(`${vatLabel}${formattedVatAmount}`);
         }
       }
 
-      if (first.discount_value && Number(first.discount_value) > 0) {
-        const formattedDiscount = formatMoney(first.discount_value);
+      const discountSum = sumField('discount_value');
+      if (discountSum > 0) {
+        const formattedDiscount = formatMoney(discountSum);
         if (formattedDiscount) {
           lines.push(`Desconto: - ${formattedDiscount}`);
         }
