@@ -82,14 +82,15 @@ export function useContracts() {
           ),
           payments (
             id, amount, status, paid_at, installment_number, due_date, opportunity_id, beneficiary_contact_id,
-            beneficiary:contacts!payments_beneficiary_contact_id_fkey ( id, full_name )
+            beneficiary:contacts!payments_beneficiary_contact_id_fkey ( id, full_name ),
+            opportunities ( id, lead_id )
           )
         `)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
 
-      const contracts = (data || []) as ContractWithOpportunity[];
+      const contracts = (data || []) as unknown as ContractWithOpportunity[];
       const opportunityIds = [...new Set(contracts.map(contract => contract.opportunity_id).filter(Boolean))];
 
       if (opportunityIds.length === 0) {

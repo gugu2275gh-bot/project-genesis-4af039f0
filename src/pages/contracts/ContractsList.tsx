@@ -178,16 +178,16 @@ export default function ContractsList() {
     const titularName = contract.opportunities?.leads?.contacts?.full_name;
     const titularContactId = contract.opportunities?.leads?.contacts?.id;
 
-    // Build map: opportunity_id -> beneficiary name (from payments)
-    const beneficiaryByOpp = new Map<string, string>();
+    // Build map: lead_id -> beneficiary name (from payments via opportunities.lead_id)
+    const beneficiaryByLead = new Map<string, string>();
     for (const p of contract.payments || []) {
       const benefId = (p as any).beneficiary_contact_id;
       const benefName = (p as any).beneficiary?.full_name;
-      if (p.opportunity_id && benefId && benefId !== titularContactId && benefName) {
-        beneficiaryByOpp.set(p.opportunity_id, benefName);
+      const leadId = (p as any).opportunities?.lead_id;
+      if (leadId && benefId && benefId !== titularContactId && benefName) {
+        beneficiaryByLead.set(leadId, benefName);
       }
     }
-    const fallbackBeneficiary = beneficiaryByOpp.values().next().value as string | undefined;
 
     if (contractLeads.length > 0) {
       return contractLeads.map(cl => {
@@ -198,15 +198,18 @@ export default function ContractsList() {
         if (contact?.is_beneficiary && contact.full_name && contact.full_name !== titularName) {
           return { name: serviceName, beneficiary: contact.full_name };
         }
-        if (fallbackBeneficiary) {
-          return { name: serviceName, beneficiary: fallbackBeneficiary };
+        const leadBeneficiary = beneficiaryByLead.get(cl.lead_id);
+        if (leadBeneficiary) {
+          return { name: serviceName, beneficiary: leadBeneficiary };
         }
         return { name: serviceName };
       });
     }
     const dynamicName = contract.opportunities?.leads?.service_types?.name;
     const serviceName = dynamicName || SERVICE_INTEREST_LABELS[contract.service_type || 'OUTRO'];
-    return [{ name: serviceName, beneficiary: fallbackBeneficiary }];
+    const mainLeadId = contract.opportunities?.lead_id;
+    const mainBeneficiary = mainLeadId ? beneficiaryByLead.get(mainLeadId) : undefined;
+    return [{ name: serviceName, beneficiary: mainBeneficiary }];
   };
 
   const calculatePaymentStatus = (contract: typeof contracts[0]) => {
