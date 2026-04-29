@@ -1402,6 +1402,22 @@ export default function ContactDetail() {
           {/* Log de Reativações */}
           <ReactivationLogSection contactId={id!} />
 
+          {/* Histórico de Alterações (auditoria) */}
+          <AuditHistoryPanel
+            tableName="contacts"
+            recordId={id!}
+            title="Histórico da Ficha"
+            description="Mesclagens e alterações registradas neste contato."
+          />
+          {contactLeads.length > 0 && (
+            <AuditHistoryPanel
+              tableName="leads"
+              recordIds={contactLeads.map(l => l.id)}
+              title="Histórico de Status dos Serviços"
+              description="Mudanças de status nos serviços/leads deste contato."
+            />
+          )}
+
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
