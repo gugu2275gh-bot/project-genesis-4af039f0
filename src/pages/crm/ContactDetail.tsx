@@ -2042,6 +2042,12 @@ export default function ContactDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Histórico unificado (auditoria + reativações) — sempre no fim da página */}
+      <UnifiedHistoryPanel
+        contactId={id!}
+        leadIds={contactLeads.map(l => l.id)}
+      />
+
     </>
   );
 }
