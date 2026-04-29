@@ -263,26 +263,11 @@ export default function LeadDetail() {
   };
 
   const handleStatusChange = async (status: string) => {
-    if (status === 'FOLLOW_UP') {
-      setFollowUpDate(lead.follow_up_date || '');
-      setShowFollowUpDialog(true);
-      return;
-    }
     if (status === 'INTERESSE_CONFIRMADO' && !lead.interest_confirmed) {
       await handleConfirmInterest();
     } else {
-      await updateLead.mutateAsync({ id: lead.id, status: status as any, follow_up_date: null });
+      await updateLead.mutateAsync({ id: lead.id, status: status as any });
     }
-  };
-
-  const handleConfirmFollowUp = async () => {
-    if (!followUpDate) return;
-    await updateLead.mutateAsync({ 
-      id: lead.id, 
-      status: 'FOLLOW_UP' as any, 
-      follow_up_date: followUpDate 
-    });
-    setShowFollowUpDialog(false);
   };
 
   const handleDeleteLead = async () => {
