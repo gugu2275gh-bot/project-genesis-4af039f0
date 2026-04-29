@@ -2015,6 +2015,34 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
           messageForAI = `O cliente respondeu à última pergunta \"${lastAssistantQuestion}\" com: ${rawCustomerMessage}`
         }
 
+        // Build dynamic conversation state to prevent repetitions
+        const assistantMsgs = history.filter(m => m.role === 'assistant')
+        const userMsgs = history.filter(m => m.role === 'user')
+        const alreadyGreeted = assistantMsgs.some(m =>
+          /\b(hola|olá|ol[áa]|hi|hello|bonjour)\b/i.test(m.content) ||
+          /soy la asistente|sou a assistente|asistente virtual|assistente virtual/i.test(m.content)
+        )
+        const alreadySaidSlogan = assistantMsgs.some(m =>
+          /te ayudar[ée] a entender|te ajudarei a entender|gracias por hablar con cb|gracias por contactar con cb|bem-vind[oa] à cb/i.test(m.content)
+        )
+        const knownEmail = contact.email || ''
+        const knownName = contact.full_name || ''
+        const turnsCount = assistantMsgs.length
+
+        if (turnsCount > 0) {
+          const stateLines: string[] = []
+          stateLines.push(`[ESTADO DA CONVERSA — leia antes de responder]`)
+          stateLines.push(`- Já houve ${turnsCount} resposta(s) sua(s) e ${userMsgs.length} mensagem(ns) do cliente.`)
+          if (alreadyGreeted) stateLines.push(`- ⛔ Você JÁ se apresentou. NÃO se apresente de novo. NÃO use "Hola"/"Olá" como abertura.`)
+          if (alreadySaidSlogan) stateLines.push(`- ⛔ Você JÁ disse a frase institucional ("Te ayudaré a entender..."). NÃO repita.`)
+          if (knownName) stateLines.push(`- Nome do cliente já conhecido: ${knownName}. NÃO pergunte o nome de novo.`)
+          if (knownEmail) stateLines.push(`- E-mail já conhecido: ${knownEmail}. NÃO peça o e-mail de novo.`)
+          stateLines.push(`- Avance para a PRÓXIMA etapa do fluxo. Reconheça curto e siga em frente.`)
+          stateLines.push(`[FIM DO ESTADO]\n`)
+          stateLines.push(`Mensagem atual do cliente: ${messageForAI}`)
+          messageForAI = stateLines.join('\n')
+        }
+
         const knowledgeContext = messageForAI
           ? await getKnowledgeBaseContext(supabase, messageForAI)
           : ''
