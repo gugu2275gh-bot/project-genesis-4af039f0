@@ -200,6 +200,17 @@ serve(async (req) => {
 
     console.log('Processing PDF:', fileName, 'at', filePath)
 
+    // Resolve OpenAI API key once (used for fallback extraction AND embeddings)
+    let openaiApiKey = Deno.env.get('OPENAI_API_KEY')
+    if (!openaiApiKey) {
+      const { data: configKey } = await supabaseAdmin
+        .from('system_config')
+        .select('value')
+        .eq('key', 'openai_api_key')
+        .single()
+      openaiApiKey = configKey?.value || null
+    }
+
     const { data: fileData, error: downloadError } = await supabaseAdmin
       .storage
       .from('knowledge-base')
