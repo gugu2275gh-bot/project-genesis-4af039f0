@@ -1869,6 +1869,8 @@ serve(async (req) => {
       .in('key', [
         'whatsapp_bot_enabled',
         'whatsapp_bot_system_prompt',
+        'kb_strict_mode',
+        'kb_strict_fallback_message',
       ])
 
     const configMap: Record<string, string> = {}
