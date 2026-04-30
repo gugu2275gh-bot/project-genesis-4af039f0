@@ -280,6 +280,7 @@ export default function KnowledgeBaseManager() {
                     onClick={async () => {
                       setReprocessing(true);
                       try {
+                        await supabase.auth.refreshSession();
                         const { data, error } = await supabase.functions.invoke('backfill-kb-embeddings', { body: {} });
                         if (error || data?.error) {
                           toast({ title: 'Erro ao gerar embeddings', description: error?.message || data?.error, variant: 'destructive' });
