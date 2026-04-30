@@ -470,15 +470,22 @@ type ChatLanguage = 'pt-BR' | 'es' | 'en' | 'fr'
 function detectChatLanguage(text: string): ChatLanguage {
   const sample = text.toLowerCase().normalize('NFC')
 
+  // Strong Portuguese signal — bail out early to avoid false positives from accents
+  // shared with French/Spanish (é, ç, ã, õ, à, etc.)
+  if (/\b(ol[aá]|oi|obrigad[oa]|por favor|voc[eê]|n[aã]o|sim|meu|minha|nome|email|telefone|cpf|cnpj|whatsapp|preciso|quero|estou|tudo bem|bom dia|boa tarde|boa noite|valeu|brasil|portugu[eê]s|espanha)\b/.test(sample) || /[ãõ]/.test(sample)) {
+    return 'pt-BR'
+  }
+
   if (/[¿¡ñ]/.test(sample) || /\b(hola|gracias|nombre|correo|quiero|necesito|estoy|españa|puedes|puede|ayuda|como|cu[aá]l)\b/.test(sample)) {
     return 'es'
   }
 
-  if (/[àâçéèêëîïôùûüÿœ]/.test(sample) || /\b(bonjour|merci|nom|courriel|email|besoin|aide|espagne|comment|quel)\b/.test(sample)) {
+  // French requires explicit French words — accents alone are too ambiguous (PT/ES also use them)
+  if (/\b(bonjour|bonsoir|salut|merci|s'il vous pla[iî]t|courriel|besoin|aide|espagne|comment|quel|quelle|oui|non|je suis|j'ai|monsieur|madame)\b/.test(sample)) {
     return 'fr'
   }
 
-  if (/\b(hello|thanks|name|email|need|help|spain|how|what|can you|please)\b/.test(sample)) {
+  if (/\b(hello|hi|thanks|thank you|name|email|need|help|spain|how|what|can you|please|good morning|good evening)\b/.test(sample)) {
     return 'en'
   }
 
