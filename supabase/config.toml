@@ -24,6 +24,9 @@ verify_jwt = false
 [functions.process-knowledge-pdf]
 verify_jwt = false
 
+[functions.backfill-kb-embeddings]
+verify_jwt = false
+
 [functions.smart-reactivation]
 verify_jwt = false
 
