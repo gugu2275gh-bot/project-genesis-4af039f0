@@ -259,20 +259,44 @@ export default function KnowledgeBaseManager() {
                 Máximo 10MB. O texto será extraído automaticamente.
               </p>
               {(
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2"
-                  onClick={handleReprocessAll}
-                  disabled={reprocessing}
-                >
-                  {reprocessing ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                  )}
-                  {reprocessing ? `Reprocessando ${processing || '...'}` : 'Reprocessar todos os PDFs'}
-                </Button>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleReprocessAll}
+                    disabled={reprocessing}
+                  >
+                    {reprocessing ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    {reprocessing ? `Reprocessando ${processing || '...'}` : 'Reprocessar todos os PDFs'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={reprocessing}
+                    onClick={async () => {
+                      setReprocessing(true);
+                      try {
+                        const { data, error } = await supabase.functions.invoke('backfill-kb-embeddings', { body: {} });
+                        if (error || data?.error) {
+                          toast({ title: 'Erro ao gerar embeddings', description: error?.message || data?.error, variant: 'destructive' });
+                        } else {
+                          toast({
+                            title: 'Embeddings gerados',
+                            description: `${data?.processed ?? 0} de ${data?.total ?? 0} chunks processados${data?.failed ? ` (${data.failed} falharam)` : ''}`,
+                          });
+                        }
+                      } finally {
+                        setReprocessing(false);
+                      }
+                    }}
+                  >
+                    Gerar embeddings (busca semântica)
+                  </Button>
+                </div>
               )}
             </div>
           )}

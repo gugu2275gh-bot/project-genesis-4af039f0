@@ -200,6 +200,17 @@ serve(async (req) => {
 
     console.log('Processing PDF:', fileName, 'at', filePath)
 
+    // Resolve OpenAI API key once (used for fallback extraction AND embeddings)
+    let openaiApiKey = Deno.env.get('OPENAI_API_KEY')
+    if (!openaiApiKey) {
+      const { data: configKey } = await supabaseAdmin
+        .from('system_config')
+        .select('value')
+        .eq('key', 'openai_api_key')
+        .single()
+      openaiApiKey = configKey?.value || null
+    }
+
     const { data: fileData, error: downloadError } = await supabaseAdmin
       .storage
       .from('knowledge-base')
@@ -227,15 +238,7 @@ serve(async (req) => {
     if (!extractedText || extractedText.length < MIN_EXTRACTED_TEXT_LENGTH || isInvalidExtractionText(extractedText)) {
       console.log('Basic extraction insufficient, using OpenAI to extract text...')
 
-      let apiKey = Deno.env.get('OPENAI_API_KEY')
-      if (!apiKey) {
-        const { data: configKey } = await supabaseAdmin
-          .from('system_config')
-          .select('value')
-          .eq('key', 'openai_api_key')
-          .single()
-        apiKey = configKey?.value || null
-      }
+      const apiKey = openaiApiKey
 
       if (apiKey) {
         try {
@@ -350,6 +353,39 @@ serve(async (req) => {
     const chunks = chunkText(extractedText)
     console.log(`Split into ${chunks.length} chunks`)
 
+    // Generate embeddings in batch (OpenAI text-embedding-3-small, 1536 dim)
+    let embeddings: (number[] | null)[] = chunks.map(() => null)
+    if (openaiApiKey) {
+      try {
+        const embRes = await fetch('https://api.openai.com/v1/embeddings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${openaiApiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'text-embedding-3-small',
+            input: chunks,
+          }),
+        })
+        if (embRes.ok) {
+          const embData = await embRes.json()
+          if (Array.isArray(embData.data)) {
+            embeddings = embData.data
+              .sort((a: any, b: any) => (a.index ?? 0) - (b.index ?? 0))
+              .map((e: any) => (Array.isArray(e.embedding) ? e.embedding : null))
+            console.log(`Generated ${embeddings.filter(Boolean).length}/${chunks.length} embeddings`)
+          }
+        } else {
+          console.error('Embeddings API failed:', embRes.status, await embRes.text())
+        }
+      } catch (embErr) {
+        console.error('Embedding generation error:', embErr)
+      }
+    } else {
+      console.warn('No OpenAI key — skipping embeddings (semantic search will be unavailable for this file)')
+    }
+
     for (let i = 0; i < chunks.length; i++) {
       const { error: insertError } = await supabaseAdmin
         .from('knowledge_base')
@@ -360,6 +396,7 @@ serve(async (req) => {
           chunk_index: i,
           created_by_user_id: user.id,
           is_active: true,
+          embedding: embeddings[i] ? JSON.stringify(embeddings[i]) : null,
         })
 
       if (insertError) {

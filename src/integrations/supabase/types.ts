@@ -1388,6 +1388,7 @@ export type Database = {
           content: string
           created_at: string | null
           created_by_user_id: string | null
+          embedding: string | null
           file_name: string
           file_path: string
           id: string
@@ -1398,6 +1399,7 @@ export type Database = {
           content: string
           created_at?: string | null
           created_by_user_id?: string | null
+          embedding?: string | null
           file_name: string
           file_path: string
           id?: string
@@ -1408,6 +1410,7 @@ export type Database = {
           content?: string
           created_at?: string | null
           created_by_user_id?: string | null
+          embedding?: string | null
           file_name?: string
           file_path?: string
           id?: string
@@ -3087,6 +3090,20 @@ export type Database = {
         }[]
       }
       is_superuser: { Args: { _user_id: string }; Returns: boolean }
+      match_knowledge_base: {
+        Args: {
+          match_count?: number
+          query_embedding: string
+          similarity_threshold?: number
+        }
+        Returns: {
+          chunk_index: number
+          content: string
+          file_name: string
+          id: string
+          similarity: number
+        }[]
+      }
       merge_contacts: {
         Args: {
           p_source_contact_id: string
