@@ -238,15 +238,7 @@ serve(async (req) => {
     if (!extractedText || extractedText.length < MIN_EXTRACTED_TEXT_LENGTH || isInvalidExtractionText(extractedText)) {
       console.log('Basic extraction insufficient, using OpenAI to extract text...')
 
-      let apiKey = Deno.env.get('OPENAI_API_KEY')
-      if (!apiKey) {
-        const { data: configKey } = await supabaseAdmin
-          .from('system_config')
-          .select('value')
-          .eq('key', 'openai_api_key')
-          .single()
-        apiKey = configKey?.value || null
-      }
+      const apiKey = openaiApiKey
 
       if (apiKey) {
         try {
