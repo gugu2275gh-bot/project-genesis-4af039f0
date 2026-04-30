@@ -110,7 +110,7 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
     label: 'Mensagem padrão (Modo Estrito)',
     description: 'Mensagem enviada quando nenhuma resposta é encontrada na Base de Conhecimento.',
     type: 'textarea',
-    category: 'messaging',
+    category: 'integration',
   },
   {
     key: 'email_notifications_enabled',
