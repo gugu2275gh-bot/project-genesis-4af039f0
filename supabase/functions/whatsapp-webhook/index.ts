@@ -261,11 +261,73 @@ function normalizeForSearch(text: string): string {
     .replace(/[^a-z0-9\s]/g, ' ')
 }
 
-/** Retrieve relevant knowledge base content for the AI context */
+/** Generate an OpenAI embedding for a query (text-embedding-3-small, 1536 dim) */
+async function generateQueryEmbedding(
+  supabase: ReturnType<typeof createClient>,
+  query: string,
+): Promise<number[] | null> {
+  let apiKey = Deno.env.get('OPENAI_API_KEY')
+  if (!apiKey) {
+    const { data: configKey } = await supabase
+      .from('system_config')
+      .select('value')
+      .eq('key', 'openai_api_key')
+      .single()
+    apiKey = configKey?.value || null
+  }
+  if (!apiKey) return null
+  try {
+    const res = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: query.slice(0, 4000),
+      }),
+    })
+    if (!res.ok) {
+      console.error('Query embedding failed:', res.status, await res.text())
+      return null
+    }
+    const data = await res.json()
+    return data?.data?.[0]?.embedding ?? null
+  } catch (err) {
+    console.error('Query embedding error:', err)
+    return null
+  }
+}
+
+/** Retrieve relevant knowledge base content for the AI context (semantic + lexical fallback) */
 async function getKnowledgeBaseContext(
   supabase: ReturnType<typeof createClient>,
   userMessage: string
 ): Promise<string> {
+  // 1) Try semantic search first
+  const queryEmbedding = await generateQueryEmbedding(supabase, userMessage)
+  if (queryEmbedding) {
+    const { data: semanticMatches, error: semErr } = await supabase.rpc('match_knowledge_base', {
+      query_embedding: queryEmbedding as unknown as string,
+      match_count: 8,
+      similarity_threshold: 0.3,
+    })
+    if (!semErr && Array.isArray(semanticMatches) && semanticMatches.length > 0) {
+      const valid = semanticMatches.filter((entry: any) => !isInvalidKnowledgeChunk(entry.content))
+      if (valid.length > 0) {
+        console.log(`[KB] Semantic search returned ${valid.length} chunks (top sim: ${valid[0].similarity?.toFixed(3)})`)
+        return valid
+          .map((chunk: any) => `[Fonte: ${chunk.file_name} | Bloco ${chunk.chunk_index} | Sim: ${chunk.similarity?.toFixed(2)}]\n${chunk.content}`)
+          .join('\n\n')
+          .substring(0, 8000)
+      }
+    }
+    if (semErr) console.error('[KB] Semantic search error:', semErr)
+  }
+
+  // 2) Fallback to lexical keyword search (covers chunks without embeddings)
+  console.log('[KB] Falling back to lexical search')
   const { data: kbEntries } = await supabase
     .from('knowledge_base')
     .select('content, file_name, chunk_index')
