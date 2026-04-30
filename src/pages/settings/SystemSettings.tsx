@@ -97,6 +97,22 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
     category: 'integration',
   },
   {
+    key: 'kb_strict_mode',
+    value: 'false',
+    label: 'Modo Estrito (Base de Conhecimento)',
+    description: 'Quando ativado, o agente responde APENAS com base na Base de Conhecimento. Sem correspondência → envia mensagem padrão.',
+    type: 'boolean',
+    category: 'integration',
+  },
+  {
+    key: 'kb_strict_fallback_message',
+    value: 'Obrigado pela sua mensagem! Não tenho essa informação no momento. Vou encaminhar para um de nossos atendentes que entrará em contato em breve. 🙏',
+    label: 'Mensagem padrão (Modo Estrito)',
+    description: 'Mensagem enviada quando nenhuma resposta é encontrada na Base de Conhecimento.',
+    type: 'textarea',
+    category: 'integration',
+  },
+  {
     key: 'email_notifications_enabled',
     value: 'true',
     label: 'Notificações por Email',

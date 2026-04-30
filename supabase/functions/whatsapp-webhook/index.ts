@@ -1869,6 +1869,8 @@ serve(async (req) => {
       .in('key', [
         'whatsapp_bot_enabled',
         'whatsapp_bot_system_prompt',
+        'kb_strict_mode',
+        'kb_strict_fallback_message',
       ])
 
     const configMap: Record<string, string> = {}
@@ -2111,10 +2113,41 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
 
         console.log(`Knowledge base context: ${knowledgeContext.length} chars, consolidated message length: ${messageForAI.length}`)
 
+        // ===== STRICT KB MODE =====
+        const kbStrictMode = configMap['kb_strict_mode'] === 'true'
+        const kbStrictFallback = (configMap['kb_strict_fallback_message'] || '').trim()
+          || 'Obrigado pela sua mensagem! Não tenho essa informação no momento. Vou encaminhar para um de nossos atendentes que entrará em contato em breve. 🙏'
+
         // Generate AI response (Gemini primary, OpenAI fallback)
         let aiResponse = ''
-        const resolvedSystemPrompt = systemPrompt.replace('{nome}', contact.full_name)
-        
+        let resolvedSystemPrompt = systemPrompt.replace('{nome}', contact.full_name)
+
+        if (kbStrictMode) {
+          if (!knowledgeContext) {
+            console.log('[KB-STRICT] No KB match found — sending standard fallback message')
+            try {
+              await sendWhatsAppMessage(phoneNumber, kbStrictFallback)
+              await supabase.from('mensagens_cliente').insert({
+                id_lead: lead.id,
+                tipo: 'TEXTO',
+                conteudo: kbStrictFallback,
+                direcao: 'SAINDO',
+                origem: 'AGENTE_IA',
+              })
+            } catch (e) {
+              console.error('[KB-STRICT] Failed to send fallback:', e instanceof Error ? e.message : e)
+            }
+            return new Response(JSON.stringify({ success: true, kb_strict_fallback: true }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+          resolvedSystemPrompt += `\n\n## MODO ESTRITO — BASE DE CONHECIMENTO\n` +
+            `Você DEVE responder EXCLUSIVAMENTE com base nos trechos da Base de Conhecimento fornecidos no contexto. ` +
+            `É PROIBIDO usar conhecimento geral, suposições ou inferências fora desses trechos. ` +
+            `Se a resposta não estiver claramente nos trechos, responda EXATAMENTE: "${kbStrictFallback}". ` +
+            `Não invente, não complete lacunas, não combine com conhecimento externo.`
+        }
+
         try {
           aiResponse = await generateAIResponse(
             history,
