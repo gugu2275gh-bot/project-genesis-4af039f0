@@ -1044,6 +1044,47 @@ async function sendWhatsAppMessage(
 }
 
 /** Extract structured contact data from a chat message using Gemini */
+function extractReferralSource(messageText: string): string | null {
+  const text = messageText.trim()
+  const lower = text.toLowerCase()
+
+  const referralPatterns = [
+    /\b(?:vi|vim|achei|encontrei|conheci|soube|descobri|cheguei)\s+(?:voc[eê]s?|a\s+cb|a\s+empresa)?\s*(?:pelo|pela|por|no|na|atrav[eé]s\s+do|atrav[eé]s\s+da)\s+([a-záàâãéèêíïóôõöúçñ\s]{2,40})/i,
+    /\b(?:me\s+indicaram|fui\s+indicad[oa]|indicaç[aã]o\s+de|indicado\s+por|indicada\s+por)\s+([a-záàâãéèêíïóôõöúçñ\s]{2,50})/i,
+    /\b(?:instagram|google|facebook|tiktok|tik\s*tok|youtube|site|internet|whatsapp|amigo|amiga)\b/i,
+  ]
+
+  const match = referralPatterns.map(pattern => lower.match(pattern)).find(Boolean)
+  if (!match) return null
+
+  const rawValue = (match[1] || match[0]).replace(/\b(?:de|do|da|dos|das|um|uma|meu|minha|pelo|pela|por|no|na)\b/gi, ' ').trim()
+  const normalized = rawValue.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+  const knownSources: Record<string, string> = {
+    instagram: 'Instagram',
+    google: 'Google',
+    facebook: 'Facebook',
+    tiktok: 'TikTok',
+    'tik tok': 'TikTok',
+    youtube: 'YouTube',
+    site: 'Site',
+    internet: 'Internet',
+    whatsapp: 'WhatsApp',
+    amigo: 'Indicação de amigo',
+    amiga: 'Indicação de amiga',
+  }
+
+  for (const [key, label] of Object.entries(knownSources)) {
+    if (normalized.includes(key)) return label
+  }
+
+  return rawValue
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
 async function extractAndSuggestContactData(
   supabase: ReturnType<typeof createClient>,
   contactId: string,
@@ -1054,6 +1095,8 @@ async function extractAndSuggestContactData(
 
   // Skip generic/short messages
   if (/^(ok|sim|não|nao|obrigad|oi|olá|hola|hello|bonjour|👍|✅)[\s!?.]*$/i.test(messageText.trim())) return
+
+  const deterministicReferral = extractReferralSource(messageText)
 
   const prompt = `Analise a mensagem do cliente e extraia APENAS dados pessoais explicitamente mencionados.
 Retorne um JSON com SOMENTE os campos que foram claramente informados na mensagem. Não invente dados.
@@ -1123,21 +1166,27 @@ Responda APENAS com o JSON, sem markdown, sem explicação.`
       }
     )
 
-    if (!response.ok) return
+    if (!response.ok && !deterministicReferral) return
 
-    const data = await response.json()
+    const data = response.ok ? await response.json() : null
     const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
     
     // Parse JSON from response (handle markdown code blocks)
     const jsonMatch = rawText.replace(/```json?\s*/g, '').replace(/```/g, '').trim()
-    if (!jsonMatch || jsonMatch === '{}') return
+    if (!jsonMatch || jsonMatch === '{}') {
+      if (!deterministicReferral) return
+    }
 
     let extracted: Record<string, string>
     try {
-      extracted = JSON.parse(jsonMatch)
+      extracted = jsonMatch && jsonMatch !== '{}' ? JSON.parse(jsonMatch) : {}
     } catch {
       console.warn('Failed to parse extraction JSON:', rawText.substring(0, 200))
-      return
+      extracted = {}
+    }
+
+    if (deterministicReferral && !extracted.referral_name) {
+      extracted.referral_name = deterministicReferral
     }
 
     if (Object.keys(extracted).length === 0) return
