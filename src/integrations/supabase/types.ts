@@ -3207,6 +3207,7 @@ export type Database = {
         | "NACIONALIDADE_CASAMENTO"
         | "OUTRO"
         | "RESIDENCIA_PARENTE_COMUNITARIO"
+        | "SEM_SERVICO"
       service_sector:
         | "ESTUDANTE"
         | "TRABALHO"
@@ -3468,6 +3469,7 @@ export const Constants = {
         "NACIONALIDADE_CASAMENTO",
         "OUTRO",
         "RESIDENCIA_PARENTE_COMUNITARIO",
+        "SEM_SERVICO",
       ],
       service_sector: [
         "ESTUDANTE",

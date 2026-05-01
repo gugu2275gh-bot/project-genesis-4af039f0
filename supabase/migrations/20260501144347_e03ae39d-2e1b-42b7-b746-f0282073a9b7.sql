@@ -1,0 +1,1 @@
+ALTER TYPE service_interest ADD VALUE IF NOT EXISTS 'SEM_SERVICO';
