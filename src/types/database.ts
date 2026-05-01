@@ -32,6 +32,7 @@ export type ServiceInterest =
   | 'NACIONALIDADE_RESIDENCIA'
   | 'NACIONALIDADE_CASAMENTO'
   | 'RESIDENCIA_PARENTE_COMUNITARIO'
+  | 'SEM_SERVICO'
   | 'OUTRO';
 
 export type LeadStatus = 
@@ -375,6 +376,7 @@ export const SERVICE_INTEREST_LABELS: Record<ServiceInterest, string> = {
   NACIONALIDADE_RESIDENCIA: 'Nacionalidade por Residência',
   NACIONALIDADE_CASAMENTO: 'Nacionalidade por Casamento',
   RESIDENCIA_PARENTE_COMUNITARIO: 'Residência por Parente de Comunitário (EX19)',
+  SEM_SERVICO: 'Sem Serviço',
   OUTRO: 'Outro',
 };
 

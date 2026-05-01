@@ -1405,6 +1405,7 @@ serve(async (req) => {
         .insert({
           contact_id: contact.id,
           status: 'NOVO',
+          service_interest: 'SEM_SERVICO',
           notes: 'Lead criado automaticamente via WhatsApp',
           assigned_to_user_id: assignedUserId,
         })
