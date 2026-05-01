@@ -1079,8 +1079,11 @@ Campos possíveis:
 - has_job_offer (true/false)
 - works_remotely (true/false)
 - has_eu_family_member (true/false)
+- referral_name (como conheceu a empresa / quem indicou — ex.: "Instagram", "Google", "Facebook", "TikTok", "YouTube", "Indicação de amigo", "João Silva". Capture quando o cliente disser frases como "vi no Instagram", "achei no Google", "fui indicado por X", "me indicaram", "conheci pelo Facebook")
 
 REGRA CPF: Sempre normalize o CPF removendo pontos, traços e espaços. Retorne apenas os 11 dígitos. Se o cliente informar menos ou mais que 11 dígitos, NÃO inclua o campo.
+
+REGRA REFERRAL: Para referral_name, normalize redes sociais para o nome próprio capitalizado (ex.: "instagram" → "Instagram", "google" → "Google"). Se for nome de pessoa, mantenha em formato Title Case. Não inclua o campo se o cliente apenas mencionar a rede sem dizer que foi por onde conheceu.
 
 REGRAS DE NORMALIZAÇÃO DE DATAS (MUITO IMPORTANTE):
 Sempre converta QUALQUER formato de data informado pelo cliente para o padrão YYYY-MM-DD.
