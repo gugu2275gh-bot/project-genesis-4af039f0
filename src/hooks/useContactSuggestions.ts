@@ -33,6 +33,7 @@ const FIELD_LABELS: Record<string, string> = {
   has_job_offer: 'Oferta de Trabalho',
   works_remotely: 'Trabalho Remoto',
   has_eu_family_member: 'Familiar Europeu',
+  referral_name: 'Indicado por',
   monthly_income: 'Renda Mensal',
 };
 
