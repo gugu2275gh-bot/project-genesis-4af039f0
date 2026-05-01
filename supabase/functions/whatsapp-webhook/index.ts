@@ -1200,6 +1200,23 @@ Responda APENAS com o JSON, sem markdown, sem explicação.`
 
     if (!currentContact) return
 
+    const referralValue = extracted.referral_name ? String(extracted.referral_name).trim() : ''
+    const currentReferral = (currentContact as Record<string, any>).referral_name
+
+    if (referralValue && !String(currentReferral || '').trim()) {
+      const { error: referralUpdateError } = await supabase
+        .from('contacts')
+        .update({ referral_name: referralValue })
+        .eq('id', contactId)
+
+      if (referralUpdateError) {
+        console.error('Failed to update referral_name directly:', referralUpdateError.message)
+      } else {
+        ;(currentContact as Record<string, any>).referral_name = referralValue
+        console.log(`Updated referral_name directly for contact ${contactId}: ${referralValue}`)
+      }
+    }
+
     const suggestions: Array<{ contact_id: string; field_name: string; suggested_value: string; current_value: string | null }> = []
 
     for (const [field, value] of Object.entries(extracted)) {
