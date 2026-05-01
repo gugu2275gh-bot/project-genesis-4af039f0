@@ -1066,6 +1066,8 @@ Campos possíveis:
 - civil_status (solteiro, casado, divorciado, viuvo, uniao_estavel)
 - profession (profissão)
 - email (e-mail)
+- cpf (CPF brasileiro, apenas dígitos, 11 caracteres - aceite formatos como "123.456.789-00", "12345678900", "123 456 789 00")
+- document_number (número do documento de identidade/NIE/passaporte/DNI, se NÃO for CPF)
 - address (endereço)
 - spain_arrival_date (data de chegada na Espanha, formato YYYY-MM-DD)
 - education_level (escolaridade)
@@ -1077,6 +1079,8 @@ Campos possíveis:
 - has_job_offer (true/false)
 - works_remotely (true/false)
 - has_eu_family_member (true/false)
+
+REGRA CPF: Sempre normalize o CPF removendo pontos, traços e espaços. Retorne apenas os 11 dígitos. Se o cliente informar menos ou mais que 11 dígitos, NÃO inclua o campo.
 
 REGRAS DE NORMALIZAÇÃO DE DATAS (MUITO IMPORTANTE):
 Sempre converta QUALQUER formato de data informado pelo cliente para o padrão YYYY-MM-DD.
