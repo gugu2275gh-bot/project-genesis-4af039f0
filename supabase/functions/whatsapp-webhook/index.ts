@@ -2292,16 +2292,16 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
           messageForAI = stateLines.join('\n')
         }
 
-        // Build a contextual KB query: include the previous agent question and the lead's
-        // service of interest so generic follow-up replies (e.g. "requisitos e documentos")
-        // still match the correct PDF in semantic search.
+        // Build a contextual KB query: direct questions in the current message have priority;
+        // only then use the lead's service of interest for generic follow-ups.
         const { data: leadInterest } = await supabase
           .from('leads')
           .select('service_interest, service_type_id, notes')
           .eq('id', lead.id)
           .maybeSingle()
-        let topicHint = ''
-        if (leadInterest?.service_type_id) {
+        const currentMessageTopicHint = await detectKnowledgeTopicHint(supabase, rawCustomerMessage || '')
+        let topicHint = currentMessageTopicHint
+        if (!topicHint && leadInterest?.service_type_id) {
           const { data: stRow } = await supabase
             .from('service_types')
             .select('name')
@@ -2326,10 +2326,10 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
         if (rawCustomerMessage) kbQueryParts.push(`Pergunta do cliente: ${rawCustomerMessage}`)
         const kbQuery = kbQueryParts.join('\n').trim() || (rawCustomerMessage || messageForAI || '').trim()
         const knowledgeContext = kbQuery
-          ? await getKnowledgeBaseContext(supabase, kbQuery, topicHint || recentAssistantText)
+          ? await getKnowledgeBaseContext(supabase, kbQuery, topicHint || undefined)
           : ''
 
-        console.log(`[KB] query topicHint="${topicHint}" len=${kbQuery.length} -> context ${knowledgeContext.length} chars`)
+        console.log(`[KB] query currentTopic="${currentMessageTopicHint}" finalTopic="${topicHint}" len=${kbQuery.length} -> context ${knowledgeContext.length} chars`)
 
         // ===== STRICT KB MODE =====
         const kbStrictMode = configMap['kb_strict_mode'] === 'true'
@@ -2361,8 +2361,11 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
           }
           resolvedSystemPrompt += `\n\n## MODO ESTRITO — BASE DE CONHECIMENTO\n` +
             `Você DEVE responder EXCLUSIVAMENTE com base nos trechos da Base de Conhecimento fornecidos no contexto. ` +
+            `Antes de dizer que não tem informação, procure a resposta nos trechos marcados como BASE DE CONHECIMENTO, especialmente no arquivo do tópico atual. ` +
+            `Se o cliente perguntar "o que é", use a seção "O que é — Explicação do serviço" quando ela existir. ` +
+            `Se perguntar requisitos/documentos, use a seção "Requisitos e documentos" quando ela existir. ` +
             `É PROIBIDO usar conhecimento geral, suposições ou inferências fora desses trechos. ` +
-            `Se a resposta não estiver claramente nos trechos, responda EXATAMENTE: "${kbStrictFallback}". ` +
+            `Só responda EXATAMENTE "${kbStrictFallback}" quando o contexto da base estiver vazio ou realmente não contiver a resposta. ` +
             `Não invente, não complete lacunas, não combine com conhecimento externo.`
         }
 
