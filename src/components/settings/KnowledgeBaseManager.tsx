@@ -7,7 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { BookOpen, Upload, Trash2, FileText, Loader2, RefreshCw } from 'lucide-react';
+import { BookOpen, Upload, Trash2, FileText, Loader2, RefreshCw, Download } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface KnowledgeEntry {
@@ -327,6 +327,30 @@ export default function KnowledgeBaseManager() {
                     <Badge variant={entry.is_active ? 'default' : 'secondary'}>
                       {entry.is_active ? 'Ativo' : 'Inativo'}
                     </Badge>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Baixar PDF"
+                      onClick={async () => {
+                        try {
+                          const { data, error } = await supabase.storage
+                            .from('knowledge-base')
+                            .createSignedUrl(entry.file_path, 60);
+                          if (error || !data?.signedUrl) throw error || new Error('No URL');
+                          const a = document.createElement('a');
+                          a.href = data.signedUrl;
+                          a.download = entry.file_name;
+                          a.target = '_blank';
+                          document.body.appendChild(a);
+                          a.click();
+                          a.remove();
+                        } catch (err: any) {
+                          toast({ title: 'Erro ao baixar', description: err.message, variant: 'destructive' });
+                        }
+                      }}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
                     {isAdmin && (
                       <Button
                         variant="ghost"
