@@ -371,6 +371,9 @@ async function getKnowledgeBaseContext(
   topicHint?: string,
 ): Promise<string> {
   const normalizedHint = topicHint ? normalizeForSearch(topicHint) : ''
+  // Preload topic-matched chunks (used as a *boost*, not as a hard lock — the agent
+  // must still be able to answer about other services if the question shifts).
+  let topicPreloaded: Array<{ content: string; file_name: string; chunk_index: number }> = []
   if (normalizedHint) {
     const { data: topicEntries } = await supabase
       .from('knowledge_base')
@@ -386,13 +389,8 @@ async function getKnowledgeBaseContext(
       .sort((a, b) => b.score - a.score || meaningfulSearchTokens(a.fileName).length - meaningfulSearchTokens(b.fileName).length)[0]
 
     if (bestTopic) {
-      const selected = validTopicEntries.filter((entry) => entry.file_name === bestTopic.fileName).slice(0, 8)
-      console.log(`[KB] Topic lock selected ${bestTopic.fileName} (${bestTopic.score.toFixed(2)}) with ${selected.length} chunks`)
-      return selected
-        .map((chunk) => `[Fonte: ${chunk.file_name} | Bloco ${chunk.chunk_index}]
-${chunk.content}`)
-        .join('\n\n')
-        .substring(0, 8000)
+      topicPreloaded = validTopicEntries.filter((entry) => entry.file_name === bestTopic.fileName).slice(0, 4)
+      console.log(`[KB] Topic preload ${bestTopic.fileName} (${bestTopic.score.toFixed(2)}): ${topicPreloaded.length} chunks (will be merged with semantic)`)
     }
   }
 
@@ -421,10 +419,15 @@ ${chunk.content}`)
         }
         const top3 = valid.slice(0, 3).map((c: any) => `${c.file_name}#${c.chunk_index}=${c.similarity?.toFixed(3)}${c._boost ? `(+${c._boost})` : ''}`).join(' | ')
         console.log(`[KB] Semantic returned ${valid.length} chunks. Top3: ${top3}`)
-        return valid
-          .map((chunk: any) => `[Fonte: ${chunk.file_name} | Bloco ${chunk.chunk_index} | Sim: ${chunk.similarity?.toFixed(2)}]\n${chunk.content}`)
-          .join('\n\n')
-          .substring(0, 8000)
+        // Merge topic-preloaded chunks (deduped) so the agent has the canonical doc
+        // for the active topic available, but without locking out other services.
+        const seen = new Set(valid.map((c: any) => `${c.file_name}#${c.chunk_index}`))
+        const extras = topicPreloaded.filter((c) => !seen.has(`${c.file_name}#${c.chunk_index}`))
+        const merged = [
+          ...valid.map((c: any) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Sim: ${c.similarity?.toFixed(2)}]\n${c.content}`),
+          ...extras.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Tópico]\n${c.content}`),
+        ]
+        return merged.join('\n\n').substring(0, 8000)
       }
     }
     if (semErr) console.error('[KB] Semantic search error:', semErr)
@@ -460,11 +463,13 @@ ${chunk.content}`)
     .slice(0, 8)
 
   const selected = relevant.length > 0 ? relevant : validEntries.slice(0, 8)
+  const seen = new Set(selected.map((c) => `${c.file_name}#${c.chunk_index}`))
+  const extras = topicPreloaded.filter((c) => !seen.has(`${c.file_name}#${c.chunk_index}`))
 
-  return selected
-    .map((chunk) => `[Fonte: ${chunk.file_name} | Bloco ${chunk.chunk_index}]\n${chunk.content}`)
-    .join('\n\n')
-    .substring(0, 8000)
+  return [
+    ...selected.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index}]\n${c.content}`),
+    ...extras.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Tópico]\n${c.content}`),
+  ].join('\n\n').substring(0, 8000)
 }
 
 /** Try to extract name and email from a client message */
