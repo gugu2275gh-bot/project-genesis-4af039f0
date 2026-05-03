@@ -860,7 +860,7 @@ async function rewriteResponseToLanguage(
     if (!response.ok) return text
 
     const data = await response.json()
-    const rewritten = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+    const rewritten = extractGeminiText(data)
     return rewritten || text
   } catch {
     return text
@@ -972,7 +972,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
       }
 
       const data = await response.json()
-      const result = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
+      const result = extractGeminiText(data)
 
       if (!result) {
         const finishReason = data?.candidates?.[0]?.finishReason || 'unknown'
