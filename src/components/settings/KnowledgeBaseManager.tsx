@@ -333,17 +333,20 @@ export default function KnowledgeBaseManager() {
                       title="Baixar PDF"
                       onClick={async () => {
                         try {
-                          const { data, error } = await supabase.storage
-                            .from('knowledge-base')
-                            .createSignedUrl(entry.file_path, 60);
-                          if (error || !data?.signedUrl) throw error || new Error('No URL');
+                          await supabase.auth.refreshSession();
+                          const { data, error } = await supabase.functions.invoke('kb-download', {
+                            body: { filePath: entry.file_path },
+                          });
+                          if (error) throw error;
+                          const blob = data instanceof Blob ? data : new Blob([data], { type: 'application/pdf' });
+                          const url = URL.createObjectURL(blob);
                           const a = document.createElement('a');
-                          a.href = data.signedUrl;
+                          a.href = url;
                           a.download = entry.file_name;
-                          a.target = '_blank';
                           document.body.appendChild(a);
                           a.click();
                           a.remove();
+                          URL.revokeObjectURL(url);
                         } catch (err: any) {
                           toast({ title: 'Erro ao baixar', description: err.message, variant: 'destructive' });
                         }
