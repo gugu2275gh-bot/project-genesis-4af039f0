@@ -2188,8 +2188,10 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
           messageForAI = stateLines.join('\n')
         }
 
-        const knowledgeContext = messageForAI
-          ? await getKnowledgeBaseContext(supabase, messageForAI)
+        // Use the raw customer message for KB lookup (not the augmented messageForAI which contains state preamble that pollutes embedding similarity)
+        const kbQuery = (rawCustomerMessage || messageForAI || '').trim()
+        const knowledgeContext = kbQuery
+          ? await getKnowledgeBaseContext(supabase, kbQuery)
           : ''
 
         console.log(`Knowledge base context: ${knowledgeContext.length} chars, consolidated message length: ${messageForAI.length}`)
