@@ -371,6 +371,31 @@ async function getKnowledgeBaseContext(
   topicHint?: string,
 ): Promise<string> {
   const normalizedHint = topicHint ? normalizeForSearch(topicHint) : ''
+  if (normalizedHint) {
+    const { data: topicEntries } = await supabase
+      .from('knowledge_base')
+      .select('content, file_name, chunk_index')
+      .eq('is_active', true)
+      .order('file_name')
+      .order('chunk_index')
+
+    const validTopicEntries = (topicEntries || []).filter((entry) => !isInvalidKnowledgeChunk(entry.content))
+    const bestTopic = Array.from(new Set(validTopicEntries.map((entry) => entry.file_name).filter(Boolean)))
+      .map((fileName) => ({ fileName, score: scoreTopicFileName(fileName, topicHint || '') }))
+      .filter((item) => item.score >= 2)
+      .sort((a, b) => b.score - a.score || meaningfulSearchTokens(a.fileName).length - meaningfulSearchTokens(b.fileName).length)[0]
+
+    if (bestTopic) {
+      const selected = validTopicEntries.filter((entry) => entry.file_name === bestTopic.fileName).slice(0, 8)
+      console.log(`[KB] Topic lock selected ${bestTopic.fileName} (${bestTopic.score.toFixed(2)}) with ${selected.length} chunks`)
+      return selected
+        .map((chunk) => `[Fonte: ${chunk.file_name} | Bloco ${chunk.chunk_index}]
+${chunk.content}`)
+        .join('\n\n')
+        .substring(0, 8000)
+    }
+  }
+
   // 1) Try semantic search first
   const queryEmbedding = await generateQueryEmbedding(supabase, userMessage)
   if (queryEmbedding) {
