@@ -371,6 +371,9 @@ async function getKnowledgeBaseContext(
   topicHint?: string,
 ): Promise<string> {
   const normalizedHint = topicHint ? normalizeForSearch(topicHint) : ''
+  // Preload topic-matched chunks (used as a *boost*, not as a hard lock — the agent
+  // must still be able to answer about other services if the question shifts).
+  let topicPreloaded: Array<{ content: string; file_name: string; chunk_index: number }> = []
   if (normalizedHint) {
     const { data: topicEntries } = await supabase
       .from('knowledge_base')
@@ -386,13 +389,8 @@ async function getKnowledgeBaseContext(
       .sort((a, b) => b.score - a.score || meaningfulSearchTokens(a.fileName).length - meaningfulSearchTokens(b.fileName).length)[0]
 
     if (bestTopic) {
-      const selected = validTopicEntries.filter((entry) => entry.file_name === bestTopic.fileName).slice(0, 8)
-      console.log(`[KB] Topic lock selected ${bestTopic.fileName} (${bestTopic.score.toFixed(2)}) with ${selected.length} chunks`)
-      return selected
-        .map((chunk) => `[Fonte: ${chunk.file_name} | Bloco ${chunk.chunk_index}]
-${chunk.content}`)
-        .join('\n\n')
-        .substring(0, 8000)
+      topicPreloaded = validTopicEntries.filter((entry) => entry.file_name === bestTopic.fileName).slice(0, 4)
+      console.log(`[KB] Topic preload ${bestTopic.fileName} (${bestTopic.score.toFixed(2)}): ${topicPreloaded.length} chunks (will be merged with semantic)`)
     }
   }
 
