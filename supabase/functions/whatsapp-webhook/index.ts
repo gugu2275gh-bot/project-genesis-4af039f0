@@ -2203,13 +2203,38 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
           messageForAI = stateLines.join('\n')
         }
 
-        // Use the raw customer message for KB lookup (not the augmented messageForAI which contains state preamble that pollutes embedding similarity)
-        const kbQuery = (rawCustomerMessage || messageForAI || '').trim()
+        // Build a contextual KB query: include the previous agent question and the lead's
+        // service of interest so generic follow-up replies (e.g. "requisitos e documentos")
+        // still match the correct PDF in semantic search.
+        const { data: leadInterest } = await supabase
+          .from('leads')
+          .select('service_interest, service_type_id, notes')
+          .eq('id', lead.id)
+          .maybeSingle()
+        let topicHint = ''
+        if (leadInterest?.service_type_id) {
+          const { data: stRow } = await supabase
+            .from('service_types')
+            .select('name')
+            .eq('id', leadInterest.service_type_id)
+            .maybeSingle()
+          if (stRow?.name) topicHint = stRow.name
+        }
+        if (!topicHint && leadInterest?.service_interest && leadInterest.service_interest !== 'SEM_SERVICO') {
+          topicHint = String(leadInterest.service_interest).replace(/_/g, ' ')
+        }
+        // Try to detect topic from last assistant messages (e.g. "Residência para Práticas")
+        const recentAssistantText = assistantMsgs.slice(-3).map(m => m.content).join(' ')
+        const kbQueryParts: string[] = []
+        if (topicHint) kbQueryParts.push(`Tópico: ${topicHint}`)
+        if (lastAssistantQuestion) kbQueryParts.push(`Pergunta anterior do agente: ${lastAssistantQuestion}`)
+        if (rawCustomerMessage) kbQueryParts.push(`Pergunta do cliente: ${rawCustomerMessage}`)
+        const kbQuery = kbQueryParts.join('\n').trim() || (rawCustomerMessage || messageForAI || '').trim()
         const knowledgeContext = kbQuery
-          ? await getKnowledgeBaseContext(supabase, kbQuery)
+          ? await getKnowledgeBaseContext(supabase, kbQuery, topicHint || recentAssistantText)
           : ''
 
-        console.log(`Knowledge base context: ${knowledgeContext.length} chars, consolidated message length: ${messageForAI.length}`)
+        console.log(`[KB] query topicHint="${topicHint}" len=${kbQuery.length} -> context ${knowledgeContext.length} chars`)
 
         // ===== STRICT KB MODE =====
         const kbStrictMode = configMap['kb_strict_mode'] === 'true'
