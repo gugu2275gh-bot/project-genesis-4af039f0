@@ -303,8 +303,10 @@ async function generateQueryEmbedding(
 /** Retrieve relevant knowledge base content for the AI context (semantic + lexical fallback) */
 async function getKnowledgeBaseContext(
   supabase: ReturnType<typeof createClient>,
-  userMessage: string
+  userMessage: string,
+  topicHint?: string,
 ): Promise<string> {
+  const normalizedHint = topicHint ? normalizeForSearch(topicHint) : ''
   // 1) Try semantic search first
   const queryEmbedding = await generateQueryEmbedding(supabase, userMessage)
   if (queryEmbedding) {
@@ -314,9 +316,22 @@ async function getKnowledgeBaseContext(
       similarity_threshold: 0.3,
     })
     if (!semErr && Array.isArray(semanticMatches) && semanticMatches.length > 0) {
-      const valid = semanticMatches.filter((entry: any) => !isInvalidKnowledgeChunk(entry.content))
+      let valid = semanticMatches.filter((entry: any) => !isInvalidKnowledgeChunk(entry.content))
       if (valid.length > 0) {
-        console.log(`[KB] Semantic search returned ${valid.length} chunks (top sim: ${valid[0].similarity?.toFixed(3)})`)
+        // Boost chunks whose file_name matches the topic hint (e.g. "Residencia para Practicas")
+        if (normalizedHint) {
+          const hintTokens = normalizedHint.split(/\s+/).filter((w) => w.length > 3)
+          valid = valid
+            .map((chunk: any) => {
+              const fname = normalizeForSearch(chunk.file_name || '')
+              const hits = hintTokens.reduce((acc, t) => acc + (fname.includes(t) ? 1 : 0), 0)
+              const boost = hits >= 2 ? 0.25 : hits === 1 ? 0.1 : 0
+              return { ...chunk, similarity: (chunk.similarity || 0) + boost, _boost: boost }
+            })
+            .sort((a: any, b: any) => b.similarity - a.similarity)
+        }
+        const top3 = valid.slice(0, 3).map((c: any) => `${c.file_name}#${c.chunk_index}=${c.similarity?.toFixed(3)}${c._boost ? `(+${c._boost})` : ''}`).join(' | ')
+        console.log(`[KB] Semantic returned ${valid.length} chunks. Top3: ${top3}`)
         return valid
           .map((chunk: any) => `[Fonte: ${chunk.file_name} | Bloco ${chunk.chunk_index} | Sim: ${chunk.similarity?.toFixed(2)}]\n${chunk.content}`)
           .join('\n\n')
