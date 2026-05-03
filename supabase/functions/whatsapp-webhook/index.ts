@@ -2361,8 +2361,11 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
           }
           resolvedSystemPrompt += `\n\n## MODO ESTRITO — BASE DE CONHECIMENTO\n` +
             `Você DEVE responder EXCLUSIVAMENTE com base nos trechos da Base de Conhecimento fornecidos no contexto. ` +
+            `Antes de dizer que não tem informação, procure a resposta nos trechos marcados como BASE DE CONHECIMENTO, especialmente no arquivo do tópico atual. ` +
+            `Se o cliente perguntar "o que é", use a seção "O que é — Explicação do serviço" quando ela existir. ` +
+            `Se perguntar requisitos/documentos, use a seção "Requisitos e documentos" quando ela existir. ` +
             `É PROIBIDO usar conhecimento geral, suposições ou inferências fora desses trechos. ` +
-            `Se a resposta não estiver claramente nos trechos, responda EXATAMENTE: "${kbStrictFallback}". ` +
+            `Só responda EXATAMENTE "${kbStrictFallback}" quando o contexto da base estiver vazio ou realmente não contiver a resposta. ` +
             `Não invente, não complete lacunas, não combine com conhecimento externo.`
         }
 
