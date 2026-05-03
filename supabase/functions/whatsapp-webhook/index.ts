@@ -463,11 +463,13 @@ async function getKnowledgeBaseContext(
     .slice(0, 8)
 
   const selected = relevant.length > 0 ? relevant : validEntries.slice(0, 8)
+  const seen = new Set(selected.map((c) => `${c.file_name}#${c.chunk_index}`))
+  const extras = topicPreloaded.filter((c) => !seen.has(`${c.file_name}#${c.chunk_index}`))
 
-  return selected
-    .map((chunk) => `[Fonte: ${chunk.file_name} | Bloco ${chunk.chunk_index}]\n${chunk.content}`)
-    .join('\n\n')
-    .substring(0, 8000)
+  return [
+    ...selected.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index}]\n${c.content}`),
+    ...extras.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Tópico]\n${c.content}`),
+  ].join('\n\n').substring(0, 8000)
 }
 
 /** Try to extract name and email from a client message */
