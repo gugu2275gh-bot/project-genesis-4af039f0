@@ -2309,11 +2309,17 @@ NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie
             .maybeSingle()
           if (stRow?.name) topicHint = stRow.name
         }
-        if (!topicHint && leadInterest?.service_interest && leadInterest.service_interest !== 'SEM_SERVICO') {
+        if (!topicHint && leadInterest?.service_interest && !['SEM_SERVICO', 'OUTRO'].includes(String(leadInterest.service_interest))) {
           topicHint = String(leadInterest.service_interest).replace(/_/g, ' ')
         }
         // Try to detect topic from last assistant messages (e.g. "Residência para Práticas")
         const recentAssistantText = assistantMsgs.slice(-3).map(m => m.content).join(' ')
+        if (!topicHint) {
+          topicHint = await detectKnowledgeTopicHint(
+            supabase,
+            `${recentAssistantText}\n${lastAssistantQuestion || ''}\n${rawCustomerMessage || ''}`,
+          )
+        }
         const kbQueryParts: string[] = []
         if (topicHint) kbQueryParts.push(`Tópico: ${topicHint}`)
         if (lastAssistantQuestion) kbQueryParts.push(`Pergunta anterior do agente: ${lastAssistantQuestion}`)
