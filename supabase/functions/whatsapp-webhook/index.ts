@@ -261,6 +261,70 @@ function normalizeForSearch(text: string): string {
     .replace(/[^a-z0-9\s]/g, ' ')
 }
 
+const SEARCH_STOPWORDS = new Set([
+  'ok', 'pdf', 'para', 'por', 'com', 'sem', 'uma', 'das', 'dos', 'de', 'da', 'do', 'del', 'el', 'la',
+  'desde', 'pais', 'origem', 'mais', 'menos', 'ano', 'anos', 'todas', 'todo', 'toda', 'sobre',
+])
+
+function meaningfulSearchTokens(text: string): string[] {
+  return normalizeForSearch(text)
+    .split(/\s+/)
+    .filter((token) => token.length > 2 && !SEARCH_STOPWORDS.has(token))
+}
+
+function compactSearchText(text: string): string {
+  return meaningfulSearchTokens(text).join(' ')
+}
+
+function scoreTopicFileName(fileName: string, hintOrConversation: string): number {
+  const fileTokens = meaningfulSearchTokens(fileName)
+  if (!fileTokens.length) return 0
+
+  const normalizedTarget = normalizeForSearch(hintOrConversation)
+  const compactTarget = compactSearchText(hintOrConversation)
+  const compactFile = fileTokens.join(' ')
+  const hits = fileTokens.filter((token) => normalizedTarget.includes(token)).length
+  if (hits === 0) return 0
+
+  const phraseBonus = compactTarget.includes(compactFile) ? 10 : compactTarget.includes(fileTokens.filter((token) => normalizedTarget.includes(token)).join(' ')) ? 4 : 0
+  const coverage = hits / fileTokens.length
+  const extraPenalty = Math.max(0, fileTokens.length - hits) * 0.2
+  return hits + phraseBonus + coverage - extraPenalty
+}
+
+function extractGeminiText(data: any): string {
+  const parts = data?.candidates?.[0]?.content?.parts
+  if (!Array.isArray(parts)) return ''
+  return parts.map((part: any) => part?.text || '').join('').trim()
+}
+
+async function detectKnowledgeTopicHint(
+  supabase: ReturnType<typeof createClient>,
+  conversationText: string,
+): Promise<string> {
+  if (!conversationText.trim()) return ''
+
+  const { data: rows, error } = await supabase
+    .from('knowledge_base')
+    .select('file_name')
+    .eq('is_active', true)
+
+  if (error || !rows?.length) return ''
+
+  const uniqueFileNames = Array.from(new Set(rows.map((row: any) => row.file_name).filter(Boolean)))
+  const ranked = uniqueFileNames
+    .map((fileName) => ({ fileName, score: scoreTopicFileName(fileName, conversationText) }))
+    .filter((item) => item.score >= 2)
+    .sort((a, b) => b.score - a.score || meaningfulSearchTokens(a.fileName).length - meaningfulSearchTokens(b.fileName).length)
+
+  if (ranked[0]) {
+    console.log(`[KB] Detected topic from conversation: ${ranked[0].fileName} (${ranked[0].score.toFixed(2)})`)
+    return ranked[0].fileName
+  }
+
+  return ''
+}
+
 /** Generate an OpenAI embedding for a query (text-embedding-3-small, 1536 dim) */
 async function generateQueryEmbedding(
   supabase: ReturnType<typeof createClient>,
