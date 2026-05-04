@@ -65,22 +65,6 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
     category: 'integration',
   },
   {
-    key: 'uazapi_url',
-    value: '',
-    label: 'WhatsApp API - URL',
-    description: 'URL base da API de envio de mensagens WhatsApp',
-    type: 'text',
-    category: 'integration',
-  },
-  {
-    key: 'uazapi_token',
-    value: '',
-    label: 'WhatsApp API - Token',
-    description: 'Token de autenticação da API WhatsApp',
-    type: 'text',
-    category: 'integration',
-  },
-  {
     key: 'whatsapp_bot_system_prompt',
     value: '',
     label: 'Prompt do Agente IA (WhatsApp)',
@@ -166,7 +150,7 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
 export default function SystemSettings() {
   const { isSuperuser } = useSuperuser();
 
-  const SENSITIVE_KEYS = ['openai_api_key', 'gemini_api_key', 'uazapi_url', 'uazapi_token'];
+  const SENSITIVE_KEYS = ['openai_api_key', 'gemini_api_key'];
 
   const { toast } = useToast();
   const { hasRole } = useAuth();

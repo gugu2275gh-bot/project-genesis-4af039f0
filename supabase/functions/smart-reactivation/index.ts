@@ -134,8 +134,6 @@ serve(async (req) => {
         'llm_confidence_threshold_confirmation',
         'reactivation_context_message_limit',
         'openai_api_key',
-        'uazapi_url',
-        'uazapi_token',
       ])
 
     const cfg: Record<string, string> = {}
@@ -742,22 +740,46 @@ async function deterministicFallback(
   return { action: 'SEND_MESSAGE', message_to_customer: msg }
 }
 
-async function sendMessage(cfg: Record<string, string>, phone: string, message: string): Promise<void> {
-  const uazapiUrl = cfg['uazapi_url']
-  const uazapiToken = cfg['uazapi_token']
-  if (!uazapiUrl || !uazapiToken) {
-    console.error('WhatsApp API not configured for reactivation message')
+const TWILIO_GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio'
+const TWILIO_FROM_NUMBER = 'whatsapp:+34654378464'
+
+async function sendMessage(_cfg: Record<string, string>, phone: string, message: string): Promise<void> {
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
+  const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY')
+  if (!LOVABLE_API_KEY || !TWILIO_API_KEY) {
+    console.error('Twilio credentials not configured for reactivation message')
     return
   }
 
+  // Normalize destination to whatsapp:+E164
+  const digits = String(phone || '').replace(/\D/g, '')
+  if (!digits) {
+    console.error('Invalid phone for reactivation message')
+    return
+  }
+  const to = `whatsapp:+${digits}`
+
   try {
-    const apiUrl = `${uazapiUrl.replace(/\/$/, '')}/send/text`
-    await fetch(apiUrl, {
+    const response = await fetch(`${TWILIO_GATEWAY_URL}/Messages.json`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'token': uazapiToken },
-      body: JSON.stringify({ number: phone, text: message }),
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'X-Connection-Api-Key': TWILIO_API_KEY,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        To: to,
+        From: TWILIO_FROM_NUMBER,
+        Body: message,
+      }),
     })
-    console.log('Reactivation message sent to:', phone)
+
+    if (!response.ok) {
+      const errText = await response.text()
+      console.error('Twilio API error:', response.status, errText)
+      return
+    }
+    console.log('Reactivation message sent (Twilio) to:', to)
   } catch (err) {
     console.error('Failed to send reactivation message:', err instanceof Error ? err.message : err)
   }
