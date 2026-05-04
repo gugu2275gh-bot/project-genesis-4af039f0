@@ -1,0 +1,1 @@
+DELETE FROM public.system_config WHERE key IN ('uazapi_url', 'uazapi_token');
