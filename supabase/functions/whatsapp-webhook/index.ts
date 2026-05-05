@@ -2120,26 +2120,29 @@ serve(async (req) => {
         const langHint = contact.preferred_language ? preferredLangMap[contact.preferred_language] : null
         const detectedFromText = detectChatLanguage(currentCustomerMessage)
         
+        // Strong Portuguese signal in current message — overrides any saved hint
+        const ptSample = currentCustomerMessage.toLowerCase().normalize('NFC')
+        const strongPortuguese = /\b(n[aã]o|sim|obrigad[oa]|ol[aá]|oi|voc[eê]|nunca|tamb[eé]m|tudo bem|bom dia|boa tarde|boa noite|brasil|espanha|europa|portugu[eê]s|estou|quero|preciso|meu|minha|cpf|cnpj)\b/u.test(ptSample) || /[ãõ]/.test(currentCustomerMessage)
+
         // Language decision logic:
-        // 1. If text detection found a NON-default language (es/en/fr), trust it and persist
-        // 2. If text detection returned default (pt-BR) AND contact has a saved language, use the saved one
-        //    (handles ambiguous messages like names, "ok", "sim" which default to pt-BR)
-        // 3. If text detection returned pt-BR and no saved language, use pt-BR
+        // 1. Confident non-pt detection from text → use it
+        // 2. Strong Portuguese signal → force pt-BR (overrides saved hint)
+        // 3. Ambiguous text + saved non-pt hint → use saved
+        // 4. Else pt-BR
         let detectedChatLanguage: ChatLanguage
         if (detectedFromText !== 'pt-BR') {
-          // Confident non-Portuguese detection — use it
           detectedChatLanguage = detectedFromText
+        } else if (strongPortuguese) {
+          detectedChatLanguage = 'pt-BR'
         } else if (langHint && langHint !== 'pt-BR') {
-          // Ambiguous message but contact has a saved non-Portuguese language — keep it
           detectedChatLanguage = langHint
         } else {
           detectedChatLanguage = 'pt-BR'
         }
-        
-        // Persist detected language on contact if it changed or was never set
+
+        // Persist when we have a confident change (non-default detection OR strong PT switch)
         const currentLangCode = langCodeMap[detectedChatLanguage]
-        if (contact.preferred_language !== currentLangCode && detectedFromText !== 'pt-BR') {
-          // Only persist when we have a confident (non-default) detection
+        if (contact.preferred_language !== currentLangCode && (detectedFromText !== 'pt-BR' || strongPortuguese)) {
           await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
           contact.preferred_language = currentLangCode
           console.log('Persisted detected language on contact:', currentLangCode)
