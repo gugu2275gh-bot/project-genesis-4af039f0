@@ -468,6 +468,7 @@ export default function Leads() {
           <SelectContent>
             <SelectItem value="all">Todos os status</SelectItem>
             {Object.entries(LEAD_STATUS_LABELS)
+              .filter(([value]) => value !== 'MESCLADO' && value !== 'FOLLOW_UP')
               .map(([value, label]) => (
                 <SelectItem key={value} value={value}>{label}</SelectItem>
               ))}
