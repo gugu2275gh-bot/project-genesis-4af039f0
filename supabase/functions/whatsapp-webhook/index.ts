@@ -580,14 +580,16 @@ type ChatLanguage = 'pt-BR' | 'es' | 'en' | 'fr'
 function detectChatLanguage(text: string): ChatLanguage {
   const sample = text.toLowerCase().normalize('NFC')
 
-  // Strong Portuguese signal — bail out early to avoid false positives from accents
-  // shared with French/Spanish (é, ç, ã, õ, à, etc.)
-  if (/\b(ol[aá]|oi|obrigad[oa]|por favor|voc[eê]|n[aã]o|sim|meu|minha|nome|email|telefone|cpf|cnpj|whatsapp|preciso|quero|estou|tudo bem|bom dia|boa tarde|boa noite|valeu|brasil|portugu[eê]s|espanha)\b/.test(sample) || /[ãõ]/.test(sample)) {
-    return 'pt-BR'
+  // Strong Spanish signals (must run BEFORE Portuguese to avoid false positives like
+  // "española" matching \bola\b because ñ is not a JS word-character).
+  if (/[¿¡ñ]/.test(sample) || /\b(hola|gracias|nombre|correo|quiero|necesito|estoy|espa[nñ]ola?|puedes|puede|ayuda|cu[aá]l|gustar[ií]a|me gusta|en mi|mi nacionalidad|por favor)\b/u.test(sample)) {
+    return 'es'
   }
 
-  if (/[¿¡ñ]/.test(sample) || /\b(hola|gracias|nombre|correo|quiero|necesito|estoy|españa|puedes|puede|ayuda|como|cu[aá]l)\b/.test(sample)) {
-    return 'es'
+  // Strong Portuguese signal — uses 'u' flag so ñ is treated as a word char and
+  // doesn't create false word boundaries inside Spanish words.
+  if (/\b(ol[aá]|oi|obrigad[oa]|voc[eê]|n[aã]o|sim|meu|minha|nome|email|telefone|cpf|cnpj|whatsapp|preciso|quero|estou|tudo bem|bom dia|boa tarde|boa noite|valeu|brasil|portugu[eê]s|espanha)\b/u.test(sample) || /[ãõ]/.test(sample)) {
+    return 'pt-BR'
   }
 
   // French requires explicit French words — accents alone are too ambiguous (PT/ES also use them)
