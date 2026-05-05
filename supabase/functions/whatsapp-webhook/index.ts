@@ -2032,7 +2032,33 @@ serve(async (req) => {
         )
       }
 
-      console.log('Buffer: no newer messages, proceeding with AI response')
+      // ANTI-DOUBLE-RESPONSE GUARD: check if another AI/SISTEMA response was already sent
+      // for this lead AFTER the current customer message arrived (race condition between
+      // parallel webhooks or Twilio retries)
+      const currentMsgCreatedAt = insertedMsg?.created_at
+      if (currentMsgCreatedAt) {
+        const { data: recentOutbound } = await supabase
+          .from('mensagens_cliente')
+          .select('id, origem, created_at')
+          .eq('id_lead', lead.id)
+          .not('mensagem_IA', 'is', null)
+          .gt('created_at', currentMsgCreatedAt)
+          .in('origem', ['IA', 'SISTEMA'])
+          .limit(1)
+
+        if (recentOutbound && recentOutbound.length > 0) {
+          console.log('Buffer: another outbound message already exists for this lead after customer message, skipping to avoid duplicate AI response', recentOutbound[0])
+          if (webhookLog?.id) {
+            await supabase.from('webhook_logs').update({ processed: true }).eq('id', webhookLog.id)
+          }
+          return new Response(
+            JSON.stringify({ success: true, message: 'Skipped: outbound response already sent (anti-duplicate)' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      }
+
+      console.log('Buffer: no newer messages and no concurrent response, proceeding with AI response')
     }
 
     // ========== AI AGENT SECTION ==========
