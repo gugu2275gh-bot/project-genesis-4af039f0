@@ -241,15 +241,26 @@ export default function ContractDetail() {
     // Build consolidated due-date summary across ALL groups: sum amounts when multiple
     // installments share the same due date (only show entries that consolidate 2+ payments).
     const dueMap = new Map<string, { total: number; count: number; date: Date }>();
+    // First pass: collect installment due dates
+    const installmentDates = new Set<string>();
     for (const key of groupOrder) {
       const gp = groupsMap.get(key)!;
-      // only consider when group is installments (PARCELADO or >1 payments)
       const first = gp[0];
       const isInst = gp.length > 1 || first.payment_form === 'PARCELADO';
       if (!isInst) continue;
       for (const p of gp) {
+        if (p.due_date) installmentDates.add(p.due_date as string);
+      }
+    }
+    // Second pass: aggregate installments + single payments matching an installment date
+    for (const key of groupOrder) {
+      const gp = groupsMap.get(key)!;
+      const first = gp[0];
+      const isInst = gp.length > 1 || first.payment_form === 'PARCELADO';
+      for (const p of gp) {
         if (!p.due_date) continue;
         const dateKey = p.due_date as string;
+        if (!isInst && !installmentDates.has(dateKey)) continue;
         const cur = dueMap.get(dateKey) || { total: 0, count: 0, date: new Date(`${dateKey}T12:00:00`) };
         cur.total += Number(p.amount ?? 0);
         cur.count += 1;
