@@ -243,10 +243,8 @@ export default function ContractDetail() {
     const dueMap = new Map<string, { total: number; count: number; date: Date }>();
     for (const key of groupOrder) {
       const gp = groupsMap.get(key)!;
-      // only consider when group is installments (PARCELADO or >1 payments)
-      const first = gp[0];
-      const isInst = gp.length > 1 || first.payment_form === 'PARCELADO';
-      if (!isInst) continue;
+      // Include all payments (installments and single payments) so single payments
+      // sharing a due date with installments are consolidated together.
       for (const p of gp) {
         if (!p.due_date) continue;
         const dateKey = p.due_date as string;
