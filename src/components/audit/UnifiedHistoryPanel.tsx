@@ -127,7 +127,7 @@ function AuditList({ logs, loading }: { logs: any[] | undefined; loading: boolea
 
 export function UnifiedHistoryPanel({ contactId, leadIds }: UnifiedHistoryPanelProps) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<'ficha' | 'servicos' | 'reativacoes'>('ficha');
+  const [tab, setTab] = useState<'ficha' | 'servicos'>('ficha');
 
   const { data: contactLogs, isLoading: loadingContact } = useAuditLogs({
     tableName: 'contacts',
