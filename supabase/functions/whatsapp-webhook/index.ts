@@ -420,15 +420,15 @@ async function getKnowledgeBaseContext(
         }
         const top3 = valid.slice(0, 3).map((c: any) => `${c.file_name}#${c.chunk_index}=${c.similarity?.toFixed(3)}${c._boost ? `(+${c._boost})` : ''}`).join(' | ')
         console.log(`[KB] Semantic returned ${valid.length} chunks. Top3: ${top3}`)
-        // Merge topic-preloaded chunks (deduped) so the agent has the canonical doc
-        // for the active topic available, but without locking out other services.
-        const seen = new Set(valid.map((c: any) => `${c.file_name}#${c.chunk_index}`))
-        const extras = topicPreloaded.filter((c) => !seen.has(`${c.file_name}#${c.chunk_index}`))
+        // Put topic-preloaded chunks first so the canonical service document cannot be
+        // truncated behind generic/semantic matches (e.g. "nacionalidade espanhola").
+        const seen = new Set(topicPreloaded.map((c) => `${c.file_name}#${c.chunk_index}`))
+        const semanticRest = valid.filter((c: any) => !seen.has(`${c.file_name}#${c.chunk_index}`))
         const merged = [
-          ...valid.map((c: any) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Sim: ${c.similarity?.toFixed(2)}]\n${c.content}`),
-          ...extras.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Tópico]\n${c.content}`),
+          ...topicPreloaded.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Tópico]\n${c.content}`),
+          ...semanticRest.map((c: any) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Sim: ${c.similarity?.toFixed(2)}]\n${c.content}`),
         ]
-        return merged.join('\n\n').substring(0, 8000)
+        return merged.join('\n\n').substring(0, 9000)
       }
     }
     if (semErr) console.error('[KB] Semantic search error:', semErr)
