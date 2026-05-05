@@ -127,7 +127,7 @@ function AuditList({ logs, loading }: { logs: any[] | undefined; loading: boolea
 
 export function UnifiedHistoryPanel({ contactId, leadIds }: UnifiedHistoryPanelProps) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<'ficha' | 'servicos' | 'reativacoes'>('ficha');
+  const [tab, setTab] = useState<'ficha' | 'servicos'>('ficha');
 
   const { data: contactLogs, isLoading: loadingContact } = useAuditLogs({
     tableName: 'contacts',
@@ -141,7 +141,7 @@ export function UnifiedHistoryPanel({ contactId, leadIds }: UnifiedHistoryPanelP
     enabled: open && tab === 'servicos' && leadIds.length > 0,
   });
 
-  const { logs: reactivationLogs, isLoading: loadingReact } = useReactivationLog(contactId);
+  
 
   return (
     <Card>
@@ -157,7 +157,7 @@ export function UnifiedHistoryPanel({ contactId, leadIds }: UnifiedHistoryPanelP
               Histórico e Logs
             </CardTitle>
             <CardDescription>
-              Mesclagens, mudanças de status e reativações inteligentes deste contato.
+              Mesclagens e mudanças de status deste contato.
             </CardDescription>
           </div>
           {open ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
@@ -166,12 +166,9 @@ export function UnifiedHistoryPanel({ contactId, leadIds }: UnifiedHistoryPanelP
       {open && (
         <CardContent>
           <Tabs value={tab} onValueChange={v => setTab(v as any)}>
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="ficha">Ficha</TabsTrigger>
               <TabsTrigger value="servicos">Serviços</TabsTrigger>
-              <TabsTrigger value="reativacoes">
-                Reativações {reactivationLogs.length > 0 && `(${reactivationLogs.length})`}
-              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="ficha" className="mt-4">
@@ -180,52 +177,6 @@ export function UnifiedHistoryPanel({ contactId, leadIds }: UnifiedHistoryPanelP
 
             <TabsContent value="servicos" className="mt-4">
               <AuditList logs={leadLogs} loading={loadingLeads} />
-            </TabsContent>
-
-            <TabsContent value="reativacoes" className="mt-4">
-              {loadingReact ? (
-                <Skeleton className="h-24 w-full" />
-              ) : reactivationLogs.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">
-                  Nenhuma reativação registrada.
-                </p>
-              ) : (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {reactivationLogs.map(log => (
-                    <div key={log.id} className="border rounded-lg p-3 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {log.action_taken && (
-                            <Badge variant="outline">
-                              {REACT_ACTION_LABELS[log.action_taken] || log.action_taken}
-                            </Badge>
-                          )}
-                          <Badge className={CONFIRMATION_COLORS[log.user_confirmation_status]}>
-                            {CONFIRMATION_LABELS[log.user_confirmation_status] || log.user_confirmation_status}
-                          </Badge>
-                          {log.confidence_score != null && (
-                            <span className="text-xs text-muted-foreground">
-                              Confiança: {(log.confidence_score * 100).toFixed(0)}%
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(log.created_at), 'dd/MM HH:mm', { locale: ptBR })}
-                        </span>
-                      </div>
-                      {log.incoming_message_text && (
-                        <p className="text-xs">
-                          <span className="text-muted-foreground">Mensagem: </span>
-                          "{log.incoming_message_text}"
-                        </p>
-                      )}
-                      {log.selected_sector && (
-                        <p className="text-xs text-muted-foreground">Setor: {log.selected_sector}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
             </TabsContent>
           </Tabs>
         </CardContent>
