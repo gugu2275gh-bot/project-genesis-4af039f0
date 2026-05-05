@@ -264,6 +264,7 @@ function normalizeForSearch(text: string): string {
 const SEARCH_STOPWORDS = new Set([
   'ok', 'pdf', 'para', 'por', 'com', 'sem', 'uma', 'das', 'dos', 'de', 'da', 'do', 'del', 'el', 'la',
   'desde', 'pais', 'origem', 'mais', 'menos', 'ano', 'anos', 'todas', 'todo', 'toda', 'sobre',
+  'queria', 'quero', 'gostaria', 'saber', 'como', 'dar', 'entrada', 'informacao', 'informacoes',
 ])
 
 function meaningfulSearchTokens(text: string): string[] {
