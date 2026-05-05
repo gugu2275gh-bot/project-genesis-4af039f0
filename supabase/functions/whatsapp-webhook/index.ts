@@ -390,7 +390,7 @@ async function getKnowledgeBaseContext(
       .sort((a, b) => b.score - a.score || meaningfulSearchTokens(a.fileName).length - meaningfulSearchTokens(b.fileName).length)[0]
 
     if (bestTopic) {
-      topicPreloaded = validTopicEntries.filter((entry) => entry.file_name === bestTopic.fileName).slice(0, 4)
+      topicPreloaded = validTopicEntries.filter((entry) => entry.file_name === bestTopic.fileName).slice(0, 6)
       console.log(`[KB] Topic preload ${bestTopic.fileName} (${bestTopic.score.toFixed(2)}): ${topicPreloaded.length} chunks (will be merged with semantic)`)
     }
   }
