@@ -1277,7 +1277,8 @@ export function ContractGroupsSection({
           const discLabel = p.discount_type === 'PERCENTUAL' ? ` (${p.discount_value}%)` : '';
           block += `Desconto: - ${symbol} ${Number(p.discount_value).toFixed(2)}${discLabel}\n`;
         }
-        block += `Total Final: ${symbol} ${Number(p.amount).toFixed(2)}\n`;
+        const dueStr = p.due_date ? format(new Date(p.due_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : null;
+        block += `Total Final: ${symbol} ${Number(p.amount).toFixed(2)}${dueStr ? ` — Venc: ${dueStr}` : ''}\n`;
         if (p.payment_method) {
           const methodLabels: Record<string, string> = {
             'TRANSFERENCIA': 'Transferência', 'PIX': 'PIX', 'CARTAO': 'Cartão',
