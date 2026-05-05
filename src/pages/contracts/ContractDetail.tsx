@@ -460,8 +460,8 @@ export default function ContractDetail() {
       : c?.opportunities?.leads?.contacts;
     if (resolvedContact?.payment_notes) sources.push(resolvedContact.payment_notes);
 
-    const seen = new Set<string>();
-    const result: { service: string; observation: string }[] = [];
+    // Keep only the latest observation per service (last occurrence wins)
+    const latestByService = new Map<string, string>();
     sources.forEach((raw) => {
       raw.split('\n---\n').forEach((block: string) => {
         const serviceMatch = block.match(/Serviço:\s*(.+?)(?:\n|$)/);
@@ -471,13 +471,10 @@ export default function ContractDetail() {
         const observation = obsMatch[1].trim();
         if (!observation) return;
         if (activeServiceNames.size > 0 && !activeServiceNames.has(service)) return;
-        const key = `${service}::${observation}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        result.push({ service, observation });
+        latestByService.set(service, observation);
       });
     });
-    return result;
+    return Array.from(latestByService, ([service, observation]) => ({ service, observation }));
   }, [contract, contractLeadLinks, allLinkedContactNotes]);
 
   // Initialize form data when contract loads
