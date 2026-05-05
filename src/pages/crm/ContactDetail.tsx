@@ -2545,9 +2545,14 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
                                   Parcela {payment.installment_number}
                                 </Badge>
                               )}
+                              {!payment.installment_number && payment.due_date && (
+                                <span className="text-xs text-muted-foreground">
+                                  • Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                              {payment.due_date && (
+                              {payment.installment_number && payment.due_date && (
                                 <span>Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
                               )}
                             </div>
