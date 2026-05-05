@@ -742,11 +742,14 @@ export default function LeadDetail() {
               <Input
                 id="follow-up-date"
                 type="date"
-                value={lead.follow_up_date || ''}
-                onChange={async (e) => {
+                defaultValue={lead.follow_up_date || ''}
+                key={lead.follow_up_date || 'empty'}
+                onBlur={async (e) => {
+                  const newValue = e.target.value || null;
+                  if (newValue === (lead.follow_up_date || null)) return;
                   await updateLead.mutateAsync({
                     id: lead.id,
-                    follow_up_date: e.target.value || null,
+                    follow_up_date: newValue,
                   } as any);
                 }}
               />
