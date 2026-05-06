@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Search, Eye, UserPlus, Users, ChevronRight, ChevronDown, User, AlertTriangle, Info } from 'lucide-react';
-import { LEAD_STATUS_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
+import { LEAD_STATUS_LABELS, ORIGIN_CHANNEL_LABELS, ORIGIN_CHANNEL_OPTIONS, OriginChannel } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
