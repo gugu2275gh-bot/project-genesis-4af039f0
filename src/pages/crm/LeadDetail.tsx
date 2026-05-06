@@ -567,11 +567,11 @@ export default function LeadDetail() {
               </div>
             </div>
             
-            {lead.contacts?.origin_channel === 'COLABORADOR' && (
+            {(lead.contacts?.origin_channel === 'INDICACAO' || lead.contacts?.origin_channel === 'COLABORADOR') && (
               <div className="flex items-center gap-3">
                 <UserPlus className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <p className="text-sm text-muted-foreground">Nome do Colaborador</p>
+                  <p className="text-sm text-muted-foreground">Indicado por</p>
                   <p className="font-medium">{lead.contacts?.referral_name || 'Não informado'}</p>
                 </div>
               </div>
