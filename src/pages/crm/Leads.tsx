@@ -79,7 +79,7 @@ export default function Leads() {
     phone: '',
     service_interest: 'SEM_SERVICO' as any,
     service_interest_other: '',
-    origin_channel: 'WHATSAPP' as OriginChannel,
+    origin_channel: 'GOOGLE' as OriginChannel,
     referral_name: '',
   });
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
