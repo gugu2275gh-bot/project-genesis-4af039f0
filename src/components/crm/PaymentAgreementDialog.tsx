@@ -1080,6 +1080,26 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             />
           </div>
 
+          {/* Indicado por */}
+          <div className="space-y-2 rounded-lg border p-3">
+            <Label>Indicado por (opcional)</Label>
+            <Input
+              value={referralName}
+              onChange={(e) => setReferralName(e.target.value)}
+              placeholder="Nome de quem indicou (colaborador, parceiro, cliente...)"
+            />
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="pa-referral-confirmed"
+                checked={referralConfirmed}
+                onCheckedChange={(c) => setReferralConfirmed(!!c)}
+              />
+              <Label htmlFor="pa-referral-confirmed" className="cursor-pointer font-normal">
+                Indicação confirmada
+              </Label>
+            </div>
+          </div>
+
           {readOnly ? (
             <div className="flex justify-end pointer-events-auto">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
