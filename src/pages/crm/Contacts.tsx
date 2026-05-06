@@ -30,7 +30,7 @@ export default function Contacts() {
   const [newContact, setNewContact] = useState<Omit<Partial<ContactInsert>, 'phone'>>({
     full_name: '',
     email: '',
-    origin_channel: 'WHATSAPP',
+    origin_channel: 'GOOGLE',
     preferred_language: 'pt',
   });
 
