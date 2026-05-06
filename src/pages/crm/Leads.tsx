@@ -373,19 +373,19 @@ export default function Leads() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.entries(ORIGIN_CHANNEL_LABELS).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                          {ORIGIN_CHANNEL_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                    {newLead.origin_channel === 'COLABORADOR' && (
+                    {newLead.origin_channel === 'INDICACAO' && (
                       <div>
-                        <Label>Nome do Colaborador</Label>
+                        <Label>Nome de Quem Indicou</Label>
                         <Input
                           value={newLead.referral_name}
                           onChange={(e) => setNewLead({ ...newLead, referral_name: e.target.value })}
-                          placeholder="Nome do colaborador que indicou"
+                          placeholder="Nome da pessoa que indicou"
                         />
                       </div>
                     )}
