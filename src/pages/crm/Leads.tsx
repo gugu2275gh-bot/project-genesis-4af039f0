@@ -245,7 +245,7 @@ export default function Leads() {
         email: newLead.email || undefined,
         phone: phoneStr,
         origin_channel: newLead.origin_channel,
-        referral_name: newLead.origin_channel === 'COLABORADOR' ? newLead.referral_name : undefined,
+        referral_name: newLead.origin_channel === 'INDICACAO' ? newLead.referral_name : undefined,
         preferred_language: 'pt',
       });
       const createdLead = await createLead.mutateAsync({
