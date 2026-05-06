@@ -72,7 +72,7 @@ export default function Contacts() {
     setNewContact({
       full_name: '',
       email: '',
-      origin_channel: 'WHATSAPP',
+      origin_channel: 'GOOGLE',
       preferred_language: 'pt',
     });
   };
