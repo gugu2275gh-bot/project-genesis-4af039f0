@@ -1071,7 +1071,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              {selectedServiceTypeId && (
+              {!hideSaveAndAddNew && selectedServiceTypeId && (
                 <Button
                   variant="secondary"
                   onClick={() => handleSave(true)}
