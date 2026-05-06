@@ -898,26 +898,6 @@ export default function ContactDetail() {
         </div>
       </div>
 
-      {/* Indicação */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <Label>Indicado por (Colaborador/Parceiro)</Label>
-          <Input
-            value={editedContact.referral_name || ''}
-            onChange={(e) => setEditedContact({ ...editedContact, referral_name: e.target.value })}
-            placeholder="Nome do colaborador"
-          />
-        </div>
-        <div className="flex items-center gap-2 pt-6">
-          <Checkbox
-            id="referral_confirmed"
-            checked={editedContact.referral_confirmed || false}
-            onCheckedChange={(c) => setEditedContact({ ...editedContact, referral_confirmed: !!c })}
-          />
-          <Label htmlFor="referral_confirmed" className="cursor-pointer">Indicação confirmada</Label>
-        </div>
-      </div>
-
       {/* Representante Legal (menores) */}
       {isMinor && (
         <>
@@ -1275,19 +1255,6 @@ export default function ContactDetail() {
           <p className="text-sm text-muted-foreground">Idioma Preferencial</p>
           <p className="font-medium">
             {LANGUAGE_LABELS[contact.preferred_language || 'pt']}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3 sm:col-span-2">
-        <Users className="h-5 w-5 text-muted-foreground" />
-        <div>
-          <p className="text-sm text-muted-foreground">Indicado por</p>
-          <p className="font-medium">
-            {contact.referral_name || '-'}
-            {contact.referral_confirmed && contact.referral_name && (
-              <Badge variant="outline" className="ml-2">Confirmado</Badge>
-            )}
           </p>
         </div>
       </div>
