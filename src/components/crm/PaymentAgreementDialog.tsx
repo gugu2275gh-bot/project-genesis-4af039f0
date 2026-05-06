@@ -1070,18 +1070,20 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button
-                variant="secondary"
-                onClick={() => handleSave(true)}
-                disabled={!form.amount || isSaving || (form.payment_form === 'PARCELADO' && form.installments.some(i => !i.due_date))}
-              >
-                {isSaving ? (
-                  <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                ) : (
-                  <Plus className="h-4 w-4 mr-2" />
-                )}
-                Salvar e Adicionar Novo
-              </Button>
+              {selectedServiceTypeId && (
+                <Button
+                  variant="secondary"
+                  onClick={() => handleSave(true)}
+                  disabled={!form.amount || isSaving || (form.payment_form === 'PARCELADO' && form.installments.some(i => !i.due_date))}
+                >
+                  {isSaving ? (
+                    <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <Plus className="h-4 w-4 mr-2" />
+                  )}
+                  Salvar e Adicionar Novo
+                </Button>
+              )}
               <Button
                 onClick={() => handleSave(false)}
                 disabled={!form.amount || isSaving || (form.payment_form === 'PARCELADO' && form.installments.some(i => !i.due_date))}
