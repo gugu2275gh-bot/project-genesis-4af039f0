@@ -1336,14 +1336,14 @@ export function ContractGroupsSection({
           <div>
             <CardTitle className="flex items-center gap-2">
               <Briefcase className="h-5 w-5" />
-              Serviços & Pagamentos ({totalServices})
+              Serviços ({totalServices})
             </CardTitle>
             <CardDescription>Serviços agrupados por contrato</CardDescription>
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => { setEditPaymentData(null); setShowPaymentAgreement(true); }}>
               <DollarSign className="h-4 w-4 mr-1" />
-              {totalServices > 0 ? 'Alterar Serviço' : 'Novo Serviço'}
+              Adicionar Serviço
             </Button>
           </div>
         </CardHeader>
