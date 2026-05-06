@@ -816,6 +816,7 @@ export default function LeadDetail() {
               </Button>
               {lead.contact_id && (
                 <PaymentAgreementDialog
+                  hideSaveAndAddNew
                   open={showPaymentAgreement}
                   onOpenChange={setShowPaymentAgreement}
                   contactId={lead.contact_id}
