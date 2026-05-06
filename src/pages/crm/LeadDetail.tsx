@@ -810,9 +810,9 @@ export default function LeadDetail() {
                 <DollarSign className="h-4 w-4 mr-2" />
                 {isGroupFinalized
                   ? 'Detalhes'
-                  : (existingPayment || (lead.service_interest && lead.service_interest !== 'OUTRO')
-                      ? 'Editar Serviço'
-                      : 'Novo Serviço')}
+                 : (existingPayment || lead.service_type_id || (lead.service_interest && lead.service_interest !== 'OUTRO')
+                     ? 'Editar Serviço'
+                     : 'Novo Serviço')}
               </Button>
               {lead.contact_id && (
                 <PaymentAgreementDialog
