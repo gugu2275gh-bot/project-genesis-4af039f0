@@ -115,6 +115,24 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   };
 
   const [form, setForm] = useState(defaultForm);
+  const [referralName, setReferralName] = useState('');
+  const [referralConfirmed, setReferralConfirmed] = useState(false);
+
+  // Load existing referral info from the contact
+  useEffect(() => {
+    if (!open) return;
+    const targetId = (isBeneficiary && selectedTitularId) ? selectedTitularId : contactId;
+    if (!targetId) return;
+    supabase
+      .from('contacts')
+      .select('referral_name, referral_confirmed')
+      .eq('id', targetId)
+      .maybeSingle()
+      .then(({ data }) => {
+        setReferralName(data?.referral_name || '');
+        setReferralConfirmed(!!data?.referral_confirmed);
+      });
+  }, [open, contactId, selectedTitularId, isBeneficiary]);
 
   // Pre-fill form when dialog opens with initialData
   useEffect(() => {
