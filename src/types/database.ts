@@ -22,6 +22,7 @@ export type OriginChannel =
   | 'EMAIL'
   | 'INDICACAO'
   | 'COLABORADOR'
+  | 'GOOGLE'
   | 'OUTRO';
 
 export type ServiceInterest = 

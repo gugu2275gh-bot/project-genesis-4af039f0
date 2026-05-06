@@ -1,0 +1,1 @@
+ALTER TYPE public.origin_channel ADD VALUE IF NOT EXISTS 'GOOGLE';
