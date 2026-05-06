@@ -404,16 +404,28 @@ export const OPPORTUNITY_STATUS_LABELS: Record<OpportunityStatus, string> = {
 };
 
 export const ORIGIN_CHANNEL_LABELS: Record<OriginChannel, string> = {
-  WHATSAPP: 'WhatsApp',
-  SITE: 'Site',
+  GOOGLE: 'Google',
   INSTAGRAM: 'Instagram',
   FACEBOOK: 'Facebook',
+  WHATSAPP: 'WhatsApp',
+  INDICACAO: 'Indicação Pessoal',
+  SITE: 'Site',
   YOUTUBE: 'YouTube',
   EMAIL: 'Email',
-  INDICACAO: 'Indicação',
   COLABORADOR: 'Colaborador',
   OUTRO: 'Outro',
 };
+
+// Opções exibidas nos seletores (referência: indicado por). Demais valores são mantidos apenas para histórico.
+export const ORIGIN_CHANNEL_OPTIONS: { value: OriginChannel; label: string }[] = [
+  { value: 'GOOGLE', label: 'Google' },
+  { value: 'INSTAGRAM', label: 'Instagram' },
+  { value: 'FACEBOOK', label: 'Facebook' },
+  { value: 'WHATSAPP', label: 'WhatsApp' },
+  { value: 'INDICACAO', label: 'Indicação Pessoal' },
+  { value: 'SITE', label: 'Site' },
+  { value: 'OUTRO', label: 'Outro' },
+];
 
 export const TECHNICAL_STATUS_LABELS: Record<TechnicalStatus, string> = {
   CONTATO_INICIAL: 'Contato Inicial',
