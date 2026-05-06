@@ -68,6 +68,7 @@ import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   ORIGIN_CHANNEL_LABELS,
+  ORIGIN_CHANNEL_OPTIONS,
   LANGUAGE_LABELS,
   LEAD_STATUS_LABELS,
   SERVICE_INTEREST_LABELS,
