@@ -53,9 +53,10 @@ interface PaymentAgreementDialogProps {
   isBeneficiary?: boolean;
   titulares?: TitularLink[];
   readOnly?: boolean;
+  hideSaveAndAddNew?: boolean;
 }
 
-export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange, initialData, isBeneficiary = false, titulares = [], readOnly = false }: PaymentAgreementDialogProps) {
+export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactName, serviceTypeId, onServiceTypeChange, initialData, isBeneficiary = false, titulares = [], readOnly = false, hideSaveAndAddNew = false }: PaymentAgreementDialogProps) {
   const { updateContact } = useContacts();
   const { data: serviceTypes } = useServiceTypes();
   const queryClient = useQueryClient();
