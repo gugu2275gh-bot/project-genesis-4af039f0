@@ -115,6 +115,24 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   };
 
   const [form, setForm] = useState(defaultForm);
+  const [referralName, setReferralName] = useState('');
+  const [referralConfirmed, setReferralConfirmed] = useState(false);
+
+  // Load existing referral info from the contact
+  useEffect(() => {
+    if (!open) return;
+    const targetId = (isBeneficiary && selectedTitularId) ? selectedTitularId : contactId;
+    if (!targetId) return;
+    supabase
+      .from('contacts')
+      .select('referral_name, referral_confirmed')
+      .eq('id', targetId)
+      .maybeSingle()
+      .then(({ data }) => {
+        setReferralName(data?.referral_name || '');
+        setReferralConfirmed(!!data?.referral_confirmed);
+      });
+  }, [open, contactId, selectedTitularId, isBeneficiary]);
 
   // Pre-fill form when dialog opens with initialData
   useEffect(() => {
@@ -509,7 +527,9 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     await updateContact.mutateAsync({
       id: leadOwnerContactId,
       payment_notes: existingNotes + separator + titularSummary,
-    });
+      referral_name: referralName || null,
+      referral_confirmed: referralConfirmed,
+    } as any);
 
     queryClient.invalidateQueries({ queryKey: ['leads'] });
     queryClient.invalidateQueries({ queryKey: ['contacts'] });
@@ -1058,6 +1078,26 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               placeholder="Observações adicionais sobre o acordo..."
               rows={2}
             />
+          </div>
+
+          {/* Indicado por */}
+          <div className="space-y-2 rounded-lg border p-3">
+            <Label>Indicado por (opcional)</Label>
+            <Input
+              value={referralName}
+              onChange={(e) => setReferralName(e.target.value)}
+              placeholder="Nome de quem indicou (colaborador, parceiro, cliente...)"
+            />
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="pa-referral-confirmed"
+                checked={referralConfirmed}
+                onCheckedChange={(c) => setReferralConfirmed(!!c)}
+              />
+              <Label htmlFor="pa-referral-confirmed" className="cursor-pointer font-normal">
+                Indicação confirmada
+              </Label>
+            </div>
           </div>
 
           {readOnly ? (

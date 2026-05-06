@@ -367,7 +367,7 @@ export default function Leads() {
                       <Label>Canal de Origem</Label>
                       <Select
                         value={newLead.origin_channel}
-                        onValueChange={(v: OriginChannel) => setNewLead({ ...newLead, origin_channel: v, referral_name: '' })}
+                        onValueChange={(v: OriginChannel) => setNewLead({ ...newLead, origin_channel: v })}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -379,16 +379,6 @@ export default function Leads() {
                         </SelectContent>
                       </Select>
                     </div>
-                    {newLead.origin_channel === 'INDICACAO' && (
-                      <div>
-                        <Label>Nome de Quem Indicou</Label>
-                        <Input
-                          value={newLead.referral_name}
-                          onChange={(e) => setNewLead({ ...newLead, referral_name: e.target.value })}
-                          placeholder="Nome da pessoa que indicou"
-                        />
-                      </div>
-                    )}
                   </>
                 )}
 
