@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Search, Eye, UserPlus, Users, ChevronRight, ChevronDown, User, AlertTriangle, Info } from 'lucide-react';
-import { LEAD_STATUS_LABELS, ORIGIN_CHANNEL_LABELS, OriginChannel } from '@/types/database';
+import { LEAD_STATUS_LABELS, ORIGIN_CHANNEL_LABELS, ORIGIN_CHANNEL_OPTIONS, OriginChannel } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -79,7 +79,7 @@ export default function Leads() {
     phone: '',
     service_interest: 'SEM_SERVICO' as any,
     service_interest_other: '',
-    origin_channel: 'WHATSAPP' as OriginChannel,
+    origin_channel: 'GOOGLE' as OriginChannel,
     referral_name: '',
   });
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -245,7 +245,7 @@ export default function Leads() {
         email: newLead.email || undefined,
         phone: phoneStr,
         origin_channel: newLead.origin_channel,
-        referral_name: newLead.origin_channel === 'COLABORADOR' ? newLead.referral_name : undefined,
+        referral_name: newLead.origin_channel === 'INDICACAO' ? newLead.referral_name : undefined,
         preferred_language: 'pt',
       });
       const createdLead = await createLead.mutateAsync({
@@ -373,19 +373,19 @@ export default function Leads() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.entries(ORIGIN_CHANNEL_LABELS).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                          {ORIGIN_CHANNEL_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                    {newLead.origin_channel === 'COLABORADOR' && (
+                    {newLead.origin_channel === 'INDICACAO' && (
                       <div>
-                        <Label>Nome do Colaborador</Label>
+                        <Label>Nome de Quem Indicou</Label>
                         <Input
                           value={newLead.referral_name}
                           onChange={(e) => setNewLead({ ...newLead, referral_name: e.target.value })}
-                          placeholder="Nome do colaborador que indicou"
+                          placeholder="Nome da pessoa que indicou"
                         />
                       </div>
                     )}

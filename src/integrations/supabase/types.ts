@@ -3177,6 +3177,7 @@ export type Database = {
         | "OUTRO"
         | "COLABORADOR"
         | "YOUTUBE"
+        | "GOOGLE"
       payment_form: "UNICO" | "PARCELADO"
       payment_method:
         | "CARTAO"
@@ -3435,6 +3436,7 @@ export const Constants = {
         "OUTRO",
         "COLABORADOR",
         "YOUTUBE",
+        "GOOGLE",
       ],
       payment_form: ["UNICO", "PARCELADO"],
       payment_method: [

@@ -14,7 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Plus, Search, Phone, Mail, Users, Check, ChevronsUpDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ORIGIN_CHANNEL_LABELS, LANGUAGE_LABELS } from '@/types/database';
+import { ORIGIN_CHANNEL_LABELS, ORIGIN_CHANNEL_OPTIONS, LANGUAGE_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 
@@ -30,7 +30,7 @@ export default function Contacts() {
   const [newContact, setNewContact] = useState<Omit<Partial<ContactInsert>, 'phone'>>({
     full_name: '',
     email: '',
-    origin_channel: 'WHATSAPP',
+    origin_channel: 'GOOGLE',
     preferred_language: 'pt',
   });
 
@@ -72,7 +72,7 @@ export default function Contacts() {
     setNewContact({
       full_name: '',
       email: '',
-      origin_channel: 'WHATSAPP',
+      origin_channel: 'GOOGLE',
       preferred_language: 'pt',
     });
   };
@@ -190,8 +190,8 @@ export default function Contacts() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.entries(ORIGIN_CHANNEL_LABELS).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>{label}</SelectItem>
+                        {ORIGIN_CHANNEL_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

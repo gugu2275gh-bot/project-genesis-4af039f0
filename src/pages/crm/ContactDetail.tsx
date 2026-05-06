@@ -68,6 +68,7 @@ import { format, differenceInYears } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   ORIGIN_CHANNEL_LABELS,
+  ORIGIN_CHANNEL_OPTIONS,
   LANGUAGE_LABELS,
   LEAD_STATUS_LABELS,
   SERVICE_INTEREST_LABELS,
@@ -873,8 +874,8 @@ export default function ContactDetail() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {Object.entries(ORIGIN_CHANNEL_LABELS).map(([value, label]) => (
-                <SelectItem key={value} value={value}>{label}</SelectItem>
+              {ORIGIN_CHANNEL_OPTIONS.map(opt => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
