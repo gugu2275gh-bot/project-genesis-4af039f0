@@ -810,9 +810,13 @@ export default function LeadDetail() {
                 <DollarSign className="h-4 w-4 mr-2" />
                 {isGroupFinalized
                   ? 'Detalhes'
-                 : (existingPayment || lead.service_type_id || (lead.service_interest && lead.service_interest !== 'OUTRO')
-                     ? 'Editar Serviço'
-                     : 'Novo Serviço')}
+                 : ((() => {
+                     const stCode = serviceTypes?.find(st => st.id === lead.service_type_id)?.code;
+                     const hasService = existingPayment
+                       || (stCode && stCode !== 'SEM_SERVICO' && stCode !== 'OUTRO')
+                       || (lead.service_interest && lead.service_interest !== 'OUTRO' && lead.service_interest !== 'SEM_SERVICO');
+                     return hasService ? 'Editar Serviço' : 'Novo Serviço';
+                   })())}
               </Button>
               {lead.contact_id && (
                 <PaymentAgreementDialog
