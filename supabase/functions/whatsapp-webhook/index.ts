@@ -2228,8 +2228,14 @@ NUNCA copie frases literalmente em português quando o cliente estiver em outro 
         if (isFirstInteraction) {
           console.log('First interaction detected, using welcome flow')
           systemPrompt += `\n\n--- INSTRUÇÃO ESPECIAL: PRIMEIRA INTERAÇÃO ---
-Esta é a PRIMEIRA mensagem deste cliente. Comece obrigatoriamente pela ETAPA 1 (Abertura).
-NÃO responda a pergunta do cliente ainda. Primeiro faça o acolhimento e inicie o fluxo.
+Esta é a PRIMEIRA mensagem deste cliente. Você DEVE responder com EXATAMENTE estas duas mensagens, nesta ordem, separadas pelo delimitador "|||" (sem nenhum outro texto antes, depois ou entre elas):
+
+Olá 👋 Tudo bem? Obrigado por falar com a CB Asesoría. Vou te ajudar a entender seus caminhos legais aqui na Espanha.|||Vou te fazer algumas perguntas rápidas só para entender seu caso e te direcionar para o especialista certo, pode ser?
+
+Regras:
+- NÃO responda à pergunta do cliente ainda. Apenas envie essas duas mensagens de abertura.
+- Se o idioma detectado do cliente for diferente de português, traduza fielmente as duas mensagens para o idioma do cliente, mantendo o mesmo tom, o emoji 👋 e o delimitador "|||" entre elas. Use "CB Asesoría" como nome da empresa em qualquer idioma.
+- NÃO adicione nenhuma pergunta extra, assinatura, nem mais texto.
 --- FIM DA INSTRUÇÃO ESPECIAL ---`
         }
 
