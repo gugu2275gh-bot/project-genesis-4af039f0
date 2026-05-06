@@ -116,7 +116,6 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
   const [form, setForm] = useState(defaultForm);
   const [referralName, setReferralName] = useState('');
-  const [referralConfirmed, setReferralConfirmed] = useState(false);
 
   // Load existing referral info from the contact
   useEffect(() => {
@@ -125,12 +124,11 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     if (!targetId) return;
     supabase
       .from('contacts')
-      .select('referral_name, referral_confirmed')
+      .select('referral_name')
       .eq('id', targetId)
       .maybeSingle()
       .then(({ data }) => {
         setReferralName(data?.referral_name || '');
-        setReferralConfirmed(!!data?.referral_confirmed);
       });
   }, [open, contactId, selectedTitularId, isBeneficiary]);
 
@@ -528,7 +526,6 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       id: leadOwnerContactId,
       payment_notes: existingNotes + separator + titularSummary,
       referral_name: referralName || null,
-      referral_confirmed: referralConfirmed,
     } as any);
 
     queryClient.invalidateQueries({ queryKey: ['leads'] });
@@ -1088,16 +1085,6 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               onChange={(e) => setReferralName(e.target.value)}
               placeholder="Nome de quem indicou (colaborador, parceiro, cliente...)"
             />
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="pa-referral-confirmed"
-                checked={referralConfirmed}
-                onCheckedChange={(c) => setReferralConfirmed(!!c)}
-              />
-              <Label htmlFor="pa-referral-confirmed" className="cursor-pointer font-normal">
-                Indicação confirmada
-              </Label>
-            </div>
           </div>
 
           {readOnly ? (
