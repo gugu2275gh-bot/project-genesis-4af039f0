@@ -688,7 +688,7 @@ export default function ContractDetail() {
   const contractData = contract as any;
   const isSuspended = contractData.is_suspended === true;
 
-  const canEdit = contract.status === 'EM_ELABORACAO';
+  const canEdit = contract.status !== 'ASSINADO' && contract.status !== 'CANCELADO';
   const canApprove = contract.status === 'EM_ELABORACAO';
   const canReject = contract.status === 'EM_ELABORACAO';
   const canSign = contract.status === 'APROVADO';
