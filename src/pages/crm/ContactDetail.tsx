@@ -2378,13 +2378,13 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
                                   )}
                                   {!payment.installment_number && payment.due_date && (
                                     <span className="text-xs text-muted-foreground">
-                                      • Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}
+                                      • Venc: {format(new Date(`${payment.due_date}T12:00:00`), "dd/MM/yyyy")}
                                     </span>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                                   {payment.installment_number && payment.due_date && (
-                                    <span>Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
+                                    <span>Venc: {format(new Date(`${payment.due_date}T12:00:00`), "dd/MM/yyyy")}</span>
                                   )}
                                   {payment.contracts?.contract_number && (
                                     <span>{payment.contracts.contract_number}</span>
@@ -2454,13 +2454,13 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
                                   )}
                                   {!payment.installment_number && payment.due_date && (
                                     <span className="text-xs text-muted-foreground">
-                                      • Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}
+                                      • Venc: {format(new Date(`${payment.due_date}T12:00:00`), "dd/MM/yyyy")}
                                     </span>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                                   {payment.installment_number && payment.due_date && (
-                                    <span>Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
+                                    <span>Venc: {format(new Date(`${payment.due_date}T12:00:00`), "dd/MM/yyyy")}</span>
                                   )}
                                 </div>
                               </div>
@@ -2515,13 +2515,13 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
                               )}
                               {!payment.installment_number && payment.due_date && (
                                 <span className="text-xs text-muted-foreground">
-                                  • Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}
+                                  • Venc: {format(new Date(`${payment.due_date}T12:00:00`), "dd/MM/yyyy")}
                                 </span>
                               )}
                             </div>
                             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                               {payment.installment_number && payment.due_date && (
-                                <span>Venc: {format(new Date(payment.due_date), "dd/MM/yyyy")}</span>
+                                <span>Venc: {format(new Date(`${payment.due_date}T12:00:00`), "dd/MM/yyyy")}</span>
                               )}
                             </div>
                           </div>
