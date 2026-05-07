@@ -117,9 +117,14 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   const [form, setForm] = useState(defaultForm);
   const [referralName, setReferralName] = useState('');
 
-  // Load existing referral info from the contact
+  // Load existing referral info from the contact only when editing an existing agreement.
+  // For new services, leave it blank.
   useEffect(() => {
     if (!open) return;
+    if (!initialData) {
+      setReferralName('');
+      return;
+    }
     const targetId = (isBeneficiary && selectedTitularId) ? selectedTitularId : contactId;
     if (!targetId) return;
     supabase
@@ -130,7 +135,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       .then(({ data }) => {
         setReferralName(data?.referral_name || '');
       });
-  }, [open, contactId, selectedTitularId, isBeneficiary]);
+  }, [open, contactId, selectedTitularId, isBeneficiary, initialData]);
 
   // Pre-fill form when dialog opens with initialData
   useEffect(() => {
