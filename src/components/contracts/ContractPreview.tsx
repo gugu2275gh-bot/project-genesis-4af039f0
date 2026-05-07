@@ -177,7 +177,7 @@ export function ContractPreview({
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg">Pré-visualização do Contrato</CardTitle>
         <div className="flex gap-2">
-          {contractStatus === 'EM_ELABORACAO' && (
+          {contractStatus !== 'ASSINADO' && contractStatus !== 'CANCELADO' && contractStatus !== 'REPROVADO' && (
             <>
               {isEditing ? (
                 <div className="flex gap-2">
@@ -200,7 +200,7 @@ export function ContractPreview({
               )}
             </>
           )}
-          {contractStatus === 'EM_ELABORACAO' && (
+          {contractStatus !== 'ASSINADO' && contractStatus !== 'CANCELADO' && contractStatus !== 'REPROVADO' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="outline">
@@ -221,7 +221,7 @@ export function ContractPreview({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          {canDownload && (contractStatus === 'APROVADO' || contractStatus === 'ASSINADO') && (
+          {canDownload && (contractStatus === 'ASSINADO') && (
             <Button size="sm" onClick={handleDownloadPDF}>
               <Download className="h-4 w-4 mr-1" />
               Baixar PDF
