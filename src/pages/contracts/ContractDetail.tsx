@@ -348,7 +348,11 @@ export default function ContractDetail() {
       );
       const formattedTotalFinal = formatMoney(totalFinal);
       if (formattedTotalFinal) {
-        lines.push(`Total Final: ${formattedTotalFinal}`);
+        const showDueOnTotal = !isInstallments && first.due_date;
+        const dueSuffix = showDueOnTotal
+          ? ` — Venc: ${format(new Date(`${first.due_date}T12:00:00`), 'dd/MM/yyyy', { locale: ptBR })}`
+          : '';
+        lines.push(`Total Final: ${formattedTotalFinal}${dueSuffix}`);
       }
 
       if (first.payment_method) {
