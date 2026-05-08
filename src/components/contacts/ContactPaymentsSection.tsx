@@ -37,6 +37,8 @@ type LocalPayment = {
   payment_method: string;
   payment_form: string;
   status: string;
+  contract_id?: string | null;
+  lead_id?: string | null;
   contract_number?: string | null;
   lead_name?: string;
   paid_at?: string | null;
