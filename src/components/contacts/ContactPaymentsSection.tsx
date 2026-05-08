@@ -37,6 +37,8 @@ type LocalPayment = {
   payment_method: string;
   payment_form: string;
   status: string;
+  contract_id?: string | null;
+  lead_id?: string | null;
   contract_number?: string | null;
   lead_name?: string;
   paid_at?: string | null;
@@ -201,6 +203,8 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
         payment_method: variables.payment_method,
         payment_form: variables.payment_form,
         status: variables.status,
+        contract_id: variables.contract_id,
+        lead_id: variables.lead_id,
         contract_number: ctr?.contract_number || null,
         lead_name: leadName(lead),
         paid_at: variables.status === 'CONFIRMADO' ? new Date().toISOString() : null,
@@ -234,6 +238,38 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
   });
 
   const handleNew = () => { setEditingId(null); setForm(emptyForm()); setOpen(true); };
+
+  const handleEdit = async (p: LocalPayment) => {
+    let contract_id = p.contract_id || '';
+    let lead_id = p.lead_id || '';
+    if (!contract_id || !lead_id) {
+      const { data } = await supabase
+        .from('payments')
+        .select('contract_id, opportunity_id')
+        .eq('id', p.id)
+        .maybeSingle();
+      if (data) {
+        contract_id = data.contract_id || '';
+        if (data.opportunity_id) {
+          const { data: opp } = await supabase
+            .from('opportunities').select('lead_id').eq('id', data.opportunity_id).maybeSingle();
+          lead_id = opp?.lead_id || '';
+        }
+      }
+    }
+    setEditingId(p.id);
+    setForm({
+      contract_id,
+      lead_id,
+      amount: String(p.amount ?? ''),
+      due_date: p.due_date || '',
+      installment_number: p.installment_number ? String(p.installment_number) : '',
+      payment_method: (p.payment_method || 'TRANSFERENCIA') as PaymentMethod,
+      payment_form: (p.payment_form || 'UNICO') as PaymentForm,
+      status: (p.status || 'PENDENTE') as PaymentStatus,
+    });
+    setOpen(true);
+  };
 
   const loadExistingIntoForm = (p: any) => {
     setEditingId(p.id);
@@ -305,7 +341,14 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
         ) : (
           <div className="space-y-2">
             {payments.map(p => (
-              <div key={p.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-background">
+              <div
+                key={p.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => handleEdit(p)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleEdit(p); }}
+                className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-background cursor-pointer hover:bg-muted/50 transition-colors"
+              >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold">€ {Number(p.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
@@ -326,7 +369,10 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
                   status={p.status || 'PENDENTE'}
                   label={PAYMENT_STATUS_LABELS[p.status as PaymentStatus] || p.status}
                 />
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-primary" onClick={() => handleEdit(p)} title="Editar">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
                   <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => setDeleteId(p.id)} title="Excluir">
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
