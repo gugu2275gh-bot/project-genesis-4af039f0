@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { PaymentAgreementDialog, PaymentAgreementInitialData } from '@/components/crm/PaymentAgreementDialog';
 import { ContractGroupsSection } from '@/components/crm/ContractGroupsSection';
+import { ContactPaymentsSection } from '@/components/contacts/ContactPaymentsSection';
 import PendingItemsSection from '@/components/contacts/PendingItemsSection';
 import { UnifiedHistoryPanel } from '@/components/audit/UnifiedHistoryPanel';
 import DataSuggestionsPanel from '@/components/contacts/DataSuggestionsPanel';
