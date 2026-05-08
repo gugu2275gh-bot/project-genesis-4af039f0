@@ -2008,6 +2008,26 @@ export default function ContactDetail() {
                 </PopoverContent>
               </Popover>
             </div>
+            {selectedMergeContact && (
+              <div className="space-y-2 rounded-lg border p-3 bg-muted/30">
+                <p className="text-xs font-medium text-muted-foreground">Substituir dados do contato de destino:</p>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox checked={mergeUpdatePhone} onCheckedChange={(v) => setMergeUpdatePhone(!!v)} />
+                  <span className="text-sm">
+                    Substituir telefone
+                    {selectedMergeContact.phone && contact?.phone && (
+                      <span className="text-xs text-muted-foreground ml-1">
+                        ({selectedMergeContact.phone} → {contact.phone})
+                      </span>
+                    )}
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox checked={mergeUpdateEmail} onCheckedChange={(v) => setMergeUpdateEmail(!!v)} />
+                  <span className="text-sm">Substituir e-mail</span>
+                </label>
+              </div>
+            )}
             {isMerging && (
               <div className="flex items-center justify-center gap-2 py-2">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
