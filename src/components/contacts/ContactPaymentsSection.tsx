@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { StatusBadge } from '@/components/ui/status-badge';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -17,7 +16,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
-import { CreditCard, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { CreditCard, Plus, Trash2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_FORM_LABELS,
@@ -30,8 +29,20 @@ interface Props {
   contactName: string;
 }
 
+type LocalPayment = {
+  id: string;
+  amount: number;
+  due_date: string | null;
+  installment_number: number | null;
+  payment_method: string;
+  payment_form: string;
+  status: string;
+  contract_number?: string | null;
+  lead_name?: string;
+  paid_at?: string | null;
+};
+
 type FormState = {
-  id: string | null;
   contract_id: string;
   lead_id: string;
   amount: string;
@@ -40,11 +51,9 @@ type FormState = {
   payment_method: PaymentMethod;
   payment_form: PaymentForm;
   status: PaymentStatus;
-  notes: string;
 };
 
 const emptyForm = (): FormState => ({
-  id: null,
   contract_id: '',
   lead_id: '',
   amount: '',
@@ -53,7 +62,6 @@ const emptyForm = (): FormState => ({
   payment_method: 'TRANSFERENCIA',
   payment_form: 'UNICO',
   status: 'PENDENTE',
-  notes: '',
 });
 
 export function ContactPaymentsSection({ contactId, contactName }: Props) {
@@ -64,33 +72,10 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
+  const [payments, setPayments] = useState<LocalPayment[]>([]);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // ------ Queries ------
-  const { data: payments = [], isLoading } = useQuery({
-    queryKey: ['contact-avulso-payments', contactId],
-    queryFn: async () => {
-      const { data: cLeads } = await supabase.from('leads').select('id').eq('contact_id', contactId);
-      const leadIds = (cLeads || []).map(l => l.id);
-      let oppIds: string[] = [];
-      if (leadIds.length) {
-        const { data: opps } = await supabase.from('opportunities').select('id').in('lead_id', leadIds);
-        oppIds = (opps || []).map(o => o.id);
-      }
-      // payments via own opportunities OR via beneficiary_contact_id
-      const orFilters: string[] = [];
-      if (oppIds.length) orFilters.push(`opportunity_id.in.(${oppIds.join(',')})`);
-      orFilters.push(`beneficiary_contact_id.eq.${contactId}`);
-      const { data, error } = await supabase
-        .from('payments')
-        .select('*, contracts(id, contract_number), opportunities(id, lead_id, leads(id, service_type_id, service_interest))')
-        .or(orFilters.join(','))
-        .order('due_date', { ascending: true, nullsFirst: false });
-      if (error) throw error;
-      return data || [];
-    },
-  });
-
   const { data: contracts = [] } = useQuery({
     queryKey: ['contact-contracts-picker', contactId],
     queryFn: async () => {
@@ -135,17 +120,13 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
     if (!form.contract_id) return [];
     const links = contractLeadLinks.filter((cl: any) => cl.contract_id === form.contract_id);
     if (links.length) return links.map((cl: any) => cl.leads).filter(Boolean);
-    // fallback via opportunity
     const ctr = contracts.find(c => c.id === form.contract_id);
     if (ctr?.lead_id) {
-      const fromPayments = payments.find((p: any) => p.opportunities?.lead_id === ctr.lead_id);
-      const lead = fromPayments?.opportunities?.leads;
-      return lead ? [lead] : [{ id: ctr.lead_id, service_type_id: null, service_interest: 'OUTRO' }];
+      return [{ id: ctr.lead_id, service_type_id: null, service_interest: 'OUTRO' }];
     }
     return [];
-  }, [form.contract_id, contractLeadLinks, contracts, payments, serviceTypes]);
+  }, [form.contract_id, contractLeadLinks, contracts]);
 
-  // Reset lead when contract changes
   useEffect(() => {
     if (form.contract_id && leadsForContract.length === 1) {
       setForm(f => ({ ...f, lead_id: leadsForContract[0].id }));
@@ -153,7 +134,7 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
   }, [form.contract_id, leadsForContract]);
 
   // ------ Mutations ------
-  const upsertPayment = useMutation({
+  const createPayment = useMutation({
     mutationFn: async (f: FormState) => {
       if (!f.contract_id) throw new Error('Selecione o contrato');
       if (!f.lead_id) throw new Error('Selecione o serviço');
@@ -164,7 +145,7 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
       if (oppErr) throw oppErr;
       if (!opp) throw new Error('Não foi possível localizar a oportunidade do serviço selecionado');
 
-      const payload: any = {
+      const payload = {
         contract_id: f.contract_id,
         opportunity_id: opp.id,
         amount: Number(f.amount),
@@ -176,19 +157,28 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
         paid_at: f.status === 'CONFIRMADO' ? new Date().toISOString() : null,
       };
 
-      if (f.id) {
-        const { error } = await supabase.from('payments').update(payload).eq('id', f.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('payments').insert([payload]);
-        if (error) throw error;
-      }
+      const { data, error } = await supabase.from('payments').insert([payload]).select('id').single();
+      if (error) throw error;
+      return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contact-avulso-payments', contactId] });
-      queryClient.invalidateQueries({ queryKey: ['contact-payments', contactId] });
+    onSuccess: (data, variables) => {
+      const ctr = contracts.find(c => c.id === variables.contract_id);
+      const lead = leadsForContract.find((l: any) => l.id === variables.lead_id);
+      const newPayment: LocalPayment = {
+        id: data.id,
+        amount: Number(variables.amount),
+        due_date: variables.due_date || null,
+        installment_number: variables.installment_number ? Number(variables.installment_number) : null,
+        payment_method: variables.payment_method,
+        payment_form: variables.payment_form,
+        status: variables.status,
+        contract_number: ctr?.contract_number || null,
+        lead_name: leadName(lead),
+        paid_at: variables.status === 'CONFIRMADO' ? new Date().toISOString() : null,
+      };
+      setPayments(prev => [...prev, newPayment]);
       queryClient.invalidateQueries({ queryKey: ['payments'] });
-      toast({ title: form.id ? 'Pagamento atualizado' : 'Pagamento criado' });
+      toast({ title: 'Pagamento criado' });
       setOpen(false);
       setForm(emptyForm());
     },
@@ -200,37 +190,20 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
       const { error } = await supabase.from('payments').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contact-avulso-payments', contactId] });
-      queryClient.invalidateQueries({ queryKey: ['contact-payments', contactId] });
-      toast({ title: 'Pagamento excluído' });
+    onSuccess: (_, id) => {
+      setPayments(prev => prev.filter(p => p.id !== id));
+      toast({ title: 'Pagamento removido' });
       setDeleteId(null);
     },
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const handleEdit = (p: any) => {
-    setForm({
-      id: p.id,
-      contract_id: p.contract_id || '',
-      lead_id: p.opportunities?.lead_id || '',
-      amount: String(p.amount ?? ''),
-      due_date: p.due_date || '',
-      installment_number: p.installment_number ? String(p.installment_number) : '',
-      payment_method: (p.payment_method || 'TRANSFERENCIA') as PaymentMethod,
-      payment_form: (p.payment_form || 'UNICO') as PaymentForm,
-      status: (p.status || 'PENDENTE') as PaymentStatus,
-      notes: '',
-    });
-    setOpen(true);
-  };
-
   const handleNew = () => { setForm(emptyForm()); setOpen(true); };
 
-  const total = payments.reduce((s, p: any) => s + Number(p.amount || 0), 0);
+  const total = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
   const totalPaid = payments
-    .filter((p: any) => p.status === 'CONFIRMADO')
-    .reduce((s, p: any) => s + Number(p.amount || 0), 0);
+    .filter(p => p.status === 'CONFIRMADO')
+    .reduce((s, p) => s + Number(p.amount || 0), 0);
 
   return (
     <Card>
@@ -257,9 +230,7 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
         )}
       </CardHeader>
       <CardContent>
-        {isLoading ? (
-          <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-        ) : payments.length === 0 ? (
+        {payments.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">
             {contracts.length === 0
               ? 'Este contato ainda não possui contratos. Crie um contrato antes de registrar pagamentos.'
@@ -267,7 +238,7 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
           </p>
         ) : (
           <div className="space-y-2">
-            {payments.map((p: any) => (
+            {payments.map(p => (
               <div key={p.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-background">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -275,12 +246,12 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
                     {p.installment_number && (
                       <Badge variant="outline" className="text-xs">Parcela {p.installment_number}</Badge>
                     )}
-                    {p.contracts?.contract_number && (
-                      <Badge variant="secondary" className="text-xs">{p.contracts.contract_number}</Badge>
+                    {p.contract_number && (
+                      <Badge variant="secondary" className="text-xs">{p.contract_number}</Badge>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {leadName(p.opportunities?.leads)}
+                    {p.lead_name || '—'}
                     {p.due_date && <> · Venc: {format(new Date(`${p.due_date}T12:00:00`), 'dd/MM/yyyy')}</>}
                     {p.payment_method && <> · {PAYMENT_METHOD_LABELS[p.payment_method as PaymentMethod] || p.payment_method}</>}
                   </p>
@@ -290,9 +261,6 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
                   label={PAYMENT_STATUS_LABELS[p.status as PaymentStatus] || p.status}
                 />
                 <div className="flex items-center gap-1">
-                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEdit(p)} title="Editar">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
                   <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => setDeleteId(p.id)} title="Excluir">
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -307,7 +275,7 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setForm(emptyForm()); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{form.id ? 'Editar pagamento' : 'Novo pagamento avulso'}</DialogTitle>
+            <DialogTitle>Novo pagamento avulso</DialogTitle>
             <DialogDescription>
               Vincule o pagamento a um contrato e a um serviço de {contactName}.
             </DialogDescription>
@@ -407,10 +375,10 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={upsertPayment.isPending}>Cancelar</Button>
-            <Button onClick={() => upsertPayment.mutate(form)} disabled={upsertPayment.isPending}>
-              {upsertPayment.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              {form.id ? 'Salvar' : 'Criar'}
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={createPayment.isPending}>Cancelar</Button>
+            <Button onClick={() => createPayment.mutate(form)} disabled={createPayment.isPending}>
+              {createPayment.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Criar
             </Button>
           </DialogFooter>
         </DialogContent>
