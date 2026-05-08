@@ -279,6 +279,8 @@ export default function ContactDetail() {
       const { data, error } = await supabase.rpc('merge_contacts', {
         p_source_contact_id: id,
         p_target_contact_id: targetContactId,
+        p_update_phone: mergeUpdatePhone,
+        p_update_email: mergeUpdateEmail,
       });
       if (error) throw error;
       const result = data as any;
