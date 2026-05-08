@@ -125,6 +125,8 @@ export default function ContactDetail() {
   const [isMerging, setIsMerging] = useState(false);
   const [selectedMergeContact, setSelectedMergeContact] = useState<any>(null);
   const [mergePopoverOpen, setMergePopoverOpen] = useState(false);
+  const [mergeUpdatePhone, setMergeUpdatePhone] = useState(true);
+  const [mergeUpdateEmail, setMergeUpdateEmail] = useState(false);
   const queryClient = useQueryClient();
 
   const directLeads = leads.filter(l => l.contact_id === id && l.status !== 'ARQUIVADO_SEM_RETORNO');
