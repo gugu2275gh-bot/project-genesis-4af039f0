@@ -1384,6 +1384,9 @@ export default function ContactDetail() {
             />
           )}
 
+          {/* Pagamentos avulsos vinculados a contrato + serviço */}
+          <ContactPaymentsSection contactId={id!} contactName={contact.full_name} />
+
           {/* Pendências por Setor */}
           <PendingItemsSection contactId={id!} />
 
