@@ -341,7 +341,14 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
         ) : (
           <div className="space-y-2">
             {payments.map(p => (
-              <div key={p.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-background">
+              <div
+                key={p.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => handleEdit(p)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleEdit(p); }}
+                className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-background cursor-pointer hover:bg-muted/50 transition-colors"
+              >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold">€ {Number(p.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
@@ -362,7 +369,10 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
                   status={p.status || 'PENDENTE'}
                   label={PAYMENT_STATUS_LABELS[p.status as PaymentStatus] || p.status}
                 />
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-primary" onClick={() => handleEdit(p)} title="Editar">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
                   <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => setDeleteId(p.id)} title="Excluir">
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
