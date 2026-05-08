@@ -89,6 +89,7 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
         .from('contracts')
         .select('id, contract_number, status, opportunity_id')
         .in('opportunity_id', opps.map(o => o.id))
+        .eq('status', 'APROVADO')
         .order('created_at', { ascending: false });
       return (ctrs || []).map(c => ({
         ...c,
