@@ -239,6 +239,38 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
 
   const handleNew = () => { setEditingId(null); setForm(emptyForm()); setOpen(true); };
 
+  const handleEdit = async (p: LocalPayment) => {
+    let contract_id = p.contract_id || '';
+    let lead_id = p.lead_id || '';
+    if (!contract_id || !lead_id) {
+      const { data } = await supabase
+        .from('payments')
+        .select('contract_id, opportunity_id')
+        .eq('id', p.id)
+        .maybeSingle();
+      if (data) {
+        contract_id = data.contract_id || '';
+        if (data.opportunity_id) {
+          const { data: opp } = await supabase
+            .from('opportunities').select('lead_id').eq('id', data.opportunity_id).maybeSingle();
+          lead_id = opp?.lead_id || '';
+        }
+      }
+    }
+    setEditingId(p.id);
+    setForm({
+      contract_id,
+      lead_id,
+      amount: String(p.amount ?? ''),
+      due_date: p.due_date || '',
+      installment_number: p.installment_number ? String(p.installment_number) : '',
+      payment_method: (p.payment_method || 'TRANSFERENCIA') as PaymentMethod,
+      payment_form: (p.payment_form || 'UNICO') as PaymentForm,
+      status: (p.status || 'PENDENTE') as PaymentStatus,
+    });
+    setOpen(true);
+  };
+
   const loadExistingIntoForm = (p: any) => {
     setEditingId(p.id);
     setForm(f => ({
