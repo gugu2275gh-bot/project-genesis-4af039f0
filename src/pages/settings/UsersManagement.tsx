@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useServiceSectors } from '@/hooks/useServiceSectors';
 import { useAllUsersSectors, useUpdateUserSectors } from '@/hooks/useUserSectors';
+import { validatePassword } from '@/lib/password-validation';
 import {
   Table,
   TableBody,
@@ -321,9 +322,10 @@ export default function UsersManagement() {
       });
       return;
     }
-    if (createUserForm.password.length < 6) {
+    const pwValidation = validatePassword(createUserForm.password);
+    if (!pwValidation.valid) {
       toast({ 
-        title: 'A senha deve ter pelo menos 6 caracteres',
+        title: pwValidation.error!,
         variant: 'destructive' 
       });
       return;

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Building2, Loader2, KeyRound, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { validatePassword } from '@/lib/password-validation';
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -65,8 +66,9 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (password.length < 6) {
-      toast.error('A senha deve ter pelo menos 6 caracteres');
+    const validation = validatePassword(password);
+    if (!validation.valid) {
+      toast.error(validation.error!);
       return;
     }
 
