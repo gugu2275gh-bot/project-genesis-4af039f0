@@ -203,6 +203,8 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
         payment_method: variables.payment_method,
         payment_form: variables.payment_form,
         status: variables.status,
+        contract_id: variables.contract_id,
+        lead_id: variables.lead_id,
         contract_number: ctr?.contract_number || null,
         lead_name: leadName(lead),
         paid_at: variables.status === 'CONFIRMADO' ? new Date().toISOString() : null,
