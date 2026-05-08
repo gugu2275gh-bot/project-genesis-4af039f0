@@ -16,7 +16,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
-import { CreditCard, Plus, Trash2, Loader2 } from 'lucide-react';
+import { CreditCard, Plus, Trash2, Loader2, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_FORM_LABELS,
@@ -72,6 +72,7 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [payments, setPayments] = useState<LocalPayment[]>([]);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -128,13 +129,34 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
   }, [form.contract_id, contractLeadLinks, contracts]);
 
   useEffect(() => {
-    if (form.contract_id && leadsForContract.length === 1) {
+    if (form.contract_id && leadsForContract.length === 1 && !form.lead_id) {
       setForm(f => ({ ...f, lead_id: leadsForContract[0].id }));
     }
   }, [form.contract_id, leadsForContract]);
 
+  // Fetch existing payments for the selected contract+service (only when both selected and not currently editing)
+  const { data: existingPayments = [], isFetching: loadingExisting } = useQuery({
+    queryKey: ['existing-payments-picker', form.contract_id, form.lead_id],
+    queryFn: async () => {
+      if (!form.contract_id || !form.lead_id) return [];
+      const { data: opp } = await supabase
+        .from('opportunities').select('id').eq('lead_id', form.lead_id).limit(1).maybeSingle();
+      if (!opp) return [];
+      const { data, error } = await supabase
+        .from('payments')
+        .select('id, amount, due_date, installment_number, payment_method, payment_form, status, paid_at')
+        .eq('contract_id', form.contract_id)
+        .eq('opportunity_id', opp.id)
+        .order('installment_number', { ascending: true, nullsFirst: false })
+        .order('due_date', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!form.contract_id && !!form.lead_id && open,
+  });
+
   // ------ Mutations ------
-  const createPayment = useMutation({
+  const upsertPayment = useMutation({
     mutationFn: async (f: FormState) => {
       if (!f.contract_id) throw new Error('Selecione o contrato');
       if (!f.lead_id) throw new Error('Selecione o serviço');
@@ -157,14 +179,20 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
         paid_at: f.status === 'CONFIRMADO' ? new Date().toISOString() : null,
       };
 
-      const { data, error } = await supabase.from('payments').insert([payload]).select('id').single();
-      if (error) throw error;
-      return data;
+      if (editingId) {
+        const { data, error } = await supabase.from('payments').update(payload).eq('id', editingId).select('id').single();
+        if (error) throw error;
+        return { ...data, _edited: true };
+      } else {
+        const { data, error } = await supabase.from('payments').insert([payload]).select('id').single();
+        if (error) throw error;
+        return { ...data, _edited: false };
+      }
     },
     onSuccess: (data, variables) => {
       const ctr = contracts.find(c => c.id === variables.contract_id);
       const lead = leadsForContract.find((l: any) => l.id === variables.lead_id);
-      const newPayment: LocalPayment = {
+      const item: LocalPayment = {
         id: data.id,
         amount: Number(variables.amount),
         due_date: variables.due_date || null,
@@ -176,10 +204,15 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
         lead_name: leadName(lead),
         paid_at: variables.status === 'CONFIRMADO' ? new Date().toISOString() : null,
       };
-      setPayments(prev => [...prev, newPayment]);
+      setPayments(prev => {
+        const exists = prev.some(p => p.id === item.id);
+        return exists ? prev.map(p => p.id === item.id ? item : p) : [...prev, item];
+      });
       queryClient.invalidateQueries({ queryKey: ['payments'] });
-      toast({ title: 'Pagamento criado' });
+      queryClient.invalidateQueries({ queryKey: ['existing-payments-picker'] });
+      toast({ title: data._edited ? 'Pagamento atualizado' : 'Pagamento criado' });
       setOpen(false);
+      setEditingId(null);
       setForm(emptyForm());
     },
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
@@ -192,13 +225,45 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
     },
     onSuccess: (_, id) => {
       setPayments(prev => prev.filter(p => p.id !== id));
+      queryClient.invalidateQueries({ queryKey: ['existing-payments-picker'] });
       toast({ title: 'Pagamento removido' });
       setDeleteId(null);
     },
     onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
   });
 
-  const handleNew = () => { setForm(emptyForm()); setOpen(true); };
+  const handleNew = () => { setEditingId(null); setForm(emptyForm()); setOpen(true); };
+
+  const loadExistingIntoForm = (p: any) => {
+    setEditingId(p.id);
+    setForm(f => ({
+      ...f,
+      amount: String(p.amount ?? ''),
+      due_date: p.due_date || '',
+      installment_number: p.installment_number ? String(p.installment_number) : '',
+      payment_method: (p.payment_method || 'TRANSFERENCIA') as PaymentMethod,
+      payment_form: (p.payment_form || 'UNICO') as PaymentForm,
+      status: (p.status || 'PENDENTE') as PaymentStatus,
+    }));
+    // also reflect in local list so user sees it on the section
+    const ctr = contracts.find(c => c.id === form.contract_id);
+    const lead = leadsForContract.find((l: any) => l.id === form.lead_id);
+    setPayments(prev => {
+      if (prev.some(x => x.id === p.id)) return prev;
+      return [...prev, {
+        id: p.id,
+        amount: Number(p.amount),
+        due_date: p.due_date,
+        installment_number: p.installment_number,
+        payment_method: p.payment_method,
+        payment_form: p.payment_form,
+        status: p.status,
+        contract_number: ctr?.contract_number || null,
+        lead_name: leadName(lead),
+        paid_at: p.paid_at,
+      }];
+    });
+  };
 
   const total = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
   const totalPaid = payments
@@ -272,10 +337,10 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
       </CardContent>
 
       {/* Form Dialog */}
-      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setForm(emptyForm()); }}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setForm(emptyForm()); setEditingId(null); } }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Novo pagamento avulso</DialogTitle>
+            <DialogTitle>{editingId ? 'Editar pagamento' : 'Novo pagamento'}</DialogTitle>
             <DialogDescription>
               Vincule o pagamento a um contrato e a um serviço de {contactName}.
             </DialogDescription>
@@ -285,7 +350,7 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <Label>Contrato *</Label>
-                <Select value={form.contract_id} onValueChange={(v) => setForm({ ...form, contract_id: v, lead_id: '' })}>
+                <Select value={form.contract_id} onValueChange={(v) => { setEditingId(null); setForm({ ...form, contract_id: v, lead_id: '' }); }}>
                   <SelectTrigger><SelectValue placeholder="Selecione o contrato" /></SelectTrigger>
                   <SelectContent>
                     {contracts.map(c => (
@@ -299,7 +364,7 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
 
               <div className="col-span-2">
                 <Label>Serviço *</Label>
-                <Select value={form.lead_id} onValueChange={(v) => setForm({ ...form, lead_id: v })} disabled={!form.contract_id}>
+                <Select value={form.lead_id} onValueChange={(v) => { setEditingId(null); setForm({ ...form, lead_id: v }); }} disabled={!form.contract_id}>
                   <SelectTrigger><SelectValue placeholder={form.contract_id ? 'Selecione o serviço' : 'Selecione um contrato primeiro'} /></SelectTrigger>
                   <SelectContent>
                     {leadsForContract.map((l: any) => (
@@ -310,6 +375,53 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Existing payments for the selected contract + service */}
+              {form.contract_id && form.lead_id && (
+                <div className="col-span-2 space-y-1">
+                  <Label className="text-xs text-muted-foreground">
+                    Pagamentos existentes deste serviço {loadingExisting && <Loader2 className="inline h-3 w-3 animate-spin ml-1" />}
+                  </Label>
+                  {existingPayments.length === 0 && !loadingExisting && (
+                    <p className="text-xs text-muted-foreground italic">Nenhum pagamento existente. Preencha os campos abaixo para criar um novo.</p>
+                  )}
+                  {existingPayments.length > 0 && (
+                    <div className="border rounded-md divide-y max-h-44 overflow-y-auto">
+                      {existingPayments.map((p: any) => {
+                        const isSelected = editingId === p.id;
+                        return (
+                          <button
+                            type="button"
+                            key={p.id}
+                            onClick={() => loadExistingIntoForm(p)}
+                            className={`w-full text-left px-3 py-2 text-xs hover:bg-muted flex items-center justify-between gap-2 ${isSelected ? 'bg-muted' : ''}`}
+                          >
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium">€ {Number(p.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                              {p.installment_number && <Badge variant="outline" className="text-[10px] py-0">Parc. {p.installment_number}</Badge>}
+                              {p.due_date && <span className="text-muted-foreground">{format(new Date(`${p.due_date}T12:00:00`), 'dd/MM/yyyy')}</span>}
+                              <StatusBadge status={p.status} label={PAYMENT_STATUS_LABELS[p.status as PaymentStatus] || p.status} />
+                            </div>
+                            <Pencil className="h-3 w-3 text-muted-foreground" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {editingId && (
+                    <div className="flex items-center justify-between text-[11px] pt-1">
+                      <span className="text-primary">Editando pagamento existente</span>
+                      <button
+                        type="button"
+                        className="underline text-muted-foreground hover:text-foreground"
+                        onClick={() => { setEditingId(null); setForm(f => ({ ...emptyForm(), contract_id: f.contract_id, lead_id: f.lead_id })); }}
+                      >
+                        Criar novo em vez de editar
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
                 <Label>Valor (€) *</Label>
@@ -375,10 +487,10 @@ export function ContactPaymentsSection({ contactId, contactName }: Props) {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={createPayment.isPending}>Cancelar</Button>
-            <Button onClick={() => createPayment.mutate(form)} disabled={createPayment.isPending}>
-              {createPayment.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
-              Criar
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={upsertPayment.isPending}>Cancelar</Button>
+            <Button onClick={() => upsertPayment.mutate(form)} disabled={upsertPayment.isPending}>
+              {upsertPayment.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              {editingId ? 'Salvar' : 'Criar'}
             </Button>
           </DialogFooter>
         </DialogContent>
