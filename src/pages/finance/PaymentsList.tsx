@@ -88,7 +88,10 @@ export default function PaymentsList() {
   );
 
   const filteredPayments = payments.filter(p => {
-    const matchesSearch = 
+    const contractStatus = (p as any).contracts?.status;
+    const hasApprovedContract = contractStatus === 'APROVADO' || contractStatus === 'ASSINADO';
+    if (!hasApprovedContract) return false;
+    const matchesSearch =
       p.opportunities?.leads?.contacts?.full_name.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
     return matchesSearch && matchesStatus;
