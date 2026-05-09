@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Save, Percent } from 'lucide-react';
+import { Save, Percent, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface AccountForm {
@@ -16,15 +16,21 @@ interface AccountForm {
   account_details: string;
 }
 
+interface AccountRow extends AccountForm {
+  id: string;
+  country: string;
+}
+
 const emptyForm: AccountForm = { account_name: '', bank_name: '', account_details: '' };
 
 export default function PaymentSettings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [brasilForm, setBrasilForm] = useState<AccountForm>(emptyForm);
-  const [espanhaForm, setEspanhaForm] = useState<AccountForm>(emptyForm);
-  const [brasilId, setBrasilId] = useState<string | null>(null);
-  const [espanhaId, setEspanhaId] = useState<string | null>(null);
+  const [editForms, setEditForms] = useState<Record<string, AccountForm>>({});
+  const [newForms, setNewForms] = useState<Record<'BRASIL' | 'ESPANHA', AccountForm>>({
+    BRASIL: emptyForm,
+    ESPANHA: emptyForm,
+  });
   const [ivaRate, setIvaRate] = useState<string>('21');
   const [ivaLoaded, setIvaLoaded] = useState(false);
   const [commissionRate, setCommissionRate] = useState<string>('10');
