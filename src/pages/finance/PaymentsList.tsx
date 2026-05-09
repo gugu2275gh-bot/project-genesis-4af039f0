@@ -83,6 +83,10 @@ export default function PaymentsList() {
   const [reschedulePayment, setReschedulePayment] = useState<typeof payments[0] | null>(null);
   const [showRefinanceDialog, setShowRefinanceDialog] = useState(false);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
+  const [expandedContracts, setExpandedContracts] = useState<Record<string, boolean>>({});
+
+  const toggleContract = (key: string) =>
+    setExpandedContracts((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const availableOpportunities = opportunities.filter(o => 
     o.status === 'CONTRATO_ASSINADO' || o.status === 'PAGAMENTO_PENDENTE' || o.status === 'FECHADA_GANHA'
