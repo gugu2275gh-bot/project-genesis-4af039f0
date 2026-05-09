@@ -394,8 +394,8 @@ export default function PaymentSettings() {
       </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {renderCountryCard('Conta Brasil', '🇧🇷', 'BRASIL', brasilForm, setBrasilForm)}
-        {renderCountryCard('Conta Espanha', '🇪🇸', 'ESPANHA', espanhaForm, setEspanhaForm)}
+        {renderCountryCard('Conta Brasil', '🇧🇷', 'BRASIL')}
+        {renderCountryCard('Conta Espanha', '🇪🇸', 'ESPANHA')}
       </div>
     </div>
   );
