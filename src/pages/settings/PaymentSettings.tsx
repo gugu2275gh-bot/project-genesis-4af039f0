@@ -283,6 +283,40 @@ export default function PaymentSettings() {
         </CardContent>
       </Card>
 
+      {/* Default Commission Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Percent className="h-4 w-4" /> Porcentagem Padrão de Comissão
+          </CardTitle>
+          <CardDescription>Percentual sugerido automaticamente ao criar novas comissões</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-end gap-4">
+            <div className="flex-1 max-w-[200px]">
+              <Label>Percentual (%)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={commissionRate}
+                onChange={(e) => setCommissionRate(e.target.value)}
+                placeholder="10"
+              />
+            </div>
+            <Button
+              onClick={() => saveCommissionMutation.mutate(commissionRate)}
+              disabled={saveCommissionMutation.isPending}
+              className="gap-2"
+            >
+              <Save className="h-4 w-4" />
+              {saveCommissionMutation.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 md:grid-cols-2">
         {renderCountryCard('Conta Brasil', '🇧🇷', 'BRASIL', brasilForm, setBrasilForm)}
         {renderCountryCard('Conta Espanha', '🇪🇸', 'ESPANHA', espanhaForm, setEspanhaForm)}
