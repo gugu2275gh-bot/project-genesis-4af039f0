@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Save, Percent } from 'lucide-react';
+import { Save, Percent, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface AccountForm {
@@ -16,15 +16,21 @@ interface AccountForm {
   account_details: string;
 }
 
+interface AccountRow extends AccountForm {
+  id: string;
+  country: string;
+}
+
 const emptyForm: AccountForm = { account_name: '', bank_name: '', account_details: '' };
 
 export default function PaymentSettings() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [brasilForm, setBrasilForm] = useState<AccountForm>(emptyForm);
-  const [espanhaForm, setEspanhaForm] = useState<AccountForm>(emptyForm);
-  const [brasilId, setBrasilId] = useState<string | null>(null);
-  const [espanhaId, setEspanhaId] = useState<string | null>(null);
+  const [editForms, setEditForms] = useState<Record<string, AccountForm>>({});
+  const [newForms, setNewForms] = useState<Record<'BRASIL' | 'ESPANHA', AccountForm>>({
+    BRASIL: emptyForm,
+    ESPANHA: emptyForm,
+  });
   const [ivaRate, setIvaRate] = useState<string>('21');
   const [ivaLoaded, setIvaLoaded] = useState(false);
   const [commissionRate, setCommissionRate] = useState<string>('10');
@@ -112,131 +118,201 @@ export default function PaymentSettings() {
       const { data, error } = await supabase
         .from('payment_accounts')
         .select('*')
-        .order('country', { ascending: true });
+        .order('country', { ascending: true })
+        .order('created_at', { ascending: true });
       if (error) throw error;
-      return data;
+      return data as AccountRow[];
     },
   });
 
   useEffect(() => {
-    const brasil = accounts.find(a => a.country === 'BRASIL');
-    const espanha = accounts.find(a => a.country === 'ESPANHA');
-    if (brasil) {
-      setBrasilId(brasil.id);
-      setBrasilForm({
-        account_name: brasil.account_name || '',
-        bank_name: brasil.bank_name || '',
-        account_details: brasil.account_details || '',
+    setEditForms((prev) => {
+      const next: Record<string, AccountForm> = {};
+      accounts.forEach((a) => {
+        next[a.id] = prev[a.id] || {
+          account_name: a.account_name || '',
+          bank_name: a.bank_name || '',
+          account_details: a.account_details || '',
+        };
       });
-    } else {
-      setBrasilId(null);
-    }
-    if (espanha) {
-      setEspanhaId(espanha.id);
-      setEspanhaForm({
-        account_name: espanha.account_name || '',
-        bank_name: espanha.bank_name || '',
-        account_details: espanha.account_details || '',
-      });
-    } else {
-      setEspanhaId(null);
-    }
+      return next;
+    });
   }, [accounts]);
 
-  const saveMutation = useMutation({
-    mutationFn: async ({ country, form, existingId }: { country: string; form: AccountForm; existingId: string | null }) => {
-      if (existingId) {
-        const { error } = await supabase
-          .from('payment_accounts')
-          .update({
-            account_name: form.account_name,
-            bank_name: form.bank_name || null,
-            account_details: form.account_details || null,
-          })
-          .eq('id', existingId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('payment_accounts')
-          .insert({
-            country,
-            account_name: form.account_name,
-            bank_name: form.bank_name || null,
-            account_details: form.account_details || null,
-            created_by_user_id: user?.id,
-          });
-        if (error) throw error;
-      }
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, form }: { id: string; form: AccountForm }) => {
+      const { error } = await supabase
+        .from('payment_accounts')
+        .update({
+          account_name: form.account_name,
+          bank_name: form.bank_name || null,
+          account_details: form.account_details || null,
+        })
+        .eq('id', id);
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-accounts'] });
-      toast.success('Dados salvos com sucesso');
+      toast.success('Conta atualizada');
     },
-    onError: () => toast.error('Erro ao salvar dados'),
+    onError: () => toast.error('Erro ao salvar conta'),
   });
 
-  const handleSave = (country: 'BRASIL' | 'ESPANHA') => {
-    const form = country === 'BRASIL' ? brasilForm : espanhaForm;
-    const existingId = country === 'BRASIL' ? brasilId : espanhaId;
+  const insertMutation = useMutation({
+    mutationFn: async ({ country, form }: { country: 'BRASIL' | 'ESPANHA'; form: AccountForm }) => {
+      const { error } = await supabase
+        .from('payment_accounts')
+        .insert({
+          country,
+          account_name: form.account_name,
+          bank_name: form.bank_name || null,
+          account_details: form.account_details || null,
+          created_by_user_id: user?.id,
+        });
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['payment-accounts'] });
+      setNewForms((prev) => ({ ...prev, [vars.country]: emptyForm }));
+      toast.success('Conta adicionada');
+    },
+    onError: () => toast.error('Erro ao adicionar conta'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('payment_accounts').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payment-accounts'] });
+      toast.success('Conta removida');
+    },
+    onError: () => toast.error('Erro ao remover conta'),
+  });
+
+  const handleUpdate = (id: string) => {
+    const form = editForms[id];
+    if (!form?.account_name.trim()) {
+      toast.error('Nome da conta é obrigatório');
+      return;
+    }
+    updateMutation.mutate({ id, form });
+  };
+
+  const handleAdd = (country: 'BRASIL' | 'ESPANHA') => {
+    const form = newForms[country];
     if (!form.account_name.trim()) {
       toast.error('Nome da conta é obrigatório');
       return;
     }
-    saveMutation.mutate({ country, form, existingId });
+    insertMutation.mutate({ country, form });
   };
+
+  const handleDelete = (id: string) => {
+    if (!confirm('Remover esta conta bancária?')) return;
+    deleteMutation.mutate(id);
+  };
+
+  const renderAccountFields = (
+    form: AccountForm,
+    setForm: (f: AccountForm) => void,
+  ) => (
+    <div className="space-y-3">
+      <div>
+        <Label>Nome da Conta</Label>
+        <Input
+          value={form.account_name}
+          onChange={(e) => setForm({ ...form, account_name: e.target.value })}
+          placeholder="Ex: Conta Principal"
+        />
+      </div>
+      <div>
+        <Label>Banco</Label>
+        <Input
+          value={form.bank_name}
+          onChange={(e) => setForm({ ...form, bank_name: e.target.value })}
+          placeholder="Ex: Banco do Brasil / CaixaBank"
+        />
+      </div>
+      <div>
+        <Label>Detalhes da Conta</Label>
+        <Textarea
+          value={form.account_details}
+          onChange={(e) => setForm({ ...form, account_details: e.target.value })}
+          rows={3}
+          placeholder="IBAN, agência, número da conta, etc."
+        />
+      </div>
+    </div>
+  );
 
   const renderCountryCard = (
     title: string,
     flag: string,
     country: 'BRASIL' | 'ESPANHA',
-    form: AccountForm,
-    setForm: (f: AccountForm) => void,
-  ) => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <span>{flag}</span> {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <Label>Nome da Conta</Label>
-          <Input
-            value={form.account_name}
-            onChange={(e) => setForm({ ...form, account_name: e.target.value })}
-            placeholder="Ex: Conta Principal"
-          />
-        </div>
-        <div>
-          <Label>Banco</Label>
-          <Input
-            value={form.bank_name}
-            onChange={(e) => setForm({ ...form, bank_name: e.target.value })}
-            placeholder="Ex: Banco do Brasil / CaixaBank"
-          />
-        </div>
-        <div>
-          <Label>Detalhes da Conta</Label>
-          <Textarea
-            value={form.account_details}
-            onChange={(e) => setForm({ ...form, account_details: e.target.value })}
-            rows={3}
-            placeholder="IBAN, agência, número da conta, etc."
-          />
-        </div>
-        <div className="flex justify-end">
-          <Button
-            onClick={() => handleSave(country)}
-            disabled={saveMutation.isPending}
-            className="gap-2"
-          >
-            <Save className="h-4 w-4" />
-            {saveMutation.isPending ? 'Salvando...' : 'Salvar'}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  ) => {
+    const countryAccounts = accounts.filter((a) => a.country === country);
+    const newForm = newForms[country];
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <span>{flag}</span> {title}
+          </CardTitle>
+          <CardDescription>{countryAccounts.length} conta(s) cadastrada(s)</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {countryAccounts.map((acc) => {
+            const form = editForms[acc.id] || emptyForm;
+            return (
+              <div key={acc.id} className="rounded-md border p-3 space-y-3 bg-muted/30">
+                {renderAccountFields(form, (f) =>
+                  setEditForms((prev) => ({ ...prev, [acc.id]: f })),
+                )}
+                <div className="flex justify-between gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDelete(acc.id)}
+                    disabled={deleteMutation.isPending}
+                    className="gap-2 text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" /> Remover
+                  </Button>
+                  <Button
+                    onClick={() => handleUpdate(acc.id)}
+                    disabled={updateMutation.isPending}
+                    size="sm"
+                    className="gap-2"
+                  >
+                    <Save className="h-4 w-4" /> Salvar
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+
+          <div className="rounded-md border border-dashed p-3 space-y-3">
+            <p className="text-sm font-medium text-muted-foreground">Adicionar nova conta</p>
+            {renderAccountFields(newForm, (f) =>
+              setNewForms((prev) => ({ ...prev, [country]: f })),
+            )}
+            <div className="flex justify-end">
+              <Button
+                onClick={() => handleAdd(country)}
+                disabled={insertMutation.isPending}
+                size="sm"
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" /> Adicionar
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   if (isLoading) {
     return <p className="text-muted-foreground text-sm">Carregando...</p>;
@@ -318,8 +394,8 @@ export default function PaymentSettings() {
       </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {renderCountryCard('Conta Brasil', '🇧🇷', 'BRASIL', brasilForm, setBrasilForm)}
-        {renderCountryCard('Conta Espanha', '🇪🇸', 'ESPANHA', espanhaForm, setEspanhaForm)}
+        {renderCountryCard('Conta Brasil', '🇧🇷', 'BRASIL')}
+        {renderCountryCard('Conta Espanha', '🇪🇸', 'ESPANHA')}
       </div>
     </div>
   );
