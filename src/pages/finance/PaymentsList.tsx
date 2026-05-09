@@ -15,7 +15,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText, Download, CheckCircle, Clock, FileCheck, MessageSquare, Users } from 'lucide-react';
+import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText, Download, CheckCircle, Clock, FileCheck, MessageSquare, Users, ChevronDown, ChevronRight } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_FORM_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { format, differenceInDays, isBefore } from 'date-fns';
@@ -82,6 +83,10 @@ export default function PaymentsList() {
   const [reschedulePayment, setReschedulePayment] = useState<typeof payments[0] | null>(null);
   const [showRefinanceDialog, setShowRefinanceDialog] = useState(false);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
+  const [expandedContracts, setExpandedContracts] = useState<Record<string, boolean>>({});
+
+  const toggleContract = (key: string) =>
+    setExpandedContracts((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const availableOpportunities = opportunities.filter(o => 
     o.status === 'CONTRATO_ASSINADO' || o.status === 'PAGAMENTO_PENDENTE' || o.status === 'FECHADA_GANHA'
@@ -864,13 +869,122 @@ export default function PaymentsList() {
         </Select>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filteredPayments}
-        loading={isLoading}
-        emptyMessage="Nenhum pagamento encontrado"
-        rowClassName={getRowClassName}
-      />
+      {(() => {
+        // Group filtered payments by contract
+        const groupsMap = new Map<string, { key: string; contract: any; clientName: string; items: typeof filteredPayments }>();
+        filteredPayments.forEach((p: any) => {
+          const key = p.contract_id || `no-contract-${p.opportunity_id || p.id}`;
+          if (!groupsMap.has(key)) {
+            groupsMap.set(key, {
+              key,
+              contract: p.contracts || null,
+              clientName: p.opportunities?.leads?.contacts?.full_name || 'Sem cliente',
+              items: [],
+            });
+          }
+          groupsMap.get(key)!.items.push(p);
+        });
+        const groups = Array.from(groupsMap.values());
+
+        if (isLoading) {
+          return (
+            <div className="rounded-lg border bg-card p-12 text-center text-muted-foreground">
+              Carregando...
+            </div>
+          );
+        }
+
+        if (groups.length === 0) {
+          return (
+            <div className="rounded-lg border bg-card p-12 text-center text-muted-foreground">
+              Nenhum pagamento encontrado
+            </div>
+          );
+        }
+
+        return (
+          <div className="space-y-3">
+            {groups.map((group) => {
+              const isExpanded = expandedContracts[group.key] ?? false;
+              const totalAmount = group.items.reduce((sum, p) => sum + (p.amount || 0), 0);
+              const paidCount = group.items.filter((p) => p.status === 'CONFIRMADO').length;
+              const pendingCount = group.items.filter((p) => p.status === 'PENDENTE').length;
+              const contractStatus = group.contract?.status;
+              const contractLabel =
+                contractStatus === 'APROVADO' ? 'A Assinar' :
+                contractStatus === 'ASSINADO' ? 'Assinado' :
+                contractStatus === 'EM_ELABORACAO' ? 'Em Elaboração' :
+                contractStatus || 'Sem contrato';
+
+              return (
+                <div key={group.key} className="rounded-lg border bg-card overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggleContract(group.key)}
+                    className="w-full flex items-center gap-3 p-4 hover:bg-muted/50 transition-colors text-left"
+                  >
+                    {isExpanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold">{group.clientName}</span>
+                        <Badge
+                          className={cn(
+                            'flex items-center gap-1 whitespace-nowrap',
+                            contractStatus === 'APROVADO' && 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+                            contractStatus === 'ASSINADO' && 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+                          )}
+                          variant={contractStatus === 'APROVADO' || contractStatus === 'ASSINADO' ? undefined : 'outline'}
+                        >
+                          <FileText className="h-3 w-3" />
+                          {contractLabel}
+                        </Badge>
+                        {group.contract?.contract_number && (
+                          <span className="text-xs text-muted-foreground">Nº {group.contract.contract_number}</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {group.items.length} pagamento(s) · {paidCount} confirmado(s) · {pendingCount} pendente(s)
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-semibold">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: group.items[0]?.currency || 'EUR' }).format(totalAmount)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Total</div>
+                    </div>
+                  </button>
+                  {isExpanded && (
+                    <div className="border-t">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            {columns.map((col) => (
+                              <TableHead key={col.key} className={cn('font-semibold', col.className)}>
+                                {col.header}
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {group.items.map((p) => (
+                            <TableRow key={p.id} className={getRowClassName(p)}>
+                              {columns.map((col) => (
+                                <TableCell key={col.key} className={col.className}>
+                                  {col.cell ? col.cell(p) : (p as any)[col.key]}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Reschedule Dialog */}
       {reschedulePayment && (
