@@ -27,6 +27,8 @@ export default function PaymentSettings() {
   const [espanhaId, setEspanhaId] = useState<string | null>(null);
   const [ivaRate, setIvaRate] = useState<string>('21');
   const [ivaLoaded, setIvaLoaded] = useState(false);
+  const [commissionRate, setCommissionRate] = useState<string>('10');
+  const [commissionLoaded, setCommissionLoaded] = useState(false);
 
   // Fetch IVA rate from system_config
   const { data: ivaConfig } = useQuery({
@@ -42,12 +44,33 @@ export default function PaymentSettings() {
     },
   });
 
+  // Fetch default commission rate from system_config
+  const { data: commissionConfig } = useQuery({
+    queryKey: ['system-config', 'default_commission_rate'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('system_config')
+        .select('value')
+        .eq('key', 'default_commission_rate')
+        .maybeSingle();
+      if (error) throw error;
+      return data?.value || '10';
+    },
+  });
+
   useEffect(() => {
     if (ivaConfig && !ivaLoaded) {
       setIvaRate(ivaConfig);
       setIvaLoaded(true);
     }
   }, [ivaConfig, ivaLoaded]);
+
+  useEffect(() => {
+    if (commissionConfig && !commissionLoaded) {
+      setCommissionRate(commissionConfig);
+      setCommissionLoaded(true);
+    }
+  }, [commissionConfig, commissionLoaded]);
 
   const saveIvaMutation = useMutation({
     mutationFn: async (rate: string) => {
@@ -64,6 +87,23 @@ export default function PaymentSettings() {
       toast.success('Taxa de IVA salva com sucesso');
     },
     onError: () => toast.error('Erro ao salvar taxa de IVA'),
+  });
+
+  const saveCommissionMutation = useMutation({
+    mutationFn: async (rate: string) => {
+      const { error } = await supabase
+        .from('system_config')
+        .upsert(
+          { key: 'default_commission_rate', value: rate, description: 'Porcentagem padrão de comissão (%)' },
+          { onConflict: 'key' }
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-config', 'default_commission_rate'] });
+      toast.success('Porcentagem de comissão salva com sucesso');
+    },
+    onError: () => toast.error('Erro ao salvar porcentagem de comissão'),
   });
 
   const { data: accounts = [], isLoading } = useQuery({
@@ -238,6 +278,40 @@ export default function PaymentSettings() {
             >
               <Save className="h-4 w-4" />
               {saveIvaMutation.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Default Commission Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Percent className="h-4 w-4" /> Porcentagem Padrão de Comissão
+          </CardTitle>
+          <CardDescription>Percentual sugerido automaticamente ao criar novas comissões</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-end gap-4">
+            <div className="flex-1 max-w-[200px]">
+              <Label>Percentual (%)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={commissionRate}
+                onChange={(e) => setCommissionRate(e.target.value)}
+                placeholder="10"
+              />
+            </div>
+            <Button
+              onClick={() => saveCommissionMutation.mutate(commissionRate)}
+              disabled={saveCommissionMutation.isPending}
+              className="gap-2"
+            >
+              <Save className="h-4 w-4" />
+              {saveCommissionMutation.isPending ? 'Salvando...' : 'Salvar'}
             </Button>
           </div>
         </CardContent>
