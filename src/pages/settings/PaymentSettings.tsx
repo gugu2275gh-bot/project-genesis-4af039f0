@@ -89,6 +89,23 @@ export default function PaymentSettings() {
     onError: () => toast.error('Erro ao salvar taxa de IVA'),
   });
 
+  const saveCommissionMutation = useMutation({
+    mutationFn: async (rate: string) => {
+      const { error } = await supabase
+        .from('system_config')
+        .upsert(
+          { key: 'default_commission_rate', value: rate, description: 'Porcentagem padrão de comissão (%)' },
+          { onConflict: 'key' }
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['system-config', 'default_commission_rate'] });
+      toast.success('Porcentagem de comissão salva com sucesso');
+    },
+    onError: () => toast.error('Erro ao salvar porcentagem de comissão'),
+  });
+
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['payment-accounts'],
     queryFn: async () => {
