@@ -2571,6 +2571,16 @@ Regras:
           console.log(`[GATE] step=${nextStep.key} done=${steps.filter(s=>s.done).length}/${steps.length} inSpain=${userInSpain} outside=${userOutsideSpain}`)
         } else {
           console.log(`[GATE] flow complete — KB liberada (handoff=${handoffDone})`)
+          if (!handoffDone) {
+            messageForAI = `${messageForAI}\n\n[MODO TIRA-DÚVIDAS — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
+              `O cadastro inicial e o Pré-Handoff já foram enviados. Agora você está em MODO TIRA-DÚVIDAS.\n` +
+              `REGRAS:\n` +
+              `1. Use a Base de Conhecimento (KB) fornecida no contexto para responder dúvidas do cliente de forma breve, clara e baseada exclusivamente nos trechos disponíveis.\n` +
+              `2. NÃO envie o Handoff ("Vou encaminhar suas informações..." / "Vou te encaminhar para um atendente") automaticamente. Só envie o Handoff quando o cliente sinalizar que NÃO TEM MAIS DÚVIDAS (ex.: "é só isso", "obrigado", "ok") OU pedir explicitamente para falar com um humano.\n` +
+              `3. Se o cliente acabou de receber o Pré-Handoff e ainda não fez perguntas, convide-o gentilmente: "Tem alguma dúvida que eu possa esclarecer agora sobre seu caso?".\n` +
+              `4. Se a KB realmente não tiver a informação, diga honestamente que vai confirmar com o especialista — mas NÃO faça o handoff por isso, continue disponível para outras dúvidas.\n` +
+              `[FIM DO MODO TIRA-DÚVIDAS]`
+          }
         }
 
         console.log(`[KB] query currentTopic="${currentMessageTopicHint}" finalTopic="${topicHint}" len=${kbQuery.length} -> context ${knowledgeContext.length} chars`)
