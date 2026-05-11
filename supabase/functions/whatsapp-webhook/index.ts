@@ -2419,36 +2419,61 @@ Regras:
 
         // Aceita e segue se já perguntamos 2+ vezes sem resposta válida ("Repetir uma vez")
         const pendingField = gateQueue.find(f => f.asks < 2)
-        const collectionGateActive = !!pendingField
         const isRepeatAsk = !!pendingField && pendingField.asks >= 1
+
+        // ===== FLOW COMPLETION GATE =====
+        // Só liberamos a Base de Conhecimento DEPOIS que o agente concluir o fluxo estruturado
+        // (Pré-Handoff enviado: "Já consigo ter uma visão inicial do seu caso" / "cada caso de forma individual").
+        const preHandoffDone = assistantMsgs.some(m =>
+          /vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case/i.test(m.content)
+          || /cada caso de forma individual|cada caso de forma individual|each case individually/i.test(m.content)
+        )
+        const handoffDone = assistantMsgs.some(m =>
+          /encaminhar suas informa[çc][õo]es|encaminhar tus datos|forward your information/i.test(m.content)
+          || /vou te encaminhar para um atendente|te derivar[ée] a un agente|forward you to an agent/i.test(m.content)
+        )
+        const flowComplete = preHandoffDone || handoffDone
+        const collectionGateActive = !!pendingField || !flowComplete
 
         const kbQueryParts: string[] = []
         if (topicHint) kbQueryParts.push(`Tópico: ${topicHint}`)
         if (lastAssistantQuestion) kbQueryParts.push(`Pergunta anterior do agente: ${lastAssistantQuestion}`)
         if (rawCustomerMessage) kbQueryParts.push(`Pergunta do cliente: ${rawCustomerMessage}`)
         const kbQuery = kbQueryParts.join('\n').trim() || (rawCustomerMessage || messageForAI || '').trim()
-        // Se gate está ativo, NÃO consulta KB ainda — força coleta primeiro
+        // Se gate está ativo, NÃO consulta KB ainda — força conclusão do fluxo primeiro
         const knowledgeContext = (!collectionGateActive && kbQuery)
           ? await getKnowledgeBaseContext(supabase, kbQuery, topicHint || undefined)
           : ''
 
         if (collectionGateActive) {
-          const fieldLabel = pendingField!.key === 'nome' ? 'NOME COMPLETO'
-            : pendingField!.key === 'email' ? 'E-MAIL'
-            : 'SERVIÇO DE INTERESSE'
-          const repeatNote = isRepeatAsk
-            ? `O cliente JÁ foi perguntado sobre ${fieldLabel} antes e não respondeu de forma válida. Reformule a pergunta de outra maneira, mais simples e clara, deixando explícito por que precisamos dessa informação. Esta é a ÚLTIMA vez que perguntaremos.`
-            : `Esta é a primeira vez que perguntamos sobre ${fieldLabel}.`
-          messageForAI = `${messageForAI}\n\n[GATE DE COLETA — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
-            `Você está em modo COLETA OBRIGATÓRIA. Ainda falta capturar: ${fieldLabel}.\n` +
-            `${repeatNote}\n` +
-            `REGRAS RÍGIDAS:\n` +
-            `1. NÃO responda a nenhuma dúvida factual do cliente (preço, requisitos, prazos, documentos) agora — diga gentilmente que vai responder logo após coletar essa última informação.\n` +
-            `2. Faça APENAS uma pergunta: a do campo ${fieldLabel}.\n` +
-            `3. Seja breve (1–2 frases). Se o cliente fez uma pergunta, reconheça em uma frase ("Ótima pergunta, já te explico em seguida.") e em seguida faça SOMENTE a pergunta de ${fieldLabel}.\n` +
-            `Sugestão de pergunta base: "${pendingField!.question}"\n` +
-            `[FIM DO GATE]`
-          console.log(`[GATE] active field=${pendingField!.key} asks=${pendingField!.asks} repeat=${isRepeatAsk}`)
+          if (pendingField) {
+            const fieldLabel = pendingField.key === 'nome' ? 'NOME COMPLETO'
+              : pendingField.key === 'email' ? 'E-MAIL'
+              : 'SERVIÇO DE INTERESSE'
+            const repeatNote = isRepeatAsk
+              ? `O cliente JÁ foi perguntado sobre ${fieldLabel} antes e não respondeu de forma válida. Reformule a pergunta de outra maneira, mais simples e clara, deixando explícito por que precisamos dessa informação. Esta é a ÚLTIMA vez que perguntaremos.`
+              : `Esta é a primeira vez que perguntamos sobre ${fieldLabel}.`
+            messageForAI = `${messageForAI}\n\n[GATE DE COLETA — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
+              `Você está em modo COLETA OBRIGATÓRIA. Ainda falta capturar: ${fieldLabel}.\n` +
+              `${repeatNote}\n` +
+              `REGRAS RÍGIDAS:\n` +
+              `1. NÃO responda a nenhuma dúvida factual do cliente (preço, requisitos, prazos, documentos) agora — diga gentilmente que vai responder logo após coletar essa última informação.\n` +
+              `2. Faça APENAS uma pergunta: a do campo ${fieldLabel}.\n` +
+              `3. Seja breve (1–2 frases). Se o cliente fez uma pergunta, reconheça em uma frase ("Ótima pergunta, já te explico em seguida.") e em seguida faça SOMENTE a pergunta de ${fieldLabel}.\n` +
+              `Sugestão de pergunta base: "${pendingField.question}"\n` +
+              `[FIM DO GATE]`
+            console.log(`[GATE] coleta field=${pendingField.key} asks=${pendingField.asks} repeat=${isRepeatAsk}`)
+          } else {
+            // Campos básicos OK, mas o fluxo estruturado (objetivos 4 a 8) ainda não terminou.
+            messageForAI = `${messageForAI}\n\n[GATE DE FLUXO — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
+              `Os dados básicos (nome, e-mail, serviço) já foram capturados, MAS o fluxo estruturado da conversa ainda NÃO foi concluído. Continue avançando pelos objetivos do roteiro na ordem definida (Origem → Interesse detalhado → Localização atual → Aprofundamento conforme localização → Pré-Handoff).\n` +
+              `REGRAS RÍGIDAS:\n` +
+              `1. NÃO consulte nem responda com a Base de Conhecimento ainda. Se o cliente fizer uma pergunta factual (preço, requisitos, prazos, documentos), reconheça em UMA frase ("Ótima pergunta, te explico em detalhes assim que terminarmos esse rapidíssimo levantamento.") e em seguida faça SOMENTE a próxima pergunta do roteiro.\n` +
+              `2. UMA pergunta por vez, exatamente como descrito nos objetivos do roteiro.\n` +
+              `3. Só após enviar o Pré-Handoff ("Já consigo ter uma visão inicial do seu caso." + "Na CB analisamos cada caso de forma individual...") a Base de Conhecimento será liberada nas próximas mensagens.\n` +
+              `[FIM DO GATE]`
+            console.log(`[GATE] fluxo preHandoff=${preHandoffDone} handoff=${handoffDone}`)
+          }
         }
 
         console.log(`[KB] query currentTopic="${currentMessageTopicHint}" finalTopic="${topicHint}" len=${kbQuery.length} -> context ${knowledgeContext.length} chars`)
