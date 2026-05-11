@@ -10,9 +10,13 @@ import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Settings, Save, Globe, Brain } from 'lucide-react';
+import { Settings, Save, Globe, Brain, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import KnowledgeBaseManager from '@/components/settings/KnowledgeBaseManager';
 import { useSuperuser } from '@/hooks/useSuperuser';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface SystemConfig {
   key: string;
