@@ -981,7 +981,8 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
             system_instruction: { parts: [{ text: fullSystemPrompt }] },
             contents: geminiContents,
             generationConfig: {
-              maxOutputTokens: 1000,
+              maxOutputTokens: 2048,
+              thinkingConfig: { thinkingBudget: 0 },
             },
           }),
           signal: controller.signal,
