@@ -2533,7 +2533,7 @@ Regras:
           key: 'preHandoff', label: 'PRÉ-HANDOFF',
           done: preHandoffDone,
           instruction:
-            'Envie o PRÉ-HANDOFF em duas frases curtas, nesta ordem: (1) "Perfeito. Já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." NÃO faça novas perguntas. Após esta mensagem a Base de Conhecimento será liberada.',
+            'Envie o PRÉ-HANDOFF em duas frases curtas, nesta ordem: (1) "Perfeito. Já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." NÃO faça novas perguntas e NÃO envie o Handoff (encaminhar para atendente) agora. Após esta mensagem, a Base de Conhecimento será liberada e você entrará em modo tira-dúvidas usando a KB.',
         })
 
         // Etapa 8 — Handoff (H3 + H4) — opcional, apenas se a equipe for assumir
