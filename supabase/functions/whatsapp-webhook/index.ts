@@ -2394,9 +2394,19 @@ Regras:
             `${recentAssistantText}\n${lastAssistantQuestion || ''}\n${rawCustomerMessage || ''}`,
           )
         }
-        // ===== COLLECTION GATE =====
-        // Bloqueia KB enquanto faltarem campos obrigatórios (nome, email, serviço de interesse).
-        // Repete a mesma pergunta no máx. 1 vez (reformulada); depois aceita e segue.
+        // ===== FLUXO ESTRUTURADO (Roteiro CB Asesoría — Fluxo_Mensagens_WhatsApp) =====
+        // Bloqueia a Base de Conhecimento até o agente concluir TODAS as etapas do roteiro,
+        // na ordem definida no PDF oficial. Só libera KB após Pré-Handoff (H1+H2) enviado.
+        const allAssistant = assistantMsgs.map(m => m.content).join('\n')
+        const userMsgsText = (history || [])
+          .filter((m: any) => m.role === 'user')
+          .map((m: any) => String(m.content || ''))
+          .join('\n')
+
+        const sentAny = (re: RegExp) => re.test(allAssistant)
+        const userSaid = (re: RegExp) => re.test(userMsgsText) || re.test(rawCustomerMessage || '')
+
+        // Detecção de campos básicos já capturados
         const nameMissing = !contact.full_name
           || /^WhatsApp\s/i.test(contact.full_name)
           || contact.full_name === message.name
@@ -2405,75 +2415,158 @@ Regras:
           && (!leadInterest?.service_interest
             || ['SEM_SERVICO', 'OUTRO', ''].includes(String(leadInterest.service_interest).toUpperCase()))
 
-        const askedAbout = (regex: RegExp) =>
-          assistantMsgs.filter(m => regex.test(m.content)).length
-        const nameAsks = askedAbout(/\b(seu nome|qual.*nome|tu nombre|c[óo]mo te llamas|your name)\b/i)
-        const emailAsks = askedAbout(/\b(e-?mail|correo electr[óo]nico|tu correo)\b/i)
-        const serviceAsks = askedAbout(/\b(qual servi[çc]o|interesse|interesado|interesa|qu[eé] servicio|servi[çc]o.*deseja)\b/i)
+        // Detecção de localização (Espanha vs fora) a partir da resposta do cliente
+        const userInSpain = userSaid(/\b(estou|estoy|moro|vivo|aqui)\b.*\b(espanha|espa[ñn]a|spain)\b/i)
+          || userSaid(/^\s*(sim|si|s[ií]|yes)\b.*espa/i)
+          || userSaid(/\bj[áa] estou (na |em |aqui)/i)
+        const userOutsideSpain = userSaid(/\b(brasil|portugal|argentina|m[ée]xico|colombia|ainda n[ãa]o|todav[ií]a no|fora|outro pa[ií]s|other country)\b/i)
+          && !userInSpain
 
-        type GateField = { key: 'nome' | 'email' | 'servico'; asks: number; question: string }
-        const gateQueue: GateField[] = []
-        if (nameMissing) gateQueue.push({ key: 'nome', asks: nameAsks, question: 'Para começar, pode me dizer seu nome completo?' })
-        if (emailMissing) gateQueue.push({ key: 'email', asks: emailAsks, question: 'Qual é o seu melhor e-mail para contato?' })
-        if (serviceMissing) gateQueue.push({ key: 'servico', asks: serviceAsks, question: 'Em qual serviço você tem interesse? (ex.: Residência, NIE, Cidadania, etc.)' })
+        // Definição das 8 etapas do roteiro (na ordem)
+        type Step = {
+          key: string
+          label: string
+          done: boolean
+          instruction: string
+        }
+        const steps: Step[] = []
 
-        // Aceita e segue se já perguntamos 2+ vezes sem resposta válida ("Repetir uma vez")
-        const pendingField = gateQueue.find(f => f.asks < 2)
-        const isRepeatAsk = !!pendingField && pendingField.asks >= 1
+        // Etapa 1 — Abertura (Msg1 + Msg2)
+        const aberturaDone = sentAny(/\b(obrigad[oa] por (falar|escrever|entrar)|gracias por (hablar|escribir)|thanks? for (reaching|contacting))\b/i)
+          && sentAny(/\b(perguntas? r[áa]pidas?|preguntas r[áa]pidas|quick questions?|entender (seu|tu|your) caso|direcionar|derivar|direct you)\b/i)
+        steps.push({
+          key: 'abertura', label: 'ABERTURA',
+          done: aberturaDone,
+          instruction:
+            'Envie a ABERTURA exatamente em duas frases curtas: (1) "Olá 😊 Tudo bem? Obrigado por falar com a CB Asesoría. Vou te ajudar a entender seus caminhos legais aqui na Espanha." (2) "Vou te fazer algumas perguntas rápidas só para entender seu caso e te direcionar para o especialista certo, pode ser?". NÃO faça nenhuma outra pergunta agora.',
+        })
 
-        // ===== FLOW COMPLETION GATE =====
-        // Só liberamos a Base de Conhecimento DEPOIS que o agente concluir o fluxo estruturado
-        // (Pré-Handoff enviado: "Já consigo ter uma visão inicial do seu caso" / "cada caso de forma individual").
-        const preHandoffDone = assistantMsgs.some(m =>
-          /vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case/i.test(m.content)
-          || /cada caso de forma individual|cada caso de forma individual|each case individually/i.test(m.content)
-        )
-        const handoffDone = assistantMsgs.some(m =>
-          /encaminhar suas informa[çc][õo]es|encaminhar tus datos|forward your information/i.test(m.content)
-          || /vou te encaminhar para um atendente|te derivar[ée] a un agente|forward you to an agent/i.test(m.content)
-        )
-        const flowComplete = preHandoffDone || handoffDone
-        const collectionGateActive = !!pendingField || !flowComplete
+        // Etapa 2 — Nome (Msg3)
+        steps.push({
+          key: 'nome', label: 'NOME COMPLETO',
+          done: !nameMissing,
+          instruction:
+            'Pergunte APENAS o NOME COMPLETO do cliente. Use exatamente: "Antes de tudo, como é seu nome completo?". Se o cliente fez outra pergunta, agradeça em UMA frase ("Ótima pergunta, já te explico em seguida.") e em seguida faça SOMENTE a pergunta do nome.',
+        })
+
+        // Etapa 3 — Email (Msg4)
+        steps.push({
+          key: 'email', label: 'E-MAIL',
+          done: !emailMissing,
+          instruction:
+            'Agradeça brevemente o nome e pergunte APENAS o melhor e-mail. Use exatamente: "Obrigado. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?". NÃO faça outras perguntas nem responda dúvidas factuais agora.',
+        })
+
+        // Etapa 4 — Interesse (Msg5 + Msg6)
+        const interesseDone = !serviceMissing
+          || sentAny(/\b(o que voc[êe] busca|o que (voc[êe]|tu) procura|qu[eé] buscas hoy|what are you looking)\b/i)
+          && sentAny(/\b(cidadania|nacionalidade|n[óo]made digital|nie|tie|homologa[çc][ãa]o|reagrup|antecedentes)\b/i)
+        steps.push({
+          key: 'interesse', label: 'INTERESSE / SERVIÇO',
+          done: interesseDone,
+          instruction:
+            'Pergunte sobre o interesse do cliente em DUAS mensagens curtas, nesta ordem: (1) "Me conta com calma: o que você busca hoje? Pode ser nacionalidade, residência, estudos, arraigo ou algum documento específico." (2) "Trabalhamos com cidadania espanhola, nômade digital, residências, NIE, TIE, homologação de estudos, antecedentes, reagrupação e outros processos." NÃO consulte a Base de Conhecimento.',
+        })
+
+        // Etapa 5 — Localização (Msg7)
+        const localizacaoAsked = sentAny(/\b(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|em outro pa[íi]s|en otro pa[íi]s)\b/i)
+        const localizacaoAnswered = userInSpain || userOutsideSpain
+        steps.push({
+          key: 'localizacao', label: 'LOCALIZAÇÃO ATUAL',
+          done: localizacaoAsked && localizacaoAnswered,
+          instruction:
+            'Pergunte APENAS: "Hoje você já está na Espanha ou ainda está em outro país?". Aguarde a resposta antes de avançar.',
+        })
+
+        // Etapa 6 — Aprofundamento conforme localização
+        let aprofundamentoDone = false
+        let aprofundamentoInstruction = ''
+        if (userInSpain) {
+          // Bloco B — Na Espanha (B1-B5)
+          const bIntro = sentAny(/\bagora preciso entender como est[áa] sua situa[çc][ãa]o aqui|ahora necesito entender|now i need to understand\b/i)
+          const askedEntryDate = sentAny(/\b(data (exata )?da sua entrada|fecha (exacta )?de tu entrada|date you entered)\b/i)
+          const askedEmpadronado = sentAny(/\bempadronad/i)
+          const askedCidade = sentAny(/\b(em qual cidade|en qu[eé] ciudad|which city)\b.*empadronad/i) || sentAny(/\bcidade.*empadronad/i)
+          aprofundamentoDone = bIntro && askedEntryDate && askedEmpadronado && askedCidade
+          aprofundamentoInstruction =
+            'O cliente JÁ ESTÁ na Espanha. Avance pelo bloco B na ordem, UMA pergunta por turno: ' +
+            (!bIntro ? '(B1) "Perfeito. Agora preciso entender como está sua situação aqui." então ' : '') +
+            (!askedEntryDate ? '(B2) "Qual foi a data exata da sua entrada na Espanha?". ' :
+             !askedEmpadronado ? '(B3) "Você está empadronado? Se sim, desde quando?". ' :
+             !askedCidade ? '(B5) "Em qual cidade você está empadronado?". ' :
+             'Bloco completo, avance para o Pré-Handoff.')
+        } else if (userOutsideSpain) {
+          // Bloco A — Fora da Espanha (A1-A6)
+          const aIntro = sentAny(/\bperguntas? r[áa]pidas? s[óo] para entender melhor|preguntas r[áa]pidas? para entender mejor\b/i)
+          const askedIdade = sentAny(/\b(qual sua idade|cu[áa]ntos a[ñn]os|how old)\b/i)
+          const askedEuropa = sentAny(/\beuropa nos [úu]ltimos 6 meses|europa en los [úu]ltimos 6 meses|europe in the last 6 months\b/i)
+          const askedFamiliar = sentAny(/\bfamiliar (europeu|europeo)|family member.*(eu|spain)\b/i)
+          const askedRemoto = sentAny(/\b(trabalha remoto|trabajas? remoto|work remotely)\b/i)
+          const askedFormacao = sentAny(/\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree)\b/i)
+          aprofundamentoDone = aIntro && askedIdade && askedEuropa && askedFamiliar && askedRemoto && askedFormacao
+          aprofundamentoInstruction =
+            'O cliente está FORA da Espanha. Avance pelo bloco A na ordem, UMA pergunta por turno: ' +
+            (!aIntro ? '(A1) "Perfeito. Vou te fazer perguntas rápidas só para entender melhor seu cenário." então ' : '') +
+            (!askedIdade ? '(A2) "Qual sua idade?". ' :
+             !askedEuropa ? '(A3) "Você esteve na Europa nos últimos 6 meses?". ' :
+             !askedFamiliar ? '(A4) "Possui familiar europeu ou residente legal na Espanha?". ' :
+             !askedRemoto ? '(A5) "Você trabalha remoto?". ' :
+             !askedFormacao ? '(A6) "Você possui formação superior?". ' :
+             'Bloco completo, avance para o Pré-Handoff.')
+        } else {
+          aprofundamentoInstruction = 'Aguardando resposta do cliente sobre localização antes de avançar.'
+        }
+        steps.push({
+          key: 'aprofundamento', label: 'APROFUNDAMENTO',
+          done: aprofundamentoDone,
+          instruction: aprofundamentoInstruction,
+        })
+
+        // Etapa 7 — Pré-Handoff (H1 + H2) — APÓS isso a KB é liberada
+        const preHandoffDone = sentAny(/vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case/i)
+          && sentAny(/cada caso de forma individual|each case individually|caminho mais seguro/i)
+        steps.push({
+          key: 'preHandoff', label: 'PRÉ-HANDOFF',
+          done: preHandoffDone,
+          instruction:
+            'Envie o PRÉ-HANDOFF em duas frases curtas, nesta ordem: (1) "Perfeito. Já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." NÃO faça novas perguntas. Após esta mensagem a Base de Conhecimento será liberada.',
+        })
+
+        // Etapa 8 — Handoff (H3 + H4) — opcional, apenas se a equipe for assumir
+        const handoffDone = sentAny(/encaminhar suas informa[çc][õo]es|forward your information/i)
+          && sentAny(/encaminhar para um atendente|derivar a un agente|forward you to an agent/i)
+
+        // Próxima etapa pendente
+        const nextStep = steps.find(s => !s.done)
+        const flowComplete = !nextStep // todas as 7 primeiras etapas concluídas → KB liberada
+        const collectionGateActive = !flowComplete
 
         const kbQueryParts: string[] = []
         if (topicHint) kbQueryParts.push(`Tópico: ${topicHint}`)
         if (lastAssistantQuestion) kbQueryParts.push(`Pergunta anterior do agente: ${lastAssistantQuestion}`)
         if (rawCustomerMessage) kbQueryParts.push(`Pergunta do cliente: ${rawCustomerMessage}`)
         const kbQuery = kbQueryParts.join('\n').trim() || (rawCustomerMessage || messageForAI || '').trim()
-        // Se gate está ativo, NÃO consulta KB ainda — força conclusão do fluxo primeiro
+
+        // KB só é consultada DEPOIS que o roteiro completo (até Pré-Handoff) for cumprido
         const knowledgeContext = (!collectionGateActive && kbQuery)
           ? await getKnowledgeBaseContext(supabase, kbQuery, topicHint || undefined)
           : ''
 
-        if (collectionGateActive) {
-          if (pendingField) {
-            const fieldLabel = pendingField.key === 'nome' ? 'NOME COMPLETO'
-              : pendingField.key === 'email' ? 'E-MAIL'
-              : 'SERVIÇO DE INTERESSE'
-            const repeatNote = isRepeatAsk
-              ? `O cliente JÁ foi perguntado sobre ${fieldLabel} antes e não respondeu de forma válida. Reformule a pergunta de outra maneira, mais simples e clara, deixando explícito por que precisamos dessa informação. Esta é a ÚLTIMA vez que perguntaremos.`
-              : `Esta é a primeira vez que perguntamos sobre ${fieldLabel}.`
-            messageForAI = `${messageForAI}\n\n[GATE DE COLETA — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
-              `Você está em modo COLETA OBRIGATÓRIA. Ainda falta capturar: ${fieldLabel}.\n` +
-              `${repeatNote}\n` +
-              `REGRAS RÍGIDAS:\n` +
-              `1. NÃO responda a nenhuma dúvida factual do cliente (preço, requisitos, prazos, documentos) agora — diga gentilmente que vai responder logo após coletar essa última informação.\n` +
-              `2. Faça APENAS uma pergunta: a do campo ${fieldLabel}.\n` +
-              `3. Seja breve (1–2 frases). Se o cliente fez uma pergunta, reconheça em uma frase ("Ótima pergunta, já te explico em seguida.") e em seguida faça SOMENTE a pergunta de ${fieldLabel}.\n` +
-              `Sugestão de pergunta base: "${pendingField.question}"\n` +
-              `[FIM DO GATE]`
-            console.log(`[GATE] coleta field=${pendingField.key} asks=${pendingField.asks} repeat=${isRepeatAsk}`)
-          } else {
-            // Campos básicos OK, mas o fluxo estruturado (objetivos 4 a 8) ainda não terminou.
-            messageForAI = `${messageForAI}\n\n[GATE DE FLUXO — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
-              `Os dados básicos (nome, e-mail, serviço) já foram capturados, MAS o fluxo estruturado da conversa ainda NÃO foi concluído. Continue avançando pelos objetivos do roteiro na ordem definida (Origem → Interesse detalhado → Localização atual → Aprofundamento conforme localização → Pré-Handoff).\n` +
-              `REGRAS RÍGIDAS:\n` +
-              `1. NÃO consulte nem responda com a Base de Conhecimento ainda. Se o cliente fizer uma pergunta factual (preço, requisitos, prazos, documentos), reconheça em UMA frase ("Ótima pergunta, te explico em detalhes assim que terminarmos esse rapidíssimo levantamento.") e em seguida faça SOMENTE a próxima pergunta do roteiro.\n` +
-              `2. UMA pergunta por vez, exatamente como descrito nos objetivos do roteiro.\n` +
-              `3. Só após enviar o Pré-Handoff ("Já consigo ter uma visão inicial do seu caso." + "Na CB analisamos cada caso de forma individual...") a Base de Conhecimento será liberada nas próximas mensagens.\n` +
-              `[FIM DO GATE]`
-            console.log(`[GATE] fluxo preHandoff=${preHandoffDone} handoff=${handoffDone}`)
-          }
+        if (collectionGateActive && nextStep) {
+          const stepsSummary = steps.map(s => `${s.done ? '✅' : '⏳'} ${s.label}`).join(' → ')
+          messageForAI = `${messageForAI}\n\n[GATE DE FLUXO — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
+            `Roteiro oficial CB Asesoría em andamento. Etapas: ${stepsSummary}\n` +
+            `PRÓXIMA ETAPA OBRIGATÓRIA: ${nextStep.label}\n` +
+            `INSTRUÇÃO: ${nextStep.instruction}\n` +
+            `REGRAS RÍGIDAS:\n` +
+            `1. NÃO consulte nem responda com a Base de Conhecimento ainda. Se o cliente fizer pergunta factual (preço, requisitos, prazos, documentos), reconheça em UMA frase ("Ótima pergunta, te explico em detalhes assim que terminarmos esse rapidíssimo levantamento.") e em seguida envie SOMENTE a etapa atual.\n` +
+            `2. Siga o roteiro NA ORDEM. Não pule etapas. UMA pergunta principal por turno (a abertura e o pré-handoff têm 2 frases curtas).\n` +
+            `3. Mantenha o tom natural, humanizado e curto. Use as frases sugeridas como base — pode adaptar levemente, mas mantenha o sentido e a ordem.\n` +
+            `4. A Base de Conhecimento só será liberada APÓS o Pré-Handoff (H1+H2) ser enviado.\n` +
+            `[FIM DO GATE]`
+          console.log(`[GATE] step=${nextStep.key} done=${steps.filter(s=>s.done).length}/${steps.length} inSpain=${userInSpain} outside=${userOutsideSpain}`)
+        } else {
+          console.log(`[GATE] flow complete — KB liberada (handoff=${handoffDone})`)
         }
 
         console.log(`[KB] query currentTopic="${currentMessageTopicHint}" finalTopic="${topicHint}" len=${kbQuery.length} -> context ${knowledgeContext.length} chars`)
