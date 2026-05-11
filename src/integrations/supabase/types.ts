@@ -3054,6 +3054,7 @@ export type Database = {
     }
     Functions: {
       cleanup_old_dedup_entries: { Args: never; Returns: undefined }
+      cleanup_test_data: { Args: never; Returns: Json }
       get_user_roles: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"][]
