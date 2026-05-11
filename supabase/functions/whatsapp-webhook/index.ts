@@ -2402,7 +2402,19 @@ Regras:
         // ===== FLUXO ESTRUTURADO (Roteiro CB Asesoría — Fluxo_Mensagens_WhatsApp) =====
         // Bloqueia a Base de Conhecimento até o agente concluir TODAS as etapas do roteiro,
         // na ordem definida no PDF oficial. Só libera KB após Pré-Handoff (H1+H2) enviado.
-        const allAssistant = assistantMsgs.map(m => m.content).join('\n')
+        // Fetch ALL assistant messages for this lead (not just the last 20-message window)
+        // so the gate detection of completed steps doesn't reset when conversations get long.
+        const { data: allAssistantRows } = await supabase
+          .from('mensagens_cliente')
+          .select('mensagem_IA')
+          .eq('id_lead', lead.id)
+          .not('mensagem_IA', 'is', null)
+          .order('created_at', { ascending: true })
+          .limit(500)
+        const allAssistant = (allAssistantRows || [])
+          .map((r: any) => String(r.mensagem_IA || ''))
+          .concat(assistantMsgs.map(m => m.content))
+          .join('\n')
         const userMsgsText = (history || [])
           .filter((m: any) => m.role === 'user')
           .map((m: any) => String(m.content || ''))
