@@ -2563,10 +2563,11 @@ Regras:
             `PRÓXIMA ETAPA OBRIGATÓRIA: ${nextStep.label}\n` +
             `INSTRUÇÃO: ${nextStep.instruction}\n` +
             `REGRAS RÍGIDAS:\n` +
-            `1. NÃO consulte nem responda com a Base de Conhecimento ainda. Se o cliente fizer pergunta factual (preço, requisitos, prazos, documentos), reconheça em UMA frase ("Ótima pergunta, te explico em detalhes assim que terminarmos esse rapidíssimo levantamento.") e em seguida envie SOMENTE a etapa atual.\n` +
-            `2. Siga o roteiro NA ORDEM. Não pule etapas. UMA pergunta principal por turno (a abertura e o pré-handoff têm 2 frases curtas).\n` +
-            `3. Mantenha o tom natural, humanizado e curto. Use as frases sugeridas como base — pode adaptar levemente, mas mantenha o sentido e a ordem.\n` +
-            `4. A Base de Conhecimento só será liberada APÓS o Pré-Handoff (H1+H2) ser enviado.\n` +
+            `1. NÃO consulte nem responda com a Base de Conhecimento ainda. Se o cliente fizer pergunta factual (preço, requisitos, prazos, documentos, "o que é", "como funciona"), reconheça em UMA frase curta ("Ótima pergunta, te explico em detalhes assim que terminarmos esse rapidíssimo levantamento.") e EM SEGUIDA envie SOMENTE a etapa atual.\n` +
+            `2. PROIBIDO dizer ou sugerir que NÃO TEM essa informação, que NÃO SABE, que NÃO TEM DETALHES, que vai CONFIRMAR, ou qualquer variação que indique falta de conhecimento. A informação EXISTE e será fornecida em seguida — você está apenas adiando a resposta detalhada para terminar o cadastro. Nunca diga "não tenho essa informação", "não sei te dar todos os pormenores", "preciso confirmar", etc.\n` +
+            `3. Siga o roteiro NA ORDEM. Não pule etapas. UMA pergunta principal por turno (a abertura e o pré-handoff têm 2 frases curtas).\n` +
+            `4. Mantenha o tom natural, humanizado e curto. Use as frases sugeridas como base — pode adaptar levemente, mas mantenha o sentido e a ordem.\n` +
+            `5. A Base de Conhecimento será liberada APÓS o Pré-Handoff (H1+H2) ser enviado e então você poderá responder em detalhes.\n` +
             `[FIM DO GATE]`
           console.log(`[GATE] step=${nextStep.key} done=${steps.filter(s=>s.done).length}/${steps.length} inSpain=${userInSpain} outside=${userOutsideSpain}`)
         } else {
