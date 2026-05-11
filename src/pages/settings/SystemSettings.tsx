@@ -413,6 +413,55 @@ export default function SystemSettings() {
       {/* Knowledge Base */}
       <KnowledgeBaseManager />
 
+      {/* Danger Zone — Cleanup test data */}
+      {isAdmin && (
+        <Card className="border-destructive/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Zona de Perigo — Limpeza de Dados de Teste
+            </CardTitle>
+            <CardDescription>
+              Apaga TODOS os contatos, leads, oportunidades, contratos, pagamentos, mensagens,
+              tarefas, interações e documentos. Preserva usuários, papéis, setores, tipos de
+              serviço, templates e base de conhecimento. Use apenas durante o período de testes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={cleanupMutation.isPending}>
+                  {cleanupMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-2" />
+                  )}
+                  Limpar todos os dados de teste
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação é <strong>irreversível</strong>. Todos os contatos, leads,
+                    contratos, pagamentos, mensagens, tarefas e documentos serão apagados
+                    permanentemente. Apenas configurações do sistema serão mantidas.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => cleanupMutation.mutate()}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Sim, apagar tudo
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+      )}
       {/* Bottom Save Button */}
       <div className="flex justify-end pt-4">
         <Button 
