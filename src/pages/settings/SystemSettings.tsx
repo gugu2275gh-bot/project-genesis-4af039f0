@@ -10,9 +10,13 @@ import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Settings, Save, Globe, Brain } from 'lucide-react';
+import { Settings, Save, Globe, Brain, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import KnowledgeBaseManager from '@/components/settings/KnowledgeBaseManager';
 import { useSuperuser } from '@/hooks/useSuperuser';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface SystemConfig {
   key: string;
@@ -226,6 +230,27 @@ export default function SystemSettings() {
     saveMutation.mutate(valuesToSave);
   };
 
+  const cleanupMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('cleanup_test_data' as any);
+      if (error) throw error;
+      return data as any;
+    },
+    onSuccess: (data) => {
+      const total = data?.results
+        ? Object.values(data.results).reduce((acc: number, n: any) => acc + (typeof n === 'number' ? n : 0), 0)
+        : 0;
+      toast({
+        title: 'Dados de teste apagados',
+        description: `${total} registros removidos. Configurações preservadas.`,
+      });
+      queryClient.invalidateQueries();
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao limpar dados', description: error.message, variant: 'destructive' });
+    },
+  });
+
   const renderConfigInput = (config: SystemConfig) => {
     const currentValue = getValue(config.key, config.value);
 
@@ -388,6 +413,55 @@ export default function SystemSettings() {
       {/* Knowledge Base */}
       <KnowledgeBaseManager />
 
+      {/* Danger Zone — Cleanup test data */}
+      {isAdmin && (
+        <Card className="border-destructive/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Zona de Perigo — Limpeza de Dados de Teste
+            </CardTitle>
+            <CardDescription>
+              Apaga TODOS os contatos, leads, oportunidades, contratos, pagamentos, mensagens,
+              tarefas, interações e documentos. Preserva usuários, papéis, setores, tipos de
+              serviço, templates e base de conhecimento. Use apenas durante o período de testes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={cleanupMutation.isPending}>
+                  {cleanupMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-2" />
+                  )}
+                  Limpar todos os dados de teste
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação é <strong>irreversível</strong>. Todos os contatos, leads,
+                    contratos, pagamentos, mensagens, tarefas e documentos serão apagados
+                    permanentemente. Apenas configurações do sistema serão mantidas.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => cleanupMutation.mutate()}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Sim, apagar tudo
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+      )}
       {/* Bottom Save Button */}
       <div className="flex justify-end pt-4">
         <Button 
