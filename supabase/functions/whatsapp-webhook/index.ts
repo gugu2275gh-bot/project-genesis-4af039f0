@@ -2394,14 +2394,62 @@ Regras:
             `${recentAssistantText}\n${lastAssistantQuestion || ''}\n${rawCustomerMessage || ''}`,
           )
         }
+        // ===== COLLECTION GATE =====
+        // Bloqueia KB enquanto faltarem campos obrigatórios (nome, email, serviço de interesse).
+        // Repete a mesma pergunta no máx. 1 vez (reformulada); depois aceita e segue.
+        const nameMissing = !contact.full_name
+          || /^WhatsApp\s/i.test(contact.full_name)
+          || contact.full_name === message.name
+        const emailMissing = !contact.email
+        const serviceMissing = !leadInterest?.service_type_id
+          && (!leadInterest?.service_interest
+            || ['SEM_SERVICO', 'OUTRO', ''].includes(String(leadInterest.service_interest).toUpperCase()))
+
+        const askedAbout = (regex: RegExp) =>
+          assistantMsgs.filter(m => regex.test(m.content)).length
+        const nameAsks = askedAbout(/\b(seu nome|qual.*nome|tu nombre|c[óo]mo te llamas|your name)\b/i)
+        const emailAsks = askedAbout(/\b(e-?mail|correo electr[óo]nico|tu correo)\b/i)
+        const serviceAsks = askedAbout(/\b(qual servi[çc]o|interesse|interesado|interesa|qu[eé] servicio|servi[çc]o.*deseja)\b/i)
+
+        type GateField = { key: 'nome' | 'email' | 'servico'; asks: number; question: string }
+        const gateQueue: GateField[] = []
+        if (nameMissing) gateQueue.push({ key: 'nome', asks: nameAsks, question: 'Para começar, pode me dizer seu nome completo?' })
+        if (emailMissing) gateQueue.push({ key: 'email', asks: emailAsks, question: 'Qual é o seu melhor e-mail para contato?' })
+        if (serviceMissing) gateQueue.push({ key: 'servico', asks: serviceAsks, question: 'Em qual serviço você tem interesse? (ex.: Residência, NIE, Cidadania, etc.)' })
+
+        // Aceita e segue se já perguntamos 2+ vezes sem resposta válida ("Repetir uma vez")
+        const pendingField = gateQueue.find(f => f.asks < 2)
+        const collectionGateActive = !!pendingField
+        const isRepeatAsk = !!pendingField && pendingField.asks >= 1
+
         const kbQueryParts: string[] = []
         if (topicHint) kbQueryParts.push(`Tópico: ${topicHint}`)
         if (lastAssistantQuestion) kbQueryParts.push(`Pergunta anterior do agente: ${lastAssistantQuestion}`)
         if (rawCustomerMessage) kbQueryParts.push(`Pergunta do cliente: ${rawCustomerMessage}`)
         const kbQuery = kbQueryParts.join('\n').trim() || (rawCustomerMessage || messageForAI || '').trim()
-        const knowledgeContext = kbQuery
+        // Se gate está ativo, NÃO consulta KB ainda — força coleta primeiro
+        const knowledgeContext = (!collectionGateActive && kbQuery)
           ? await getKnowledgeBaseContext(supabase, kbQuery, topicHint || undefined)
           : ''
+
+        if (collectionGateActive) {
+          const fieldLabel = pendingField!.key === 'nome' ? 'NOME COMPLETO'
+            : pendingField!.key === 'email' ? 'E-MAIL'
+            : 'SERVIÇO DE INTERESSE'
+          const repeatNote = isRepeatAsk
+            ? `O cliente JÁ foi perguntado sobre ${fieldLabel} antes e não respondeu de forma válida. Reformule a pergunta de outra maneira, mais simples e clara, deixando explícito por que precisamos dessa informação. Esta é a ÚLTIMA vez que perguntaremos.`
+            : `Esta é a primeira vez que perguntamos sobre ${fieldLabel}.`
+          messageForAI = `${messageForAI}\n\n[GATE DE COLETA — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
+            `Você está em modo COLETA OBRIGATÓRIA. Ainda falta capturar: ${fieldLabel}.\n` +
+            `${repeatNote}\n` +
+            `REGRAS RÍGIDAS:\n` +
+            `1. NÃO responda a nenhuma dúvida factual do cliente (preço, requisitos, prazos, documentos) agora — diga gentilmente que vai responder logo após coletar essa última informação.\n` +
+            `2. Faça APENAS uma pergunta: a do campo ${fieldLabel}.\n` +
+            `3. Seja breve (1–2 frases). Se o cliente fez uma pergunta, reconheça em uma frase ("Ótima pergunta, já te explico em seguida.") e em seguida faça SOMENTE a pergunta de ${fieldLabel}.\n` +
+            `Sugestão de pergunta base: "${pendingField!.question}"\n` +
+            `[FIM DO GATE]`
+          console.log(`[GATE] active field=${pendingField!.key} asks=${pendingField!.asks} repeat=${isRepeatAsk}`)
+        }
 
         console.log(`[KB] query currentTopic="${currentMessageTopicHint}" finalTopic="${topicHint}" len=${kbQuery.length} -> context ${knowledgeContext.length} chars`)
 
