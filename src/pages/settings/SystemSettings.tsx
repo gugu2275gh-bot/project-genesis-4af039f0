@@ -230,6 +230,27 @@ export default function SystemSettings() {
     saveMutation.mutate(valuesToSave);
   };
 
+  const cleanupMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('cleanup_test_data' as any);
+      if (error) throw error;
+      return data as any;
+    },
+    onSuccess: (data) => {
+      const total = data?.results
+        ? Object.values(data.results).reduce((acc: number, n: any) => acc + (typeof n === 'number' ? n : 0), 0)
+        : 0;
+      toast({
+        title: 'Dados de teste apagados',
+        description: `${total} registros removidos. Configurações preservadas.`,
+      });
+      queryClient.invalidateQueries();
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Erro ao limpar dados', description: error.message, variant: 'destructive' });
+    },
+  });
+
   const renderConfigInput = (config: SystemConfig) => {
     const currentValue = getValue(config.key, config.value);
 
