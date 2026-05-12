@@ -107,6 +107,14 @@ export function forceAdvanceFromInterestQuestion(
   return aiResponse
 }
 
+function questionBlockHash(assistantText: string): string {
+  if (!assistantText) return ''
+  const lastQ = extractLastQuestion(assistantText) || ''
+  const preamble = (extractTextBeforeLastQuestion(assistantText) || '').trim()
+  const block = `${preamble} ${lastQ}`.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return block.slice(0, 80)
+}
+
 export function isLikelyQuestionLoop(
   conversationHistory: Array<{ role: string; content: string }>,
   currentMessage: string,
@@ -124,5 +132,9 @@ export function isLikelyQuestionLoop(
 
   if (!isValidAnswer) return false
 
-  return areQuestionsEquivalent(previousQuestion, nextQuestion)
+  // Wave 4: comparar bloco completo (preamble+pergunta), não só pergunta literal
+  if (areQuestionsEquivalent(previousQuestion, nextQuestion)) return true
+  const prevHash = questionBlockHash(lastAssistantMessage)
+  const nextHash = questionBlockHash(aiResponse)
+  return !!prevHash && prevHash === nextHash
 }
