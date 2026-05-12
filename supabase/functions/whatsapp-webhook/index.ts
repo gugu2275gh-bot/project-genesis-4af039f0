@@ -287,7 +287,7 @@ import {
 export { scoreTopicFileName }
 
 // extractNameAndEmail / extractTextFromOpenAIResponse moved to lib/extract.ts and lib/ai.ts (Wave 3b)
-import { extractNameAndEmail, extractReferralSource, extractAndSuggestContactData } from './lib/extract.ts'
+import { extractNameAndEmail, extractReferralSource, extractAndSuggestContactData, extractInterestFromMessage } from './lib/extract.ts'
 import { extractTextFromOpenAIResponse } from './lib/ai.ts'
 
 
