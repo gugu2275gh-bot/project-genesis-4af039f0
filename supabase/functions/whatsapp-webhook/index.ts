@@ -704,12 +704,30 @@ function isPotentialEntryDateAnswer(text: string): boolean {
 
   if (!raw || normalized.includes('?')) return false
 
-  const hasSingleDate = /(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2})/.test(raw)
-  const hasDateRange = /(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2}).{0,20}(ate|até|a|to|-).{0,20}(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2})/i.test(raw)
-  const hasMonthName = /\b(janeiro|fevereiro|marco|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|january|february|march|april|may|june|july|august|september|october|november|december|janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)\b/.test(normalized)
-  const hasMonthYear = /\b\d{4}\b/.test(normalized) && hasMonthName
+  const numericFullDate = /(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{4}|\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2})/
+  const hasSingleDate = numericFullDate.test(raw)
+  const hasDateRange = new RegExp(`${numericFullDate.source}.{0,20}(ate|até|a|to|-).{0,20}${numericFullDate.source}`, 'i').test(raw)
+  const monthName = '(janeiro|fevereiro|marco|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|january|february|march|april|may|june|july|august|september|october|november|december|janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)'
+  const hasFullMonthNameDate = new RegExp(`\\b(\\d{1,2}\\s+(de\\s+)?${monthName}\\s+(de\\s+)?\\d{4}|${monthName}\\s+\\d{1,2}(st|nd|rd|th)?[,]?\\s+\\d{4})\\b`).test(normalized)
 
-  return hasDateRange || hasSingleDate || hasMonthYear || hasMonthName
+  return hasDateRange || hasSingleDate || hasFullMonthNameDate
+}
+
+function looksLikeIncompleteEntryDateWithoutYear(text: string): boolean {
+  const normalized = normalizeForLanguageChecks(text)
+  if (!normalized || normalized.includes('?')) return false
+
+  const monthName = '(janeiro|fevereiro|marco|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|january|february|march|april|may|june|july|august|september|october|november|december|janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)'
+  return !/\b\d{4}\b/.test(normalized)
+    && (new RegExp(`\\b\\d{1,2}\\s+(de\\s+)?${monthName}\\b`).test(normalized)
+      || /\b\d{1,2}[\/.-]\d{1,2}\b/.test(normalized))
+}
+
+function getEntryDateNeedsYearQuestion(language: ChatLanguage): string {
+  if (language === 'es') return 'Necesito la fecha completa, incluyendo el año. ¿Cuál fue la fecha exacta de tu entrada en España?'
+  if (language === 'en') return 'I need the full date, including the year. What was the exact date you entered Spain?'
+  if (language === 'fr') return 'J’ai besoin de la date complète, avec l’année. Quelle était la date exacte de votre entrée en Espagne ?'
+  return 'Preciso da data completa, incluindo o ano. Qual foi a data exata da sua entrada na Espanha?'
 }
 
 function isQuestionAboutInterest(question: string): boolean {
@@ -809,6 +827,10 @@ function forceAdvanceFromEntryDateQuestion(
 
   if (isQuestionAboutSpainEntryDate(previousQuestion) && isNeverBeenToSpainAnswer(currentMessage)) {
     return outsideSpainNextQuestion || getOutsideSpainAgeQuestion(language)
+  }
+
+  if (isQuestionAboutSpainEntryDate(previousQuestion) && looksLikeIncompleteEntryDateWithoutYear(currentMessage)) {
+    return getEntryDateNeedsYearQuestion(language)
   }
 
   if (!isQuestionAboutSpainEntryDate(previousQuestion) || !isPotentialEntryDateAnswer(currentMessage)) {
