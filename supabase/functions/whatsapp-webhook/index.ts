@@ -1618,7 +1618,9 @@ serve(async (req) => {
         .from('contacts')
         .insert({
           phone: phoneNumber,
-          full_name: message.name || `WhatsApp ${phoneNumber.slice(-4)}`,
+          // Não confiar no ProfileName do WhatsApp como nome real do contato.
+          // O agente deve sempre perguntar e confirmar o nome com o cliente.
+          full_name: `WhatsApp ${phoneNumber.slice(-4)}`,
           origin_channel: 'WHATSAPP',
         })
         .select('id, full_name, email, preferred_language')
