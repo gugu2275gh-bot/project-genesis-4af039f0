@@ -2670,7 +2670,7 @@ Regras:
 
         // Detecção de localização: buscar a RESPOSTA imediatamente após a pergunta de localização
         // (não varrer histórico inteiro, que pode incluir menções a "Espanha" no contexto de interesse).
-        const locQuestionRe = /\b(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|em outro pa[íi]s|en otro pa[íi]s)\b/i
+        const locQuestionRe = /(j[áa] est[áa]|ya est[áa]s|already (in|live)).{0,30}(na )?espanha?.{0,30}(ou|o)\s+(ainda |todav[ií]a |still )?(est[áa]|en )?(em |en )?outro pa[íi]s|hoje voc[êe] j[áa] est[áa] na espanha/i
         let locationAnswer = ''
         for (let i = 0; i < history.length - 1; i++) {
           const m = history[i]
