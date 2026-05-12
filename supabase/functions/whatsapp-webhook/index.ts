@@ -211,7 +211,8 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
 async function getConversationHistory(
   supabase: ReturnType<typeof createClient>,
   leadId: string,
-  limit = 20
+  limit = 20,
+  sessionGapHours = 48
 ): Promise<Array<{ role: string; content: string }>> {
   // Fetch the N MOST RECENT messages (descending), then reverse to chronological order
   const { data: recentMessages } = await supabase
@@ -223,9 +224,27 @@ async function getConversationHistory(
 
   if (!recentMessages?.length) return []
 
-  const messages = [...recentMessages].reverse()
+  let messages = [...recentMessages].reverse()
+
+  // R4: Sessionize — cut history at any gap larger than sessionGapHours so that
+  // a reactivated conversation doesn't drag old context into the LLM window.
+  const gapMs = sessionGapHours * 60 * 60 * 1000
+  let cutIdx = 0
+  for (let i = 1; i < messages.length; i++) {
+    const prevAt = new Date(messages[i - 1].created_at as string).getTime()
+    const curAt = new Date(messages[i].created_at as string).getTime()
+    if (Number.isFinite(prevAt) && Number.isFinite(curAt) && curAt - prevAt > gapMs) {
+      cutIdx = i
+    }
+  }
+  if (cutIdx > 0) {
+    messages = messages.slice(cutIdx)
+  }
 
   const history: Array<{ role: string; content: string }> = []
+  if (cutIdx > 0) {
+    history.push({ role: 'system', content: '[NOVA SESSÃO — mensagens anteriores foram omitidas por inatividade > 48h]' })
+  }
   for (const msg of messages) {
     if (msg.mensagem_cliente) {
       history.push({ role: 'user', content: msg.mensagem_cliente })
