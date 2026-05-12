@@ -2,6 +2,34 @@
 // Wave 3b step 11: contact data extraction & suggestions
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+/**
+ * Mapeia uma resposta livre do cliente à pergunta de INTERESSE para um valor
+ * válido do enum `service_interest`. Retorna null se nada bater.
+ *
+ * Enum disponível (ver migration):
+ *   VISTO_ESTUDANTE, VISTO_TRABALHO, REAGRUPAMENTO, RENOVACAO_RESIDENCIA,
+ *   NACIONALIDADE_RESIDENCIA, NACIONALIDADE_CASAMENTO, OUTRO,
+ *   RESIDENCIA_PARENTE_COMUNITARIO, SEM_SERVICO
+ */
+export function extractInterestFromMessage(raw: string): string | null {
+  if (!raw) return null
+  const t = raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+  if (!t) return null
+  // Casamento tem prioridade sobre nacionalidade genérica
+  if (/\b(casamento|matrimonio|conyug|esposa|esposo|marriage|spouse)\b/.test(t)) return 'NACIONALIDADE_CASAMENTO'
+  if (/\b(nacionalidad|cidadania|ciudadan|citizenship|passaporte espanhol|passaporte espanol)\b/.test(t)) return 'NACIONALIDADE_RESIDENCIA'
+  if (/\b(estud|homologa|universidad|faculdade|college|study|studies)\b/.test(t)) return 'VISTO_ESTUDANTE'
+  if (/\b(reagrupa|reagrupamento|reagrupacion|reunifica|family reunif)\b/.test(t)) return 'REAGRUPAMENTO'
+  if (/\b(renova|renovacion|renewal)\b/.test(t)) return 'RENOVACAO_RESIDENCIA'
+  if (/\b(arraigo|residenc|nie|tie|tarjeta|residence)\b/.test(t)) return 'RESIDENCIA_PARENTE_COMUNITARIO'
+  if (/\b(nomad|digital|trabalh|work|job|emprego|empleo|visto trabalho)\b/.test(t)) return 'VISTO_TRABALHO'
+  return null
+}
+
 export function extractNameAndEmail(text: string): { name: string | null; email: string | null } {
   let name: string | null = null
   let email: string | null = null
