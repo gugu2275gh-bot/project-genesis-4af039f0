@@ -79,6 +79,7 @@ export function useCommissions() {
           contracts (
             id,
             total_fee,
+            payment_status,
             opportunities (
               leads (
                 contacts (
@@ -86,6 +87,10 @@ export function useCommissions() {
                   referral_name
                 )
               )
+            ),
+            payments (
+              id,
+              status
             )
           )
         `)
@@ -93,8 +98,14 @@ export function useCommissions() {
       
       if (error) throw error;
 
+      // Only show commissions whose linked contract has at least one CONFIRMADO payment
+      const filtered = (data || []).filter((c: any) => {
+        const payments = c.contracts?.payments || [];
+        return payments.some((p: any) => p.status === 'CONFIRMADO');
+      });
+
       // Fetch approver names separately
-      const approverIds = [...new Set(data?.filter(c => c.approved_by_user_id).map(c => c.approved_by_user_id) || [])];
+      const approverIds = [...new Set(filtered.filter((c: any) => c.approved_by_user_id).map((c: any) => c.approved_by_user_id) || [])];
       let approverMap: Record<string, string> = {};
       if (approverIds.length > 0) {
         const { data: profiles } = await supabase
@@ -106,7 +117,7 @@ export function useCommissions() {
         }
       }
 
-      return (data || []).map(c => ({
+      return filtered.map((c: any) => ({
         ...c,
         approved_by_profile: c.approved_by_user_id ? { full_name: approverMap[c.approved_by_user_id] || '' } : null,
       })) as CommissionWithContract[];
