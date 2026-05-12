@@ -954,7 +954,10 @@ function forceReaskEmailIfMissing(
   const previousQuestion = extractLastQuestion(previousAssistantMessage)
   if (!isQuestionAboutEmail(previousQuestion)) return aiResponse
   if (hasValidEmail(currentMessage)) return aiResponse
-  return getEmailReaskQuestion(language)
+  // R3: cumulative — preserve any preamble from the LLM, only swap the question.
+  const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
+  const reask = getEmailReaskQuestion(language)
+  return preamble ? `${preamble}\n${reask}` : reask
 }
 
 function forceAdvanceFromEntryDateQuestion(
@@ -966,13 +969,16 @@ function forceAdvanceFromEntryDateQuestion(
 ): string {
   const previousQuestion = extractLastQuestion(previousAssistantMessage)
   const nextQuestion = extractLastQuestion(aiResponse)
+  const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
 
   if (isQuestionAboutSpainEntryDate(previousQuestion) && isNeverBeenToSpainAnswer(currentMessage)) {
-    return outsideSpainNextQuestion || getOutsideSpainAgeQuestion(language)
+    const replacement = outsideSpainNextQuestion || getOutsideSpainAgeQuestion(language)
+    return preamble ? `${preamble}\n${replacement}` : replacement
   }
 
   if (isQuestionAboutSpainEntryDate(previousQuestion) && looksLikeIncompleteEntryDateWithoutYear(currentMessage)) {
-    return getEntryDateNeedsYearQuestion(language)
+    const replacement = getEntryDateNeedsYearQuestion(language)
+    return preamble ? `${preamble}\n${replacement}` : replacement
   }
 
   if (!isQuestionAboutSpainEntryDate(previousQuestion) || !isPotentialEntryDateAnswer(currentMessage)) {
@@ -980,7 +986,8 @@ function forceAdvanceFromEntryDateQuestion(
   }
 
   if (nextQuestion && areQuestionsEquivalent(previousQuestion, nextQuestion)) {
-    return getEmpadronadoQuestion(language)
+    const replacement = getEmpadronadoQuestion(language)
+    return preamble ? `${preamble}\n${replacement}` : replacement
   }
 
   return aiResponse
@@ -1000,7 +1007,9 @@ function forceAdvanceFromInterestQuestion(
   }
 
   if (nextQuestion && areQuestionsEquivalent(previousQuestion, nextQuestion)) {
-    return getLocationQuestion(language)
+    const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
+    const replacement = getLocationQuestion(language)
+    return preamble ? `${preamble}\n${replacement}` : replacement
   }
 
   return aiResponse
