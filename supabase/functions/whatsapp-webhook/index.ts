@@ -2752,8 +2752,9 @@ Regras:
           }
         }
 
+        const outsideSpainNextQuestion = getOutsideSpainNextQuestion(detectedChatLanguage, allAssistant)
         aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
-        aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
+        aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
 
         if (aiResponse && isLikelyQuestionLoop(history, rawCustomerMessage, aiResponse)) {
           console.warn('Detected repeated-question loop, retrying with anti-repeat instruction')
@@ -2767,7 +2768,7 @@ Regras:
               detectedChatLanguage,
             )
             aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
-            aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
+            aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
           } catch (retryError) {
             console.error('Anti-repeat retry failed:', retryError instanceof Error ? retryError.message : retryError)
           }
