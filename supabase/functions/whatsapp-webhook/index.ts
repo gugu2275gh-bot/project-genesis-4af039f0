@@ -1078,10 +1078,10 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       .from('mensagens_cliente')
       .select('origem')
       .eq('id_lead', lead.id)
-      .not('mensagem_IA', 'is', null)
+      .neq('origem', 'WHATSAPP') // exclui inbound do cliente; pega última outbound real
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (lastOutgoing?.origem === 'SISTEMA') {
       aiPausedByHuman = true
