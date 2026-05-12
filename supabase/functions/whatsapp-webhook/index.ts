@@ -1540,6 +1540,26 @@ Regras:
           && (!leadInterest?.service_interest
             || ['SEM_SERVICO', 'OUTRO', ''].includes(String(leadInterest.service_interest).toUpperCase()))
 
+        // Wave 7: capturar interesse a partir de resposta livre à pergunta INTERESSE.
+        // Sem isto, o cadastro fica "eternamente aberto" e a KB nunca é liberada.
+        try {
+          const askedInterest = lastAssistantQuestion && /me conta com calma|cu[eé]ntame con calma|tell me what.*looking for|busca hoje/i.test(lastAssistantQuestion)
+          if (serviceMissing && askedInterest && rawCustomerMessage) {
+            const detectedInterest = extractInterestFromMessage(rawCustomerMessage)
+            if (detectedInterest) {
+              await supabase
+                .from('leads')
+                .update({ service_interest: detectedInterest, interest_confirmed: true, updated_at: new Date().toISOString() })
+                .eq('id', lead.id)
+              leadInterest = { ...(leadInterest || {}), service_interest: detectedInterest }
+              serviceMissing = false
+              console.log(`[INTEREST_CAPTURE] "${rawCustomerMessage}" -> ${detectedInterest}`)
+            }
+          }
+        } catch (capErr) {
+          console.warn('[INTEREST_CAPTURE] non-blocking error:', capErr instanceof Error ? capErr.message : capErr)
+        }
+
         // Wave 6 (anti-repetição em divergência): sincronizar IMEDIATAMENTE o funil
         // com o que já está em contacts/leads. Isso garante que o Gate use o funil
         // persistido como única fonte de verdade e nunca reabra etapas confirmadas
