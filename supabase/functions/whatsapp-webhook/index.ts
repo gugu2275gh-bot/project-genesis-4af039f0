@@ -688,6 +688,16 @@ function isQuestionAboutSpainEntryDate(question: string): boolean {
     || normalized.includes('date exacte de votre entree en espagne')
 }
 
+function isNeverBeenToSpainAnswer(text: string): boolean {
+  const normalized = normalizeForLanguageChecks(text)
+  if (!normalized || normalized.includes('?')) return false
+
+  return /\b(nunca fui|nunca estive|nunca entrei|jamais fui|jamais estive)\b/.test(normalized)
+    || /\b(nao|no|not|never)\b.{0,24}\b(fui|estive|entrei|estoy|been|entered)\b/.test(normalized)
+    || /\b(never been|never entered)\b.{0,16}\b(spain|espana|espanha)\b/.test(normalized)
+    || /\b(nunca he estado|nunca entre|nunca fui)\b/.test(normalized)
+}
+
 function isPotentialEntryDateAnswer(text: string): boolean {
   const raw = text.trim()
   const normalized = normalizeForLanguageChecks(text)
@@ -741,14 +751,65 @@ function getEmpadronadoQuestion(language: ChatLanguage): string {
   return 'Perfeito. Você está empadronado?'
 }
 
+function getOutsideSpainAgeQuestion(language: ChatLanguage): string {
+  if (language === 'es') return 'Entendido. Entonces seguimos por tu escenario fuera de España. ¿Cuál es tu edad?'
+  if (language === 'en') return 'Got it. Then we’ll continue with your situation outside Spain. How old are you?'
+  if (language === 'fr') return 'D’accord. Nous continuons donc avec votre situation hors d’Espagne. Quel âge avez-vous ?'
+  return 'Entendido. Então seguimos pelo seu cenário fora da Espanha. Qual sua idade?'
+}
+
+function getOutsideSpainNextQuestion(language: ChatLanguage, assistantTranscript: string): string {
+  const askedIdade = /\b(qual sua idade|cu[áa]ntos a[ñn]os|how old)\b/i.test(assistantTranscript)
+  const askedEuropa = /\beuropa nos [úu]ltimos 6 meses|europa en los [úu]ltimos 6 meses|europe in the last 6 months\b/i.test(assistantTranscript)
+  const askedFamiliar = /\bfamiliar (europeu|europeo)|family member.*(eu|spain)\b/i.test(assistantTranscript)
+  const askedRemoto = /\b(trabalha remoto|trabajas? remoto|work remotely)\b/i.test(assistantTranscript)
+  const askedFormacao = /\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree)\b/i.test(assistantTranscript)
+
+  if (!askedIdade) return getOutsideSpainAgeQuestion(language)
+  if (!askedEuropa) {
+    if (language === 'es') return '¿Estuviste en Europa en los últimos 6 meses?'
+    if (language === 'en') return 'Have you been in Europe in the last 6 months?'
+    if (language === 'fr') return 'Êtes-vous allé en Europe au cours des 6 derniers mois ?'
+    return 'Você esteve na Europa nos últimos 6 meses?'
+  }
+  if (!askedFamiliar) {
+    if (language === 'es') return '¿Tienes algún familiar europeo o residente legal en España?'
+    if (language === 'en') return 'Do you have a European family member or a legal resident in Spain?'
+    if (language === 'fr') return 'Avez-vous un membre de votre famille européen ou résident légal en Espagne ?'
+    return 'Possui familiar europeu ou residente legal na Espanha?'
+  }
+  if (!askedRemoto) {
+    if (language === 'es') return '¿Trabajas de forma remota?'
+    if (language === 'en') return 'Do you work remotely?'
+    if (language === 'fr') return 'Travaillez-vous à distance ?'
+    return 'Você trabalha remoto?'
+  }
+  if (!askedFormacao) {
+    if (language === 'es') return '¿Tienes formación superior?'
+    if (language === 'en') return 'Do you have higher education?'
+    if (language === 'fr') return 'Avez-vous une formation supérieure ?'
+    return 'Você possui formação superior?'
+  }
+
+  if (language === 'es') return 'Perfecto. Ya puedo tener una visión inicial de tu caso.\nEn CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
+  if (language === 'en') return 'Perfect. I can already get an initial view of your case.\nAt CB, we analyze each case individually, always looking for the safest path within the law.'
+  if (language === 'fr') return 'Parfait. Je peux déjà avoir une première vision de votre cas.\nChez CB, nous analysons chaque cas individuellement, en cherchant toujours la voie la plus sûre et conforme à la loi.'
+  return 'Perfeito. Já consigo ter uma visão inicial do seu caso.\nNa CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
+}
+
 function forceAdvanceFromEntryDateQuestion(
   previousAssistantMessage: string,
   currentMessage: string,
   aiResponse: string,
   language: ChatLanguage,
+  outsideSpainNextQuestion?: string,
 ): string {
   const previousQuestion = extractLastQuestion(previousAssistantMessage)
   const nextQuestion = extractLastQuestion(aiResponse)
+
+  if (isQuestionAboutSpainEntryDate(previousQuestion) && isNeverBeenToSpainAnswer(currentMessage)) {
+    return outsideSpainNextQuestion || getOutsideSpainAgeQuestion(language)
+  }
 
   if (!isQuestionAboutSpainEntryDate(previousQuestion) || !isPotentialEntryDateAnswer(currentMessage)) {
     return aiResponse
@@ -1540,11 +1601,11 @@ serve(async (req) => {
     console.log('Processing message from:', phoneNumber)
 
     // Find existing contact by phone
-    let contact: { id: string; full_name: string; preferred_language: string | null } | null = null
+    let contact: { id: string; full_name: string; email: string | null; preferred_language: string | null } | null = null
     // Use .limit(1) instead of .single() to avoid error when duplicate contacts exist for same phone
     const { data: existingContacts } = await supabase
       .from('contacts')
-      .select('id, full_name, preferred_language')
+      .select('id, full_name, email, preferred_language')
       .eq('phone', phoneNumber)
       .order('created_at', { ascending: true })
       .limit(1)
@@ -1560,7 +1621,7 @@ serve(async (req) => {
           full_name: message.name || `WhatsApp ${phoneNumber.slice(-4)}`,
           origin_channel: 'WHATSAPP',
         })
-        .select('id, full_name, preferred_language')
+        .select('id, full_name, email, preferred_language')
         .single()
 
       if (contactError || !newContact) {
@@ -2426,7 +2487,6 @@ Regras:
         // Detecção de campos básicos já capturados
         const nameMissing = !contact.full_name
           || /^WhatsApp\s/i.test(contact.full_name)
-          || contact.full_name === message.name
         const emailMissing = !contact.email
         const serviceMissing = !leadInterest?.service_type_id
           && (!leadInterest?.service_interest
@@ -2692,8 +2752,9 @@ Regras:
           }
         }
 
+        const outsideSpainNextQuestion = getOutsideSpainNextQuestion(detectedChatLanguage, allAssistant)
         aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
-        aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
+        aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
 
         if (aiResponse && isLikelyQuestionLoop(history, rawCustomerMessage, aiResponse)) {
           console.warn('Detected repeated-question loop, retrying with anti-repeat instruction')
@@ -2707,7 +2768,7 @@ Regras:
               detectedChatLanguage,
             )
             aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
-            aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
+            aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
           } catch (retryError) {
             console.error('Anti-repeat retry failed:', retryError instanceof Error ? retryError.message : retryError)
           }
