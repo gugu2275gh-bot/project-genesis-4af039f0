@@ -154,14 +154,51 @@ export function buildStateDirective(state: FunnelState, language: ChatLanguage):
     livre: 'conversa livre (todos os dados básicos coletados)',
   }
 
+  // Wave 5 — bloco explícito de NÃO regressão (F3) e localização (F7).
+  // O LLM tende a reiniciar pelo nome quando o cliente diverge; este bloco
+  // congela cada bandeira e dá uma instrução de fallback para divergências.
+  const lockLines: string[] = []
+  if (state.name_confirmed) lockLines.push('NOME já está confirmado — JAMAIS pergunte o nome novamente.')
+  if (state.email_confirmed) lockLines.push('E-MAIL já está confirmado — JAMAIS pergunte o e-mail novamente.')
+  if (state.interest_confirmed) lockLines.push(`INTERESSE já está confirmado (${state.interest_confirmed}) — não volte ao catálogo.`)
+  if (state.location_known) lockLines.push(`LOCALIZAÇÃO já é conhecida (${state.location_known}) — não pergunte de novo onde está.`)
+  if (state.entry_date_confirmed) lockLines.push(`DATA DE ENTRADA já registrada (${state.entry_date_confirmed}).`)
+  if (state.empadronado_confirmed !== null && state.empadronado_confirmed !== undefined) {
+    lockLines.push('EMPADRONAMENTO já registrado.')
+  }
+  // F7 — guard de elegibilidade quando cliente está fora da Espanha.
+  if (state.location_known === 'outside') {
+    lockLines.push(
+      'O cliente está FORA DA ESPANHA. NÃO recomende nem explique processos exclusivos para residentes ' +
+      '(autorização de regresso, prórroga de estancia, TIE, renovação de residência, arraigo, asilo já em curso, etc.) ' +
+      'sem antes esclarecer que é PRÉ-REQUISITO já residir legalmente na Espanha. ' +
+      'Se o cliente perguntar sobre algum desses, diga claramente: "Esse processo é exclusivo para quem já está residindo na Espanha — no seu caso atual ele não se aplica."',
+    )
+  }
+
+  const lockBlock = lockLines.length ? `\nTRAVAS RÍGIDAS:\n- ${lockLines.join('\n- ')}` : ''
+  const divergenceRulePT =
+    '\nSE O CLIENTE DIVERGIR (responder com pergunta, dúvida ou outro assunto): ' +
+    'reformule o pedido NO MESMO PASSO atual (acolha em uma frase e repita a pergunta atual), ' +
+    'NUNCA reinicie pelo nome ou por passos anteriores já confirmados.'
+  const divergenceRuleES =
+    '\nSI EL CLIENTE SE DESVÍA (responde con pregunta o cambia de tema): ' +
+    'reformula la petición EN EL MISMO PASO actual (acoge en una frase y repite la pregunta actual), ' +
+    'NUNCA reinicies pidiendo el nombre o pasos anteriores ya confirmados.'
+  const divergenceRuleEN =
+    '\nIF THE CUSTOMER DIVERGES (asks back, changes topic): rephrase the request IN THE CURRENT STEP, ' +
+    'NEVER restart from name or previously confirmed steps.'
+  const divergenceRuleFR =
+    '\nSI LE CLIENT DÉVIE : reformulez la demande DANS LA MÊME ÉTAPE, ne redémarrez JAMAIS depuis le nom.'
+
   if (language === 'es') {
-    return `\n\n## ESTADO DEL EMBUDO (NO RE-PREGUNTAR)\nEtapa actual: ${stepLabel[state.step]}.\nDatos ya confirmados: ${confirmed.join(', ') || 'ninguno todavía'}.\nNUNCA vuelvas a preguntar lo que ya está confirmado. Si la etapa actual es "${stepLabel[state.step]}", céntrate en ese paso.`
+    return `\n\n## ESTADO DEL EMBUDO (NO RE-PREGUNTAR / NO REINICIAR)\nEtapa actual: ${stepLabel[state.step]}.\nDatos ya confirmados: ${confirmed.join(', ') || 'ninguno todavía'}.${lockBlock}\nNUNCA vuelvas a preguntar lo confirmado. Si la etapa actual es "${stepLabel[state.step]}", céntrate en ese paso y avanza UN paso a la vez (no saltes etapas).${divergenceRuleES}`
   }
   if (language === 'en') {
-    return `\n\n## FUNNEL STATE (DO NOT RE-ASK)\nCurrent step: ${stepLabel[state.step]}.\nAlready confirmed: ${confirmed.join(', ') || 'nothing yet'}.\nNEVER re-ask what is already confirmed. If the current step is "${stepLabel[state.step]}", focus on that step.`
+    return `\n\n## FUNNEL STATE (DO NOT RE-ASK / DO NOT RESTART)\nCurrent step: ${stepLabel[state.step]}.\nAlready confirmed: ${confirmed.join(', ') || 'nothing yet'}.${lockBlock}\nNEVER re-ask confirmed data. Focus on the current step and advance ONE step at a time.${divergenceRuleEN}`
   }
   if (language === 'fr') {
-    return `\n\n## ÉTAT DE L’ENTONNOIR (NE PAS REDEMANDER)\nÉtape actuelle : ${stepLabel[state.step]}.\nDéjà confirmé : ${confirmed.join(', ') || 'rien pour l’instant'}.\nNE redemandez JAMAIS ce qui est déjà confirmé. Si l’étape actuelle est « ${stepLabel[state.step]} », concentrez-vous sur cette étape.`
+    return `\n\n## ÉTAT DE L’ENTONNOIR (NE PAS REDEMANDER)\nÉtape actuelle : ${stepLabel[state.step]}.\nDéjà confirmé : ${confirmed.join(', ') || 'rien pour l’instant'}.${lockBlock}\nNE redemandez JAMAIS ce qui est confirmé. Avancez UNE étape à la fois.${divergenceRuleFR}`
   }
-  return `\n\n## ESTADO DO FUNIL (NÃO RE-PERGUNTAR)\nEtapa atual: ${stepLabel[state.step]}.\nDados já confirmados: ${confirmed.join(', ') || 'nenhum ainda'}.\nNUNCA pergunte de novo o que já está confirmado. Se a etapa atual é "${stepLabel[state.step]}", foque nesse passo.`
+  return `\n\n## ESTADO DO FUNIL (NÃO RE-PERGUNTAR / NÃO REINICIAR)\nEtapa atual: ${stepLabel[state.step]}.\nDados já confirmados: ${confirmed.join(', ') || 'nenhum ainda'}.${lockBlock}\nNUNCA pergunte de novo o que já está confirmado. Foque na etapa atual e avance UM passo de cada vez (não pule etapas).${divergenceRulePT}`
 }

@@ -251,7 +251,11 @@ async function getConversationHistory(
       history.push({ role: 'user', content: msg.mensagem_cliente })
     }
     if (msg.mensagem_IA) {
-      history.push({ role: 'assistant', content: msg.mensagem_IA })
+      // Wave 5 (F8): mensagens com origem='SISTEMA' são de atendente humano,
+      // não da IA. Prefixar para que o LLM saiba que foi humano falando.
+      const isHuman = String(msg.origem || '').toUpperCase() === 'SISTEMA'
+      const content = isHuman ? `[ATENDENTE HUMANO] ${msg.mensagem_IA}` : msg.mensagem_IA
+      history.push({ role: 'assistant', content })
     }
   }
   return history
@@ -1127,19 +1131,38 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         const langHint = contact.preferred_language ? preferredLangMap[contact.preferred_language] : null
         const detectedFromText = detectChatLanguage(currentCustomerMessage)
 
-        // Strong Portuguese signal in current message
+        // Strong Portuguese signal in current message (Wave 5: vocabulário ampliado para
+        // capturar correções como "Já me fez esta pergunta" / "Também já me perguntou isto")
         const ptSample = currentCustomerMessage.toLowerCase().normalize('NFC')
-        const strongPortuguese = /\b(n[aã]o|sim|obrigad[oa]|ol[aá]|oi|voc[eê]|nunca|tamb[eé]m|tudo bem|bom dia|boa tarde|boa noite|brasil|espanha|europa|portugu[eê]s|estou|quero|preciso|meu|minha|cpf|cnpj)\b/u.test(ptSample) || /[ãõ]/.test(currentCustomerMessage)
+        const strongPortuguese = /\b(n[aã]o|sim|obrigad[oa]|ol[aá]|oi|voc[eê]|nunca|tamb[eé]m|tudo bem|bom dia|boa tarde|boa noite|brasil|espanha|europa|portugu[eê]s|estou|quero|preciso|meu|minha|cpf|cnpj|j[aá]|fez|isso|isto|esta pergunta|essa pergunta|me perguntou|me fez|entendi|errado|errou|repetiu|de novo)\b/u.test(ptSample) || /[ãõ]/.test(currentCustomerMessage)
+
+        // Wave 5 (F5): se as últimas 2 mensagens do cliente foram detectadas como PT,
+        // o lock para outro idioma é quebrado mesmo sem strong signal — evita "leak"
+        // quando o cliente troca para PT no meio da conversa.
+        let twoTurnsPortuguese = false
+        try {
+          const { data: lastUserMsgs } = await supabase
+            .from('mensagens_cliente')
+            .select('mensagem_cliente, created_at')
+            .eq('id_lead', lead.id)
+            .not('mensagem_cliente', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(3)
+          const prior = (lastUserMsgs || []).slice(1, 3) // ignora a mensagem atual recém-inserida
+          if (prior.length >= 1) {
+            const allPt = prior.every((m: any) => detectChatLanguage(String(m.mensagem_cliente || '')) === 'pt-BR')
+            twoTurnsPortuguese = allPt && detectedFromText === 'pt-BR'
+          }
+        } catch (_) { /* best effort */ }
 
         // R5 (lock language after 2 turns): if a non-PT preference is on file, do NOT flip to PT
-        // because of a single ambiguous message. Only flip when current text is STRONGLY Portuguese.
+        // because of a single ambiguous message. Only flip when current text is STRONGLY Portuguese
+        // OR temos 2 turnos consecutivos em PT.
         let detectedChatLanguage: ChatLanguage
         if (langHint && langHint !== 'pt-BR') {
-          // Locked to non-PT — keep it unless we see strong PT signal AND no opposite signal
-          if (strongPortuguese && detectedFromText === 'pt-BR') {
+          if ((strongPortuguese && detectedFromText === 'pt-BR') || twoTurnsPortuguese) {
             detectedChatLanguage = 'pt-BR'
           } else {
-            // Stay on locked language even if detector returns 'pt-BR' for ambiguous short text
             detectedChatLanguage = detectedFromText !== 'pt-BR' ? detectedFromText : langHint
           }
         } else if (detectedFromText !== 'pt-BR') {
@@ -1152,15 +1175,15 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           detectedChatLanguage = 'pt-BR'
         }
 
-        // Persist when we have a confident change (non-default detection OR strong PT switch)
+        // Persist when we have a confident change (non-default detection OR strong PT switch OR 2-turn PT)
         const currentLangCode = langCodeMap[detectedChatLanguage]
-        if (contact.preferred_language !== currentLangCode && (detectedFromText !== 'pt-BR' || strongPortuguese)) {
+        if (contact.preferred_language !== currentLangCode && (detectedFromText !== 'pt-BR' || strongPortuguese || twoTurnsPortuguese)) {
           await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
           contact.preferred_language = currentLangCode
           console.log('Persisted detected language on contact:', currentLangCode)
         }
 
-        console.log('Detected chat language:', detectedChatLanguage, 'hint:', contact.preferred_language, 'fromText:', detectedFromText, 'strongPT:', strongPortuguese, 'sample:', currentCustomerMessage.slice(0, 80))
+        console.log('Detected chat language:', detectedChatLanguage, 'hint:', contact.preferred_language, 'fromText:', detectedFromText, 'strongPT:', strongPortuguese, '2turnPT:', twoTurnsPortuguese, 'sample:', currentCustomerMessage.slice(0, 80))
 
         // Wave 4: carregar estado persistente do funil
         const funnelState = await loadFunnelState(supabase, lead.id, contact)
@@ -1819,6 +1842,49 @@ Regras:
 
         if (aiResponse) {
           aiResponse = removeRepeatedQuestionIntro(lastAssistantMessage, aiResponse)
+
+          // Wave 5 (F4): dedup do bloco de catálogo. Se a resposta repete quase
+          // literalmente uma das últimas 3 mensagens do assistente, força uma
+          // nova geração com instrução de paráfrase + avanço.
+          try {
+            const lastThreeAssistant = history.filter((m) => m.role === 'assistant').slice(-3).map((m) => String(m.content || ''))
+            const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+            const aiNorm = norm(aiResponse)
+            const overlap = (a: string, b: string): number => {
+              if (!a || !b) return 0
+              const aw = new Set(a.split(' ').filter((w) => w.length > 3))
+              const bw = b.split(' ').filter((w) => w.length > 3)
+              if (!aw.size || !bw.length) return 0
+              let hits = 0
+              for (const w of bw) if (aw.has(w)) hits++
+              return hits / Math.max(aw.size, bw.length)
+            }
+            const isCatalogEcho = lastThreeAssistant.some((prev) => {
+              const sim = overlap(norm(prev), aiNorm)
+              return sim >= 0.7 && /(cidadania|n[óo]made|residencia|residências|nie|tie|homologa|reagrupa|ciudadan|nationality)/i.test(prev) && /(cidadania|n[óo]made|residencia|residências|nie|tie|homologa|reagrupa|ciudadan|nationality)/i.test(aiResponse)
+            })
+            if (isCatalogEcho) {
+              console.warn('[F4] Catálogo repetido detectado — gerando paráfrase com avanço')
+              try {
+                const paraphraseResp = await generateAIResponse(
+                  history,
+                  messageForAI,
+                  `${resolvedSystemPrompt}\n\n## INSTRUÇÃO ANTI-REPETIÇÃO DE CATÁLOGO\nA frase do catálogo de serviços JÁ FOI ENVIADA recentemente. NÃO repita o catálogo. Confirme em UMA frase curta o interesse do cliente e AVANCE imediatamente para a PRÓXIMA pergunta pendente do roteiro.`,
+                  geminiApiKey,
+                  knowledgeContext,
+                  detectedChatLanguage,
+                )
+                if (paraphraseResp && norm(paraphraseResp) !== aiNorm) {
+                  aiResponse = paraphraseResp
+                  aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
+                  aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
+                  aiResponse = removeRepeatedQuestionIntro(lastAssistantMessage, aiResponse)
+                }
+              } catch (paraErr) {
+                console.error('[F4] Paraphrase retry failed:', paraErr instanceof Error ? paraErr.message : paraErr)
+              }
+            }
+          } catch (_) { /* dedup is best-effort */ }
 
           // R9: Single per-turn structured log for auditability
           try {
