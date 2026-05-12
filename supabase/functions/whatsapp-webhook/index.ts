@@ -3145,4 +3145,10 @@ Regras:
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
-})
+}
+
+export { handler }
+
+if (!Deno.env.get('SKIP_SERVE')) {
+  serve(handler)
+}
