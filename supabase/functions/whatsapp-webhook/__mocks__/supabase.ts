@@ -121,6 +121,23 @@ function makeBuilder(tables: Tables, state: BuilderState): any {
     delete() { state.op = 'delete'; state.returning = false; return builder },
     eq(col: string, val: any) { state.filters.push({ kind: 'eq', col, val }); return builder },
     neq(col: string, val: any) { state.filters.push({ kind: 'neq', col, val }); return builder },
+    gte(col: string, val: any) { state.filters.push({ kind: 'gte', col, val }); return builder },
+    lte(col: string, val: any) { state.filters.push({ kind: 'lte', col, val }); return builder },
+    gt(col: string, val: any) { state.filters.push({ kind: 'gt', col, val }); return builder },
+    lt(col: string, val: any) { state.filters.push({ kind: 'lt', col, val }); return builder },
+    is(col: string, val: any) { state.filters.push({ kind: 'is', col, val }); return builder },
+    match(obj: Record<string, any>) { state.filters.push({ kind: 'match', obj }); return builder },
+    filter(col: string, op: string, val: any) {
+      if (op === 'eq') state.filters.push({ kind: 'eq', col, val })
+      else if (op === 'neq') state.filters.push({ kind: 'neq', col, val })
+      else if (op === 'gte') state.filters.push({ kind: 'gte', col, val })
+      else if (op === 'lte') state.filters.push({ kind: 'lte', col, val })
+      else if (op === 'gt') state.filters.push({ kind: 'gt', col, val })
+      else if (op === 'lt') state.filters.push({ kind: 'lt', col, val })
+      return builder
+    },
+    or(_expr: string) { return builder },
+    upsert(payload: Row | Row[]) { state.op = 'insert'; state.payload = payload; state.returning = false; return builder },
     in(col: string, vals: any[]) { state.filters.push({ kind: 'in', col, vals }); return builder },
     not(col: string, op: string, val: any) {
       if (op === 'eq') state.filters.push({ kind: 'neq', col, val })
