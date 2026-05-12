@@ -1728,9 +1728,41 @@ Regras:
         const flowComplete = !nextStep // todas as 7 primeiras etapas concluídas → KB liberada
         const collectionGateActive = !flowComplete
 
+        // Wave 7: detectar pergunta factual do cliente.
+        const isFactualQuestion = !!rawCustomerMessage && (
+          /\?/.test(rawCustomerMessage)
+          || /\b(como|quanto|qual|quais|quanto custa|preciso|posso|onde|quando|cu[áa]nto|c[óo]mo|d[óo]nde|how|what|where|when|how much)\b/i.test(rawCustomerMessage)
+        )
+
+        // Wave 7: durante o cadastro, MEMORIZAR a pergunta factual para responder
+        // assim que o cadastro terminar. Após o cadastro, RECUPERAR a pergunta pendente
+        // e usá-la como query da KB no lugar (ou em adição) à mensagem atual.
+        let pendingQuestionToAnswer: string | null = null
+        try {
+          if (collectionGateActive && isFactualQuestion && !funnelStateLive.pending_question) {
+            await supabase
+              .from('lead_funnel_state')
+              .update({ pending_question: rawCustomerMessage, updated_at: new Date().toISOString() })
+              .eq('lead_id', lead.id)
+            funnelStateLive = { ...funnelStateLive, pending_question: rawCustomerMessage }
+            console.log(`[PENDING_Q] saved during cadastro: "${rawCustomerMessage}"`)
+          } else if (!collectionGateActive && funnelStateLive.pending_question) {
+            pendingQuestionToAnswer = funnelStateLive.pending_question
+            await supabase
+              .from('lead_funnel_state')
+              .update({ pending_question: null, updated_at: new Date().toISOString() })
+              .eq('lead_id', lead.id)
+            funnelStateLive = { ...funnelStateLive, pending_question: null }
+            console.log(`[PENDING_Q] consumed after cadastro: "${pendingQuestionToAnswer}"`)
+          }
+        } catch (pqErr) {
+          console.warn('[PENDING_Q] non-blocking error:', pqErr instanceof Error ? pqErr.message : pqErr)
+        }
+
         const kbQueryParts: string[] = []
         if (topicHint) kbQueryParts.push(`Tópico: ${topicHint}`)
         if (lastAssistantQuestion) kbQueryParts.push(`Pergunta anterior do agente: ${lastAssistantQuestion}`)
+        if (pendingQuestionToAnswer) kbQueryParts.push(`Pergunta pendente do cliente (feita antes durante o cadastro): ${pendingQuestionToAnswer}`)
         if (rawCustomerMessage) kbQueryParts.push(`Pergunta do cliente: ${rawCustomerMessage}`)
         const kbQuery = kbQueryParts.join('\n').trim() || (rawCustomerMessage || messageForAI || '').trim()
 
