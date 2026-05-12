@@ -11,6 +11,12 @@ type Filter =
   | { kind: 'eq'; col: string; val: any }
   | { kind: 'neq'; col: string; val: any }
   | { kind: 'in'; col: string; vals: any[] }
+  | { kind: 'gte'; col: string; val: any }
+  | { kind: 'lte'; col: string; val: any }
+  | { kind: 'gt'; col: string; val: any }
+  | { kind: 'lt'; col: string; val: any }
+  | { kind: 'is'; col: string; val: any }
+  | { kind: 'match'; obj: Record<string, any> }
 
 interface BuilderState {
   table: string
