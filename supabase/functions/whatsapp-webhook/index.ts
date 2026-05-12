@@ -1701,6 +1701,8 @@ Regras:
         // Generate AI response (Gemini primary, OpenAI fallback)
         let aiResponse = ''
         let resolvedSystemPrompt = systemPrompt.replace('{nome}', promptContactName || '')
+        // Wave 4: diretiva de estado do funil (anti F1/F4)
+        resolvedSystemPrompt += buildStateDirective(funnelState, detectedChatLanguage)
 
         if (kbStrictMode) {
           if (!knowledgeContext) {
