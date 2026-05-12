@@ -2733,10 +2733,10 @@ Regras:
             'Agradeça brevemente o nome e pergunte APENAS o melhor e-mail. Use exatamente: "Obrigado. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?". NÃO faça outras perguntas nem responda dúvidas factuais agora.',
         })
 
-        // Etapa 4 — Interesse (Msg5 + Msg6)
-        const interesseDone = !serviceMissing
-          || sentAny(/\b(o que voc[êe] busca|o que (voc[êe]|tu) procura|qu[eé] buscas hoy|what are you looking)\b/i)
-          && sentAny(/\b(cidadania|nacionalidade|n[óo]made digital|nie|tie|homologa[çc][ãa]o|reagrup|antecedentes)\b/i)
+        // Etapa 4 — Interesse (Msg5 + Msg6) — exige a pergunta explícita E a frase do catálogo
+        const interesseAsked = sentAny(/me conta com calma.*o que voc[êe] busca|cu[eé]ntame con calma.*qu[eé] buscas|tell me.*what are you looking for/i)
+        const catalogSent = sentAny(/trabalhamos com cidadania.*n[óo]made digital|trabajamos con (la )?ciudadan[ií]a.*n[óo]mada digital|we work with (spanish )?citizenship.*digital nomad/i)
+        const interesseDone = !serviceMissing || (interesseAsked && catalogSent)
         steps.push({
           key: 'interesse', label: 'INTERESSE / SERVIÇO',
           done: interesseDone,
@@ -2744,8 +2744,9 @@ Regras:
             'Pergunte sobre o interesse do cliente em DUAS mensagens curtas, nesta ordem: (1) "Me conta com calma: o que você busca hoje? Pode ser nacionalidade, residência, estudos, arraigo ou algum documento específico." (2) "Trabalhamos com cidadania espanhola, nômade digital, residências, NIE, TIE, homologação de estudos, antecedentes, reagrupação e outros processos." NÃO consulte a Base de Conhecimento.',
         })
 
-        // Etapa 5 — Localização (Msg7)
-        const localizacaoAsked = sentAny(/\b(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|em outro pa[íi]s|en otro pa[íi]s)\b/i)
+        // Etapa 5 — Localização (Msg7) — exige a pergunta exata "Espanha OU outro país"
+        const localizacaoAsked = sentAny(/(j[áa] est[áa]|j[áa] mora|ya est[áa]s|already (in|live)).{0,30}(na )?espanha?.{0,30}(ou|o)\s+(ainda |todav[ií]a |still )?(est[áa]|en )?(em |en )?outro pa[íi]s|en otro pa[íi]s\b/i)
+          || sentAny(/hoje voc[êe] j[áa] est[áa] na espanha/i)
         const localizacaoAnswered = userInSpain || userOutsideSpain
         steps.push({
           key: 'localizacao', label: 'LOCALIZAÇÃO ATUAL',
