@@ -342,6 +342,7 @@ import {
   forceAdvanceFromEntryDateQuestion,
   forceAdvanceFromInterestQuestion,
   isLikelyQuestionLoop,
+  lockConfirmedFieldsInResponse,
 } from './lib/overrides.ts'
 
 import {
