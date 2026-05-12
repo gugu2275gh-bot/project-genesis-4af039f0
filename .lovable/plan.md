@@ -1,47 +1,54 @@
-## Objetivo
-Quando o cliente envia um áudio no WhatsApp, o agente deve receber o **texto transcrito** como se fosse a mensagem do cliente e continuar a conversa normalmente — sem responder a um placeholder `[audio]`.
+## Diagnóstico do caso real (lead Gustavo)
 
-## Diagnóstico
-- A função `transcribe-audio` já existe, é chamada automaticamente em `whatsapp-webhook/index.ts` (linhas 674–701) e atualiza `mensagens_cliente.mensagem_cliente` com o texto.
-- **Mas** o agente é alimentado por `messageForAI = message.body || getMediaPlaceholder(...)` (linha 1376) e por `interactions.content`/`displayBody` (linhas 655, 660), que ficam como `"[audio]"`. A transcrição nunca é injetada no prompt da IA daquele turno.
-- Resultado: o LLM vê `[audio]` e responde sem contexto, perdendo o conteúdo da fala.
+Sequência observada no banco:
+1. Agente: "Antes de tudo, como é seu nome completo?"
+2. Cliente: "Gustavo braga" → salvo em `contacts.full_name` com `name_source = USER_CONFIRMED` e `lead_funnel_state.name_confirmed = true`.
+3. Agente: pediu e-mail.
+4. Cliente: "O que é autorizacao de regresso" (saiu do fluxo).
+5. Agente: re-pediu e-mail (correto).
+6. Cliente: enviou e-mail.
+7. Agente: pediu interesse.
+8. Cliente: "Autorizacao de regresso" (resposta válida ao interesse).
+9. Agente: "Ótima pergunta, já te explico em seguida! Antes de tudo, como é seu nome completo?" — REPETIU NOME.
 
-## Mudanças (apenas em `supabase/functions/whatsapp-webhook/index.ts` e teste)
+Causa raiz: quando o cliente sai do roteiro (faz pergunta factual ou muda de assunto) e volta, o `Gate de Fluxo` é recalculado a cada turno e às vezes escolhe a primeira etapa pendente errada porque:
+- o "done" de cada etapa é detectado por regex no histórico de mensagens da IA, não pelo estado já persistido em `lead_funnel_state`/`contacts`;
+- as flags `nameMissing`/`emailMissing`/`serviceMissing` são calculadas no início e não consideram o que já está confirmado no funil;
+- a diretiva "TRAVAS RÍGIDAS" do `buildStateDirective` é apenas um aviso ao LLM, não uma regra que o Gate respeite.
 
-1. **Capturar a transcrição como variável**
-   - No bloco "AUTO-TRANSCRIBE AUDIO/PTT" (linhas 674–701): guardar `transcribedText` a partir de `transcribeResult.transcription` quando a resposta for OK e o texto não for `[áudio inaudível]`.
-   - Manter o `await` (já é) para que esteja disponível antes da geração da resposta.
+## Plano de correção
 
-2. **Persistir a transcrição nos registros do turno atual**
-   - `displayBody`: se houver `transcribedText`, usar `🎙️ {transcrição}` (mantém indicação visual de que veio de áudio).
-   - `interactions.content` (linha 655): mesmo tratamento.
-   - `mensagens_cliente.mensagem_cliente` já é atualizado pela própria função `transcribe-audio` via `messageId`; ok.
+1. Tornar o estado persistente (`lead_funnel_state` + `contacts.name_source`/`email`) a única fonte de verdade do Gate
+   - Substituir os "done" baseados em regex por leitura direta do funil para `NOME`, `E-MAIL`, `INTERESSE`, `LOCALIZAÇÃO`.
+   - Manter o regex apenas como fallback complementar (não como gatekeeper único).
 
-3. **Alimentar o agente com a transcrição**
-   - Substituir `message.body` efetivo por uma variável `effectiveBody = transcribedText || message.body || ''` no início do fluxo (logo após o bloco de transcrição).
-   - Usar `effectiveBody` em:
-     - `messageForAI` fallback (linha 1376) → `effectiveBody || getMediaPlaceholder(...)`.
-     - `currentCustomerMessage` (linha 1127).
-     - `extractNameAndEmail` (linha 1315) e `extractAndSuggestContactData` (linha 1338) — assim nome/e-mail ditados em áudio também são capturados.
-     - Roteamento multichat / detecção de mensagem genérica (`clientMessage`, linha 730).
-   - **Não** alterar `message.body` original em logs de baixo nível para preservar payload Twilio.
+2. Hard-skip de etapas já confirmadas mesmo após divergência
+   - O Gate nunca pode escolher como "próxima etapa" algo cujo flag no funil já está `true`.
+   - Quando o cliente diverge e depois volta, o Gate continua exatamente da próxima etapa pendente real, sem reabrir nenhuma etapa anterior.
 
-4. **Buffer de mensagens não respondidas**
-   - O buffer (linhas 1364–1377) já lê `mensagem_cliente` do banco, que conterá a transcrição (a função `transcribe-audio` faz update antes do AI rodar). Verificar ordem: garantir que o `await` da transcrição ocorre **antes** da query do buffer (já ocorre, pois transcrição é em ~675 e buffer ~1364). Sem mudança extra.
+3. Trava determinística pós-IA (sem nova chamada ao modelo)
+   - Antes de enviar a resposta final, se ela contiver pergunta de nome/e-mail/interesse/localização que já está confirmado, substituir pela próxima pergunta pendente computada a partir do funil — sem re-chamar a IA.
 
-5. **Idioma**
-   - O prompt de `transcribe-audio` mantém o idioma original do falante. Nenhuma mudança necessária; a detecção de idioma do agente continua funcionando sobre o texto transcrito.
+4. Sincronização imediata após detectar nome/e-mail/interesse no turno
+   - Sempre que o webhook fizer backfill de nome/e-mail/interesse no contato ou no lead, atualizar `lead_funnel_state` no mesmo turno e recomputar `nameMissing`/`emailMissing`/`serviceMissing` antes de montar o prompt.
 
-6. **Falhas de transcrição**
-   - Se transcrição falhar ou retornar `[áudio inaudível]`: manter comportamento atual (placeholder `[audio]`) para o agente pedir que o cliente repita por texto. Não bloquear o fluxo.
+5. Tratar perguntas factuais do cliente sem reiniciar fluxo
+   - Quando a mensagem do cliente é uma pergunta (não uma resposta), o Gate acolhe em uma frase ("Ótima pergunta, te explico já já") e repete SOMENTE a etapa pendente atual — nunca volta para uma etapa anterior já marcada como confirmada.
 
-7. **Teste**
-   - Adicionar caso em `handler_test.ts` (ou novo arquivo) simulando payload com `MediaContentType0=audio/ogg` e mock de `transcribe-audio` retornando `"Quero saber sobre nacionalidade"`, verificando que o `messageForAI` enviado ao LLM contém esse texto e não `[audio]`.
+6. Regressões cobrindo o caso real
+   - Teste 1: nome confirmado → cliente faz pergunta factual no lugar de responder o interesse → próxima resposta NÃO contém pergunta de nome nem de e-mail.
+   - Teste 2: cliente alterna entre responder e divergir 3 vezes seguidas → nenhuma pergunta confirmada é repetida.
+   - Teste 3: backfill simultâneo de nome e e-mail no mesmo turno → próximo prompt já parte de "interesse".
 
-## Arquivos a editar
-- `supabase/functions/whatsapp-webhook/index.ts`
-- `supabase/functions/whatsapp-webhook/*_test.ts` (novo teste)
+7. Validação
+   - Rodar a suíte do `whatsapp-webhook` (`supabase--test_edge_functions`).
+   - Conferir nos logs do edge function que cada turno loga `[GATE] step=...` consistente com o funil persistido.
 
-## Validação
-- Rodar `supabase--test_edge_functions` na função `whatsapp-webhook`.
-- Em produção: enviar áudio de teste e verificar nos logs: `Auto-transcription completed: ...` seguido de `messageForAI` contendo o texto transcrito, e a resposta da IA coerente com o conteúdo falado.
+## Detalhes técnicos
+
+- Arquivos a editar:
+  - `supabase/functions/whatsapp-webhook/index.ts` (cálculo do Gate, recomputo pós-backfill, trava pós-IA).
+  - `supabase/functions/whatsapp-webhook/lib/funnel-state.ts` (helper para "próxima etapa pendente" reutilizável).
+  - `supabase/functions/whatsapp-webhook/lib/overrides.ts` (extender `forceSkipFullNameIfAlreadyKnown` para também substituir por interesse/localização quando e-mail também já existe).
+  - Novo arquivo de teste `supabase/functions/whatsapp-webhook/funnel_persistence_test.ts`.
+- Sem mudanças de schema — `lead_funnel_state` e `contacts.name_source` já existem.
