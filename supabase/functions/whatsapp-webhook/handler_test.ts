@@ -133,9 +133,16 @@ Deno.test({
 
     Deno.env.set('LOVABLE_API_KEY', 'test-stub')
     Deno.env.set('TWILIO_API_KEY', 'test-stub')
+    Deno.env.set('CBAsesoria_Key', 'test-stub')
 
     try {
-      const mock = createMockSupabase()
+      const mock = createMockSupabase({
+        system_config: [
+          { key: 'whatsapp_bot_enabled', value: 'true' },
+          { key: 'whatsapp_bot_system_prompt', value: 'Você é o assistente da Innovatia.' },
+          { key: 'kb_strict_mode', value: 'false' },
+        ],
+      })
       const res = await handler(
         twilioForm({ from: 'whatsapp:+5511999998888', body: 'oi, preciso de ajuda' }),
         { supabase: mock.client },
