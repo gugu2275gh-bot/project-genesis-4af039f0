@@ -251,7 +251,11 @@ async function getConversationHistory(
       history.push({ role: 'user', content: msg.mensagem_cliente })
     }
     if (msg.mensagem_IA) {
-      history.push({ role: 'assistant', content: msg.mensagem_IA })
+      // Wave 5 (F8): mensagens com origem='SISTEMA' são de atendente humano,
+      // não da IA. Prefixar para que o LLM saiba que foi humano falando.
+      const isHuman = String(msg.origem || '').toUpperCase() === 'SISTEMA'
+      const content = isHuman ? `[ATENDENTE HUMANO] ${msg.mensagem_IA}` : msg.mensagem_IA
+      history.push({ role: 'assistant', content })
     }
   }
   return history
