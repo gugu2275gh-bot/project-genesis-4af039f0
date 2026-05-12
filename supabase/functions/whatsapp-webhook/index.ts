@@ -601,41 +601,8 @@ export { detectChatLanguage }
 export type { ChatLanguage }
 
 
-export function extractLastQuestion(text: string): string {
-  const matches = text.match(/[^?\n]*\?/g)
-  return matches?.map((item) => item.trim()).filter(Boolean).at(-1) || ''
-}
-
-export function extractTextBeforeLastQuestion(text: string): string {
-  const lastQuestion = extractLastQuestion(text)
-  if (!lastQuestion) return text.trim()
-
-  const questionIndex = text.lastIndexOf(lastQuestion)
-  if (questionIndex === -1) return text.trim()
-
-  return text.slice(0, questionIndex).trim()
-}
-
-function removeRepeatedQuestionIntro(
-  previousAssistantMessage: string,
-  aiResponse: string,
-): string {
-  const previousQuestion = extractLastQuestion(previousAssistantMessage)
-  const nextQuestion = extractLastQuestion(aiResponse)
-
-  if (!previousQuestion || !nextQuestion || areQuestionsEquivalent(previousQuestion, nextQuestion)) {
-    return aiResponse
-  }
-
-  const previousIntro = extractTextBeforeLastQuestion(previousAssistantMessage)
-  const nextIntro = extractTextBeforeLastQuestion(aiResponse)
-
-  if (!previousIntro || !nextIntro) return aiResponse
-
-  if (!areQuestionsEquivalent(previousIntro, nextIntro)) return aiResponse
-
-  return aiResponse.slice(aiResponse.lastIndexOf(nextQuestion)).trim()
-}
+// extractLastQuestion / extractTextBeforeLastQuestion / removeRepeatedQuestionIntro
+// moved to lib/text-utils.ts (Wave 3b step 2)
 
 function isStructuredQuestionAnswer(text: string): boolean {
   const sample = normalizeForLanguageChecks(text)
