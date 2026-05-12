@@ -1127,19 +1127,38 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         const langHint = contact.preferred_language ? preferredLangMap[contact.preferred_language] : null
         const detectedFromText = detectChatLanguage(currentCustomerMessage)
 
-        // Strong Portuguese signal in current message
+        // Strong Portuguese signal in current message (Wave 5: vocabulário ampliado para
+        // capturar correções como "Já me fez esta pergunta" / "Também já me perguntou isto")
         const ptSample = currentCustomerMessage.toLowerCase().normalize('NFC')
-        const strongPortuguese = /\b(n[aã]o|sim|obrigad[oa]|ol[aá]|oi|voc[eê]|nunca|tamb[eé]m|tudo bem|bom dia|boa tarde|boa noite|brasil|espanha|europa|portugu[eê]s|estou|quero|preciso|meu|minha|cpf|cnpj)\b/u.test(ptSample) || /[ãõ]/.test(currentCustomerMessage)
+        const strongPortuguese = /\b(n[aã]o|sim|obrigad[oa]|ol[aá]|oi|voc[eê]|nunca|tamb[eé]m|tudo bem|bom dia|boa tarde|boa noite|brasil|espanha|europa|portugu[eê]s|estou|quero|preciso|meu|minha|cpf|cnpj|j[aá]|fez|isso|isto|esta pergunta|essa pergunta|me perguntou|me fez|entendi|errado|errou|repetiu|de novo)\b/u.test(ptSample) || /[ãõ]/.test(currentCustomerMessage)
+
+        // Wave 5 (F5): se as últimas 2 mensagens do cliente foram detectadas como PT,
+        // o lock para outro idioma é quebrado mesmo sem strong signal — evita "leak"
+        // quando o cliente troca para PT no meio da conversa.
+        let twoTurnsPortuguese = false
+        try {
+          const { data: lastUserMsgs } = await supabase
+            .from('mensagens_cliente')
+            .select('mensagem_cliente, created_at')
+            .eq('id_lead', lead.id)
+            .not('mensagem_cliente', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(3)
+          const prior = (lastUserMsgs || []).slice(1, 3) // ignora a mensagem atual recém-inserida
+          if (prior.length >= 1) {
+            const allPt = prior.every((m: any) => detectChatLanguage(String(m.mensagem_cliente || '')) === 'pt-BR')
+            twoTurnsPortuguese = allPt && detectedFromText === 'pt-BR'
+          }
+        } catch (_) { /* best effort */ }
 
         // R5 (lock language after 2 turns): if a non-PT preference is on file, do NOT flip to PT
-        // because of a single ambiguous message. Only flip when current text is STRONGLY Portuguese.
+        // because of a single ambiguous message. Only flip when current text is STRONGLY Portuguese
+        // OR temos 2 turnos consecutivos em PT.
         let detectedChatLanguage: ChatLanguage
         if (langHint && langHint !== 'pt-BR') {
-          // Locked to non-PT — keep it unless we see strong PT signal AND no opposite signal
-          if (strongPortuguese && detectedFromText === 'pt-BR') {
+          if ((strongPortuguese && detectedFromText === 'pt-BR') || twoTurnsPortuguese) {
             detectedChatLanguage = 'pt-BR'
           } else {
-            // Stay on locked language even if detector returns 'pt-BR' for ambiguous short text
             detectedChatLanguage = detectedFromText !== 'pt-BR' ? detectedFromText : langHint
           }
         } else if (detectedFromText !== 'pt-BR') {
@@ -1152,15 +1171,15 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           detectedChatLanguage = 'pt-BR'
         }
 
-        // Persist when we have a confident change (non-default detection OR strong PT switch)
+        // Persist when we have a confident change (non-default detection OR strong PT switch OR 2-turn PT)
         const currentLangCode = langCodeMap[detectedChatLanguage]
-        if (contact.preferred_language !== currentLangCode && (detectedFromText !== 'pt-BR' || strongPortuguese)) {
+        if (contact.preferred_language !== currentLangCode && (detectedFromText !== 'pt-BR' || strongPortuguese || twoTurnsPortuguese)) {
           await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
           contact.preferred_language = currentLangCode
           console.log('Persisted detected language on contact:', currentLangCode)
         }
 
-        console.log('Detected chat language:', detectedChatLanguage, 'hint:', contact.preferred_language, 'fromText:', detectedFromText, 'strongPT:', strongPortuguese, 'sample:', currentCustomerMessage.slice(0, 80))
+        console.log('Detected chat language:', detectedChatLanguage, 'hint:', contact.preferred_language, 'fromText:', detectedFromText, 'strongPT:', strongPortuguese, '2turnPT:', twoTurnsPortuguese, 'sample:', currentCustomerMessage.slice(0, 80))
 
         // Wave 4: carregar estado persistente do funil
         const funnelState = await loadFunnelState(supabase, lead.id, contact)
