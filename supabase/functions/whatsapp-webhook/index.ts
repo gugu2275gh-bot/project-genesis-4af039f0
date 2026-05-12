@@ -704,11 +704,11 @@ function isPotentialEntryDateAnswer(text: string): boolean {
 
   if (!raw || normalized.includes('?')) return false
 
-  const numericFullDate = /(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{4}|\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2})/
+  const numericFullDate = /(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}|\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2})/
   const hasSingleDate = numericFullDate.test(raw)
   const hasDateRange = new RegExp(`${numericFullDate.source}.{0,20}(ate|até|a|to|-).{0,20}${numericFullDate.source}`, 'i').test(raw)
   const monthName = '(janeiro|fevereiro|marco|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|january|february|march|april|may|june|july|august|september|october|november|december|janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)'
-  const hasFullMonthNameDate = new RegExp(`\\b(\\d{1,2}\\s+(de\\s+)?${monthName}\\s+(de\\s+)?\\d{4}|${monthName}\\s+\\d{1,2}(st|nd|rd|th)?[,]?\\s+\\d{4})\\b`).test(normalized)
+  const hasFullMonthNameDate = new RegExp(`\\b(\\d{1,2}\\s+(de\\s+)?${monthName}\\s+(de\\s+)?\\d{2,4}|${monthName}\\s+\\d{1,2}(st|nd|rd|th)?[,]?\\s+\\d{2,4})\\b`).test(normalized)
 
   return hasDateRange || hasSingleDate || hasFullMonthNameDate
 }
@@ -716,6 +716,7 @@ function isPotentialEntryDateAnswer(text: string): boolean {
 function looksLikeIncompleteEntryDateWithoutYear(text: string): boolean {
   const normalized = normalizeForLanguageChecks(text)
   if (!normalized || normalized.includes('?')) return false
+  if (isPotentialEntryDateAnswer(text)) return false
 
   const monthName = '(janeiro|fevereiro|marco|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|january|february|march|april|may|june|july|august|september|october|november|december|janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)'
   return !/\b\d{4}\b/.test(normalized)
