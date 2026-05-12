@@ -655,7 +655,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
 
       await supabase.from('tasks').insert({
         title: `Novo lead via WhatsApp: ${contact.full_name}`,
-        description: `Mensagem inicial: ${message.body.substring(0, 200)}`,
+        description: `Mensagem inicial: ${effectiveBody.substring(0, 200)}`,
         status: 'PENDENTE',
         related_lead_id: lead.id,
         ...(assignedUserId ? { assigned_to_user_id: assignedUserId } : {}),
@@ -665,7 +665,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         await supabase.from('notifications').insert({
           user_id: assignedUserId,
           title: 'Novo lead WhatsApp atribuído a você',
-          message: `${contact.full_name}: ${message.body.substring(0, 100)}...`,
+          message: `${contact.full_name}: ${effectiveBody.substring(0, 100)}...`,
           type: 'whatsapp_lead_assigned',
         })
       }
@@ -679,7 +679,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         await supabase.from('notifications').insert({
           user_id: assignedUserId,
           title: 'Lead WhatsApp atribuído a você',
-          message: `${contact.full_name}: ${message.body.substring(0, 100)}...`,
+          message: `${contact.full_name}: ${effectiveBody.substring(0, 100)}...`,
           type: 'whatsapp_lead_assigned',
         })
       }
@@ -743,7 +743,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
 
         const timeoutMs = (parseInt(timeoutConfig?.value || '60') || 60) * 60 * 1000
         const now = Date.now()
-        const clientMessage = (message.body || '').trim()
+        const clientMessage = (effectiveBody || '').trim()
 
         const setoresAtivos = ((chatCtx.setores_ativos as Array<{ setor: string; user_id: string; last_sent_at: string }>) || [])
           .filter(s => now - new Date(s.last_sent_at).getTime() < timeoutMs)
@@ -922,7 +922,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
               await supabase.from('notifications').insert({
                 user_id: su.user_id,
                 title: `Mensagem direcionada - ${routedSector}`,
-                message: `${contact.full_name}: ${(message.body || '').substring(0, 100)}`,
+                message: `${contact.full_name}: ${(effectiveBody || '').substring(0, 100)}`,
                 type: 'sector_message',
                 sector: routedSector,
               })
@@ -972,7 +972,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           },
           body: JSON.stringify({
             contactId: contact.id,
-            incomingMessageText: message.body || '',
+            incomingMessageText: effectiveBody || '',
             phoneNumber,
             leadId: lead.id,
           }),
@@ -1140,7 +1140,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         
         const isFirstInteraction = (messageCount || 0) <= 1 // 1 because we just inserted the current message
 
-        const currentCustomerMessage = String(message.body || '')
+        const currentCustomerMessage = String(effectiveBody || '')
         // R5: Use preferred_language from contact as initial hint for language detection
         const preferredLangMap: Record<string, ChatLanguage> = { 'pt': 'pt-BR', 'pt-BR': 'pt-BR', 'es': 'es', 'en': 'en', 'fr': 'fr' }
         const langCodeMap: Record<ChatLanguage, string> = { 'pt-BR': 'pt', 'es': 'es', 'en': 'en', 'fr': 'fr' }
@@ -1328,7 +1328,7 @@ Regras:
         }
 
         // Try to extract name/email from the current message and update contact
-        const extracted = extractNameAndEmail(String(message.body || ''))
+        const extracted = extractNameAndEmail(String(effectiveBody || ''))
         if (extracted.name || extracted.email) {
           const updateData: Record<string, string> = {}
           if (extracted.name && (contact.full_name.startsWith('WhatsApp ') || contact.full_name === message.name)) {
@@ -1351,7 +1351,7 @@ Regras:
 
         // ========== AI DATA EXTRACTION FOR SUGGESTIONS ==========
         try {
-          await extractAndSuggestContactData(supabase, contact.id, String(message.body || ''), geminiApiKey)
+          await extractAndSuggestContactData(supabase, contact.id, String(effectiveBody || ''), geminiApiKey)
         } catch (extractErr) {
           console.error('Data extraction error (non-blocking):', extractErr instanceof Error ? extractErr.message : extractErr)
         }
@@ -1389,7 +1389,7 @@ Regras:
             .filter(Boolean)
             .join('\n')
         } else {
-          messageForAI = message.body || (mediaType ? getMediaPlaceholder(mediaType, detectedChatLanguage) : '')
+          messageForAI = effectiveBody || (mediaType ? getMediaPlaceholder(mediaType, detectedChatLanguage) : '')
         }
 
         const history = await getConversationHistory(supabase, lead.id, 80)
@@ -2014,7 +2014,7 @@ Regras:
       await supabase.from('notifications').insert({
         user_id: lead.assigned_to_user_id,
         title: 'Nova mensagem WhatsApp',
-        message: `${contact.full_name}: ${message.body.substring(0, 100)}...`,
+        message: `${contact.full_name}: ${effectiveBody.substring(0, 100)}...`,
         type: 'whatsapp_message',
       })
     } else {
@@ -2027,7 +2027,7 @@ Regras:
         await supabase.from('notifications').insert({
           user_id: user.user_id,
           title: 'Nova mensagem WhatsApp (não atribuído)',
-          message: `${contact.full_name}: ${message.body.substring(0, 100)}...`,
+          message: `${contact.full_name}: ${effectiveBody.substring(0, 100)}...`,
           type: 'whatsapp_message',
         })
       }
