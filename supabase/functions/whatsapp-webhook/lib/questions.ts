@@ -82,16 +82,28 @@ export function isPotentialInterestAnswer(text: string): boolean {
   const normalized = normalizeForLanguageChecks(text)
 
   if (!normalized || normalized.includes('?')) return false
-  if (normalized.length < 4) return false
+  if (normalized.length < 3) return false
 
   const interestKeywords = [
-    'resid', 'residir', 'morar', 'viver', 'espanha', 'espanha', 'nacional', 'cidad', 'arraigo',
+    'resid', 'residir', 'morar', 'viver', 'espanha', 'espana', 'nacional', 'cidad', 'arraigo',
     'document', 'nie', 'tie', 'estudo', 'estudar', 'homologa', 'antecedente', 'reagrupa',
-    'trabalh', 'trabalho', 'family', 'famil', 'mae', 'madre', 'mãe', 'visa', 'visto',
+    'trabalh', 'trabalho', 'family', 'famil', 'mae', 'madre', 'visa', 'visto', 'visado',
+    // Wave 4: tokens isolados que apareceram em conversas reais
+    'nacionalidade', 'nacionalidad', 'nationality',
+    'autorizacao de regresso', 'autorizacion de regreso', 'return authorization',
+    'curso', 'course', 'idioma', 'language',
+    'social', 'laboral', 'familiar', 'formacion', 'formacao',
+    'permiso', 'permit', 'reagrupacao', 'reagrupacion',
   ]
 
-  return normalized.split(' ').length >= 1
-    && interestKeywords.some((keyword) => normalized.includes(keyword))
+  // Match exato para tokens curtos isolados
+  const exactTokens = new Set([
+    'nacionalidade', 'nacionalidad', 'arraigo', 'nie', 'tie', 'curso', 'residencia',
+    'residência', 'visado', 'visa', 'visto', 'homologacao', 'homologação', 'reagrupamento',
+  ])
+  if (exactTokens.has(normalized.trim())) return true
+
+  return interestKeywords.some((keyword) => normalized.includes(keyword))
 }
 
 export function getLocationQuestion(language: ChatLanguage): string {
