@@ -102,3 +102,61 @@ Deno.test('handler: duplicate MessageSid is skipped on second call', async () =>
     fetchMock.restore()
   }
 })
+
+// ---------- T5: New contact happy path → contact + lead created, AI replies, Twilio called ----------
+
+function geminiReply(text: string): Response {
+  return new Response(JSON.stringify({
+    candidates: [{ content: { parts: [{ text }] } }],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+}
+
+function twilioOk(): Response {
+  return new Response(JSON.stringify({ sid: 'SMmocked', status: 'queued' }), {
+    status: 201, headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+Deno.test({
+  name: 'handler: new contact (PT-BR) creates contact+lead and triggers Twilio outbound',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const fetchMock = installFetchMock()
+    fetchMock.on(/generativelanguage\.googleapis\.com/, () => geminiReply('Olá! Qual é o seu nome completo?'))
+    fetchMock.on(/connector-gateway\.lovable\.dev\/twilio/, () => twilioOk())
+    fetchMock.on(/api\.openai\.com/, () => new Response(JSON.stringify({
+      choices: [{ message: { content: 'Olá!' } }],
+    }), { status: 200 }))
+    // Stub anything else (transcribe, embeddings) with 200 empty
+    fetchMock.on(/.*/, () => new Response(JSON.stringify({}), { status: 200 }))
+
+    Deno.env.set('LOVABLE_API_KEY', 'test-stub')
+    Deno.env.set('TWILIO_API_KEY', 'test-stub')
+
+    try {
+      const mock = createMockSupabase()
+      const res = await handler(
+        twilioForm({ from: 'whatsapp:+5511999998888', body: 'oi, preciso de ajuda' }),
+        { supabase: mock.client },
+      )
+      assertEquals(res.status, 200)
+      await res.text()
+
+      // Contact + lead created
+      assertEquals(mock.tables.contacts?.length, 1)
+      assertEquals(mock.tables.contacts?.[0].phone, '5511999998888')
+      assertEquals(mock.tables.leads?.length, 1)
+      assertEquals(mock.tables.leads?.[0].status, 'NOVO')
+
+      // Inbound message logged in mensagens_cliente
+      assert((mock.tables.mensagens_cliente?.length ?? 0) >= 1)
+
+      // Twilio was invoked at least once
+      const twilioCalls = fetchMock.callsMatching(/connector-gateway\.lovable\.dev\/twilio/)
+      assert(twilioCalls.length >= 1, `expected Twilio call, got ${twilioCalls.length}`)
+    } finally {
+      fetchMock.restore()
+    }
+  },
+})
