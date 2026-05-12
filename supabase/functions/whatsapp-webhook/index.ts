@@ -688,6 +688,16 @@ function isQuestionAboutSpainEntryDate(question: string): boolean {
     || normalized.includes('date exacte de votre entree en espagne')
 }
 
+function isNeverBeenToSpainAnswer(text: string): boolean {
+  const normalized = normalizeForLanguageChecks(text)
+  if (!normalized || normalized.includes('?')) return false
+
+  return /\b(nunca fui|nunca estive|nunca entrei|jamais fui|jamais estive)\b/.test(normalized)
+    || /\b(nao|no|not|never)\b.{0,24}\b(fui|estive|entrei|estoy|been|entered)\b/.test(normalized)
+    || /\b(never been|never entered)\b.{0,16}\b(spain|espana|espanha)\b/.test(normalized)
+    || /\b(nunca he estado|nunca entre|nunca fui)\b/.test(normalized)
+}
+
 function isPotentialEntryDateAnswer(text: string): boolean {
   const raw = text.trim()
   const normalized = normalizeForLanguageChecks(text)
