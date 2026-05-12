@@ -1836,6 +1836,13 @@ Regras:
         aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
         aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
         aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
+        // Wave 6: trava determinística pós-IA — nunca re-perguntar dado já confirmado
+        aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, {
+          nameKnown: !nameMissing,
+          emailKnown: !emailMissing,
+          interestKnown: !serviceMissing,
+          locationKnown: !!funnelStateLive.location_known,
+        })
 
         // F1-HARD: se o nome já é confiável e a IA mesmo assim perguntou nome (guard zerou ou
         // sobrou só o preâmbulo), forçar uma nova geração com instrução anti-nome explícita.
