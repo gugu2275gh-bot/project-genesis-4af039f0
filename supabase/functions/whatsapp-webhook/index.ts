@@ -933,16 +933,8 @@ export function forceAdvanceFromInterestQuestion(
   return aiResponse
 }
 
-export function areQuestionsEquivalent(first: string, second: string): boolean {
-  const normalizedFirst = normalizeForLanguageChecks(first)
-  const normalizedSecond = normalizeForLanguageChecks(second)
+// areQuestionsEquivalent moved to lib/text-utils.ts (Wave 3b step 2)
 
-  if (!normalizedFirst || !normalizedSecond) return false
-
-  return normalizedFirst === normalizedSecond
-    || normalizedFirst.includes(normalizedSecond)
-    || normalizedSecond.includes(normalizedFirst)
-}
 
 export function isLikelyQuestionLoop(
   conversationHistory: Array<{ role: string; content: string }>,
