@@ -100,6 +100,13 @@ export default function Settings() {
                 <Wallet className="h-4 w-4 mr-2" />
                 Pagamentos
               </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => handleTableTabSelect('suppliers')}
+                className={activeTab === 'suppliers' ? 'bg-accent' : ''}
+              >
+                <Truck className="h-4 w-4 mr-2" />
+                Fornecedores
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
