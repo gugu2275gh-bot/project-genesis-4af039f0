@@ -122,6 +122,49 @@ export function computeNextStep(state: FunnelState): FunnelStep {
   return 'levantamento'
 }
 
+/**
+ * Sincroniza imediatamente o lead_funnel_state com o que foi capturado no contato/lead
+ * neste turno. Retorna o estado atualizado. Idempotente: só faz UPDATE se houver mudança.
+ *
+ * Use isto LOGO APÓS qualquer backfill de nome/email/interesse, antes de montar o Gate
+ * e o prompt — evita que o próximo turno reabra etapas já confirmadas.
+ */
+export async function syncFunnelFromCapturedData(
+  supabase: any,
+  state: FunnelState,
+  contact: ContactLite | null,
+  leadInterestRaw: string | null | undefined,
+): Promise<FunnelState> {
+  const patch: Partial<FunnelState> = {}
+  const trustworthyName = isContactNameTrustworthy(contact)
+  if (trustworthyName && !state.name_confirmed) patch.name_confirmed = true
+  if (contact?.email && !state.email_confirmed) patch.email_confirmed = true
+  const interestNorm = String(leadInterestRaw || '').trim().toUpperCase()
+  const hasInterest = interestNorm && !['SEM_SERVICO', 'OUTRO', ''].includes(interestNorm)
+  if (hasInterest && !state.interest_confirmed) patch.interest_confirmed = String(leadInterestRaw)
+
+  if (Object.keys(patch).length === 0) return state
+
+  const merged = { ...state, ...patch } as FunnelState
+  const nextStep = computeNextStep(merged)
+  const update: Record<string, unknown> = { ...patch, step: nextStep }
+  if (nextStep !== state.step) update.last_step_change = new Date().toISOString()
+
+  const { data, error } = await supabase
+    .from('lead_funnel_state')
+    .update(update)
+    .eq('lead_id', state.lead_id)
+    .select('*')
+    .single()
+
+  if (error) {
+    console.warn('[FUNNEL_STATE] sync error:', error.message)
+    return merged
+  }
+  console.log('[FUNNEL_STATE] synced from captured:', JSON.stringify(patch), '-> step:', nextStep)
+  return data as FunnelState
+}
+
 export async function applyTurnUpdates(
   supabase: any,
   state: FunnelState,
