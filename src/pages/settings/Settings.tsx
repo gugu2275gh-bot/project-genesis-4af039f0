@@ -176,6 +176,10 @@ export default function Settings() {
           <PaymentSettings />
         </TabsContent>
 
+        <TabsContent value="suppliers">
+          <SuppliersManagement />
+        </TabsContent>
+
         <TabsContent value="whatsapp-templates">
           <WhatsAppTemplatesSettings />
         </TabsContent>
