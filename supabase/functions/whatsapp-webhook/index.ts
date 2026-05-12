@@ -1514,18 +1514,10 @@ Responda APENAS com o JSON, sem markdown, sem explicação.`
     const referralValue = extracted.referral_name ? String(extracted.referral_name).trim() : ''
     const currentReferral = (currentContact as Record<string, any>).referral_name
 
-    if (referralValue && !String(currentReferral || '').trim()) {
-      const { error: referralUpdateError } = await supabase
-        .from('contacts')
-        .update({ referral_name: referralValue })
-        .eq('id', contactId)
-
-      if (referralUpdateError) {
-        console.error('Failed to update referral_name directly:', referralUpdateError.message)
-      } else {
-        ;(currentContact as Record<string, any>).referral_name = referralValue
-        console.log(`Updated referral_name directly for contact ${contactId}: ${referralValue}`)
-      }
+    // R10: Não escrever referral_name diretamente — vira sugestão para confirmação humana.
+    // Se já existe um referral confirmado, descarta a nova sugestão.
+    if (referralValue && String(currentReferral || '').trim()) {
+      delete extracted.referral_name
     }
 
     const suggestions: Array<{ contact_id: string; field_name: string; suggested_value: string; current_value: string | null }> = []
