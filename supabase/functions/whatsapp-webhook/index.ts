@@ -2857,9 +2857,18 @@ Regras:
           ? await getKnowledgeBaseContext(supabase, kbQuery, topicHint || undefined)
           : ''
 
+        const langLabel: Record<string, string> = {
+          'pt-BR': 'Português (Brasil)',
+          'es': 'Español',
+          'en': 'English',
+          'fr': 'Français',
+        }
+        const langName = langLabel[detectedChatLanguage] || 'Português (Brasil)'
+
         if (collectionGateActive && nextStep) {
           const stepsSummary = steps.map(s => `${s.done ? '✅' : '⏳'} ${s.label}`).join(' → ')
           messageForAI = `${messageForAI}\n\n[GATE DE FLUXO — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
+            `IDIOMA OBRIGATÓRIO DA RESPOSTA AO CLIENTE: ${langName}. NÃO misture idiomas. Se as frases-modelo abaixo estiverem em português, traduza-as fielmente para ${langName} antes de enviar.\n` +
             `Roteiro oficial CB Asesoría em andamento. Etapas: ${stepsSummary}\n` +
             `PRÓXIMA ETAPA OBRIGATÓRIA: ${nextStep.label}\n` +
             `INSTRUÇÃO: ${nextStep.instruction}\n` +
@@ -2875,6 +2884,7 @@ Regras:
           console.log(`[GATE] flow complete — KB liberada (handoff=${handoffDone})`)
           if (!handoffDone) {
             messageForAI = `${messageForAI}\n\n[MODO TIRA-DÚVIDAS — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
+              `IDIOMA OBRIGATÓRIO DA RESPOSTA AO CLIENTE: ${langName}. NÃO misture idiomas.\n` +
               `O cadastro inicial e o Pré-Handoff já foram enviados. Agora você está em MODO TIRA-DÚVIDAS.\n` +
               `REGRAS:\n` +
               `1. Use a Base de Conhecimento (KB) fornecida no contexto para responder dúvidas do cliente de forma breve, clara e baseada exclusivamente nos trechos disponíveis.\n` +
