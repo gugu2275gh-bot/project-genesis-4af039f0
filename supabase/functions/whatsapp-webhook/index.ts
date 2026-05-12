@@ -1341,7 +1341,7 @@ Aceite e interprete variações em português, espanhol, inglês e francês, inc
 - Anos com 2 dígitos: se ≤ ano atual atual (ex.: "90") assuma 19YY para datas de nascimento; para datas recentes/futuras assuma 20YY.
 - Meses por nome (PT/ES/EN/FR): janeiro/enero/january/janvier=01, fevereiro/febrero/february/février=02, março/marzo/march/mars=03, abril/abril/april/avril=04, maio/mayo/may/mai=05, junho/junio/june/juin=06, julho/julio/july/juillet=07, agosto/agosto/august/août=08, setembro/septiembre/september/septembre=09, outubro/octubre/october/octobre=10, novembro/noviembre/november/novembre=11, dezembro/diciembre/december/décembre=12.
 
-Se faltar o ANO em uma data de nascimento, NÃO inclua o campo (peça de novo depois). Para outras datas, se faltar ano, assuma o ano atual; se a data resultante já passou e o contexto for futuro (chegada/agendamento), assuma o próximo ano.
+Se faltar o ANO em uma data de nascimento OU na data de entrada/chegada na Espanha (spain_arrival_date), NÃO inclua o campo e não assuma ano atual. A data de entrada na Espanha só é válida com ano explícito (ex.: "20 de abril de 2024" ou "20/04/2024"). Para outras datas futuras, se faltar ano, assuma o ano atual; se a data resultante já passou e o contexto for futuro (chegada/agendamento), assuma o próximo ano.
 
 Se a mensagem não contém nenhum dado pessoal extraível, retorne: {}
 
