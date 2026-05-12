@@ -1,67 +1,109 @@
-## Opção A — Testes de integração do handler antes dos passos 8-10
+## Diagnóstico do Agente WhatsApp — perda de contexto, confusão e alucinação
 
-Objetivo: criar uma rede de segurança real para o `handler` do `whatsapp-webhook` antes de extrair `state.ts`, `gate.ts` e `prompt.ts` (passos 8-10 do plano Wave 3b). Sem isso, qualquer regressão nesses passos só aparece em produção via Twilio.
-
-### Escopo
-
-- Adicionar **testes de integração Deno** que exercitam o `handler` exportado do `index.ts` ponta a ponta.
-- Mockar `Request` (payload Twilio) e o **Supabase client** (reads/inserts/updates necessários).
-- Mockar fetch externo: Gemini, OpenAI, Twilio API, embeddings.
-- Não mudar lógica de produção. Apenas:
-  - Exportar `handler` (se ainda não exportado) para o teste.
-  - Permitir injeção do client Supabase via parâmetro opcional ou factory (mínimo invasivo).
-  - Permitir override de `fetch` via `globalThis.fetch` stub no teste.
-
-### Cenários cobertos (alvo: 6 testes)
-
-1. **Novo contato + primeira mensagem** → cria `contacts`, cria `leads`, cria `chat_sessions`, dispara saudação em PT-BR.
-2. **Resposta com nome completo** → atualiza contact name, avança fluxo, próxima pergunta é email.
-3. **Loop de pergunta detectado** → resposta válida do user repetida pelo modelo é substituída pelo override (`forceAdvance*`).
-4. **Janela 24h expirada** → handler escolhe template oficial em vez de freeform; loga `origem: SISTEMA`.
-5. **Handoff humano ativo** → AI auto-pause respeitado; nenhuma chamada Gemini/OpenAI.
-6. **Idioma ES detectado** → resposta sai em espanhol; sem vazamento de PT (cobre `enforceResponseLanguage`).
-
-### Estrutura de arquivos
-
-- Novo: `supabase/functions/whatsapp-webhook/handler_test.ts` (separado do `index_test.ts` que cobre helpers puros).
-- Novo: `supabase/functions/whatsapp-webhook/__mocks__/supabase.ts` — factory `createMockSupabase({ contacts, leads, sessions, messages, ... })` com `from().select().eq()...` chainable e gravação das mutations em arrays inspecionáveis.
-- Novo: `supabase/functions/whatsapp-webhook/__mocks__/fetch.ts` — `installFetchMock({ gemini?, openai?, twilio?, embeddings? })` com restore.
-
-### Mudanças mínimas em `index.ts`
-
-- Garantir `export async function handler(req, deps?)` onde `deps` permite injetar `{ supabase, fetch }`. Default mantém comportamento atual (cria via env).
-- Nada mais. Sem refator de lógica nesta wave.
-
-### Validação
-
-- `supabase--test_edge_functions { functions: ["whatsapp-webhook"] }` → meta: **19 antigos + 6 novos = 25/25 verde**.
-- Rodar 2x para confirmar determinismo (sem flakiness por timers/fetch reais).
-
-### Detalhes técnicos
-
-- Usar `Deno.test` com `t.step` para sub-cenários quando útil.
-- Stub de `crypto.randomUUID` apenas se necessário para asserts estáveis.
-- `Date.now` congelado via `using time = new FakeTime(...)` do `https://deno.land/std@0.224.0/testing/time.ts` quando o teste depender de janela 24h.
-- Asserts focados em: payload enviado ao Twilio (texto + idioma + template SID quando aplicável), mutations gravadas no mock Supabase, e ausência de chamadas indevidas (ex: Gemini durante handoff).
-
-### Fora do escopo
-
-- Não executa passos 8-10 nesta wave. Eles vêm em Wave 3b-final, depois desta rede de segurança verde.
-- Não adiciona testes de helpers já cobertos por `index_test.ts`.
-- Não toca em RLS, schema, secrets, prompt do Gemini.
-
-### Saída esperada
-
-- 6 testes novos verdes.
-- `index.ts` praticamente intacto (só `export` do handler + parâmetro `deps` opcional).
-- Caminho liberado para extrair `state.ts` / `gate.ts` / `prompt.ts` com confiança.
+Baseado em 3 conversas reais (73 mensagens, últimas 24h): leads `efa19624` (Gustavo, PT-BR), `8bff00ce` (Fred, PT-BR) e `08c136ca` (Agência Liga, ES). Padrões identificados se repetem nos três casos.
 
 ---
 
-## Status pós-execução (Wave 3b-pre concluída)
+### Severidade: ALTA — 4 falhas estruturais recorrentes
 
-- 27/27 testes verdes (`supabase--test_edge_functions whatsapp-webhook`).
-- 8 testes de integração do `handler` cobrindo: OPTIONS, GET verify (ok/403), payload vazio, dedup de MessageSid, novo contato PT-BR (cria contact+lead, chama Twilio), handoff humano (sem Gemini), idioma ES (Gemini com diretiva ES + reply em espanhol).
-- Mock infra: `__mocks__/supabase.ts` (chainable in-memory Postgrest) + `__mocks__/fetch.ts` (URL-pattern handlers + recorder).
-- Mudança mínima em `index.ts`: handler agora aceita `deps?: { supabase? }`. Default mantém comportamento.
-- **Caminho liberado** para Wave 3b-final (passos 8-10: state.ts, gate.ts, prompt.ts) com rede de segurança.
+#### F1. Perde o nome já coletado e re-pergunta no meio do fluxo (alucinação de estado)
+Casos:
+- **Gustavo (efa19624)** — após responder "nunca fui" (Espanha), IA pergunta "Antes de tudo, como é seu nome completo?" — quando o nome `gustavo braga` já estava capturado 11 mensagens antes.
+- **Agência Liga (08c136ca)** — após responder "Si" à pergunta de localização, IA pergunta "¿cómo es tu nombre completo?" novamente, com `Fred Teste AG LIGA` já dito.
+
+Causa provável: o `forceSkipFullNameIfAlreadyKnown` (lib/overrides.ts) só dispara quando o **modelo** gera a pergunta de nome no turno corrente; não bloqueia quando outras camadas (gate/prompt) re-injetam a etapa de abertura. O estado do funil é re-derivado a cada turno e não persiste explicitamente "abertura concluída".
+
+#### F2. Loop literal de pergunta após resposta válida (override quebrado)
+Casos:
+- **Gustavo** — "Qual sua idade?" → user responde `25` → IA responde "Qual sua idade?" exatamente igual. Só na 2ª tentativa avança.
+- **Fred** — "o que você busca?" → `Nacionalidade` → IA repete bloco completo de escopo + "está na Espanha?" sem reconhecer "nacionalidade" como interesse.
+- **Agência Liga** — "¿qué buscas hoy?" → `Curso del idioma` → IA dá explicação + pergunta localização; depois pergunta interesse OUTRA VEZ.
+
+Causa provável: `isLikelyQuestionLoop` detecta repetição literal mas não cobre **paráfrase do mesmo bloco** (texto explicativo + mesma pergunta); `isPotentialInterestAnswer` falha em "Nacionalidade", "Curso", "autorização de regresso" — palavras isoladas que deveriam ser interpretadas como interesse.
+
+#### F3. Confusão de identidade do contato (ProfileName vs nome real)
+Caso **Fred (8bff00ce)**: após `Oi` + `Ok`, IA já chama o cliente de "Fred" sem ter perguntado o nome — provavelmente pegou de `contacts.full_name` legacy/ProfileName. Quando user diz "fred@teste.com.br", o e-mail é coerente, mas o fluxo pulou a etapa de **confirmação** do nome. No **Agência Liga**, depois das desculpas, a IA passa a chamar o cliente de "Agência Liga" — nome do perfil WhatsApp, contradizendo `Fred Teste AG LIGA` que o próprio cliente havia digitado.
+
+Causa: tratamos `contact.full_name` como verdade quando ele veio de `ProfileName`/auto (formato `WhatsApp 1234`). `isAutoGeneratedContactName` existe mas não cobre "Agência Liga" / outros valores legítimos do ProfileName.
+
+#### F4. Alucinação de histórico ("perguntei antes")
+Caso **Agência Liga**: "Para que no volvamos a tener errores: ¿cómo conociste a CB Asesoría?" — essa pergunta de origem **nunca havia sido feita**. Após cliente reclamar 2x de repetição, IA inventa uma "próxima etapa" para escapar, e introduz uma pergunta nova como se fosse continuação.
+
+Causa: depois de `forceReaskEmailIfMissing` falhar em achar email, prompt cai em modo "improvise próxima pergunta" sem ancoragem em estado.
+
+---
+
+### Severidade: MÉDIA — 2 falhas de qualidade
+
+#### F5. Aceita data de entrada incompleta (sem ano)
+**Fred**: "20 de abril" → IA registra "Anotado, 20 de abril" e avança para empadronamento. O override `forceAdvanceFromEntryDateQuestion` tem branch `looksLikeIncompleteEntryDateWithoutYear` mas não disparou — possivelmente regex muito restrita ou ordem de checagem.
+
+#### F6. Resposta KB acionada FORA do gate de levantamento, mas com inconsistências
+**Gustavo**: ao final, "o que é autorização de regresso" gera resposta correta de KB. Porém **antes** do gate fechar, a mesma pergunta foi tratada como "interesse" (errado) e como "pergunta gating" (correto). Resposta depende totalmente do estado interno — comportamento imprevisível para o usuário.
+
+---
+
+### Severidade: BAIXA — observações
+
+- Saudação chega em **2 mensagens separadas** com 1-2s de gap (pattern aceitável para WhatsApp, mas duplica leituras).
+- `setor` está sempre `null` em todas as mensagens — roteamento por setor não está sendo gravado.
+- Buffer de 5s funcionou em todas as conversas (não houve race condition observável).
+
+---
+
+### Causa-raiz comum
+
+O agente **deriva o estado do funil a cada turno** (gate.ts, lib `convoState`) a partir do histórico bruto, em vez de persistir explicitamente "abertura concluída", "interesse confirmado", "localização sabida". Resultado:
+- Quando o histórico tem ruído (cliente reclama, manda emoji, pula tópico), o re-derivador erra a etapa.
+- Os overrides (`force*`) tentam compensar pontualmente, mas só atuam em **alguns** padrões e só **depois** que o modelo já gerou a pergunta errada.
+- A KB e o prompt-system não recebem um "checkpoint de fluxo" — são re-construídos do zero a cada chamada Gemini.
+
+---
+
+### Recomendação de correção (prioridade)
+
+**P0 — Persistir estado do funil em `leads` ou tabela dedicada** (`lead_funnel_state`):
+- Colunas: `step` (`abertura`/`interesse`/`localizacao`/`levantamento`/`livre`), `name_confirmed` bool, `email_confirmed` bool, `interest_confirmed` text, `entry_date_confirmed` text, `outside_spain` bool, `last_updated`.
+- Atualizar a cada turno **após** o override aplicar. Ler antes de montar prompt.
+- Elimina F1 (re-pergunta de nome) e F4 (alucinação de "próxima pergunta") na raiz.
+
+**P1 — Endurecer detectores em `lib/questions.ts`**:
+- `isPotentialInterestAnswer`: incluir tokens isolados ("nacionalidade", "residência", "arraigo", "estudos", "curso", "autorização de regresso", "TIE", "NIE", equivalentes ES).
+- `isLikelyQuestionLoop`: comparar não só a pergunta literal, mas **bloco-modelo** (preamble + pergunta) usando hash dos primeiros 80 chars normalizados.
+- Resolve F2.
+
+**P2 — Tratar `contact.full_name` como NÃO confiável quando origem WhatsApp ProfileName**:
+- Adicionar coluna `name_source` em `contacts` (`USER_CONFIRMED` vs `WHATSAPP_PROFILE` vs `AUTO_PHONE`).
+- Override `forceSkipFullNameIfAlreadyKnown` só pula se `name_source = USER_CONFIRMED`.
+- Resolve F3.
+
+**P3 — Ajustar `looksLikeIncompleteEntryDateWithoutYear`**:
+- Cobrir formatos PT/ES sem ano: "20 de abril", "20/04", "20-abr", "no dia 20 de abril".
+- Resolve F5.
+
+**P4 — Telemetria**:
+- Logar `[FUNNEL_STATE]` JSON com step + flags antes e depois do override em cada turno; permite diagnóstico futuro sem precisar reler 73 mensagens manualmente.
+
+---
+
+### Métricas atuais (24h)
+
+| Lead | Mensagens | Loops detectáveis | Re-perguntas de nome | Interesse não reconhecido |
+|------|-----------|-------------------|----------------------|---------------------------|
+| efa19624 | 33 | 1 (idade) | 1 | 1 (autorização regresso) |
+| 8bff00ce | 21 | 1 (interesse) | 0 | 1 (nacionalidade) |
+| 08c136ca | 19 | 1 (interesse) | 1 | 1 (curso del idioma) |
+| **Total** | **73** | **3** | **2** | **3** |
+
+Taxa de turnos com falha visível: **~11% (8/73)**. Considerando só turnos de IA (~36): **~22%**. Bem acima de aceitável (alvo <5%).
+
+---
+
+### O que NÃO está incluído neste diagnóstico
+
+- Não inspecionei conversas reais de produção fora dessas 3 (volume de 24h foi todo o disponível).
+- Não rodei reprodução automatizada — diagnóstico é por análise de logs.
+- Não avaliei latência, custo Gemini ou taxa de fallback OpenAI.
+- Não toquei em código (modo plano).
+
+Próximo passo sugerido: aprovar P0+P1 como Wave 4 (com migração de schema + testes de regressão para os 4 padrões F1-F4 reproduzidos das conversas reais como fixtures).
