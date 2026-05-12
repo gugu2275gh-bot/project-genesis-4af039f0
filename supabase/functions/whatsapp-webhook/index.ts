@@ -257,21 +257,7 @@ async function getConversationHistory(
   return history
 }
 
-const INVALID_KNOWLEDGE_PATTERNS = [
-  /unable to extract text from pdf/i,
-  /cannot extract text from pdf/i,
-  /can't extract text from pdf/i,
-  /i\s*(?:am|'m)\s*unable to extract/i,
-  /forne[çc]a o texto/i,
-  /provide the text or key points/i,
-  /não (?:consigo|foi possível) extrair/i,
-]
-
-function isInvalidKnowledgeChunk(content: string): boolean {
-  const normalized = content.trim()
-  if (!normalized) return true
-  return INVALID_KNOWLEDGE_PATTERNS.some((pattern) => pattern.test(normalized))
-}
+// INVALID_KNOWLEDGE_PATTERNS / isInvalidKnowledgeChunk moved to lib/kb.ts (Wave 3b step 3)
 
 import {
   normalizeForSearch,
