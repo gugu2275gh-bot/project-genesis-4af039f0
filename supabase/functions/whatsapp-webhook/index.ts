@@ -365,7 +365,11 @@ import {
 } from './lib/ai.ts'
 
 
-const handler = async (req: Request): Promise<Response> => {
+interface HandlerDeps {
+  supabase?: any
+}
+
+const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -388,7 +392,7 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const supabase = createClient(
+    const supabase = deps.supabase ?? createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
