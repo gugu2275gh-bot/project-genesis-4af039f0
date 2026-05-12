@@ -2,6 +2,34 @@
 // Wave 3b step 11: contact data extraction & suggestions
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+/**
+ * Mapeia uma resposta livre do cliente à pergunta de INTERESSE para um valor
+ * válido do enum `service_interest`. Retorna null se nada bater.
+ *
+ * Enum disponível (ver migration):
+ *   VISTO_ESTUDANTE, VISTO_TRABALHO, REAGRUPAMENTO, RENOVACAO_RESIDENCIA,
+ *   NACIONALIDADE_RESIDENCIA, NACIONALIDADE_CASAMENTO, OUTRO,
+ *   RESIDENCIA_PARENTE_COMUNITARIO, SEM_SERVICO
+ */
+export function extractInterestFromMessage(raw: string): string | null {
+  if (!raw) return null
+  const t = raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+  if (!t) return null
+  // Casamento tem prioridade sobre nacionalidade genérica
+  if (/(casamento|matrimonio|conyug|esposa|esposo|marriage|spouse)/.test(t)) return 'NACIONALIDADE_CASAMENTO'
+  if (/(nacionalidad|cidadania|ciudadan|citizenship|passaporte espanhol|passaporte espanol)/.test(t)) return 'NACIONALIDADE_RESIDENCIA'
+  if (/(estud|homologa|universidad|faculdade|college|study|studies)/.test(t)) return 'VISTO_ESTUDANTE'
+  if (/(reagrupa|reagrupacion|reunifica|family reunif)/.test(t)) return 'REAGRUPAMENTO'
+  if (/(renova|renovacion|renewal)/.test(t)) return 'RENOVACAO_RESIDENCIA'
+  if (/(arraigo|residenc|\bnie\b|\btie\b|tarjeta|residence)/.test(t)) return 'RESIDENCIA_PARENTE_COMUNITARIO'
+  if (/(nomad|digital|trabalh|\bwork\b|\bjob\b|emprego|empleo|visto trabalho)/.test(t)) return 'VISTO_TRABALHO'
+  return null
+}
+
 export function extractNameAndEmail(text: string): { name: string | null; email: string | null } {
   let name: string | null = null
   let email: string | null = null

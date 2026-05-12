@@ -10,6 +10,7 @@ for (const key of [
 
 import { assert, assertEquals, assertStringIncludes } from 'https://deno.land/std@0.224.0/assert/mod.ts'
 import { lockConfirmedFieldsInResponse } from './lib/overrides.ts'
+import { extractInterestFromMessage } from './lib/extract.ts'
 
 const flagsAll = { nameKnown: true, emailKnown: true, interestKnown: true, locationKnown: false }
 
@@ -47,4 +48,33 @@ Deno.test('lockConfirmedFieldsInResponse: idioma espanhol — substitui mantendo
   const ai = 'Una pregunta rápida.\n¿Cuál es tu nombre completo?'
   const out = lockConfirmedFieldsInResponse(ai, 'es', { nameKnown: true, emailKnown: false, interestKnown: false, locationKnown: false })
   assertStringIncludes(out, 'email') // getEmailQuestion ES contém "email"
+})
+
+// Wave 7 — captura determinística de interesse a partir de resposta livre
+Deno.test('extractInterestFromMessage: mapeia palavras-chave PT/ES/EN para enum service_interest', () => {
+  assertEquals(extractInterestFromMessage('Nacionalidade'), 'NACIONALIDADE_RESIDENCIA')
+  assertEquals(extractInterestFromMessage('Quero estudar na Espanha'), 'VISTO_ESTUDANTE')
+  assertEquals(extractInterestFromMessage('Estudos'), 'VISTO_ESTUDANTE')
+  assertEquals(extractInterestFromMessage('Homologação do diploma'), 'VISTO_ESTUDANTE')
+  assertEquals(extractInterestFromMessage('Cidadania por casamento'), 'NACIONALIDADE_CASAMENTO')
+  assertEquals(extractInterestFromMessage('reagrupamento familiar'), 'REAGRUPAMENTO')
+  assertEquals(extractInterestFromMessage('arraigo social'), 'RESIDENCIA_PARENTE_COMUNITARIO')
+  assertEquals(extractInterestFromMessage('nômade digital'), 'VISTO_TRABALHO')
+  assertEquals(extractInterestFromMessage('renovação da minha residência'), 'RENOVACAO_RESIDENCIA')
+  assertEquals(extractInterestFromMessage(''), null)
+  assertEquals(extractInterestFromMessage('xpto blah'), null)
+})
+
+// Wave 7 — quando todos os campos do cadastro estão confirmados, o lock é no-op (KB livre)
+Deno.test('lockConfirmedFieldsInResponse: cadastro completo => não substitui resposta da IA', () => {
+  const ai = 'Para tirar visto de estudos, você precisa de carta de aceitação, comprovante financeiro e seguro.\nQuer que eu detalhe algum desses pontos?'
+  const out = lockConfirmedFieldsInResponse(ai, 'pt-BR', { nameKnown: true, emailKnown: true, interestKnown: true, locationKnown: true })
+  assertEquals(out, ai)
+})
+
+// Wave 7 — caso Roberto Barros: "Nacionalidade" precisa virar interest_confirmed antes do gate
+Deno.test('caso Roberto Barros: resposta "Nacionalidade" mapeia para enum válido', () => {
+  const detected = extractInterestFromMessage('Nacionalidade')
+  assert(detected !== null, 'deveria detectar interesse')
+  assertEquals(detected, 'NACIONALIDADE_RESIDENCIA')
 })

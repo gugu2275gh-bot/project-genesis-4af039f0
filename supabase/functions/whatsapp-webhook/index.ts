@@ -287,7 +287,7 @@ import {
 export { scoreTopicFileName }
 
 // extractNameAndEmail / extractTextFromOpenAIResponse moved to lib/extract.ts and lib/ai.ts (Wave 3b)
-import { extractNameAndEmail, extractReferralSource, extractAndSuggestContactData } from './lib/extract.ts'
+import { extractNameAndEmail, extractReferralSource, extractAndSuggestContactData, extractInterestFromMessage } from './lib/extract.ts'
 import { extractTextFromOpenAIResponse } from './lib/ai.ts'
 
 
@@ -1540,6 +1540,26 @@ Regras:
           && (!leadInterest?.service_interest
             || ['SEM_SERVICO', 'OUTRO', ''].includes(String(leadInterest.service_interest).toUpperCase()))
 
+        // Wave 7: capturar interesse a partir de resposta livre à pergunta INTERESSE.
+        // Sem isto, o cadastro fica "eternamente aberto" e a KB nunca é liberada.
+        try {
+          const askedInterest = lastAssistantQuestion && /me conta com calma|cu[eé]ntame con calma|tell me what.*looking for|busca hoje/i.test(lastAssistantQuestion)
+          if (serviceMissing && askedInterest && rawCustomerMessage) {
+            const detectedInterest = extractInterestFromMessage(rawCustomerMessage)
+            if (detectedInterest) {
+              await supabase
+                .from('leads')
+                .update({ service_interest: detectedInterest, interest_confirmed: true, updated_at: new Date().toISOString() })
+                .eq('id', lead.id)
+              leadInterest = { ...(leadInterest || {}), service_interest: detectedInterest }
+              serviceMissing = false
+              console.log(`[INTEREST_CAPTURE] "${rawCustomerMessage}" -> ${detectedInterest}`)
+            }
+          }
+        } catch (capErr) {
+          console.warn('[INTEREST_CAPTURE] non-blocking error:', capErr instanceof Error ? capErr.message : capErr)
+        }
+
         // Wave 6 (anti-repetição em divergência): sincronizar IMEDIATAMENTE o funil
         // com o que já está em contacts/leads. Isso garante que o Gate use o funil
         // persistido como única fonte de verdade e nunca reabra etapas confirmadas
@@ -1708,9 +1728,41 @@ Regras:
         const flowComplete = !nextStep // todas as 7 primeiras etapas concluídas → KB liberada
         const collectionGateActive = !flowComplete
 
+        // Wave 7: detectar pergunta factual do cliente.
+        const isFactualQuestion = !!rawCustomerMessage && (
+          /\?/.test(rawCustomerMessage)
+          || /\b(como|quanto|qual|quais|quanto custa|preciso|posso|onde|quando|cu[áa]nto|c[óo]mo|d[óo]nde|how|what|where|when|how much)\b/i.test(rawCustomerMessage)
+        )
+
+        // Wave 7: durante o cadastro, MEMORIZAR a pergunta factual para responder
+        // assim que o cadastro terminar. Após o cadastro, RECUPERAR a pergunta pendente
+        // e usá-la como query da KB no lugar (ou em adição) à mensagem atual.
+        let pendingQuestionToAnswer: string | null = null
+        try {
+          if (collectionGateActive && isFactualQuestion && !funnelStateLive.pending_question) {
+            await supabase
+              .from('lead_funnel_state')
+              .update({ pending_question: rawCustomerMessage, updated_at: new Date().toISOString() })
+              .eq('lead_id', lead.id)
+            funnelStateLive = { ...funnelStateLive, pending_question: rawCustomerMessage }
+            console.log(`[PENDING_Q] saved during cadastro: "${rawCustomerMessage}"`)
+          } else if (!collectionGateActive && funnelStateLive.pending_question) {
+            pendingQuestionToAnswer = funnelStateLive.pending_question
+            await supabase
+              .from('lead_funnel_state')
+              .update({ pending_question: null, updated_at: new Date().toISOString() })
+              .eq('lead_id', lead.id)
+            funnelStateLive = { ...funnelStateLive, pending_question: null }
+            console.log(`[PENDING_Q] consumed after cadastro: "${pendingQuestionToAnswer}"`)
+          }
+        } catch (pqErr) {
+          console.warn('[PENDING_Q] non-blocking error:', pqErr instanceof Error ? pqErr.message : pqErr)
+        }
+
         const kbQueryParts: string[] = []
         if (topicHint) kbQueryParts.push(`Tópico: ${topicHint}`)
         if (lastAssistantQuestion) kbQueryParts.push(`Pergunta anterior do agente: ${lastAssistantQuestion}`)
+        if (pendingQuestionToAnswer) kbQueryParts.push(`Pergunta pendente do cliente (feita antes durante o cadastro): ${pendingQuestionToAnswer}`)
         if (rawCustomerMessage) kbQueryParts.push(`Pergunta do cliente: ${rawCustomerMessage}`)
         const kbQuery = kbQueryParts.join('\n').trim() || (rawCustomerMessage || messageForAI || '').trim()
 
@@ -1753,6 +1805,9 @@ Regras:
               `2. NÃO envie o Handoff ("Vou encaminhar suas informações..." / "Vou te encaminhar para um atendente") automaticamente. Só envie o Handoff quando o cliente sinalizar que NÃO TEM MAIS DÚVIDAS (ex.: "é só isso", "obrigado", "ok") OU pedir explicitamente para falar com um humano.\n` +
               `3. Se o cliente acabou de receber o Pré-Handoff e ainda não fez perguntas, convide-o gentilmente: "Tem alguma dúvida que eu possa esclarecer agora sobre seu caso?".\n` +
               `4. Se a KB realmente não tiver a informação, diga honestamente que vai confirmar com o especialista — mas NÃO faça o handoff por isso, continue disponível para outras dúvidas.\n` +
+              (pendingQuestionToAnswer
+                ? `5. PRIORIDADE MÁXIMA: o cliente havia feito esta pergunta DURANTE o cadastro e ficou aguardando: "${pendingQuestionToAnswer}". Responda-a AGORA, com base na KB, antes de qualquer outra coisa. Comece com algo como "Como prometi, sobre sua dúvida..." e responda objetivamente.\n`
+                : '') +
               `[FIM DO MODO TIRA-DÚVIDAS]`
           }
         }

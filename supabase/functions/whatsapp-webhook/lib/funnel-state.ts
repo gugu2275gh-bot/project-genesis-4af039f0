@@ -23,6 +23,8 @@ export interface FunnelState {
   outside_spain_progress: Record<string, unknown>
   last_step_change: string
   updated_at: string
+  /** Pergunta factual feita pelo cliente DURANTE o cadastro, a ser respondida assim que o cadastro terminar. */
+  pending_question?: string | null
 }
 
 export type NameSource = 'AUTO' | 'USER_CONFIRMED' | 'STAFF_EDITED'

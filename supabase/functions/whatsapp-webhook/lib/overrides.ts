@@ -38,6 +38,10 @@ export function lockConfirmedFieldsInResponse(
   },
 ): string {
   if (!aiResponse) return aiResponse
+  // Wave 7: se cadastro está COMPLETO, o lock é no-op — KB/tira-dúvidas livre.
+  if (flags.nameKnown && flags.emailKnown && flags.interestKnown && flags.locationKnown) {
+    return aiResponse
+  }
   const q = extractLastQuestion(aiResponse)
   if (!q) return aiResponse
   const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
