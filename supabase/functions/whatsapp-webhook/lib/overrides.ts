@@ -21,6 +21,58 @@ import {
   getLocationQuestion,
 } from './questions.ts'
 
+/**
+ * Wave 6: Trava determinística pós-IA.
+ * Se a resposta da IA contém pergunta sobre dado JÁ CONFIRMADO (nome/email/interesse),
+ * substitui por pergunta da próxima etapa real PENDENTE — sem nova chamada ao modelo.
+ * Garante que mesmo após divergência do cliente, dados confirmados nunca são re-perguntados.
+ */
+export function lockConfirmedFieldsInResponse(
+  aiResponse: string,
+  language: ChatLanguage,
+  flags: {
+    nameKnown: boolean
+    emailKnown: boolean
+    interestKnown: boolean
+    locationKnown: boolean
+  },
+): string {
+  if (!aiResponse) return aiResponse
+  const q = extractLastQuestion(aiResponse)
+  if (!q) return aiResponse
+  const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
+
+  const nextPending = (): string => {
+    if (!flags.nameKnown) return '' // não devemos remover; deixa fluir
+    if (!flags.emailKnown) return getEmailQuestion(language)
+    if (!flags.interestKnown) {
+      if (language === 'es') return 'Cuéntame con calma: ¿qué buscas hoy? Puede ser nacionalidad, residencia, estudios, arraigo o algún documento específico.'
+      if (language === 'en') return 'Tell me what you are looking for today: nationality, residence, studies, arraigo or a specific document.'
+      if (language === 'fr') return 'Dites-moi ce que vous cherchez aujourd’hui: nationalité, résidence, études, arraigo ou un document spécifique.'
+      return 'Me conta com calma: o que você busca hoje? Pode ser nacionalidade, residência, estudos, arraigo ou algum documento específico.'
+    }
+    if (!flags.locationKnown) return getLocationQuestion(language)
+    return ''
+  }
+
+  const replaceWithNext = (): string => {
+    const next = nextPending()
+    if (!next) return preamble || aiResponse
+    return preamble ? `${preamble}\n${next}` : next
+  }
+
+  if (flags.nameKnown && isQuestionAboutFullName(q)) {
+    return replaceWithNext()
+  }
+  if (flags.emailKnown && isQuestionAboutEmail(q)) {
+    return replaceWithNext()
+  }
+  if (flags.interestKnown && isQuestionAboutInterest(q)) {
+    return replaceWithNext()
+  }
+  return aiResponse
+}
+
 export function forceSkipFullNameIfAlreadyKnown(
   aiResponse: string,
   language: ChatLanguage,
