@@ -10,6 +10,7 @@ for (const key of [
 
 import { assert, assertEquals, assertStringIncludes } from 'https://deno.land/std@0.224.0/assert/mod.ts'
 import { lockConfirmedFieldsInResponse } from './lib/overrides.ts'
+import { extractInterestFromMessage } from './lib/extract.ts'
 
 const flagsAll = { nameKnown: true, emailKnown: true, interestKnown: true, locationKnown: false }
 
