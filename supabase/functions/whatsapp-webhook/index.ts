@@ -1843,6 +1843,49 @@ Regras:
         if (aiResponse) {
           aiResponse = removeRepeatedQuestionIntro(lastAssistantMessage, aiResponse)
 
+          // Wave 5 (F4): dedup do bloco de catálogo. Se a resposta repete quase
+          // literalmente uma das últimas 3 mensagens do assistente, força uma
+          // nova geração com instrução de paráfrase + avanço.
+          try {
+            const lastThreeAssistant = history.filter((m) => m.role === 'assistant').slice(-3).map((m) => String(m.content || ''))
+            const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+            const aiNorm = norm(aiResponse)
+            const overlap = (a: string, b: string): number => {
+              if (!a || !b) return 0
+              const aw = new Set(a.split(' ').filter((w) => w.length > 3))
+              const bw = b.split(' ').filter((w) => w.length > 3)
+              if (!aw.size || !bw.length) return 0
+              let hits = 0
+              for (const w of bw) if (aw.has(w)) hits++
+              return hits / Math.max(aw.size, bw.length)
+            }
+            const isCatalogEcho = lastThreeAssistant.some((prev) => {
+              const sim = overlap(norm(prev), aiNorm)
+              return sim >= 0.7 && /(cidadania|n[óo]made|residencia|residências|nie|tie|homologa|reagrupa|ciudadan|nationality)/i.test(prev) && /(cidadania|n[óo]made|residencia|residências|nie|tie|homologa|reagrupa|ciudadan|nationality)/i.test(aiResponse)
+            })
+            if (isCatalogEcho) {
+              console.warn('[F4] Catálogo repetido detectado — gerando paráfrase com avanço')
+              try {
+                const paraphraseResp = await generateAIResponse(
+                  history,
+                  messageForAI,
+                  `${resolvedSystemPrompt}\n\n## INSTRUÇÃO ANTI-REPETIÇÃO DE CATÁLOGO\nA frase do catálogo de serviços JÁ FOI ENVIADA recentemente. NÃO repita o catálogo. Confirme em UMA frase curta o interesse do cliente e AVANCE imediatamente para a PRÓXIMA pergunta pendente do roteiro.`,
+                  geminiApiKey,
+                  knowledgeContext,
+                  detectedChatLanguage,
+                )
+                if (paraphraseResp && norm(paraphraseResp) !== aiNorm) {
+                  aiResponse = paraphraseResp
+                  aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
+                  aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
+                  aiResponse = removeRepeatedQuestionIntro(lastAssistantMessage, aiResponse)
+                }
+              } catch (paraErr) {
+                console.error('[F4] Paraphrase retry failed:', paraErr instanceof Error ? paraErr.message : paraErr)
+              }
+            }
+          } catch (_) { /* dedup is best-effort */ }
+
           // R9: Single per-turn structured log for auditability
           try {
             console.log('[TURN]', JSON.stringify({
