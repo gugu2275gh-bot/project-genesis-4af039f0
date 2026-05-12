@@ -2432,12 +2432,35 @@ Regras:
           && (!leadInterest?.service_interest
             || ['SEM_SERVICO', 'OUTRO', ''].includes(String(leadInterest.service_interest).toUpperCase()))
 
-        // Detecção de localização (Espanha vs fora) a partir da resposta do cliente
-        const userInSpain = userSaid(/\b(estou|estoy|moro|vivo|aqui)\b.*\b(espanha|espa[ñn]a|spain)\b/i)
-          || userSaid(/^\s*(sim|si|s[ií]|yes)\b.*espa/i)
-          || userSaid(/\bj[áa] estou (na |em |aqui)/i)
-        const userOutsideSpain = userSaid(/\b(brasil|portugal|argentina|m[ée]xico|colombia|ainda n[ãa]o|todav[ií]a no|fora|outro pa[ií]s|other country)\b/i)
-          && !userInSpain
+        // Detecção de localização: buscar a RESPOSTA imediatamente após a pergunta de localização
+        // (não varrer histórico inteiro, que pode incluir menções a "Espanha" no contexto de interesse).
+        const locQuestionRe = /\b(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|em outro pa[íi]s|en otro pa[íi]s)\b/i
+        let locationAnswer = ''
+        for (let i = 0; i < history.length - 1; i++) {
+          const m = history[i]
+          if (m.role === 'assistant' && locQuestionRe.test(m.content)) {
+            // Pega a próxima mensagem do usuário
+            for (let j = i + 1; j < history.length; j++) {
+              if (history[j].role === 'user') {
+                locationAnswer = String(history[j].content || '')
+                break
+              }
+            }
+            break
+          }
+        }
+        const ans = locationAnswer.toLowerCase()
+        const userOutsideSpain = !!ans && (
+          /\b(brasil|portugal|argentina|m[ée]xico|mexico|colombia|chile|uruguai|uruguay|venezuela|estados unidos|eua|usa)\b/i.test(ans)
+          || /\b(ainda n[ãa]o|todav[ií]a no|n[ãa]o (estou|moro)|no (estoy)|fora|outro pa[ií]s|other country|other)\b/i.test(ans)
+          || /\b(em outro|en otro)\b/i.test(ans)
+          || /^\s*(n[ãa]o|no|nope)\b/i.test(ans)
+        )
+        const userInSpain = !!ans && !userOutsideSpain && (
+          /\b(estou|estoy|moro|vivo|j[áa] estou|ya estoy)\b/i.test(ans)
+          || /\b(espanha|espa[ñn]a|spain|aqui|aquí|here)\b/i.test(ans)
+          || /^\s*(sim|si|s[ií]|yes|yep)\b/i.test(ans)
+        )
 
         // Definição das 8 etapas do roteiro (na ordem)
         type Step = {
