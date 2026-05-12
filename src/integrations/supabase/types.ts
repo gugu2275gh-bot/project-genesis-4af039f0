@@ -1440,6 +1440,7 @@ export type Database = {
           location_known: string | null
           name_confirmed: boolean
           outside_spain_progress: Json
+          pending_question: string | null
           step: string
           updated_at: string
         }
@@ -1453,6 +1454,7 @@ export type Database = {
           location_known?: string | null
           name_confirmed?: boolean
           outside_spain_progress?: Json
+          pending_question?: string | null
           step?: string
           updated_at?: string
         }
@@ -1466,6 +1468,7 @@ export type Database = {
           location_known?: string | null
           name_confirmed?: boolean
           outside_spain_progress?: Json
+          pending_question?: string | null
           step?: string
           updated_at?: string
         }
