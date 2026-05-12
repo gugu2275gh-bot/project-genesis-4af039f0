@@ -543,6 +543,45 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       }
     }
 
+    // ========== AUTO-TRANSCRIBE AUDIO/PTT (early, before any text-based processing) ==========
+    // The transcription replaces the message body so the AI agent receives the spoken
+    // content as if it had been typed by the customer.
+    let transcribedText: string | null = null
+    if ((mediaType === 'audio' || mediaType === 'ptt') && storedMediaUrl) {
+      try {
+        console.log('Auto-transcribing audio (early stage) from:', storedMediaUrl)
+        const transcribeResponse = await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/transcribe-audio`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify({ audioUrl: storedMediaUrl }),
+          }
+        )
+        if (transcribeResponse.ok) {
+          const transcribeResult = await transcribeResponse.json()
+          const t = (transcribeResult?.transcription || '').trim()
+          if (t && t !== '[áudio inaudível]') {
+            transcribedText = t
+            console.log('Transcription captured:', t.substring(0, 200))
+          } else {
+            console.warn('Transcription empty or inaudible:', t)
+          }
+        } else {
+          console.warn('Auto-transcription failed:', transcribeResponse.status)
+        }
+      } catch (transcribeErr) {
+        console.error('Auto-transcription error (non-blocking):', transcribeErr instanceof Error ? transcribeErr.message : transcribeErr)
+      }
+    }
+
+    // effectiveBody: what the AI agent and downstream extractors should treat as the user's text.
+    // For audio messages, this is the transcription. For text messages, it's the original body.
+    const effectiveBody: string = (transcribedText || message.body || '').trim()
+
     const phoneNumber = message.from.replace(/\D/g, '')
     console.log('Processing message from:', phoneNumber)
 
