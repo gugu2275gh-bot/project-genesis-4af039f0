@@ -257,244 +257,30 @@ async function getConversationHistory(
   return history
 }
 
-const INVALID_KNOWLEDGE_PATTERNS = [
-  /unable to extract text from pdf/i,
-  /cannot extract text from pdf/i,
-  /can't extract text from pdf/i,
-  /i\s*(?:am|'m)\s*unable to extract/i,
-  /forne[çc]a o texto/i,
-  /provide the text or key points/i,
-  /não (?:consigo|foi possível) extrair/i,
-]
+// INVALID_KNOWLEDGE_PATTERNS / isInvalidKnowledgeChunk moved to lib/kb.ts (Wave 3b step 3)
 
-function isInvalidKnowledgeChunk(content: string): boolean {
-  const normalized = content.trim()
-  if (!normalized) return true
-  return INVALID_KNOWLEDGE_PATTERNS.some((pattern) => pattern.test(normalized))
-}
+import {
+  normalizeForSearch,
+  SEARCH_STOPWORDS,
+  meaningfulSearchTokens,
+  compactSearchText,
+  extractLastQuestion,
+  extractTextBeforeLastQuestion,
+  areQuestionsEquivalent,
+  removeRepeatedQuestionIntro,
+} from './lib/text-utils.ts'
 
-function normalizeForSearch(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-}
+export { extractLastQuestion, extractTextBeforeLastQuestion, areQuestionsEquivalent }
 
-const SEARCH_STOPWORDS = new Set([
-  'ok', 'pdf', 'para', 'por', 'com', 'sem', 'uma', 'das', 'dos', 'de', 'da', 'do', 'del', 'el', 'la',
-  'desde', 'pais', 'origem', 'mais', 'menos', 'ano', 'anos', 'todas', 'todo', 'toda', 'sobre',
-  'queria', 'quero', 'gostaria', 'saber', 'como', 'dar', 'entrada', 'informacao', 'informacoes',
-])
+import {
+  scoreTopicFileName,
+  isInvalidKnowledgeChunk,
+  extractGeminiText,
+  detectKnowledgeTopicHint,
+  getKnowledgeBaseContext,
+} from './lib/kb.ts'
 
-function meaningfulSearchTokens(text: string): string[] {
-  return normalizeForSearch(text)
-    .split(/\s+/)
-    .filter((token) => token.length > 2 && !SEARCH_STOPWORDS.has(token))
-}
-
-function compactSearchText(text: string): string {
-  return meaningfulSearchTokens(text).join(' ')
-}
-
-export function scoreTopicFileName(fileName: string, hintOrConversation: string): number {
-  const fileTokens = meaningfulSearchTokens(fileName)
-  if (!fileTokens.length) return 0
-
-  const normalizedTarget = normalizeForSearch(hintOrConversation)
-  const compactTarget = compactSearchText(hintOrConversation)
-  const compactFile = fileTokens.join(' ')
-  const hits = fileTokens.filter((token) => normalizedTarget.includes(token)).length
-  if (hits === 0) return 0
-
-  // R6: lexical filename match acts as a TIEBREAKER, not as a strong boost.
-  // Semantic search (embeddings) is the primary signal; we only nudge when the
-  // file name is a near-exact phrase match.
-  const phraseBonus = compactTarget.includes(compactFile) ? 3 : 0
-  const coverage = hits / fileTokens.length
-  const extraPenalty = Math.max(0, fileTokens.length - hits) * 0.2
-  return hits + phraseBonus + coverage - extraPenalty
-}
-
-function extractGeminiText(data: any): string {
-  const parts = data?.candidates?.[0]?.content?.parts
-  if (!Array.isArray(parts)) return ''
-  return parts.map((part: any) => part?.text || '').join('').trim()
-}
-
-async function detectKnowledgeTopicHint(
-  supabase: ReturnType<typeof createClient>,
-  conversationText: string,
-): Promise<string> {
-  if (!conversationText.trim()) return ''
-
-  const { data: rows, error } = await supabase
-    .from('knowledge_base')
-    .select('file_name')
-    .eq('is_active', true)
-
-  if (error || !rows?.length) return ''
-
-  const uniqueFileNames = Array.from(new Set(rows.map((row: any) => row.file_name).filter(Boolean)))
-  const ranked = uniqueFileNames
-    .map((fileName) => ({ fileName, score: scoreTopicFileName(fileName, conversationText) }))
-    .filter((item) => item.score >= 2)
-    .sort((a, b) => b.score - a.score || meaningfulSearchTokens(a.fileName).length - meaningfulSearchTokens(b.fileName).length)
-
-  if (ranked[0]) {
-    console.log(`[KB] Detected topic from conversation: ${ranked[0].fileName} (${ranked[0].score.toFixed(2)})`)
-    return ranked[0].fileName
-  }
-
-  return ''
-}
-
-/** Generate an OpenAI embedding for a query (text-embedding-3-small, 1536 dim) */
-async function generateQueryEmbedding(
-  supabase: ReturnType<typeof createClient>,
-  query: string,
-): Promise<number[] | null> {
-  let apiKey = Deno.env.get('OPENAI_API_KEY')
-  if (!apiKey) {
-    const { data: configKey } = await supabase
-      .from('system_config')
-      .select('value')
-      .eq('key', 'openai_api_key')
-      .single()
-    apiKey = configKey?.value || null
-  }
-  if (!apiKey) return null
-  try {
-    const res = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'text-embedding-3-small',
-        input: query.slice(0, 4000),
-      }),
-    })
-    if (!res.ok) {
-      console.error('Query embedding failed:', res.status, await res.text())
-      return null
-    }
-    const data = await res.json()
-    return data?.data?.[0]?.embedding ?? null
-  } catch (err) {
-    console.error('Query embedding error:', err)
-    return null
-  }
-}
-
-/** Retrieve relevant knowledge base content for the AI context (semantic + lexical fallback) */
-async function getKnowledgeBaseContext(
-  supabase: ReturnType<typeof createClient>,
-  userMessage: string,
-  topicHint?: string,
-): Promise<string> {
-  const normalizedHint = topicHint ? normalizeForSearch(topicHint) : ''
-  // Preload topic-matched chunks (used as a *boost*, not as a hard lock — the agent
-  // must still be able to answer about other services if the question shifts).
-  let topicPreloaded: Array<{ content: string; file_name: string; chunk_index: number }> = []
-  if (normalizedHint) {
-    const { data: topicEntries } = await supabase
-      .from('knowledge_base')
-      .select('content, file_name, chunk_index')
-      .eq('is_active', true)
-      .order('file_name')
-      .order('chunk_index')
-
-    const validTopicEntries = (topicEntries || []).filter((entry) => !isInvalidKnowledgeChunk(entry.content))
-    const bestTopic = Array.from(new Set(validTopicEntries.map((entry) => entry.file_name).filter(Boolean)))
-      .map((fileName) => ({ fileName, score: scoreTopicFileName(fileName, topicHint || '') }))
-      .filter((item) => item.score >= 2)
-      .sort((a, b) => b.score - a.score || meaningfulSearchTokens(a.fileName).length - meaningfulSearchTokens(b.fileName).length)[0]
-
-    if (bestTopic) {
-      topicPreloaded = validTopicEntries.filter((entry) => entry.file_name === bestTopic.fileName).slice(0, 6)
-      console.log(`[KB] Topic preload ${bestTopic.fileName} (${bestTopic.score.toFixed(2)}): ${topicPreloaded.length} chunks (will be merged with semantic)`)
-    }
-  }
-
-  // 1) Try semantic search first
-  const queryEmbedding = await generateQueryEmbedding(supabase, userMessage)
-  if (queryEmbedding) {
-    const { data: semanticMatches, error: semErr } = await supabase.rpc('match_knowledge_base', {
-      query_embedding: queryEmbedding as unknown as string,
-      match_count: 8,
-      similarity_threshold: 0.3,
-    })
-    if (!semErr && Array.isArray(semanticMatches) && semanticMatches.length > 0) {
-      let valid = semanticMatches.filter((entry: any) => !isInvalidKnowledgeChunk(entry.content))
-      if (valid.length > 0) {
-        // Boost chunks whose file_name matches the topic hint (e.g. "Residencia para Practicas")
-        if (normalizedHint) {
-          const hintTokens = normalizedHint.split(/\s+/).filter((w) => w.length > 3)
-          valid = valid
-            .map((chunk: any) => {
-              const fname = normalizeForSearch(chunk.file_name || '')
-              const hits = hintTokens.reduce((acc, t) => acc + (fname.includes(t) ? 1 : 0), 0)
-              const boost = hits >= 2 ? 0.25 : hits === 1 ? 0.1 : 0
-              return { ...chunk, similarity: (chunk.similarity || 0) + boost, _boost: boost }
-            })
-            .sort((a: any, b: any) => b.similarity - a.similarity)
-        }
-        const top3 = valid.slice(0, 3).map((c: any) => `${c.file_name}#${c.chunk_index}=${c.similarity?.toFixed(3)}${c._boost ? `(+${c._boost})` : ''}`).join(' | ')
-        console.log(`[KB] Semantic returned ${valid.length} chunks. Top3: ${top3}`)
-        // Put topic-preloaded chunks first so the canonical service document cannot be
-        // truncated behind generic/semantic matches (e.g. "nacionalidade espanhola").
-        const seen = new Set(topicPreloaded.map((c) => `${c.file_name}#${c.chunk_index}`))
-        const semanticRest = valid.filter((c: any) => !seen.has(`${c.file_name}#${c.chunk_index}`))
-        const merged = [
-          ...topicPreloaded.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Tópico]\n${c.content}`),
-          ...semanticRest.map((c: any) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Sim: ${c.similarity?.toFixed(2)}]\n${c.content}`),
-        ]
-        return merged.join('\n\n').substring(0, 9000)
-      }
-    }
-    if (semErr) console.error('[KB] Semantic search error:', semErr)
-  }
-
-  // 2) Fallback to lexical keyword search (covers chunks without embeddings)
-  console.log('[KB] Falling back to lexical search')
-  const { data: kbEntries } = await supabase
-    .from('knowledge_base')
-    .select('content, file_name, chunk_index')
-    .eq('is_active', true)
-    .order('file_name')
-    .order('chunk_index')
-
-  if (!kbEntries?.length) return ''
-
-  const validEntries = kbEntries.filter((entry) => !isInvalidKnowledgeChunk(entry.content))
-  if (!validEntries.length) return ''
-
-  const normalizedQuestion = normalizeForSearch(userMessage)
-  const keywords = normalizedQuestion.split(/\s+/).filter((w) => w.length > 2)
-
-  const scoredChunks = validEntries.map((entry) => {
-    const normalizedContent = normalizeForSearch(entry.content)
-    const keywordScore = keywords.reduce((acc, kw) => acc + (normalizedContent.includes(kw) ? 1 : 0), 0)
-    const phraseBonus = normalizedContent.includes(normalizedQuestion) ? 5 : 0
-    return { ...entry, score: keywordScore + phraseBonus }
-  })
-
-  const relevant = scoredChunks
-    .filter((chunk) => chunk.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 8)
-
-  const selected = relevant.length > 0 ? relevant : validEntries.slice(0, 8)
-  const seen = new Set(topicPreloaded.map((c) => `${c.file_name}#${c.chunk_index}`))
-  const lexicalRest = selected.filter((c) => !seen.has(`${c.file_name}#${c.chunk_index}`))
-
-  return [
-    ...topicPreloaded.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Tópico]\n${c.content}`),
-    ...lexicalRest.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index}]\n${c.content}`),
-  ].join('\n\n').substring(0, 9000)
-}
+export { scoreTopicFileName }
 
 /** Try to extract name and email from a client message */
 function extractNameAndEmail(text: string): { name: string | null; email: string | null } {
@@ -598,94 +384,22 @@ function extractTextFromOpenAIResponse(data: Record<string, unknown>): string {
   return ''
 }
 
-type ChatLanguage = 'pt-BR' | 'es' | 'en' | 'fr'
+import {
+  type ChatLanguage,
+  detectChatLanguage,
+  getLanguageDirective,
+  getTransientErrorReply,
+  normalizeForLanguageChecks,
+  looksPortuguese,
+  getLanguageName,
+} from './lib/language.ts'
 
-export function detectChatLanguage(text: string): ChatLanguage {
-  const sample = text.toLowerCase().normalize('NFC')
+export { detectChatLanguage }
+export type { ChatLanguage }
 
-  // Strong Spanish signals (must run BEFORE Portuguese to avoid false positives like
-  // "española" matching \bola\b because ñ is not a JS word-character).
-  if (/[¿¡ñ]/.test(sample) || /\b(hola|gracias|nombre|correo|quiero|necesito|estoy|espa[nñ]ola?|puedes|puede|ayuda|cu[aá]l|gustar[ií]a|me gusta|en mi|mi nacionalidad|por favor)\b/u.test(sample)) {
-    return 'es'
-  }
 
-  // Strong Portuguese signal — uses 'u' flag so ñ is treated as a word char and
-  // doesn't create false word boundaries inside Spanish words.
-  if (/\b(ol[aá]|oi|obrigad[oa]|voc[eê]|n[aã]o|sim|meu|minha|nome|email|telefone|cpf|cnpj|whatsapp|preciso|quero|estou|tudo bem|bom dia|boa tarde|boa noite|valeu|brasil|portugu[eê]s|espanha)\b/u.test(sample) || /[ãõ]/.test(sample)) {
-    return 'pt-BR'
-  }
-
-  // French requires explicit French words — accents alone are too ambiguous (PT/ES also use them)
-  if (/\b(bonjour|bonsoir|salut|merci|s'il vous pla[iî]t|courriel|besoin|aide|espagne|comment|quel|quelle|oui|non|je suis|j'ai|monsieur|madame)\b/.test(sample)) {
-    return 'fr'
-  }
-
-  if (/\b(hello|hi|thanks|thank you|name|email|need|help|spain|how|what|can you|please|good morning|good evening)\b/.test(sample)) {
-    return 'en'
-  }
-
-  return 'pt-BR'
-}
-
-function getLanguageDirective(language: ChatLanguage): string {
-  if (language === 'es') return 'RESPONDA EXCLUSIVAMENTE EM ESPANHOL. NÃO use português.'
-  if (language === 'en') return 'RESPOND EXCLUSIVELY IN ENGLISH. DO NOT use Portuguese.'
-  if (language === 'fr') return 'RÉPONDEZ EXCLUSIVEMENT EN FRANÇAIS. N’utilisez pas le portugais.'
-  return 'RESPONDA EXCLUSIVAMENTE EM PORTUGUÊS DO BRASIL.'
-}
-
-function getTransientErrorReply(language: ChatLanguage): string {
-  if (language === 'es') return 'Perdón, tuve una inestabilidad para responder ahora. ¿Puedes enviarme tu pregunta nuevamente en texto?'
-  if (language === 'en') return 'Sorry, I had a temporary issue responding just now. Could you send your question again in text?'
-  if (language === 'fr') return 'Désolé, j’ai eu une instabilité temporaire pour répondre. Pouvez-vous renvoyer votre question en texte ?'
-  return 'Desculpe, tive uma instabilidade agora para responder. Pode me enviar novamente sua pergunta em texto?'
-}
-
-function normalizeForLanguageChecks(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-export function extractLastQuestion(text: string): string {
-  const matches = text.match(/[^?\n]*\?/g)
-  return matches?.map((item) => item.trim()).filter(Boolean).at(-1) || ''
-}
-
-export function extractTextBeforeLastQuestion(text: string): string {
-  const lastQuestion = extractLastQuestion(text)
-  if (!lastQuestion) return text.trim()
-
-  const questionIndex = text.lastIndexOf(lastQuestion)
-  if (questionIndex === -1) return text.trim()
-
-  return text.slice(0, questionIndex).trim()
-}
-
-function removeRepeatedQuestionIntro(
-  previousAssistantMessage: string,
-  aiResponse: string,
-): string {
-  const previousQuestion = extractLastQuestion(previousAssistantMessage)
-  const nextQuestion = extractLastQuestion(aiResponse)
-
-  if (!previousQuestion || !nextQuestion || areQuestionsEquivalent(previousQuestion, nextQuestion)) {
-    return aiResponse
-  }
-
-  const previousIntro = extractTextBeforeLastQuestion(previousAssistantMessage)
-  const nextIntro = extractTextBeforeLastQuestion(aiResponse)
-
-  if (!previousIntro || !nextIntro) return aiResponse
-
-  if (!areQuestionsEquivalent(previousIntro, nextIntro)) return aiResponse
-
-  return aiResponse.slice(aiResponse.lastIndexOf(nextQuestion)).trim()
-}
+// extractLastQuestion / extractTextBeforeLastQuestion / removeRepeatedQuestionIntro
+// moved to lib/text-utils.ts (Wave 3b step 2)
 
 function isStructuredQuestionAnswer(text: string): boolean {
   const sample = normalizeForLanguageChecks(text)
@@ -1016,16 +730,8 @@ export function forceAdvanceFromInterestQuestion(
   return aiResponse
 }
 
-export function areQuestionsEquivalent(first: string, second: string): boolean {
-  const normalizedFirst = normalizeForLanguageChecks(first)
-  const normalizedSecond = normalizeForLanguageChecks(second)
+// areQuestionsEquivalent moved to lib/text-utils.ts (Wave 3b step 2)
 
-  if (!normalizedFirst || !normalizedSecond) return false
-
-  return normalizedFirst === normalizedSecond
-    || normalizedFirst.includes(normalizedSecond)
-    || normalizedSecond.includes(normalizedFirst)
-}
 
 export function isLikelyQuestionLoop(
   conversationHistory: Array<{ role: string; content: string }>,
@@ -1047,42 +753,7 @@ export function isLikelyQuestionLoop(
   return areQuestionsEquivalent(previousQuestion, nextQuestion)
 }
 
-function looksPortuguese(text: string): boolean {
-  const sample = normalizeForLanguageChecks(text)
-  if (!sample) return false
-
-  const strongSignals = [
-    'voce',
-    'voces',
-    'obrigado',
-    'obrigada',
-    'ola',
-    'encaminhar',
-    'atendente',
-    'nome completo',
-    'qual e',
-    'seu nome',
-    'posso te ajudar',
-    'prazo',
-    'equipe',
-    'vou te',
-  ]
-
-  const weakSignals = ['por favor', 'tudo bem', 'aqui na espanha', 'me conta', 'com calma']
-
-  const strongHits = strongSignals.filter((signal) => sample.includes(signal)).length
-  if (strongHits >= 1) return true
-
-  const weakHits = weakSignals.filter((signal) => sample.includes(signal)).length
-  return weakHits >= 2
-}
-
-function getLanguageName(language: ChatLanguage): string {
-  if (language === 'es') return 'espanhol'
-  if (language === 'en') return 'inglês'
-  if (language === 'fr') return 'francês'
-  return 'português do Brasil'
-}
+// looksPortuguese / getLanguageName moved to lib/language.ts (Wave 3b step 1)
 
 function getMediaPlaceholder(mediaType: string, language: ChatLanguage): string {
   const mediaNames: Record<ChatLanguage, Record<string, string>> = {
