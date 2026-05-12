@@ -2447,7 +2447,6 @@ Regras:
         // Detecção de campos básicos já capturados
         const nameMissing = !contact.full_name
           || /^WhatsApp\s/i.test(contact.full_name)
-          || contact.full_name === message.name
         const emailMissing = !contact.email
         const serviceMissing = !leadInterest?.service_type_id
           && (!leadInterest?.service_interest
