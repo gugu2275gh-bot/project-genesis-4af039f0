@@ -1294,11 +1294,14 @@ Regras:
           const updateData: Record<string, string> = {}
           if (extracted.name && (contact.full_name.startsWith('WhatsApp ') || contact.full_name === message.name)) {
             updateData.full_name = extracted.name
+            updateData.name_source = 'USER_CONFIRMED'
             contact.full_name = extracted.name
+            contact.name_source = 'USER_CONFIRMED'
             console.log('Extracted and updating name:', extracted.name)
           }
           if (extracted.email) {
             updateData.email = extracted.email
+            contact.email = extracted.email
             console.log('Extracted and updating email:', extracted.email)
           }
           if (Object.keys(updateData).length > 0) {
