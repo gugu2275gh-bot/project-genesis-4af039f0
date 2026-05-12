@@ -440,8 +440,11 @@ import {
 export {
   FULL_NAME_DENYLIST_PATTERNS,
   isLikelyFullNameAnswer,
+  findExplicitFullNameAnswer,
   forceSkipFullNameIfAlreadyKnown,
   forceReaskEmailIfMissing,
+  forceAdvanceFromEntryDateQuestion,
+  forceAdvanceFromInterestQuestion,
   isLikelyQuestionLoop,
   getOutsideSpainAgeQuestion,
   getEmailReaskQuestion,
