@@ -1805,6 +1805,9 @@ Regras:
               `2. NÃO envie o Handoff ("Vou encaminhar suas informações..." / "Vou te encaminhar para um atendente") automaticamente. Só envie o Handoff quando o cliente sinalizar que NÃO TEM MAIS DÚVIDAS (ex.: "é só isso", "obrigado", "ok") OU pedir explicitamente para falar com um humano.\n` +
               `3. Se o cliente acabou de receber o Pré-Handoff e ainda não fez perguntas, convide-o gentilmente: "Tem alguma dúvida que eu possa esclarecer agora sobre seu caso?".\n` +
               `4. Se a KB realmente não tiver a informação, diga honestamente que vai confirmar com o especialista — mas NÃO faça o handoff por isso, continue disponível para outras dúvidas.\n` +
+              (pendingQuestionToAnswer
+                ? `5. PRIORIDADE MÁXIMA: o cliente havia feito esta pergunta DURANTE o cadastro e ficou aguardando: "${pendingQuestionToAnswer}". Responda-a AGORA, com base na KB, antes de qualquer outra coisa. Comece com algo como "Como prometi, sobre sua dúvida..." e responda objetivamente.\n`
+                : '') +
               `[FIM DO MODO TIRA-DÚVIDAS]`
           }
         }
