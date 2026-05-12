@@ -910,10 +910,15 @@ function forceSkipFullNameIfAlreadyKnown(
   nameAlreadyKnown: boolean,
   emailMissing: boolean,
 ): string {
-  if (!nameAlreadyKnown) return aiResponse
+  if (!nameAlreadyKnown || !aiResponse) return aiResponse
   const nextQuestion = extractLastQuestion(aiResponse)
   if (!nextQuestion || !isQuestionAboutFullName(nextQuestion)) return aiResponse
-  return emailMissing ? getEmailQuestion(language) : aiResponse
+  // R3 (cumulative override): preserve any preamble from the LLM and only swap the
+  // repeated name question for the next pending question (email or just drop it).
+  const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
+  const replacement = emailMissing ? getEmailQuestion(language) : ''
+  if (!replacement) return preamble || aiResponse
+  return preamble ? `${preamble}\n${replacement}` : replacement
 }
 
 function forceReaskEmailIfMissing(
