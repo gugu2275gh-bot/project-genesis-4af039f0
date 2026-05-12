@@ -2955,6 +2955,25 @@ Regras:
         if (aiResponse) {
           aiResponse = removeRepeatedQuestionIntro(lastAssistantMessage, aiResponse)
 
+          // R9: Single per-turn structured log for auditability
+          try {
+            console.log('[TURN]', JSON.stringify({
+              leadId: lead.id,
+              contactId: contact.id,
+              lang: detectedChatLanguage,
+              gateActive: collectionGateActive,
+              nextStep: nextStep?.key || null,
+              stepsDone: steps.filter(s => s.done).map(s => s.key),
+              dataKnown: { name: !nameMissing, email: !emailMissing, service: !serviceMissing },
+              location: { inSpain: userInSpain, outsideSpain: userOutsideSpain },
+              kbHit: knowledgeContext.length > 0,
+              kbChars: knowledgeContext.length,
+              topicHint: topicHint || null,
+              historyLen: history.length,
+              responseChars: aiResponse.length,
+            }))
+          } catch (_) { /* logging is best-effort */ }
+
           // Send AI response via Twilio (split on "|||" delimiter for multi-message replies)
           try {
             const parts = aiResponse.split('|||').map(p => p.trim()).filter(Boolean)
