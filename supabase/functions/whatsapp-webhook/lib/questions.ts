@@ -57,9 +57,12 @@ export function looksLikeIncompleteEntryDateWithoutYear(text: string): boolean {
   if (isPotentialEntryDateAnswer(text)) return false
 
   const monthName = '(janeiro|fevereiro|marco|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|january|february|march|april|may|june|july|august|september|october|november|december|janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)'
+  const monthAbbr = '(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez|ene|feb|abr|may|jun|jul|ago|sep|oct|nov|dic)'
   return !/\b\d{4}\b/.test(normalized)
-    && (new RegExp(`\\b\\d{1,2}\\s+(de\\s+)?${monthName}\\b`).test(normalized)
-      || /\b\d{1,2}[\/.-]\d{1,2}\b/.test(normalized))
+    && (new RegExp(`\\b\\d{1,2}\\s*(de\\s+|del\\s+|do\\s+)?${monthName}\\b`).test(normalized)
+      || new RegExp(`\\b\\d{1,2}[\\s\\-/.]${monthAbbr}\\b`).test(normalized)
+      || /\b\d{1,2}[\/.-]\d{1,2}\b/.test(normalized)
+      || /\b(no dia|em|el|on|le)\s+\d{1,2}\b/.test(normalized))
 }
 
 export function getEntryDateNeedsYearQuestion(language: ChatLanguage): string {
