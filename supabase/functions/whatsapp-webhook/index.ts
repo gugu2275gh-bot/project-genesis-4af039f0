@@ -878,6 +878,25 @@ function getEmailReaskQuestion(language: ChatLanguage): string {
   return 'Preciso de um e-mail válido para te enviar as orientações. Qual é o seu melhor e-mail? (ex.: nome@gmail.com)'
 }
 
+function getEmailQuestion(language: ChatLanguage): string {
+  if (language === 'es') return 'Gracias. ¿Cuál es el mejor email para enviarte orientaciones y dar seguimiento a tu caso?'
+  if (language === 'en') return 'Thank you. What is the best email to send you guidance and follow up on your case?'
+  if (language === 'fr') return 'Merci. Quel est le meilleur e-mail pour vous envoyer des orientations et suivre votre dossier ?'
+  return 'Obrigado. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?'
+}
+
+function forceSkipFullNameIfAlreadyKnown(
+  aiResponse: string,
+  language: ChatLanguage,
+  nameAlreadyKnown: boolean,
+  emailMissing: boolean,
+): string {
+  if (!nameAlreadyKnown) return aiResponse
+  const nextQuestion = extractLastQuestion(aiResponse)
+  if (!nextQuestion || !isQuestionAboutFullName(nextQuestion)) return aiResponse
+  return emailMissing ? getEmailQuestion(language) : aiResponse
+}
+
 function forceReaskEmailIfMissing(
   previousAssistantMessage: string,
   currentMessage: string,
