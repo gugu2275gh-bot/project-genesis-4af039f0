@@ -76,7 +76,21 @@ export default function Commissions() {
     base_amount: 0,
     has_invoice: false,
     reference_period: '',
+    paid_at: null,
   });
+
+  const selectedContract = contracts.find((c) => c.id === formData.contract_id);
+  const selectedClientName =
+    selectedContract?.opportunities?.leads?.contacts?.full_name || '';
+
+  const handleContractChange = (contractId: string) => {
+    const contract = contracts.find((c) => c.id === contractId);
+    setFormData((prev) => ({
+      ...prev,
+      contract_id: contractId,
+      base_amount: contract?.total_fee ?? prev.base_amount,
+    }));
+  };
 
   const handleSubmit = () => {
     createCommission.mutate(formData, {
@@ -89,6 +103,7 @@ export default function Commissions() {
           base_amount: 0,
           has_invoice: false,
           reference_period: '',
+          paid_at: null,
         });
       },
     });
@@ -275,7 +290,7 @@ export default function Commissions() {
                 <Label>Contrato</Label>
                 <Select 
                   value={formData.contract_id} 
-                  onValueChange={(v) => setFormData({ ...formData, contract_id: v })}
+                  onValueChange={handleContractChange}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione o contrato" />
@@ -290,6 +305,13 @@ export default function Commissions() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {selectedClientName && (
+                <div className="space-y-2">
+                  <Label>Cliente</Label>
+                  <Input value={selectedClientName} disabled />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Tipo</Label>
@@ -319,12 +341,34 @@ export default function Commissions() {
               </div>
 
               <div className="space-y-2">
-                <Label>Valor Base (€)</Label>
+                <Label>Valor Total do Serviço (€)</Label>
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={formData.base_amount}
-                  onChange={(e) => setFormData({ ...formData, base_amount: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ ...formData, base_amount: parseFloat(e.target.value.replace(',', '.')) || 0 })}
+                  placeholder="Auto-preenchido pelo contrato"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Preenchido automaticamente ao selecionar o contrato. Pode ser ajustado.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Data de Pagamento</Label>
+                <Input
+                  type="date"
+                  value={formData.paid_at ? formData.paid_at.substring(0, 10) : ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      paid_at: e.target.value ? new Date(e.target.value).toISOString() : null,
+                    })
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Opcional. Deixe em branco se ainda não foi paga.
+                </p>
               </div>
 
               <div className="space-y-2">
