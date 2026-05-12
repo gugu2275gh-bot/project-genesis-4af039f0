@@ -1008,42 +1008,7 @@ export function isLikelyQuestionLoop(
   return areQuestionsEquivalent(previousQuestion, nextQuestion)
 }
 
-function looksPortuguese(text: string): boolean {
-  const sample = normalizeForLanguageChecks(text)
-  if (!sample) return false
-
-  const strongSignals = [
-    'voce',
-    'voces',
-    'obrigado',
-    'obrigada',
-    'ola',
-    'encaminhar',
-    'atendente',
-    'nome completo',
-    'qual e',
-    'seu nome',
-    'posso te ajudar',
-    'prazo',
-    'equipe',
-    'vou te',
-  ]
-
-  const weakSignals = ['por favor', 'tudo bem', 'aqui na espanha', 'me conta', 'com calma']
-
-  const strongHits = strongSignals.filter((signal) => sample.includes(signal)).length
-  if (strongHits >= 1) return true
-
-  const weakHits = weakSignals.filter((signal) => sample.includes(signal)).length
-  return weakHits >= 2
-}
-
-function getLanguageName(language: ChatLanguage): string {
-  if (language === 'es') return 'espanhol'
-  if (language === 'en') return 'inglês'
-  if (language === 'fr') return 'francês'
-  return 'português do Brasil'
-}
+// looksPortuguese / getLanguageName moved to lib/language.ts (Wave 3b step 1)
 
 function getMediaPlaceholder(mediaType: string, language: ChatLanguage): string {
   const mediaNames: Record<ChatLanguage, Record<string, string>> = {
