@@ -57,6 +57,9 @@ export default function Invoices() {
   const { contracts } = useContracts();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [selectedContractId, setSelectedContractId] = useState<string>('');
+  const [selectedServiceId, setSelectedServiceId] = useState<string>('');
   const [formData, setFormData] = useState<InvoiceInsert>({
     client_name: '',
     service_description: '',
@@ -64,17 +67,79 @@ export default function Invoices() {
     vat_rate: 0.21,
   });
 
-  const handleContractSelect = (contractId: string) => {
-    const contract = contracts.find(c => c.id === contractId);
-    if (contract) {
-      const clientName = contract.opportunities?.leads?.contacts?.full_name || '';
-      setFormData({
-        ...formData,
-        contract_id: contractId,
-        client_name: clientName,
-        amount_without_vat: contract.total_fee || 0,
-        service_description: `Serviços de assessoria - ${contract.service_type}`,
+  // Build unique clients list from contracts
+  const clientsMap = new Map<string, { id: string; name: string }>();
+  contracts.forEach((c) => {
+    const contact = c.opportunities?.leads?.contacts;
+    if (contact?.id && !clientsMap.has(contact.id)) {
+      clientsMap.set(contact.id, { id: contact.id, name: contact.full_name });
+    }
+  });
+  const clients = Array.from(clientsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+  // Filter contracts by selected client
+  const clientContracts = selectedClientId
+    ? contracts.filter((c) => c.opportunities?.leads?.contacts?.id === selectedClientId)
+    : [];
+
+  const selectedContract = contracts.find((c) => c.id === selectedContractId);
+
+  // Build services list from selected contract
+  const contractServices: { id: string; name: string }[] = [];
+  if (selectedContract) {
+    const mainLead = selectedContract.opportunities?.leads;
+    if (mainLead) {
+      contractServices.push({
+        id: mainLead.id,
+        name: mainLead.service_types?.name || mainLead.service_interest || 'Serviço',
       });
+    }
+    selectedContract.contract_leads?.forEach((cl) => {
+      if (cl.leads && !contractServices.find((s) => s.id === cl.leads.id)) {
+        contractServices.push({
+          id: cl.leads.id,
+          name: cl.leads.service_types?.name || cl.leads.service_interest || 'Serviço',
+        });
+      }
+    });
+  }
+
+  const handleClientSelect = (clientId: string) => {
+    setSelectedClientId(clientId);
+    setSelectedContractId('');
+    setSelectedServiceId('');
+    const client = clientsMap.get(clientId);
+    setFormData((f) => ({
+      ...f,
+      client_name: client?.name || '',
+      contract_id: undefined,
+      amount_without_vat: 0,
+      service_description: '',
+    }));
+  };
+
+  const handleContractSelect = (contractId: string) => {
+    setSelectedContractId(contractId);
+    setSelectedServiceId('');
+    const contract = contracts.find((c) => c.id === contractId);
+    if (contract) {
+      setFormData((f) => ({
+        ...f,
+        contract_id: contractId,
+        amount_without_vat: contract.total_fee || 0,
+        service_description: '',
+      }));
+    }
+  };
+
+  const handleServiceSelect = (serviceId: string) => {
+    setSelectedServiceId(serviceId);
+    const svc = contractServices.find((s) => s.id === serviceId);
+    if (svc) {
+      setFormData((f) => ({
+        ...f,
+        service_description: `Serviços de assessoria - ${svc.name}`,
+      }));
     }
   };
 
@@ -82,6 +147,9 @@ export default function Invoices() {
     createInvoice.mutate(formData, {
       onSuccess: () => {
         setIsDialogOpen(false);
+        setSelectedClientId('');
+        setSelectedContractId('');
+        setSelectedServiceId('');
         setFormData({
           client_name: '',
           service_description: '',
