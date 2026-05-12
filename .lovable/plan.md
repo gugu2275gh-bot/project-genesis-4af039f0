@@ -55,3 +55,13 @@ Objetivo: criar uma rede de segurança real para o `handler` do `whatsapp-webhoo
 - 6 testes novos verdes.
 - `index.ts` praticamente intacto (só `export` do handler + parâmetro `deps` opcional).
 - Caminho liberado para extrair `state.ts` / `gate.ts` / `prompt.ts` com confiança.
+
+---
+
+## Status pós-execução (Wave 3b-pre concluída)
+
+- 27/27 testes verdes (`supabase--test_edge_functions whatsapp-webhook`).
+- 8 testes de integração do `handler` cobrindo: OPTIONS, GET verify (ok/403), payload vazio, dedup de MessageSid, novo contato PT-BR (cria contact+lead, chama Twilio), handoff humano (sem Gemini), idioma ES (Gemini com diretiva ES + reply em espanhol).
+- Mock infra: `__mocks__/supabase.ts` (chainable in-memory Postgrest) + `__mocks__/fetch.ts` (URL-pattern handlers + recorder).
+- Mudança mínima em `index.ts`: handler agora aceita `deps?: { supabase? }`. Default mantém comportamento.
+- **Caminho liberado** para Wave 3b-final (passos 8-10: state.ts, gate.ts, prompt.ts) com rede de segurança.
