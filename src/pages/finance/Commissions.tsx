@@ -76,7 +76,21 @@ export default function Commissions() {
     base_amount: 0,
     has_invoice: false,
     reference_period: '',
+    paid_at: null,
   });
+
+  const selectedContract = contracts.find((c) => c.id === formData.contract_id);
+  const selectedClientName =
+    selectedContract?.opportunities?.leads?.contacts?.full_name || '';
+
+  const handleContractChange = (contractId: string) => {
+    const contract = contracts.find((c) => c.id === contractId);
+    setFormData((prev) => ({
+      ...prev,
+      contract_id: contractId,
+      base_amount: contract?.total_fee ?? prev.base_amount,
+    }));
+  };
 
   const handleSubmit = () => {
     createCommission.mutate(formData, {
@@ -89,6 +103,7 @@ export default function Commissions() {
           base_amount: 0,
           has_invoice: false,
           reference_period: '',
+          paid_at: null,
         });
       },
     });
