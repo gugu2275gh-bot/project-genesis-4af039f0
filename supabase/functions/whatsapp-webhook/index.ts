@@ -349,6 +349,7 @@ import {
   applyTurnUpdates,
   buildStateDirective,
   isContactNameTrustworthy,
+  syncFunnelFromCapturedData,
 } from './lib/funnel-state.ts'
 
 export {
