@@ -36,6 +36,12 @@ function applyFilters(rows: Row[], filters: Filter[]): Row[] {
     if (f.kind === 'eq') return r[f.col] === f.val
     if (f.kind === 'neq') return r[f.col] !== f.val
     if (f.kind === 'in') return f.vals.includes(r[f.col])
+    if (f.kind === 'gte') return r[f.col] >= f.val
+    if (f.kind === 'lte') return r[f.col] <= f.val
+    if (f.kind === 'gt') return r[f.col] > f.val
+    if (f.kind === 'lt') return r[f.col] < f.val
+    if (f.kind === 'is') return r[f.col] === f.val
+    if (f.kind === 'match') return Object.entries(f.obj).every(([k, v]) => r[k] === v)
     return true
   }))
 }
