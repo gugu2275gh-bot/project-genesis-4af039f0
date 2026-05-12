@@ -167,3 +167,95 @@ Deno.test({
     }
   },
 })
+
+// ---------- T7: AI paused by human (last outgoing was SISTEMA) → no Gemini call ----------
+
+Deno.test({
+  name: 'handler: AI paused when last outgoing message origem=SISTEMA → no Gemini fetch',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const fetchMock = installFetchMock()
+    fetchMock.on(/connector-gateway\.lovable\.dev\/twilio/, () => twilioOk())
+    fetchMock.on(/.*/, () => new Response('{}', { status: 200 }))
+
+    Deno.env.set('LOVABLE_API_KEY', 'test-stub')
+    Deno.env.set('TWILIO_API_KEY', 'test-stub')
+    Deno.env.set('CBAsesoria_Key', 'test-stub')
+
+    try {
+      const phone = '5511777776666'
+      const contactId = 'c-handoff-1'
+      const leadId = 'l-handoff-1'
+      const mock = createMockSupabase({
+        contacts: [{ id: contactId, phone, full_name: 'Maria', email: null, preferred_language: 'pt' }],
+        leads: [{ id: leadId, contact_id: contactId, status: 'EM_ATENDIMENTO', assigned_to_user_id: 'user-1' }],
+        // Last outgoing was a human (SISTEMA) → triggers aiPausedByHuman
+        mensagens_cliente: [
+          { id: 'm1', id_lead: leadId, phone_id: parseInt(phone), mensagem_atendente: 'Olá Maria, sou da equipe.', origem: 'SISTEMA', created_at: new Date().toISOString() },
+        ],
+        system_config: [
+          { key: 'whatsapp_bot_enabled', value: 'true' },
+          { key: 'whatsapp_bot_system_prompt', value: 'assistente' },
+        ],
+      })
+
+      const res = await handler(twilioForm({ from: `whatsapp:+${phone}`, body: 'oi de volta' }), { supabase: mock.client })
+      assertEquals(res.status, 200)
+      await res.text()
+
+      const geminiCalls = fetchMock.callsMatching(/generativelanguage\.googleapis\.com/)
+      assertEquals(geminiCalls.length, 0, 'AI must not be invoked while handoff is active')
+    } finally {
+      fetchMock.restore()
+    }
+  },
+})
+
+// ---------- T8: Spanish language detected → Gemini called with ES directive ----------
+
+Deno.test({
+  name: 'handler: Spanish inbound → Gemini receives ES forced language',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async () => {
+    const fetchMock = installFetchMock()
+    let geminiBody: string | null = null
+    fetchMock.on(/generativelanguage\.googleapis\.com/, async (req) => {
+      geminiBody = await req.clone().text()
+      return geminiReply('¡Hola! ¿Cuál es tu nombre completo?')
+    })
+    fetchMock.on(/connector-gateway\.lovable\.dev\/twilio/, () => twilioOk())
+    fetchMock.on(/.*/, () => new Response('{}', { status: 200 }))
+
+    Deno.env.set('LOVABLE_API_KEY', 'test-stub')
+    Deno.env.set('TWILIO_API_KEY', 'test-stub')
+    Deno.env.set('CBAsesoria_Key', 'test-stub')
+
+    try {
+      const mock = createMockSupabase({
+        system_config: [
+          { key: 'whatsapp_bot_enabled', value: 'true' },
+          { key: 'whatsapp_bot_system_prompt', value: 'asistente' },
+        ],
+      })
+      const res = await handler(
+        twilioForm({ from: 'whatsapp:+34611222333', body: 'Hola, necesito ayuda con la nacionalidad española' }),
+        { supabase: mock.client },
+      )
+      assertEquals(res.status, 200)
+      await res.text()
+
+      assert(geminiBody, 'Gemini was not called')
+      // The forced language directive should mention Spanish in the system prompt
+      assert(/espa[nñ]ol|spanish|es-ES|\bES\b/i.test(geminiBody!), 'Gemini prompt missing ES directive')
+
+      // Twilio should have been called with the Spanish reply
+      const twilioCalls = fetchMock.callsMatching(/connector-gateway\.lovable\.dev\/twilio/)
+      assert(twilioCalls.length >= 1)
+      assert(/Hola|Cuál/.test(twilioCalls[0].body || ''), 'Twilio body should contain ES reply')
+    } finally {
+      fetchMock.restore()
+    }
+  },
+})
