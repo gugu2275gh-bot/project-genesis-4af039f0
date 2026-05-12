@@ -758,17 +758,57 @@ function getOutsideSpainAgeQuestion(language: ChatLanguage): string {
   return 'Entendido. Então seguimos pelo seu cenário fora da Espanha. Qual sua idade?'
 }
 
+function getOutsideSpainNextQuestion(language: ChatLanguage, assistantTranscript: string): string {
+  const askedIdade = /\b(qual sua idade|cu[áa]ntos a[ñn]os|how old)\b/i.test(assistantTranscript)
+  const askedEuropa = /\beuropa nos [úu]ltimos 6 meses|europa en los [úu]ltimos 6 meses|europe in the last 6 months\b/i.test(assistantTranscript)
+  const askedFamiliar = /\bfamiliar (europeu|europeo)|family member.*(eu|spain)\b/i.test(assistantTranscript)
+  const askedRemoto = /\b(trabalha remoto|trabajas? remoto|work remotely)\b/i.test(assistantTranscript)
+  const askedFormacao = /\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree)\b/i.test(assistantTranscript)
+
+  if (!askedIdade) return getOutsideSpainAgeQuestion(language)
+  if (!askedEuropa) {
+    if (language === 'es') return '¿Estuviste en Europa en los últimos 6 meses?'
+    if (language === 'en') return 'Have you been in Europe in the last 6 months?'
+    if (language === 'fr') return 'Êtes-vous allé en Europe au cours des 6 derniers mois ?'
+    return 'Você esteve na Europa nos últimos 6 meses?'
+  }
+  if (!askedFamiliar) {
+    if (language === 'es') return '¿Tienes algún familiar europeo o residente legal en España?'
+    if (language === 'en') return 'Do you have a European family member or a legal resident in Spain?'
+    if (language === 'fr') return 'Avez-vous un membre de votre famille européen ou résident légal en Espagne ?'
+    return 'Possui familiar europeu ou residente legal na Espanha?'
+  }
+  if (!askedRemoto) {
+    if (language === 'es') return '¿Trabajas de forma remota?'
+    if (language === 'en') return 'Do you work remotely?'
+    if (language === 'fr') return 'Travaillez-vous à distance ?'
+    return 'Você trabalha remoto?'
+  }
+  if (!askedFormacao) {
+    if (language === 'es') return '¿Tienes formación superior?'
+    if (language === 'en') return 'Do you have higher education?'
+    if (language === 'fr') return 'Avez-vous une formation supérieure ?'
+    return 'Você possui formação superior?'
+  }
+
+  if (language === 'es') return 'Perfecto. Ya puedo tener una visión inicial de tu caso.\nEn CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
+  if (language === 'en') return 'Perfect. I can already get an initial view of your case.\nAt CB, we analyze each case individually, always looking for the safest path within the law.'
+  if (language === 'fr') return 'Parfait. Je peux déjà avoir une première vision de votre cas.\nChez CB, nous analysons chaque cas individuellement, en cherchant toujours la voie la plus sûre et conforme à la loi.'
+  return 'Perfeito. Já consigo ter uma visão inicial do seu caso.\nNa CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
+}
+
 function forceAdvanceFromEntryDateQuestion(
   previousAssistantMessage: string,
   currentMessage: string,
   aiResponse: string,
   language: ChatLanguage,
+  outsideSpainNextQuestion?: string,
 ): string {
   const previousQuestion = extractLastQuestion(previousAssistantMessage)
   const nextQuestion = extractLastQuestion(aiResponse)
 
   if (isQuestionAboutSpainEntryDate(previousQuestion) && isNeverBeenToSpainAnswer(currentMessage)) {
-    return getOutsideSpainAgeQuestion(language)
+    return outsideSpainNextQuestion || getOutsideSpainAgeQuestion(language)
   }
 
   if (!isQuestionAboutSpainEntryDate(previousQuestion) || !isPotentialEntryDateAnswer(currentMessage)) {
