@@ -340,6 +340,13 @@ import {
   isLikelyQuestionLoop,
 } from './lib/overrides.ts'
 
+import {
+  loadFunnelState,
+  applyTurnUpdates,
+  buildStateDirective,
+  isContactNameTrustworthy,
+} from './lib/funnel-state.ts'
+
 export {
   FULL_NAME_DENYLIST_PATTERNS,
   isLikelyFullNameAnswer,
