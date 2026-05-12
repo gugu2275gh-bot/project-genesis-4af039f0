@@ -61,6 +61,7 @@ export interface CommissionInsert {
   has_invoice?: boolean;
   notes?: string;
   reference_period?: string;
+  paid_at?: string | null;
 }
 
 export function useCommissions() {
