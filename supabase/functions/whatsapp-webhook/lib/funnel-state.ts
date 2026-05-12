@@ -53,7 +53,34 @@ export async function loadFunnelState(
 
   if (error) console.warn('[FUNNEL_STATE] load error:', error.message)
 
-  if (data) return data as FunnelState
+  if (data) {
+    // Reconciliação: contacts é a fonte de verdade para nome/email confirmados.
+    // Se o contato já tem nome confiável ou email, força os flags do funil.
+    const state = data as FunnelState
+    const reconcile: Record<string, unknown> = {}
+    const trustworthyName = isContactNameTrustworthy(contact)
+    if (trustworthyName && !state.name_confirmed) reconcile.name_confirmed = true
+    if (contact?.email && !state.email_confirmed) reconcile.email_confirmed = true
+    if (Object.keys(reconcile).length > 0) {
+      const merged = { ...state, ...reconcile } as FunnelState
+      const nextStep = computeNextStep(merged)
+      const update: Record<string, unknown> = { ...reconcile, step: nextStep }
+      if (nextStep !== state.step) update.last_step_change = new Date().toISOString()
+      const { data: updated, error: updErr } = await supabase
+        .from('lead_funnel_state')
+        .update(update)
+        .eq('lead_id', leadId)
+        .select('*')
+        .single()
+      if (updErr) {
+        console.warn('[FUNNEL_STATE] reconcile error:', updErr.message)
+        return merged
+      }
+      console.log('[FUNNEL_STATE] reconciled from contact:', JSON.stringify(reconcile))
+      return updated as FunnelState
+    }
+    return state
+  }
 
   // Inicializa para leads novos
   const initial: Partial<FunnelState> = {

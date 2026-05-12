@@ -32,7 +32,9 @@ export function forceSkipFullNameIfAlreadyKnown(
   if (!nextQuestion || !isQuestionAboutFullName(nextQuestion)) return aiResponse
   const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
   const replacement = emailMissing ? getEmailQuestion(language) : ''
-  if (!replacement) return preamble || aiResponse
+  // Sem replacement: nome e email já conhecidos. NÃO devolva aiResponse (manteria a pergunta).
+  // Devolva o preamble; se vazio, devolva string vazia para o caller disparar retry.
+  if (!replacement) return preamble
   return preamble ? `${preamble}\n${replacement}` : replacement
 }
 

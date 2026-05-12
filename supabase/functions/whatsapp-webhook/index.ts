@@ -1801,6 +1801,24 @@ Regras:
         aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
         aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
 
+        // F1-HARD: se o nome já é confiável e a IA mesmo assim perguntou nome (guard zerou ou
+        // sobrou só o preâmbulo), forçar uma nova geração com instrução anti-nome explícita.
+        if (!nameMissing && (!aiResponse || aiResponse.trim().length < 10)) {
+          console.warn('[F1-HARD] AI tried to ask name again though name is confirmed; retrying')
+          try {
+            aiResponse = await generateAIResponse(
+              history,
+              messageForAI,
+              `${resolvedSystemPrompt}\n\n## INSTRUÇÃO CRÍTICA — NOME JÁ CONFIRMADO\nO nome do cliente JÁ está confirmado (${contact.full_name}). É PROIBIDO perguntar o nome novamente. Confirme brevemente o que o cliente acabou de dizer e avance para a PRÓXIMA pergunta do roteiro que ainda não foi feita. NÃO reinicie o funil.`,
+              geminiApiKey,
+              knowledgeContext,
+              detectedChatLanguage,
+            )
+            aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
+          } catch (e) {
+            console.error('[F1-HARD] retry failed:', e instanceof Error ? e.message : e)
+          }
+        }
         if (aiResponse && isLikelyQuestionLoop(history, rawCustomerMessage, aiResponse)) {
           console.warn('Detected repeated-question loop, retrying with anti-repeat instruction')
           try {
