@@ -543,11 +543,11 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
     console.log('Processing message from:', phoneNumber)
 
     // Find existing contact by phone
-    let contact: { id: string; full_name: string; email: string | null; preferred_language: string | null } | null = null
+    let contact: { id: string; full_name: string; email: string | null; preferred_language: string | null; name_source: string | null } | null = null
     // Use .limit(1) instead of .single() to avoid error when duplicate contacts exist for same phone
     const { data: existingContacts } = await supabase
       .from('contacts')
-      .select('id, full_name, email, preferred_language')
+      .select('id, full_name, email, preferred_language, name_source')
       .eq('phone', phoneNumber)
       .order('created_at', { ascending: true })
       .limit(1)
@@ -564,8 +564,9 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           // O agente deve sempre perguntar e confirmar o nome com o cliente.
           full_name: `WhatsApp ${phoneNumber.slice(-4)}`,
           origin_channel: 'WHATSAPP',
+          name_source: 'AUTO',
         })
-        .select('id, full_name, email, preferred_language')
+        .select('id, full_name, email, preferred_language, name_source')
         .single()
 
       if (contactError || !newContact) {
