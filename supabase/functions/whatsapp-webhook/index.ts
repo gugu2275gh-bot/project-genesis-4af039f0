@@ -543,6 +543,45 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       }
     }
 
+    // ========== AUTO-TRANSCRIBE AUDIO/PTT (early, before any text-based processing) ==========
+    // The transcription replaces the message body so the AI agent receives the spoken
+    // content as if it had been typed by the customer.
+    let transcribedText: string | null = null
+    if ((mediaType === 'audio' || mediaType === 'ptt') && storedMediaUrl) {
+      try {
+        console.log('Auto-transcribing audio (early stage) from:', storedMediaUrl)
+        const transcribeResponse = await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/transcribe-audio`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify({ audioUrl: storedMediaUrl }),
+          }
+        )
+        if (transcribeResponse.ok) {
+          const transcribeResult = await transcribeResponse.json()
+          const t = (transcribeResult?.transcription || '').trim()
+          if (t && t !== '[áudio inaudível]') {
+            transcribedText = t
+            console.log('Transcription captured:', t.substring(0, 200))
+          } else {
+            console.warn('Transcription empty or inaudible:', t)
+          }
+        } else {
+          console.warn('Auto-transcription failed:', transcribeResponse.status)
+        }
+      } catch (transcribeErr) {
+        console.error('Auto-transcription error (non-blocking):', transcribeErr instanceof Error ? transcribeErr.message : transcribeErr)
+      }
+    }
+
+    // effectiveBody: what the AI agent and downstream extractors should treat as the user's text.
+    // For audio messages, this is the transcription. For text messages, it's the original body.
+    const effectiveBody: string = (transcribedText || message.body || '').trim()
+
     const phoneNumber = message.from.replace(/\D/g, '')
     console.log('Processing message from:', phoneNumber)
 
@@ -616,7 +655,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
 
       await supabase.from('tasks').insert({
         title: `Novo lead via WhatsApp: ${contact.full_name}`,
-        description: `Mensagem inicial: ${message.body.substring(0, 200)}`,
+        description: `Mensagem inicial: ${effectiveBody.substring(0, 200)}`,
         status: 'PENDENTE',
         related_lead_id: lead.id,
         ...(assignedUserId ? { assigned_to_user_id: assignedUserId } : {}),
@@ -626,7 +665,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         await supabase.from('notifications').insert({
           user_id: assignedUserId,
           title: 'Novo lead WhatsApp atribuído a você',
-          message: `${contact.full_name}: ${message.body.substring(0, 100)}...`,
+          message: `${contact.full_name}: ${effectiveBody.substring(0, 100)}...`,
           type: 'whatsapp_lead_assigned',
         })
       }
@@ -640,11 +679,19 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         await supabase.from('notifications').insert({
           user_id: assignedUserId,
           title: 'Lead WhatsApp atribuído a você',
-          message: `${contact.full_name}: ${message.body.substring(0, 100)}...`,
+          message: `${contact.full_name}: ${effectiveBody.substring(0, 100)}...`,
           type: 'whatsapp_lead_assigned',
         })
       }
     }
+
+    // Build display text for media messages.
+    // For audio with successful transcription, prefix with 🎙️ so humans see it came from voice
+    // while keeping the transcribed text fully available for the AI agent.
+    const audioPrefix = (mediaType === 'audio' || mediaType === 'ptt') && transcribedText ? '🎙️ ' : ''
+    const displayBody = transcribedText
+      ? `${audioPrefix}${transcribedText}`
+      : (message.body || (isMediaMessage ? `[${mediaType === 'ptt' ? 'audio' : mediaType}]` : ''))
 
     // Create interaction record
     await supabase.from('interactions').insert({
@@ -652,12 +699,9 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       contact_id: contact.id,
       channel: 'WHATSAPP',
       direction: 'INBOUND',
-      content: message.body || (isMediaMessage ? `[${mediaType === 'ptt' ? 'audio' : mediaType}]` : ''),
+      content: displayBody,
       origin_bot: false,
     })
-
-    // Build display text for media messages
-    const displayBody = message.body || (isMediaMessage ? `[${mediaType === 'ptt' ? 'audio' : mediaType}]` : '')
 
     // Store in mensagens_cliente
     const { data: insertedMsg } = await supabase.from('mensagens_cliente').insert({
@@ -670,35 +714,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       media_filename: mediaFilename,
       media_mimetype: mediaMimetype,
     }).select('id').single()
-
-    // ========== AUTO-TRANSCRIBE AUDIO/PTT ==========
-    if ((mediaType === 'audio' || mediaType === 'ptt') && storedMediaUrl && insertedMsg?.id) {
-      try {
-        console.log('Auto-transcribing audio message:', insertedMsg.id)
-        const transcribeResponse = await fetch(
-          `${Deno.env.get('SUPABASE_URL')}/functions/v1/transcribe-audio`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-            },
-            body: JSON.stringify({
-              audioUrl: storedMediaUrl,
-              messageId: insertedMsg.id,
-            }),
-          }
-        )
-        if (transcribeResponse.ok) {
-          const transcribeResult = await transcribeResponse.json()
-          console.log('Auto-transcription completed:', transcribeResult.transcription?.substring(0, 100))
-        } else {
-          console.warn('Auto-transcription failed:', transcribeResponse.status)
-        }
-      } catch (transcribeErr) {
-        console.error('Auto-transcription error (non-blocking):', transcribeErr instanceof Error ? transcribeErr.message : transcribeErr)
-      }
-    }
+    void insertedMsg
 
     // ========== MULTICHAT SECTOR ROUTING (REFINED) ==========
     let routedSector: string | null = null
@@ -727,7 +743,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
 
         const timeoutMs = (parseInt(timeoutConfig?.value || '60') || 60) * 60 * 1000
         const now = Date.now()
-        const clientMessage = (message.body || '').trim()
+        const clientMessage = (effectiveBody || '').trim()
 
         const setoresAtivos = ((chatCtx.setores_ativos as Array<{ setor: string; user_id: string; last_sent_at: string }>) || [])
           .filter(s => now - new Date(s.last_sent_at).getTime() < timeoutMs)
@@ -906,7 +922,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
               await supabase.from('notifications').insert({
                 user_id: su.user_id,
                 title: `Mensagem direcionada - ${routedSector}`,
-                message: `${contact.full_name}: ${(message.body || '').substring(0, 100)}`,
+                message: `${contact.full_name}: ${(effectiveBody || '').substring(0, 100)}`,
                 type: 'sector_message',
                 sector: routedSector,
               })
@@ -956,7 +972,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           },
           body: JSON.stringify({
             contactId: contact.id,
-            incomingMessageText: message.body || '',
+            incomingMessageText: effectiveBody || '',
             phoneNumber,
             leadId: lead.id,
           }),
@@ -1124,7 +1140,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         
         const isFirstInteraction = (messageCount || 0) <= 1 // 1 because we just inserted the current message
 
-        const currentCustomerMessage = String(message.body || '')
+        const currentCustomerMessage = String(effectiveBody || '')
         // R5: Use preferred_language from contact as initial hint for language detection
         const preferredLangMap: Record<string, ChatLanguage> = { 'pt': 'pt-BR', 'pt-BR': 'pt-BR', 'es': 'es', 'en': 'en', 'fr': 'fr' }
         const langCodeMap: Record<ChatLanguage, string> = { 'pt-BR': 'pt', 'es': 'es', 'en': 'en', 'fr': 'fr' }
@@ -1312,7 +1328,7 @@ Regras:
         }
 
         // Try to extract name/email from the current message and update contact
-        const extracted = extractNameAndEmail(String(message.body || ''))
+        const extracted = extractNameAndEmail(String(effectiveBody || ''))
         if (extracted.name || extracted.email) {
           const updateData: Record<string, string> = {}
           if (extracted.name && (contact.full_name.startsWith('WhatsApp ') || contact.full_name === message.name)) {
@@ -1335,7 +1351,7 @@ Regras:
 
         // ========== AI DATA EXTRACTION FOR SUGGESTIONS ==========
         try {
-          await extractAndSuggestContactData(supabase, contact.id, String(message.body || ''), geminiApiKey)
+          await extractAndSuggestContactData(supabase, contact.id, String(effectiveBody || ''), geminiApiKey)
         } catch (extractErr) {
           console.error('Data extraction error (non-blocking):', extractErr instanceof Error ? extractErr.message : extractErr)
         }
@@ -1373,7 +1389,7 @@ Regras:
             .filter(Boolean)
             .join('\n')
         } else {
-          messageForAI = message.body || (mediaType ? getMediaPlaceholder(mediaType, detectedChatLanguage) : '')
+          messageForAI = effectiveBody || (mediaType ? getMediaPlaceholder(mediaType, detectedChatLanguage) : '')
         }
 
         const history = await getConversationHistory(supabase, lead.id, 80)
@@ -1998,7 +2014,7 @@ Regras:
       await supabase.from('notifications').insert({
         user_id: lead.assigned_to_user_id,
         title: 'Nova mensagem WhatsApp',
-        message: `${contact.full_name}: ${message.body.substring(0, 100)}...`,
+        message: `${contact.full_name}: ${effectiveBody.substring(0, 100)}...`,
         type: 'whatsapp_message',
       })
     } else {
@@ -2011,7 +2027,7 @@ Regras:
         await supabase.from('notifications').insert({
           user_id: user.user_id,
           title: 'Nova mensagem WhatsApp (não atribuído)',
-          message: `${contact.full_name}: ${message.body.substring(0, 100)}...`,
+          message: `${contact.full_name}: ${effectiveBody.substring(0, 100)}...`,
           type: 'whatsapp_message',
         })
       }
