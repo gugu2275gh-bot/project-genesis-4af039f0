@@ -2826,7 +2826,7 @@ Regras:
 
         // Generate AI response (Gemini primary, OpenAI fallback)
         let aiResponse = ''
-        let resolvedSystemPrompt = systemPrompt.replace('{nome}', contact.full_name)
+        let resolvedSystemPrompt = systemPrompt.replace('{nome}', promptContactName || '')
 
         if (kbStrictMode) {
           if (!knowledgeContext) {
@@ -2890,6 +2890,7 @@ Regras:
         }
 
         const outsideSpainNextQuestion = getOutsideSpainNextQuestion(detectedChatLanguage, allAssistant)
+        aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
         aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
         aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
         aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
@@ -2905,6 +2906,7 @@ Regras:
               knowledgeContext,
               detectedChatLanguage,
             )
+            aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
             aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
             aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
             aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
