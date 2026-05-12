@@ -414,6 +414,7 @@ export type Database = {
           linked_principal_contact_id: string | null
           monthly_income: number | null
           mother_name: string | null
+          name_source: string
           nationality: string | null
           onboarding_completed: boolean | null
           origin_channel: Database["public"]["Enums"]["origin_channel"] | null
@@ -469,6 +470,7 @@ export type Database = {
           linked_principal_contact_id?: string | null
           monthly_income?: number | null
           mother_name?: string | null
+          name_source?: string
           nationality?: string | null
           onboarding_completed?: boolean | null
           origin_channel?: Database["public"]["Enums"]["origin_channel"] | null
@@ -524,6 +526,7 @@ export type Database = {
           linked_principal_contact_id?: string | null
           monthly_income?: number | null
           mother_name?: string | null
+          name_source?: string
           nationality?: string | null
           onboarding_completed?: boolean | null
           origin_channel?: Database["public"]["Enums"]["origin_channel"] | null
@@ -1422,6 +1425,56 @@ export type Database = {
             columns: ["created_by_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_funnel_state: {
+        Row: {
+          email_confirmed: boolean
+          empadronado_confirmed: boolean | null
+          entry_date_confirmed: string | null
+          interest_confirmed: string | null
+          last_step_change: string
+          lead_id: string
+          location_known: string | null
+          name_confirmed: boolean
+          outside_spain_progress: Json
+          step: string
+          updated_at: string
+        }
+        Insert: {
+          email_confirmed?: boolean
+          empadronado_confirmed?: boolean | null
+          entry_date_confirmed?: string | null
+          interest_confirmed?: string | null
+          last_step_change?: string
+          lead_id: string
+          location_known?: string | null
+          name_confirmed?: boolean
+          outside_spain_progress?: Json
+          step?: string
+          updated_at?: string
+        }
+        Update: {
+          email_confirmed?: boolean
+          empadronado_confirmed?: boolean | null
+          entry_date_confirmed?: string | null
+          interest_confirmed?: string | null
+          last_step_change?: string
+          lead_id?: string
+          location_known?: string | null
+          name_confirmed?: boolean
+          outside_spain_progress?: Json
+          step?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_funnel_state_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
         ]
