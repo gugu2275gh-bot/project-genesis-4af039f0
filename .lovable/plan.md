@@ -1,54 +1,76 @@
-## Objetivo
+# Plano — Correção definitiva do handoff humano no WhatsApp
 
-Garantir que, quando a última mensagem **outbound** do lead for de um atendente humano (`origem='SISTEMA'`), a IA não seja invocada — comportamento exigido pela memória `whatsapp-ai-agent-resilience` e pela regra de handoff.
+O problema não será tratado como ajuste amplo do agente agora. A correção definitiva é garantir, com teste de regressão, que qualquer última mensagem outbound de atendente humano (`origem='SISTEMA'`) pause a IA antes de qualquer chamada Gemini.
 
-## Diagnóstico
+## Diagnóstico confirmado
 
-O check atual em `supabase/functions/whatsapp-webhook/index.ts` (linhas 1077–1088) filtra `.not('mensagem_IA', 'is', null)`. Isso só encontra:
-- respostas geradas pela IA (`mensagem_IA` populado)
-- marcador automático de auto-pause (também usa `mensagem_IA`)
+O ponto crítico fica em `supabase/functions/whatsapp-webhook/index.ts`, na seção `AI AGENT SECTION`.
 
-E **não encontra** mensagens manuais do atendente, que são gravadas em `mensagem_atendente` com `origem='SISTEMA'`. Resultado: handoff humano real **não pausa** a IA em produção. O teste `handler: AI paused when origem=SISTEMA` exibe esse defeito.
-
-Não é regressão da Wave 4 — o diff da Wave 4 não toca esse bloco.
-
-## Correção (1 arquivo)
-
-**`supabase/functions/whatsapp-webhook/index.ts`** (bloco 1075–1089):
-
-Trocar o filtro para identificar a última mensagem **outbound** (qualquer origem que não seja inbound do cliente):
+A regra correta é:
 
 ```ts
-const { data: lastOutgoing } = await supabase
-  .from('mensagens_cliente')
-  .select('origem')
-  .eq('id_lead', lead.id)
-  .neq('origem', 'WHATSAPP')        // exclui inbound do cliente
-  .order('created_at', { ascending: false })
-  .limit(1)
-  .maybeSingle()
-
-if (lastOutgoing?.origem === 'SISTEMA') {
-  aiPausedByHuman = true
-  console.log('AI agent paused: human agent (SISTEMA) is handling this lead')
-}
+última mensagem outbound do lead = qualquer mensagem cuja origem != 'WHATSAPP'
+se essa origem for 'SISTEMA' → não chamar IA
 ```
 
-Mudanças pontuais:
-- `.not('mensagem_IA','is',null)` → `.neq('origem', 'WHATSAPP')`
-- `.single()` → `.maybeSingle()` (evita PGRST116 quando lead novo sem outbound)
+Isso cobre mensagens manuais do atendente salvas em `mensagem_atendente`, mesmo quando `mensagem_IA` está vazio.
 
-## Validação
+## Implementação
 
-1. Rodar `supabase--test_edge_functions` filtrando `pattern: SISTEMA` — deve passar (0 chamadas Gemini).
-2. Rodar a suíte completa do `whatsapp-webhook` — manter 27/27.
-3. Telemetria: o log `AI agent paused: human agent (SISTEMA)` continua existindo.
+1. **Finalizar/hardenizar o bloco de pausa humana**
+   - Manter a consulta por última mensagem outbound usando:
+     - `.eq('id_lead', lead.id)`
+     - `.neq('origem', 'WHATSAPP')`
+     - `.order('created_at', { ascending: false })`
+     - `.limit(1)`
+     - `.maybeSingle()`
+   - Se `lastOutgoing?.origem === 'SISTEMA'`, setar `aiPausedByHuman = true`.
+   - Preservar o log:
+     - `AI agent paused: human agent (SISTEMA) is handling this lead`
 
-## Fora de escopo
+2. **Garantir que não exista dependência de `mensagem_IA` para handoff humano**
+   - Conferir que o bloco não usa mais `.not('mensagem_IA', 'is', null)` para decidir pausa humana.
+   - Mensagem manual do atendente deve ser reconhecida mesmo quando só `mensagem_atendente` está preenchida.
 
-- Adicionar os 6 testes de regressão dos cenários Gustavo/Fred/Agência Liga (próximo passo, depois desta correção).
-- Qualquer mudança no fluxo de inserção da mensagem inbound ou na lógica de funil.
+3. **Fortalecer o teste de regressão existente**
+   - Usar o cenário já presente em `handler_test.ts`:
+     - lead existente
+     - última mensagem do chat com `origem='SISTEMA'`
+     - `mensagem_atendente` preenchida
+     - `mensagem_IA` ausente/nula
+   - Assertiva obrigatória:
+     - 0 chamadas para Gemini.
+   - Se o mock de Supabase não simular corretamente `.neq(...).maybeSingle()`, ajustar apenas o mock/teste, não a regra de produção.
 
-## Arquivos alterados
+4. **Rodar validação direcionada**
+   - Rodar testes do `whatsapp-webhook` filtrando por `SISTEMA`.
+   - Resultado esperado:
+     - o teste `handler: AI paused when last outgoing message origem=SISTEMA → no Gemini fetch` passa.
+     - Gemini recebe 0 chamadas.
 
-- `supabase/functions/whatsapp-webhook/index.ts` — 1 bloco (~10 linhas).
+5. **Rodar suíte completa do webhook**
+   - Rodar todos os testes de `supabase/functions/whatsapp-webhook`.
+   - Resultado esperado:
+     - todos os testes atuais permanecem verdes.
+
+6. **Atualizar memória do projeto**
+   - Atualizar `mem://features/whatsapp-ai-agent-resilience` para registrar explicitamente:
+     - mensagens manuais de atendente (`origem='SISTEMA'`, `mensagem_atendente`) pausam a IA;
+     - a verificação deve considerar a última outbound por `origem != 'WHATSAPP'`, não por `mensagem_IA`.
+
+## Fora de escopo agora
+
+- Reescrever funil completo.
+- Alterar KB/RAG.
+- Criar novas tabelas ou migrations.
+- Mexer em idioma, extração de nome ou diagnóstico Wave 5 amplo.
+- Implementar os cenários Gustavo/Fred/Agência Liga neste passo.
+
+## Critério de pronto
+
+A correção só será considerada concluída quando:
+
+1. o código não depender de `mensagem_IA` para detectar handoff humano;
+2. o teste com `origem='SISTEMA'` e `mensagem_atendente` passar;
+3. a suíte completa do webhook passar;
+4. a memória do projeto registrar a regra para evitar que futuras correções revertam o comportamento.
