@@ -882,7 +882,7 @@ export function isLikelyFullNameAnswer(text: string): boolean {
   if (!raw || raw.length > 90 || normalized.includes('?')) return false
   if (hasValidEmail(raw) || isPotentialEntryDateAnswer(raw)) return false
   if (/^(ok|okay|vale|valeu|sim|si|sí|s|yes|no|não|nao|claro|certo|perfeito|obrigad[oa]|gracias)$/i.test(normalized)) return false
-  if (FULL_NAME_DENYLIST_PATTERNS.some((re) => re.test(raw))) return false
+  if (FULL_NAME_DENYLIST_PATTERNS.some((re) => re.test(raw) || re.test(normalized))) return false
   const words = raw.split(/\s+/).filter(Boolean)
   const alphaWords = words.filter((word) => /[A-Za-zÀ-ÖØ-öø-ÿ]{2,}/.test(word))
   // Require at least 2 alpha words AND the first must be capitalized OR
