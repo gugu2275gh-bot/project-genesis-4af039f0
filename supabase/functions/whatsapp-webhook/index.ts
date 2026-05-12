@@ -1798,6 +1798,25 @@ Regras:
           }
         }
 
+        // Wave 4: persistir estado do funil após overrides
+        try {
+          const patch: Record<string, unknown> = {}
+          if (!funnelState.name_confirmed && !nameMissing) patch.name_confirmed = true
+          if (!funnelState.email_confirmed && !emailMissing) patch.email_confirmed = true
+          if (!funnelState.location_known) {
+            if (userInSpain) patch.location_known = 'spain'
+            else if (userOutsideSpain) patch.location_known = 'outside'
+          }
+          if (!funnelState.interest_confirmed && !serviceMissing) {
+            patch.interest_confirmed = String(leadInterest?.service_interest || 'detected')
+          }
+          if (Object.keys(patch).length > 0) {
+            await applyTurnUpdates(supabase, funnelState, patch)
+          }
+        } catch (stateErr) {
+          console.warn('[FUNNEL_STATE] persistence error (non-blocking):', stateErr instanceof Error ? stateErr.message : stateErr)
+        }
+
         if (aiResponse) {
           aiResponse = removeRepeatedQuestionIntro(lastAssistantMessage, aiResponse)
 
