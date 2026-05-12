@@ -751,6 +751,13 @@ function getEmpadronadoQuestion(language: ChatLanguage): string {
   return 'Perfeito. Você está empadronado?'
 }
 
+function getOutsideSpainAgeQuestion(language: ChatLanguage): string {
+  if (language === 'es') return 'Entendido. Entonces seguimos por tu escenario fuera de España. ¿Cuál es tu edad?'
+  if (language === 'en') return 'Got it. Then we’ll continue with your situation outside Spain. How old are you?'
+  if (language === 'fr') return 'D’accord. Nous continuons donc avec votre situation hors d’Espagne. Quel âge avez-vous ?'
+  return 'Entendido. Então seguimos pelo seu cenário fora da Espanha. Qual sua idade?'
+}
+
 function forceAdvanceFromEntryDateQuestion(
   previousAssistantMessage: string,
   currentMessage: string,
@@ -759,6 +766,10 @@ function forceAdvanceFromEntryDateQuestion(
 ): string {
   const previousQuestion = extractLastQuestion(previousAssistantMessage)
   const nextQuestion = extractLastQuestion(aiResponse)
+
+  if (isQuestionAboutSpainEntryDate(previousQuestion) && isNeverBeenToSpainAnswer(currentMessage)) {
+    return getOutsideSpainAgeQuestion(language)
+  }
 
   if (!isQuestionAboutSpainEntryDate(previousQuestion) || !isPotentialEntryDateAnswer(currentMessage)) {
     return aiResponse
