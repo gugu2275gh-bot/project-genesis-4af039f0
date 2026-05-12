@@ -685,18 +685,23 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       }
     }
 
+    // Build display text for media messages.
+    // For audio with successful transcription, prefix with 🎙️ so humans see it came from voice
+    // while keeping the transcribed text fully available for the AI agent.
+    const audioPrefix = (mediaType === 'audio' || mediaType === 'ptt') && transcribedText ? '🎙️ ' : ''
+    const displayBody = transcribedText
+      ? `${audioPrefix}${transcribedText}`
+      : (message.body || (isMediaMessage ? `[${mediaType === 'ptt' ? 'audio' : mediaType}]` : ''))
+
     // Create interaction record
     await supabase.from('interactions').insert({
       lead_id: lead.id,
       contact_id: contact.id,
       channel: 'WHATSAPP',
       direction: 'INBOUND',
-      content: message.body || (isMediaMessage ? `[${mediaType === 'ptt' ? 'audio' : mediaType}]` : ''),
+      content: displayBody,
       origin_bot: false,
     })
-
-    // Build display text for media messages
-    const displayBody = message.body || (isMediaMessage ? `[${mediaType === 'ptt' ? 'audio' : mediaType}]` : '')
 
     // Store in mensagens_cliente
     const { data: insertedMsg } = await supabase.from('mensagens_cliente').insert({
@@ -709,35 +714,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       media_filename: mediaFilename,
       media_mimetype: mediaMimetype,
     }).select('id').single()
-
-    // ========== AUTO-TRANSCRIBE AUDIO/PTT ==========
-    if ((mediaType === 'audio' || mediaType === 'ptt') && storedMediaUrl && insertedMsg?.id) {
-      try {
-        console.log('Auto-transcribing audio message:', insertedMsg.id)
-        const transcribeResponse = await fetch(
-          `${Deno.env.get('SUPABASE_URL')}/functions/v1/transcribe-audio`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-            },
-            body: JSON.stringify({
-              audioUrl: storedMediaUrl,
-              messageId: insertedMsg.id,
-            }),
-          }
-        )
-        if (transcribeResponse.ok) {
-          const transcribeResult = await transcribeResponse.json()
-          console.log('Auto-transcription completed:', transcribeResult.transcription?.substring(0, 100))
-        } else {
-          console.warn('Auto-transcription failed:', transcribeResponse.status)
-        }
-      } catch (transcribeErr) {
-        console.error('Auto-transcription error (non-blocking):', transcribeErr instanceof Error ? transcribeErr.message : transcribeErr)
-      }
-    }
+    void insertedMsg
 
     // ========== MULTICHAT SECTOR ROUTING (REFINED) ==========
     let routedSector: string | null = null
