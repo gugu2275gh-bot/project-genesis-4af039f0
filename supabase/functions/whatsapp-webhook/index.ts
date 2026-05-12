@@ -273,29 +273,18 @@ function isInvalidKnowledgeChunk(content: string): boolean {
   return INVALID_KNOWLEDGE_PATTERNS.some((pattern) => pattern.test(normalized))
 }
 
-function normalizeForSearch(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-}
+import {
+  normalizeForSearch,
+  SEARCH_STOPWORDS,
+  meaningfulSearchTokens,
+  compactSearchText,
+  extractLastQuestion,
+  extractTextBeforeLastQuestion,
+  areQuestionsEquivalent,
+  removeRepeatedQuestionIntro,
+} from './lib/text-utils.ts'
 
-const SEARCH_STOPWORDS = new Set([
-  'ok', 'pdf', 'para', 'por', 'com', 'sem', 'uma', 'das', 'dos', 'de', 'da', 'do', 'del', 'el', 'la',
-  'desde', 'pais', 'origem', 'mais', 'menos', 'ano', 'anos', 'todas', 'todo', 'toda', 'sobre',
-  'queria', 'quero', 'gostaria', 'saber', 'como', 'dar', 'entrada', 'informacao', 'informacoes',
-])
-
-function meaningfulSearchTokens(text: string): string[] {
-  return normalizeForSearch(text)
-    .split(/\s+/)
-    .filter((token) => token.length > 2 && !SEARCH_STOPWORDS.has(token))
-}
-
-function compactSearchText(text: string): string {
-  return meaningfulSearchTokens(text).join(' ')
-}
+export { extractLastQuestion, extractTextBeforeLastQuestion, areQuestionsEquivalent }
 
 export function scoreTopicFileName(fileName: string, hintOrConversation: string): number {
   const fileTokens = meaningfulSearchTokens(fileName)
