@@ -296,17 +296,52 @@ export default function Invoices() {
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label>Vincular a Contrato (opcional)</Label>
-                <Select onValueChange={handleContractSelect}>
+                <Label>Cliente *</Label>
+                <Select value={selectedClientId} onValueChange={handleClientSelect}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione um contrato" />
+                    <SelectValue placeholder="Selecione um cliente" />
                   </SelectTrigger>
                   <SelectContent>
-                    {contracts.map((contract) => (
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Contrato *</Label>
+                <Select
+                  value={selectedContractId}
+                  onValueChange={handleContractSelect}
+                  disabled={!selectedClientId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={selectedClientId ? 'Selecione um contrato' : 'Selecione um cliente primeiro'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clientContracts.map((contract) => (
                       <SelectItem key={contract.id} value={contract.id}>
-                        {contract.opportunities?.leads?.contacts?.full_name || 'Sem nome'} - 
-                        €{contract.total_fee?.toFixed(2) || '0.00'}
+                        {contract.contract_number ? `Nº ${contract.contract_number} - ` : ''}€{contract.total_fee?.toFixed(2) || '0.00'}
                       </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Serviço *</Label>
+                <Select
+                  value={selectedServiceId}
+                  onValueChange={handleServiceSelect}
+                  disabled={!selectedContractId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={selectedContractId ? 'Selecione um serviço' : 'Selecione um contrato primeiro'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contractServices.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
