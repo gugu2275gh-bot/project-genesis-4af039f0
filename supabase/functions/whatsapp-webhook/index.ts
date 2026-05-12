@@ -816,6 +816,37 @@ function getOutsideSpainNextQuestion(language: ChatLanguage, assistantTranscript
   return 'Perfeito. Já consigo ter uma visão inicial do seu caso.\nNa CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
 }
 
+function isQuestionAboutEmail(question: string): boolean {
+  const n = normalizeForLanguageChecks(question)
+  return /\b(e ?mail|correo|email)\b/.test(n)
+    && /\b(qual|cual|cu[áa]l|melhor|mejor|best|what|which)\b/.test(n)
+}
+
+function hasValidEmail(text: string): boolean {
+  return /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(text || '')
+}
+
+function getEmailReaskQuestion(language: ChatLanguage): string {
+  if (language === 'es') return 'Necesito un correo electrónico válido para enviarte las orientaciones. ¿Cuál es tu mejor email? (ejemplo: nombre@gmail.com)'
+  if (language === 'en') return 'I need a valid email address to send you the next steps. What is your best email? (e.g. name@gmail.com)'
+  if (language === 'fr') return 'J’ai besoin d’une adresse e-mail valide pour vous envoyer les informations. Quel est votre meilleur e-mail ? (ex. nom@gmail.com)'
+  return 'Preciso de um e-mail válido para te enviar as orientações. Qual é o seu melhor e-mail? (ex.: nome@gmail.com)'
+}
+
+function forceReaskEmailIfMissing(
+  previousAssistantMessage: string,
+  currentMessage: string,
+  aiResponse: string,
+  language: ChatLanguage,
+  emailAlreadyOnFile: boolean,
+): string {
+  if (emailAlreadyOnFile) return aiResponse
+  const previousQuestion = extractLastQuestion(previousAssistantMessage)
+  if (!isQuestionAboutEmail(previousQuestion)) return aiResponse
+  if (hasValidEmail(currentMessage)) return aiResponse
+  return getEmailReaskQuestion(language)
+}
+
 function forceAdvanceFromEntryDateQuestion(
   previousAssistantMessage: string,
   currentMessage: string,
