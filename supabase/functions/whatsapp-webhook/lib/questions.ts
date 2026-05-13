@@ -184,10 +184,17 @@ export function getLocationQuestion(language: ChatLanguage): string {
 }
 
 export function getEmpadronadoQuestion(language: ChatLanguage): string {
-  if (language === 'es') return 'Perfecto. ¿Estás empadronado?'
-  if (language === 'en') return 'Got it. Are you registered at the town hall (empadronado)?'
-  if (language === 'fr') return 'D’accord. Êtes-vous empadronado ?'
-  return 'Perfeito. Você está empadronado?'
+  if (language === 'es') return 'Perfecto. ¿Estás empadronado? Si sí, ¿desde cuándo?'
+  if (language === 'en') return 'Got it. Are you registered at the town hall (empadronado)? If yes, since when?'
+  if (language === 'fr') return 'D’accord. Êtes-vous empadronado ? Si oui, depuis quand ?'
+  return 'Perfeito. Você está empadronado? Se sim, desde quando?'
+}
+
+export function getEmpadronamientoCityQuestion(language: ChatLanguage): string {
+  if (language === 'es') return 'Perfecto. ¿En qué ciudad estás empadronado?'
+  if (language === 'en') return 'Got it. In which city are you registered (empadronado)?'
+  if (language === 'fr') return 'D’accord. Dans quelle ville êtes-vous empadronado ?'
+  return 'Perfeito. Em qual cidade você está empadronado?'
 }
 
 export function getOutsideSpainAgeQuestion(language: ChatLanguage): string {
