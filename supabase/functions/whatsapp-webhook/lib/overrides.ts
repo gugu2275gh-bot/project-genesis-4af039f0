@@ -290,6 +290,7 @@ export function forceAdvanceFromInterestQuestion(
   currentMessage: string,
   aiResponse: string,
   language: ChatLanguage,
+  assistantTranscript?: string,
 ): string {
   const previousQuestion = extractLastQuestion(previousAssistantMessage)
   const nextQuestion = extractLastQuestion(aiResponse)
@@ -300,11 +301,47 @@ export function forceAdvanceFromInterestQuestion(
 
   if (nextQuestion && areQuestionsEquivalent(previousQuestion, nextQuestion)) {
     const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
-    const replacement = getLocationQuestion(language)
+    // D1 Bizagi: antes de pedir localização, listar serviços atendidos (Msg 6).
+    const transcript = assistantTranscript || ''
+    const servicesAlreadySent = isServicesOfferedMessage(transcript)
+      || /(arraigo).{0,200}(reagrupa|reagrupacion|reunification|regroupement).{0,200}(homologa|homologation)/is.test(transcript)
+    const replacement = servicesAlreadySent
+      ? getLocationQuestion(language)
+      : getServicesOfferedMessage(language)
     return preamble ? `${preamble}\n${replacement}` : replacement
   }
 
   return aiResponse
+}
+
+/**
+ * D1 Bizagi (Msg 6): após `interest_confirmed`, garante que o bot envie a
+ * mensagem de "serviços atendidos" antes de avançar para a pergunta de
+ * localização. Se a IA gerou outra pergunta (ex.: pulou direto para localização
+ * ou começou outro assunto), substituímos pela Msg 6. Idempotente via transcript.
+ */
+export function forceServicesMessageAfterInterest(
+  aiResponse: string,
+  language: ChatLanguage,
+  flags: {
+    interestKnown: boolean
+    locationKnown: boolean
+    assistantTranscript: string
+  },
+): string {
+  if (!aiResponse) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
+  if (!flags.interestKnown) return aiResponse
+  if (flags.locationKnown) return aiResponse // já passou da etapa
+  const transcript = flags.assistantTranscript || ''
+  if (isServicesOfferedMessage(transcript)) return aiResponse
+  // Se a IA já gerou justamente a Msg 6, mantém.
+  if (isServicesOfferedMessage(aiResponse)) return aiResponse
+  // Substitui pela Msg 6 (mantém preâmbulo curto da IA, se houver).
+  const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
+  const replacement = getServicesOfferedMessage(language)
+  console.log('[D1_SERVICES] injecting Msg 6 (services offered) before location')
+  return preamble ? `${preamble}\n${replacement}` : replacement
 }
 
 /**
