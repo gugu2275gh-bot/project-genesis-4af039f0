@@ -553,20 +553,20 @@ export function forceCorrectBlockForLocation(
     // Próxima pergunta correta do bloco B
     let next: string
     if (!flags.entryDateConfirmed) {
-      if (language === 'es') next = 'Perfecto. Ahora necesito entender tu situación aquí. ¿Cuál fue la fecha exacta de tu entrada en España?'
-      else if (language === 'en') next = 'Got it. Now I need to understand your situation here. What was the exact date you entered Spain?'
-      else if (language === 'fr') next = 'D’accord. Maintenant j’ai besoin de comprendre votre situation ici. Quelle est la date exacte de votre entrée en Espagne ?'
-      else next = 'Perfeito. Agora preciso entender sua situação aqui. Qual foi a data exata da sua entrada na Espanha?'
+      // D2 Bizagi: B1 (confirmar situação) e B2 (data) entregues como blocos visuais separados.
+      if (language === 'es') next = 'Perfecto. Ahora necesito entender tu situación aquí.\n\n¿Cuál fue la fecha exacta de tu entrada en España?'
+      else if (language === 'en') next = 'Got it. Now I need to understand your situation here.\n\nWhat was the exact date you entered Spain?'
+      else if (language === 'fr') next = 'D’accord. Maintenant j’ai besoin de comprendre votre situation ici.\n\nQuelle est la date exacte de votre entrée en Espagne ?'
+      else next = 'Perfeito. Agora preciso entender sua situação aqui.\n\nQual foi a data exata da sua entrada na Espanha?'
     } else if (flags.empadronadoConfirmed === null || flags.empadronadoConfirmed === undefined) {
       next = getEmpadronadoQuestion(language)
     } else if (flags.empadronadoConfirmed && !flags.empadronadoCity) {
       next = getEmpadronamientoCityQuestion(language)
     } else {
-      // Bloco completo → Pré-Handoff
-      if (language === 'es') next = 'Perfecto. Ya puedo tener una visión inicial de tu caso.\nEn CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
-      else if (language === 'en') next = 'Perfect. I can already get an initial view of your case.\nAt CB, we analyze each case individually, always looking for the safest path within the law.'
-      else if (language === 'fr') next = 'Parfait. Je peux déjà avoir une première vision de votre cas.\nChez CB, nous analysons chaque cas individuellement.'
-      else next = 'Perfeito. Já consigo ter uma visão inicial do seu caso.\nNa CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
+      // D3 Bizagi: bloco completo → Pré-Handoff em 2 mensagens (summary ||| transfer).
+      const payload = buildPreHandoffPayload(language, flags.assistantTranscript || '')
+      next = payload || ''
+      if (!next) return aiResponse // ambos já enviados → não sobrescreve
     }
     return lock(wrap(next))
   }
