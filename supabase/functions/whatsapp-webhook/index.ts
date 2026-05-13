@@ -1963,6 +1963,14 @@ Regras:
           locationKnown: !!funnelStateLive.location_known,
         })
         aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
+        // BLOCK-LOCK: impede que a IA misture perguntas dos blocos Espanha vs fora
+        aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, {
+          locationKnown: funnelStateLive.location_known,
+          entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+          empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+          empadronadoCity: funnelStateLive.empadronado_city,
+          assistantTranscript: allAssistant,
+        })
 
         // F1-HARD: se o nome já é confiável e a IA mesmo assim perguntou nome (guard zerou ou
         // sobrou só o preâmbulo), forçar uma nova geração com instrução anti-nome explícita.
