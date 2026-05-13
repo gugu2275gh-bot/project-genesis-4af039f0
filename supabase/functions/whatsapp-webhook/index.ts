@@ -2061,7 +2061,13 @@ Regras:
               empadronadoCity: funnelStateLive.empadronado_city,
               assistantTranscript: allAssistant,
             })
-            aiResponse = ensureServicesAttachedToInterest(aiResponse, detectedChatLanguage, allAssistant)
+            aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, {
+              locationKnown: funnelStateLive.location_known,
+              entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+              empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+              empadronadoCity: funnelStateLive.empadronado_city,
+              assistantTranscript: allAssistant,
+            })
             aiResponse = forceServicesMessageAfterInterest(aiResponse, detectedChatLanguage, {
               interestKnown: !serviceMissing,
               locationKnown: !!funnelStateLive.location_known,
