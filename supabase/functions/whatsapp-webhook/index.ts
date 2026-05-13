@@ -347,6 +347,9 @@ import {
   isLikelyQuestionLoop,
   lockConfirmedFieldsInResponse,
   sanitizeLocationQuestion,
+  computeDeterministicFunnelPatch,
+  stripLockedSentinel,
+  isLocked,
 } from './lib/overrides.ts'
 
 import {
