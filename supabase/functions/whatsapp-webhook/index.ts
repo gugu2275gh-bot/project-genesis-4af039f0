@@ -1955,6 +1955,7 @@ Regras:
             aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
             aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, { nameKnown: !nameMissing, emailKnown: !emailMissing, interestKnown: !serviceMissing, locationKnown: !!funnelStateLive.location_known })
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
+          } catch (retryError) {
             console.error('Anti-repeat retry failed:', retryError instanceof Error ? retryError.message : retryError)
           }
         }
