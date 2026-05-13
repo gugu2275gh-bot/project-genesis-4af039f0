@@ -1854,21 +1854,21 @@ Regras:
           console.log(`[GATE] step=${nextStep.key} done=${steps.filter(s=>s.done).length}/${steps.length} inSpain=${userInSpain} outside=${userOutsideSpain}`)
         } else {
           console.log(`[GATE] flow complete — KB liberada (handoff=${handoffDone})`)
-          if (!handoffDone) {
-            messageForAI = `${messageForAI}\n\n[MODO TIRA-DÚVIDAS — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
-              `IDIOMA OBRIGATÓRIO E TRAVADO DA RESPOSTA: ${langName}. Definido no início da conversa, NÃO MUDA — mesmo se o cliente enviar mensagem em outro idioma, RESPONDA em ${langName}. NÃO misture idiomas.\n` +
-              `O cadastro inicial e o Pré-Handoff já foram enviados. Agora você está em MODO TIRA-DÚVIDAS.\n` +
-              `REGRAS:\n` +
-              `1. Use a Base de Conhecimento (KB) fornecida no contexto para responder dúvidas do cliente de forma breve, clara e baseada exclusivamente nos trechos disponíveis.\n` +
-              `2. NÃO envie o Handoff ("Vou encaminhar suas informações..." / "Vou te encaminhar para um atendente") automaticamente. Só envie o Handoff quando o cliente sinalizar que NÃO TEM MAIS DÚVIDAS (ex.: "é só isso", "obrigado", "ok") OU pedir explicitamente para falar com um humano.\n` +
-              `3. Se o cliente acabou de receber o Pré-Handoff e ainda não fez perguntas, convide-o gentilmente: "Tem alguma dúvida que eu possa esclarecer agora sobre seu caso?".\n` +
-              `4. Se a KB realmente não tiver a informação, diga honestamente que vai confirmar com o especialista — mas NÃO faça o handoff por isso, continue disponível para outras dúvidas.\n` +
-              `5. PROIBIDO usar a frase "assim que terminarmos esse rapidíssimo levantamento" ou variações ("vou te explicar quando terminar o levantamento", etc.). O levantamento JÁ ACABOU. Se o cliente fez uma pergunta factual ("o que é X", "como funciona Y", prazos, valores, requisitos), RESPONDA AGORA com base na KB. Adiar a resposta neste momento é ERRO grave.\n` +
-              (pendingQuestionToAnswer
-                ? `6. PRIORIDADE MÁXIMA: o cliente havia feito esta pergunta DURANTE o cadastro e ficou aguardando: "${pendingQuestionToAnswer}". Responda-a AGORA, com base na KB, antes de qualquer outra coisa. Comece com algo como "Como prometi, sobre sua dúvida..." e responda objetivamente.\n`
-                : '') +
-              `[FIM DO MODO TIRA-DÚVIDAS]`
-          }
+          // BPMN-3 MODO PÓS-HANDOFF: H1-H4 já foram enviados. Toda resposta vem da KB
+          // e termina com o sufixo localizado de "aguarde um especialista".
+          messageForAI = `${messageForAI}\n\n[MODO PÓS-HANDOFF (BPMN-3) — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
+            `IDIOMA OBRIGATÓRIO E TRAVADO DA RESPOSTA: ${langName}. Definido no início da conversa, NÃO MUDA.\n` +
+            `As 4 mensagens H1-H4 (pré-handoff + handoff) JÁ FORAM ENVIADAS. NÃO repita nenhuma delas.\n` +
+            `REGRAS:\n` +
+            `1. Responda APENAS com base na Base de Conhecimento (KB) fornecida no contexto, de forma breve e clara, no idioma travado.\n` +
+            `2. Se a KB não tiver a informação, diga honestamente que o especialista confirmará — sem inventar.\n` +
+            `3. PROIBIDO usar "assim que terminarmos esse rapidíssimo levantamento" — o cadastro acabou.\n` +
+            `4. NÃO peça novamente nenhum dado já coletado (nome, e-mail, interesse, localização, idade, data de entrada, empadronamento).\n` +
+            `5. NÃO escreva você mesmo a frase "Em breve um de nossos especialistas..." — a infraestrutura adiciona automaticamente como sufixo. Responda apenas o conteúdo da dúvida.\n` +
+            (pendingQuestionToAnswer
+              ? `6. PRIORIDADE MÁXIMA: o cliente havia feito esta pergunta DURANTE o cadastro e ficou aguardando: "${pendingQuestionToAnswer}". Responda-a AGORA com base na KB. Comece com algo como "Como prometi, sobre sua dúvida...".\n`
+              : '') +
+            `[FIM DO MODO PÓS-HANDOFF]`
         }
 
         console.log(`[KB] query currentTopic="${currentMessageTopicHint}" finalTopic="${topicHint}" len=${kbQuery.length} -> context ${knowledgeContext.length} chars`)
