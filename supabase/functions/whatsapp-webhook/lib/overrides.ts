@@ -21,11 +21,13 @@ import {
   getEmpadronadoQuestion,
   getEmpadronamientoCityQuestion,
   getEmpadronamientoSinceQuestion,
+  getInvalidSpanishCityReprompt,
   getLocationQuestion,
   getFullNameReaskQuestion,
   countAlphaWords,
   parseEntryDateFromText,
 } from './questions.ts'
+import { isValidSpanishCity } from './spanish-cities.ts'
 
 /**
  * Wave 6: Trava determinística pós-IA.
