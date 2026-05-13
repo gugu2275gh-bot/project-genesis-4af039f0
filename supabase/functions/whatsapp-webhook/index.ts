@@ -1953,7 +1953,7 @@ Regras:
         aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
         aiResponse = forceReaskFullNameIfSingleWord(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !nameMissing)
         aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
-        aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
+        aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, allAssistant)
         aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
         aiResponse = forceAdvanceFromEmpadronadoQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
         // Wave 6: trava determinística pós-IA — nunca re-perguntar dado já confirmado
@@ -1970,6 +1970,12 @@ Regras:
           entryDateConfirmed: funnelStateLive.entry_date_confirmed,
           empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
           empadronadoCity: funnelStateLive.empadronado_city,
+          assistantTranscript: allAssistant,
+        })
+        // D1 Bizagi (Msg 6): garante "serviços atendidos" entre interesse e localização.
+        aiResponse = forceServicesMessageAfterInterest(aiResponse, detectedChatLanguage, {
+          interestKnown: !serviceMissing,
+          locationKnown: !!funnelStateLive.location_known,
           assistantTranscript: allAssistant,
         })
 
