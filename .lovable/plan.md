@@ -1,34 +1,53 @@
+# Liberar KB no Pré-Handoff e responder pergunta pendente
+
 ## Problema
 
-Mesmo com a data de hoje injetada no prompt, o Gemini ainda respondeu "Essa data parece no futuro, você pode confirmar?" para `01/01/2026` (que é passado em relação a 13/05/2026). Instruções em prosa não são confiáveis — o modelo continua aplicando o viés do seu cutoff de treinamento.
+No exemplo do print:
+1. Bot enviou as 2 frases do **Pré-Handoff** ("Já consigo ter uma visão inicial do seu caso." + "Na CB analisamos cada caso de forma individual…").
+2. Cliente perguntou "o que é autorização de regresso?".
+3. Bot respondeu "Ótima pergunta, te explico assim que terminarmos esse rapidíssimo levantamento." — adiando uma pergunta legítima de KB.
 
-## Solução: validação determinística no código (não confiar no LLM)
+Causa raiz: em `supabase/functions/whatsapp-webhook/index.ts` (linhas 1749–1766), o gate de coleta (`collectionGateActive`) só cai quando TODAS as 7 etapas estão `done`. A detecção das sub-etapas de **APROFUNDAMENTO** (A1–A6 / B1–B5) usa regex sobre as mensagens já enviadas — se a IA reformulou alguma frase, a etapa permanece pendente e a KB nunca é liberada, mesmo o agente já tendo enviado o Pré-Handoff (que por definição significa "cadastro concluído").
 
-Fazer a comparação passado/futuro em código TypeScript antes de chamar o Gemini. Quando estivermos no passo "data de entrada na Espanha" (Bloco B2) e a última mensagem do cliente for uma data válida, decidir no servidor:
+## Correção
 
-- **Data válida no passado (≤ hoje):** persistir em `entry_date_confirmed`, marcar B2 como concluído e injetar instrução forçada: "DATA JÁ CONFIRMADA pelo sistema (`YYYY-MM-DD`). NÃO peça confirmação. NÃO mencione 'futuro'. Apenas dê uma confirmação curta natural ('Anotado.') e siga IMEDIATAMENTE para a próxima pergunta do bloco (B3 empadronamento)."
-- **Data no futuro:** instrução forçada: "A data informada (`YYYY-MM-DD`) é POSTERIOR a hoje (`YYYY-MM-DD`). Peça confirmação neutra, sem sugerir ano alternativo."
-- **Data sem ano ou ambígua:** instrução forçada: "Falta o ano. Peça a data completa com dia, mês e ano."
+### 1. Pré-Handoff é o sinal definitivo de fim de cadastro
 
-Assim, mesmo se o Gemini "achar" que 2026 é futuro, ele recebe um fato determinístico que sobrepõe seu palpite.
+Em `whatsapp-webhook/index.ts`, logo após calcular `preHandoffDone` (linha 1750–1751), forçar:
 
-## Mudanças
+```ts
+if (preHandoffDone) {
+  // Pré-Handoff já enviado → cadastro concluído por definição.
+  // Marca todas as etapas anteriores como done para liberar a KB.
+  for (const s of steps) s.done = true
+}
+```
 
-### `supabase/functions/whatsapp-webhook/index.ts`
-- Adicionar helper `parseUserDate(text)` que tenta extrair uma data em formatos comuns (`DD/MM/YYYY`, `DD-MM-YYYY`, `YYYY-MM-DD`, `D de mês de YYYY` em pt/es/en) e retorna `{ iso, hasYear }` ou `null`.
-- Antes do bloco do passo `aprofundamento` (linha ~1694), quando `userInSpain && !askedEmpadronado && askedEntryDate` (ou seja, acabamos de fazer B2 e a última msg do cliente deve ser a data) **OU** quando `userInSpain && !funnelStateLive.entry_date_confirmed`, processar a última mensagem do usuário:
-  - Se `parseUserDate` retornar data com ano e ela for ≤ hoje → fazer `update` em `whatsapp_funnel_state.entry_date_confirmed` e construir instrução "data já validada, apenas siga para empadronamento (B3)".
-  - Se for > hoje → instrução "peça confirmação neutra".
-  - Se sem ano → instrução "peça data completa".
-- Substituir `aprofundamentoInstruction` quando essa validação determinística disparar, para que ela tenha prioridade sobre a instrução genérica.
+Isso garante que `nextStep` fica `undefined`, `flowComplete = true`, `collectionGateActive = false`, e a KB é consultada no mesmo turno (via `getKnowledgeBaseContext` na linha 1807).
 
-### Sem mudanças em `extract.ts` ou `questions.ts`
-A regra antiga continua valendo como fallback. A nova lógica é uma camada determinística antes do LLM.
+### 2. Consumir `pending_question` mesmo quando a pergunta atual é nova
 
-## Resultado esperado
+O bloco de linhas 1786–1793 só recupera `pending_question` se o gate caiu. Com a correção acima isso já passa a funcionar. Manter a lógica como está, apenas validar que a query da KB inclui tanto `pending_question` quanto a mensagem atual (já está em `kbQueryParts`).
 
-- `01/01/2026` (hoje 13/05/2026) → sistema grava data, bot responde algo curto e já pergunta sobre empadronamento. **Nunca mais** menciona "no futuro".
-- `01/01/2027` → bot pede confirmação neutra.
-- `20/04` sem ano → bot pede ano completo.
+### 3. Reforçar instrução do modo tira-dúvidas
 
-Sem mudança de UI, sem mudança de schema. Apenas o edge function `whatsapp-webhook`.
+No bloco `if (!handoffDone)` (linha 1836+), adicionar regra explícita:
+
+> "Se o cliente fez uma pergunta factual (o que é X, como funciona Y, prazos, valores) e há `pending_question` ou a mensagem atual contém '?', RESPONDA AGORA usando a KB. NÃO use mais a frase 'assim que terminarmos esse rapidíssimo levantamento' — o levantamento já acabou."
+
+### 4. Backfill defensivo do funnel state
+
+Quando `preHandoffDone` é detectado e `funnelStateLive.step !== 'livre'`, marcar `step = 'livre'` no `lead_funnel_state` para consistência futura (não bloqueia, é só housekeeping).
+
+## Arquivos alterados
+
+- `supabase/functions/whatsapp-webhook/index.ts` — fix do gate + reforço da instrução tira-dúvidas.
+
+## Deploy
+
+- Redeploy `whatsapp-webhook`.
+
+## Validação
+
+- Reproduzir o cenário do print: enviar mensagens até o Pré-Handoff, fazer pergunta factual ("o que é autorização de regresso?"), confirmar que a resposta vem da KB no mesmo turno.
+- Verificar logs `[GATE] flow complete — KB liberada` aparecendo após o Pré-Handoff.
