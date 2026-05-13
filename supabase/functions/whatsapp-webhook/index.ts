@@ -1748,22 +1748,26 @@ Regras:
         })
 
         // Etapa 7 — Pré-Handoff (H1 + H2) — APÓS isso a KB é liberada
-        const preHandoffDone = sentAny(/vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case/i)
+        // BPMN-3: Etapa 7 — PRÉ-HANDOFF + HANDOFF combinados (H1|||H2|||H3|||H4 numa rodada)
+        const preHandoffSentFlag = !!funnelStateLive.pre_handoff_sent
+        const handoffSentFlag = !!funnelStateLive.handoff_sent
+        const preHandoffDoneByRegex = sentAny(/vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case/i)
           && sentAny(/cada caso de forma individual|each case individually|caminho mais seguro/i)
+        const handoffDoneByRegex = sentAny(/encaminhar suas informa[çc][õo]es|remitir tu informaci[óo]n|forward your information|transmettre vos informations/i)
+          && sentAny(/encaminhar para um atendente|derivar a un agente|forward you to an agent|vous transf[ée]rer [àa] un agent/i)
+        const preHandoffDone = preHandoffSentFlag || preHandoffDoneByRegex
+        const handoffDone = handoffSentFlag || handoffDoneByRegex
+
         steps.push({
-          key: 'preHandoff', label: 'PRÉ-HANDOFF',
-          done: preHandoffDone,
+          key: 'preHandoff', label: 'PRÉ-HANDOFF + HANDOFF (BPMN-3)',
+          done: preHandoffDone && handoffDone,
           instruction:
-            'Envie o PRÉ-HANDOFF em duas frases curtas, nesta ordem: (1) "Perfeito. Já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." NÃO faça novas perguntas e NÃO envie o Handoff (encaminhar para atendente) agora. Após esta mensagem, a Base de Conhecimento será liberada e você entrará em modo tira-dúvidas usando a KB.',
+            'Envie EXATAMENTE 4 frases curtas, NESTA ORDEM, separadas pelo delimitador "|||" (4 bolhas em UMA resposta): (1) "Perfeito. Já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." (3) "Vou encaminhar suas informações para um especialista analisar com mais profundidade." (4) "Estou à disposição para ajudar se precisa! Vou te encaminhar para um atendente." NÃO faça novas perguntas. NÃO insira "modo tira-dúvidas" ANTES dessas 4 mensagens.',
         })
 
-        // ⚡ Pré-Handoff é o sinal definitivo de "cadastro concluído". Se ele já foi enviado,
-        // marca todas as etapas anteriores como done para liberar a KB imediatamente — mesmo
-        // que algum regex de sub-etapa do APROFUNDAMENTO não tenha batido (ex.: a IA reformulou
-        // a frase). Sem isso, perguntas factuais pós-Pré-Handoff são incorretamente adiadas.
-        if (preHandoffDone) {
+        // Concluiu cadastro: KB liberada e funil = 'livre'.
+        if (preHandoffDone && handoffDone) {
           for (const s of steps) s.done = true
-          // Housekeeping: marca o funil como 'livre' para consistência futura.
           if (funnelStateLive.step !== 'livre') {
             try {
               await supabase
@@ -1776,10 +1780,6 @@ Regras:
             }
           }
         }
-
-        // Etapa 8 — Handoff (H3 + H4) — opcional, apenas se a equipe for assumir
-        const handoffDone = sentAny(/encaminhar suas informa[çc][õo]es|forward your information/i)
-          && sentAny(/encaminhar para um atendente|derivar a un agente|forward you to an agent/i)
 
         // Próxima etapa pendente
         const nextStep = steps.find(s => !s.done)
