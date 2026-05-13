@@ -1,0 +1,1 @@
+UPDATE public.contacts SET preferred_language = 'es' WHERE id = 'ea70de89-0eb6-4f45-b974-feeff1d5b31a';
