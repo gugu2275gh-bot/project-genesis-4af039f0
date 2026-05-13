@@ -1987,6 +1987,13 @@ Regras:
           empadronadoCity: funnelStateLive.empadronado_city,
           assistantTranscript: allAssistant,
         })
+        aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, {
+          locationKnown: funnelStateLive.location_known,
+          entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+          empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+          empadronadoCity: funnelStateLive.empadronado_city,
+          assistantTranscript: allAssistant,
+        })
         // BPMN v2: Msg5 + Msg6 na MESMA rodada — anexa Msg6 quando IA emite Msg5 sozinha.
         aiResponse = ensureServicesAttachedToInterest(aiResponse, detectedChatLanguage, allAssistant)
         // D1 Bizagi (fallback): garante "serviços atendidos" caso interesse já confirmado e Msg6 nunca enviada.
