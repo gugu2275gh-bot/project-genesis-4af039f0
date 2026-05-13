@@ -167,6 +167,19 @@ export function forceAdvanceFromEntryDateQuestion(
     return aiResponse
   }
 
+  // Validação determinística: se a data informada é parseável, decide aqui (não confiar no LLM
+  // para distinguir passado/futuro — Gemini frequentemente erra por causa do cutoff de treinamento).
+  const parsed = parseEntryDateFromText(currentMessage)
+  if (parsed) {
+    if (parsed.isFuture) {
+      const replacement = getEntryDateFutureConfirmQuestion(language, parsed.iso)
+      return preamble ? `${preamble}\n${replacement}` : replacement
+    }
+    // Data no passado/hoje → SEMPRE avança para empadronamento, ignorando qualquer pedido de confirmação que a IA tenha gerado.
+    const replacement = getEmpadronadoQuestion(language)
+    return preamble ? `${preamble}\n${replacement}` : replacement
+  }
+
   if (nextQuestion && areQuestionsEquivalent(previousQuestion, nextQuestion)) {
     const replacement = getEmpadronadoQuestion(language)
     return preamble ? `${preamble}\n${replacement}` : replacement
