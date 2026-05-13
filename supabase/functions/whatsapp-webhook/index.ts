@@ -2085,6 +2085,7 @@ Regras:
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
             aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
+            aiResponse = stripRepeatedOpener(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = preventRepeatedCanonicalQuestion(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = forceServicesMessageAfterInterest(aiResponse, detectedChatLanguage, {
               interestKnown: !serviceMissing,
