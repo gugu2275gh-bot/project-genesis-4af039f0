@@ -2060,20 +2060,9 @@ Regras:
             aiResponse = forceAdvanceFromEmpadronadoQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
             aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, { nameKnown: !nameMissing, emailKnown: !emailMissing, interestKnown: !serviceMissing, locationKnown: !!funnelStateLive.location_known })
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
-            aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, {
-              locationKnown: funnelStateLive.location_known,
-              entryDateConfirmed: funnelStateLive.entry_date_confirmed,
-              empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
-              empadronadoCity: funnelStateLive.empadronado_city,
-              assistantTranscript: allAssistant,
-            })
-            aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, {
-              locationKnown: funnelStateLive.location_known,
-              entryDateConfirmed: funnelStateLive.entry_date_confirmed,
-              empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
-              empadronadoCity: funnelStateLive.empadronado_city,
-              assistantTranscript: allAssistant,
-            })
+            aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, blockFlags)
+            aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
+            aiResponse = preventRepeatedCanonicalQuestion(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = forceServicesMessageAfterInterest(aiResponse, detectedChatLanguage, {
               interestKnown: !serviceMissing,
               locationKnown: !!funnelStateLive.location_known,
