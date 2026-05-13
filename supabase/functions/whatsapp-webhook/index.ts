@@ -347,6 +347,7 @@ import {
   isLikelyQuestionLoop,
   lockConfirmedFieldsInResponse,
   sanitizeLocationQuestion,
+  forceCorrectBlockForLocation,
   computeDeterministicFunnelPatch,
   stripLockedSentinel,
   isLocked,
