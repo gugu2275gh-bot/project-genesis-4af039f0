@@ -371,13 +371,24 @@ export function buildPreHandoffPayload(
 export function getOutsideSpainNextQuestion(
   language: ChatLanguage,
   assistantTranscript: string,
-  options?: { entryDateConfirmed?: string | null; locationKnown?: string | null },
+  options?: {
+    entryDateConfirmed?: string | null
+    locationKnown?: string | null
+    outsideProgress?: {
+      a2_age?: string
+      a3_europe_6m?: 'yes' | 'no'
+      a4_eu_family?: 'yes' | 'no'
+      a5_remote?: 'yes' | 'no'
+      a6_higher_ed?: 'yes' | 'no'
+    } | null
+  },
 ): string {
-  const askedIdade = /\b(qual sua idade|cu[áa]ntos a[ñn]os|how old)\b/i.test(assistantTranscript)
-  const askedEuropa = /\beuropa nos [úu]ltimos 6 meses|europa en los [úu]ltimos 6 meses|europe in the last 6 months\b/i.test(assistantTranscript)
-  const askedFamiliar = /\bfamiliar (europeu|europeo)|family member.*(eu|spain)\b/i.test(assistantTranscript)
-  const askedRemoto = /\b(trabalha remoto|trabajas? remoto|work remotely)\b/i.test(assistantTranscript)
-  const askedFormacao = /\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree)\b/i.test(assistantTranscript)
+  const op = options?.outsideProgress || {}
+  const askedIdade = !!op.a2_age || /\b(qual sua idade|cu[áa]ntos a[ñn]os|how old)\b/i.test(assistantTranscript)
+  const askedEuropa = !!op.a3_europe_6m || /\beuropa nos [úu]ltimos 6 meses|europa en los [úu]ltimos 6 meses|europe in the last 6 months\b/i.test(assistantTranscript)
+  const askedFamiliar = !!op.a4_eu_family || /\bfamiliar (europeu|europeo)|family member.*(eu|spain)\b/i.test(assistantTranscript)
+  const askedRemoto = !!op.a5_remote || /\b(trabalha remoto|trabajas? remoto|work remotely)\b/i.test(assistantTranscript)
+  const askedFormacao = !!op.a6_higher_ed || /\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree)\b/i.test(assistantTranscript)
 
   // Pular A3 quando já temos a informação implícita: cliente está na Espanha
   // OU informou data de entrada nos últimos 180 dias.
