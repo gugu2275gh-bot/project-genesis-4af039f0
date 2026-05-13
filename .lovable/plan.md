@@ -1,82 +1,67 @@
+## Objetivo
 
-# Plano: alinhar pré-handoff ao diagrama Bizagi (4 divergências)
+Alinhar o agente WhatsApp ao novo BPMN `CB_pre-handoff_v2.bpm`:
 
-Aplicar correções determinísticas em `supabase/functions/whatsapp-webhook/lib/` preservando:
-- Validação de cidade espanhola (B5)
-- Lock de blocos (`forceCorrectBlockForLocation`)
-- Multi-idioma PT/ES/EN/FR
-- Lock de campos confirmados (`lockConfirmedFieldsInResponse`)
-- Detecção de data futura, reprompts existentes
+1. **Msg 5 + Msg 6** entregues na **mesma rodada** (um único turno do bot). A resposta do cliente deve ser interpretada como **uma das opções listadas em Msg 5** (interesse).
+2. **Remover Msg H4**. O fluxo de handoff termina em **Msg H3** (apenas uma bolha de encerramento). Sem H4, sem segunda bolha de "vou te encaminhar para um atendente".
 
-## D1 — Inserir "Msg 6: serviços atendidos" entre interesse e localização
+Tudo o que o usuário pediu para manter (3.4 deterministic path como está, 3.5 sem roteamento real) permanece intocado.
 
-**Arquivo:** `lib/overrides.ts` + `lib/questions.ts`
+---
 
-- Nova função em `questions.ts`: `getServicesOfferedMessage(language)` retornando texto multi-idioma curto listando categorias (residência/NIE/TIE, nacionalidade, arraigo, reagrupamento familiar, homologação, autorização de regresso) e perguntando "faz sentido para o seu caso?".
-- Novo flag de estado: `services_acknowledged` (boolean) salvo em funnel-state junto com `interest_confirmed`.
-- Novo override em `overrides.ts`: `forceServicesMessageAfterInterest`
-  - Dispara quando `interest_confirmed = true` E `services_acknowledged != true` E última msg do bot não foi a de serviços.
-  - Substitui a resposta do LLM por `getServicesOfferedMessage`.
-- Ajustar `forceAdvanceFromInterestQuestion`: só avança para `getLocationQuestion` quando `services_acknowledged = true` (qualquer resposta curta afirmativa OU qualquer mensagem do cliente após Msg 6 marca como acknowledged — não bloqueia o fluxo).
-- Detector `isQuestionAboutServicesOffered(question)` para reconhecer a Msg 6 no transcript (evita repetir).
+## Mudanças
 
-## D2 — Separar A1/B1 ("confirmar cenário/situação") de A2/B2
+### 1. `lib/questions.ts` — remover H4
+- `getHandoffTransferMessage(language)` passa a retornar **apenas H3** (sem `|||`, sem segunda bolha) nos 4 idiomas:
+  - PT: "Vou encaminhar suas informações para um especialista analisar com mais profundidade."
+  - ES: "Voy a remitir tu información a un especialista para que la analice con más profundidad."
+  - EN: "I will forward your information to a specialist to analyze it in more depth."
+  - FR: "Je vais transmettre vos informations à un spécialiste pour qu'il les analyse plus en profondeur."
+- `HANDOFF_TRANSFER_RE` reduzido às âncoras de H3 (remover âncoras de H4 — "vou te encaminhar para um atendente", "te voy a derivar a un agente", etc.).
+- `buildPreHandoffPayload` mantém a lógica idempotente (usando flags `pre_handoff_sent` / `handoff_sent`), mas o payload final completo agora é `H1|||H2|||H3` (3 bolhas, não 4).
+- Comentários do bloco BPMN-3 atualizados para BPMN-v2: "3 mensagens distintas" no lugar de "4".
 
-**Arquivo:** `lib/questions.ts` + `lib/overrides.ts`
+### 2. `index.ts` — Msg5 + Msg6 na mesma rodada
+- Bloco do prompt LLM (linhas ~1244-1245 e ~1675): substituir a instrução "envie Msg5, AGUARDE, depois Msg6" por **"envie Msg5 e Msg6 numa única rodada, separadas por `\n\n` (ou duas bolhas via `|||`), e aguarde a resposta — que deve ser uma das opções citadas em Msg5"**.
+- Reforçar no prompt que a resposta esperada é **uma das opções de Msg 5** (nacionalidade / residência / estudos / arraigo / documento específico). Se vier algo fora, o bot pede para o cliente escolher uma das opções (sem repetir Msg5+Msg6 inteiras — só uma reformulação curta).
+- O passo `interesse` na "trilha" passa a ser concluído quando **uma única rodada** com Msg5+Msg6 já foi enviada (não duas separadas).
+- Remover comentários e flags que assumiam Msg6 só depois de resposta.
 
-- Quebrar mensagens fundidas em duas frases entregues no mesmo turno separadas por `\n\n` (mantém 1 turno só, mas visualmente são 2 blocos — preserva UX e evita +1 round-trip):
-  - A1+A2: "Entendido. Então seguimos pelo seu cenário fora da Espanha.\n\nQual sua idade?"
-  - B1+B2: "Perfeito. Agora preciso entender melhor sua situação aqui na Espanha.\n\nQual foi a data exata da sua entrada?"
-- Aplicar em todos os 4 idiomas em `getOutsideSpainAgeQuestion` e na string usada por `forceAdvanceFromLocationQuestion` (bloco B).
+### 3. `lib/overrides.ts` — injeção determinística
+- `getServicesOfferedMessage` (Msg6) deixa de ser injetado **depois** de `interest_confirmed`. Em vez disso, quando o bot for emitir Msg5 (`interestQuestion`), o override garante que Msg6 (`servicesCatalog` / `getServicesOfferedMessage`) seja **anexado na mesma resposta** (com `|||` ou `\n\n`).
+- Validação de resposta: se `interest_confirmed` ainda não capturou e a resposta do cliente não bate com nenhum termo do catálogo Msg5, gerar uma mensagem curta pedindo escolha (sem reenviar Msg5+Msg6).
 
-## D3 — Pré-handoff em 2 mensagens (H1-H2 + H3-H4)
+### 4. Testes
+- Atualizar `bpmn3_handoff_test.ts` (renomear mentalmente para v2): remover asserts que esperavam H4; payload final passa a ter exatamente 3 bolhas (`H1`, `H2`, `H3`).
+- Atualizar `wave7_test.ts`: payload pré-handoff = 3 bolhas.
+- Adicionar caso novo: "Msg5 e Msg6 saem juntas em um único turno" e "resposta fora das opções pede reescolha sem reenviar Msg5+Msg6".
 
-**Arquivo:** `lib/questions.ts` + `lib/overrides.ts` (ou `index.ts` no ponto de envio)
+### 5. Migration
+- **Nenhuma**. As colunas `pre_handoff_sent` / `handoff_sent` continuam válidas — `handoff_sent` agora marca o envio do H3 (único).
 
-- Renomear/dividir o texto atual de pré-handoff em duas funções multi-idioma:
-  - `getPreHandoffSummaryMessage(language)` — H1-H2 atual ("Perfeito. Já consigo ter uma visão inicial... Na CB analisamos cada caso de forma individual...").
-  - `getHandoffTransferMessage(language)` — H3-H4 nova ("Vou te encaminhar agora para um especialista da CB. Em breve uma pessoa do nosso time vai assumir essa conversa para te orientar com detalhes do seu caso.").
-- No ponto onde o pré-handoff é disparado (override de fechamento do funil):
-  - Enviar H1-H2 e em seguida H3-H4 como **duas mensagens WhatsApp separadas** (dois `sendWhatsAppMessage` consecutivos com pequeno delay opcional via `await`), antes de acionar a auto-pausa do AI.
-- Garantir idempotência: flags `pre_handoff_summary_sent` e `pre_handoff_transfer_sent` em funnel-state para não reenviar se o webhook reentrar.
+---
 
-## D4 — Mensagem determinística de "encaminhar para especialista"
+## Arquivos afetados
 
-Coberto pelo `getHandoffTransferMessage` de D3. Adicional:
-- Logar no histórico de interações `origem: SISTEMA` com tipo `HANDOFF_HUMANO` (mantém padrão de SLA Integration).
-- A auto-pausa do AI (já existente — memory: AI Resilience) só é acionada **após** confirmação de envio das duas mensagens.
+- `supabase/functions/whatsapp-webhook/lib/questions.ts`
+- `supabase/functions/whatsapp-webhook/lib/overrides.ts`
+- `supabase/functions/whatsapp-webhook/index.ts`
+- `supabase/functions/whatsapp-webhook/bpmn3_handoff_test.ts`
+- `supabase/functions/whatsapp-webhook/wave7_test.ts`
 
-## Preservação de regras existentes (não tocar)
+## Como rodar os testes
 
-- `validateSpanishCity` + reprompt de B5 — mantido.
-- `forceCorrectBlockForLocation` — continua bloqueando mistura A/B; novos overrides D1/D3 rodam DEPOIS dessa trava.
-- `lockConfirmedFieldsInResponse` — aplicado também sobre os textos novos (D1/D3 não contêm campos do cliente, então é no-op seguro).
-- Detecção de data futura em B2 — intacta.
-- Multi-idioma PT/ES/EN/FR — todas as novas strings cobrem os 4 idiomas seguindo o padrão de `getOutsideSpainAgeQuestion`.
-- `parseEntryDateFromText`, `looksLikeIncompleteEntryDateWithoutYear`, etc. — intactos.
+```bash
+# Testes do novo fluxo BPMN v2 (pré-handoff + Msg5/Msg6 + H3 único)
+deno test --allow-net --allow-env \
+  supabase/functions/whatsapp-webhook/bpmn3_handoff_test.ts \
+  supabase/functions/whatsapp-webhook/wave7_test.ts
 
-## Testes
+# Ou via Lovable:
+# tool: supabase--test_edge_functions { functions: ["whatsapp-webhook"] }
+```
 
-Adicionar `wave7_test.ts` em `supabase/functions/whatsapp-webhook/`:
-- D1: após `interest_confirmed`, próxima resposta do bot é Msg 6; após cliente responder qualquer coisa, vem `getLocationQuestion`.
-- D1: Msg 6 não é repetida se já enviada.
-- D2: A2 contém `\n\n` separando confirmação e pergunta de idade (PT/ES/EN/FR).
-- D3: ao fechar funil, são enviadas 2 mensagens (mock conta `sendWhatsAppMessage` chamado 2×).
-- D3: reentrada do webhook não duplica mensagens (flags idempotentes).
-- Regressão: `wave5_test.ts` e `wave6_test.ts` continuam passando.
+## Confirmação antes de implementar
 
-## Ordem de execução
-
-1. `lib/questions.ts` — adicionar funções novas e quebrar A2/B2 com `\n\n`.
-2. `lib/funnel-state.ts` — adicionar flags `services_acknowledged`, `pre_handoff_summary_sent`, `pre_handoff_transfer_sent`.
-3. `lib/overrides.ts` — `forceServicesMessageAfterInterest` + ajuste em `forceAdvanceFromInterestQuestion`.
-4. `index.ts` — split do envio do pré-handoff em 2 mensagens com guards idempotentes.
-5. `wave7_test.ts` — cobertura.
-6. `supabase--test_edge_functions` em `whatsapp-webhook` para validar tudo verde.
-
-## Detalhes técnicos
-
-- Nenhum schema novo no Postgres — flags ficam dentro do JSON `funnel_state` já persistido.
-- Sem migrations.
-- Sem mudança de prompts do LLM — tudo determinístico via overrides.
-- Sem mudança no contrato do webhook nem nas chamadas Twilio (só +1 chamada extra no momento do handoff).
+1. **Msg H4 deve ser removida em todos os idiomas** (PT/ES/EN/FR), correto?
+2. Quando a resposta de Msg5 vier **fora** das opções (ex.: "quero ajuda jurídica genérica"), o bot deve **(a)** aceitar como "OUTRO" e seguir, ou **(b)** insistir até o cliente escolher uma das opções listadas? (BPMN sugere (b) — gateway com opções fixas.)
