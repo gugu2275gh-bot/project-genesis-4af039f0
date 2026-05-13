@@ -408,11 +408,10 @@ export function forceAdvanceFromEmpadronadoQuestion(
   const wrap = (q: string) => (preamble ? `${preamble}\n${q}` : q)
 
   // B5 (cidade) já foi feita → validar se é cidade espanhola.
-  // Se inválida, repergunta E TRAVA a resposta com sentinel para que nada mais sobrescreva.
   if (isEmpadronamientoCityQuestion(previousQuestion)) {
     if (!isValidSpanishCity(msg)) {
       console.log('[CITY_VALIDATION] invalid Spanish city in answer, reprompting:', msg.slice(0, 60))
-      return lock(wrap(getInvalidSpanishCityReprompt(language)))
+      return lock(getInvalidSpanishCityReprompt(language))
     }
     return aiResponse
   }
@@ -420,16 +419,16 @@ export function forceAdvanceFromEmpadronadoQuestion(
   // Caso o previousQuestion já seja a reprompt de cidade inválida → continua validando.
   if (/no reconoc|did not recognize|n[ãa]o reconheci|n ai pas reconnu|reconnu cette ville/i.test(previousQuestion || '')) {
     if (!isValidSpanishCity(msg)) {
-      return lock(wrap(getInvalidSpanishCityReprompt(language)))
+      return lock(getInvalidSpanishCityReprompt(language))
     }
     return aiResponse
   }
 
-  // B4 (desde quando) → próxima é B5 (cidade).
+  // B4 (desde quando) → próxima é B5 (cidade). LOCK puro para impedir vazamento de H1.
   if (isEmpadronamientoSinceQuestion(previousQuestion)) {
     const nextQ = extractLastQuestion(aiResponse)
     if (isEmpadronamientoCityQuestion(nextQ)) return aiResponse
-    return wrap(getEmpadronamientoCityQuestion(language))
+    return lock(getEmpadronamientoCityQuestion(language))
   }
 
   // B3 (yes/no).
@@ -445,14 +444,14 @@ export function forceAdvanceFromEmpadronadoQuestion(
   if (hasDate) {
     const nextQ = extractLastQuestion(aiResponse)
     if (isEmpadronamientoCityQuestion(nextQ)) return aiResponse
-    return wrap(getEmpadronamientoCityQuestion(language))
+    return lock(getEmpadronamientoCityQuestion(language))
   }
 
   // SIM puro (ou texto curto não-negativo) → pergunta B4 (desde quando).
   if (YES_ANSWER_RE.test(msg) || msg.length < 60) {
     const nextQ = extractLastQuestion(aiResponse)
     if (isEmpadronamientoSinceQuestion(nextQ)) return aiResponse
-    return wrap(getEmpadronamientoSinceQuestion(language))
+    return lock(getEmpadronamientoSinceQuestion(language))
   }
 
   return aiResponse
