@@ -18,12 +18,14 @@ export function isStructuredQuestionAnswer(text: string): boolean {
 }
 
 export function isQuestionAboutSpainEntryDate(question: string): boolean {
-  const normalized = normalizeForLanguageChecks(question)
-  return normalized.includes('data exata da sua entrada na espanha')
-    || normalized.includes('entrada na espanha')
-    || normalized.includes('fecha exacta de tu entrada a espana')
-    || normalized.includes('date of your entry into spain')
-    || normalized.includes('date exacte de votre entree en espagne')
+  const n = normalizeForLanguageChecks(question)
+  if (!n) return false
+  // Token "espanha/espana/spain/espagne" deve estar presente
+  if (!/\b(espanha|espana|spain|espagne)\b/.test(n)) return false
+  // E algum termo de "entrada/chegada" em qualquer idioma
+  return /\b(entrada|entrou|entrar|entraste|entraron|entered|enter|entry|entree|chegada|chegou|chegar|llegada|llego|llegaste|llegar|arrival|arrived|arrive|arrivee)\b/.test(n)
+    // ou perguntas no formato "quando você entrou/chegou em ..." e equivalentes
+    || /\b(quando|cuando|when|quand)\b.{0,40}\b(entr|cheg|lleg|arriv)/.test(n)
 }
 
 export function isNeverBeenToSpainAnswer(text: string): boolean {
@@ -31,9 +33,10 @@ export function isNeverBeenToSpainAnswer(text: string): boolean {
   if (!normalized || normalized.includes('?')) return false
 
   return /\b(nunca fui|nunca estive|nunca entrei|jamais fui|jamais estive)\b/.test(normalized)
-    || /\b(nao|no|not|never)\b.{0,24}\b(fui|estive|entrei|estoy|been|entered)\b/.test(normalized)
-    || /\b(never been|never entered)\b.{0,16}\b(spain|espana|espanha)\b/.test(normalized)
-    || /\b(nunca he estado|nunca entre|nunca fui)\b/.test(normalized)
+    || /\b(nao|no|not|never|jamais|never been|jamais ete|jamais ete a)\b.{0,24}\b(fui|estive|entrei|estoy|been|entered|entre|ete|allee|alle|allee a|alle a)\b/.test(normalized)
+    || /\b(never been|never entered|never gone)\b.{0,16}\b(spain|espana|espanha|espagne)\b/.test(normalized)
+    || /\b(nunca he estado|nunca estuve|nunca entre|nunca fui|no he estado|no he ido|no he entrado)\b/.test(normalized)
+    || /\b(n ai jamais|je n ai jamais|jamais ete|jamais alle|jamais allee)\b/.test(normalized)
 }
 
 export function isPotentialEntryDateAnswer(text: string): boolean {
