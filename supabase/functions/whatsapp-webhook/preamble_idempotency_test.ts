@@ -11,11 +11,21 @@ const A1_PREAMBLE = {
   'fr': 'D’accord. Nous continuons donc avec votre situation hors d’Espagne',
 } as const
 
+// Para ES usamos a forma "cuántos años" pois é a âncora do regex isSpainOnlyQuestion;
+// a IA pode emitir qualquer das duas formas e ambas devem disparar o lock.
 const A2_QUESTION = {
   'pt-BR': 'Qual sua idade?',
-  'es': '¿Cuál es tu edad?',
+  'es': '¿Cuántos años tienes?',
   'en': 'How old are you?',
   'fr': 'Quel âge avez-vous ?',
+} as const
+
+// A2 esperado de retorno (o que o sistema substitui) — pode ser a forma canônica curta
+const A2_EXPECTED = {
+  'pt-BR': 'Qual foi a data exata da sua entrada na Espanha?',
+  'es': '¿Cuál fue la fecha exacta de tu entrada en España?',
+  'en': 'What was the exact date you entered Spain?',
+  'fr': 'Quelle est la date exacte de votre entrée en Espagne ?',
 } as const
 
 const B1_PREAMBLE = {
