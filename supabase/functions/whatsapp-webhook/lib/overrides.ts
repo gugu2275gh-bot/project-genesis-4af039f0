@@ -605,3 +605,21 @@ export function forceCorrectBlockForLocation(
   return aiResponse
 }
 
+/**
+ * Defesa final: se o texto contém H1 do pré-handoff (BPMN-v2) precedido por
+ * qualquer preâmbulo (separado por \n e não por |||), descarta tudo antes do H1.
+ * Garante que H1|||H2|||H3 saiam sem frases inventadas pelo LLM coladas antes.
+ */
+const PREHANDOFF_H1_RE = /Perfeito\. Já consigo ter uma visão inicial do seu caso\.|Perfecto\. Ya puedo tener una visión inicial de tu caso\.|Perfect\. I can already get an initial view of your case\.|Parfait\. Je peux déjà avoir une première vision de votre cas\./i
+
+export function stripPreambleBeforePreHandoff(text: string): string {
+  if (!text) return text
+  const match = text.match(PREHANDOFF_H1_RE)
+  if (!match || match.index === undefined || match.index === 0) return text
+  // Só descarta se o que vem antes NÃO contém o delimitador ||| (i.e., é preâmbulo solto).
+  const before = text.slice(0, match.index)
+  if (before.includes('|||')) return text
+  console.warn('[BPMN-v2] Preâmbulo descartado antes do H1:', before.trim().slice(0, 120))
+  return text.slice(match.index)
+}
+
