@@ -2134,13 +2134,29 @@ Regras:
           // Send AI response via Twilio (split on "|||" delimiter for multi-message replies)
           try {
             // Remove sentinel anti-clobber antes de enviar (não deve aparecer ao cliente)
-            const aiResponseClean = stripLockedSentinel(aiResponse)
+            let aiResponseClean = stripLockedSentinel(aiResponse)
+
+            // BPMN-3 MODO PÓS-HANDOFF: se H1-H4 já foram enviados, anexa o sufixo
+            // localizado de "aguarde um especialista" ao final da resposta (uma única bolha).
+            const wasHandoffSentBefore = !!funnelStateLive.handoff_sent
+            if (wasHandoffSentBefore) {
+              const suffix = getPostHandoffWaitSuffix(detectedChatLanguage)
+              // não duplica se a IA por engano colocou parte do sufixo
+              const lower = aiResponseClean.toLowerCase()
+              const sigPT = 'em breve um de nossos especialistas'
+              const sigES = 'en breve uno de nuestros especialistas'
+              const sigEN = 'one of our specialists'
+              const sigFR = 'un de nos spécialistes'
+              if (!lower.includes(sigPT) && !lower.includes(sigES) && !lower.includes(sigEN) && !lower.includes(sigFR)) {
+                aiResponseClean = `${aiResponseClean.trim()}\n\n${suffix}`
+              }
+            }
+
             const parts = aiResponseClean.split('|||').map(p => p.trim()).filter(Boolean)
             for (let i = 0; i < parts.length; i++) {
               const part = parts[i]
               await sendWhatsAppMessage(phoneNumber, part)
 
-              // Store each part in mensagens_cliente
               await supabase.from('mensagens_cliente').insert({
                 id_lead: lead.id,
                 phone_id: parseInt(phoneNumber),
@@ -2148,7 +2164,6 @@ Regras:
                 origem: 'IA',
               })
 
-              // Create outbound interaction per part
               await supabase.from('interactions').insert({
                 lead_id: lead.id,
                 contact_id: contact.id,
@@ -2158,7 +2173,6 @@ Regras:
                 origin_bot: true,
               })
 
-              // Small delay between consecutive messages so they arrive in order
               if (i < parts.length - 1) {
                 await new Promise(r => setTimeout(r, 800))
               }
@@ -2166,27 +2180,27 @@ Regras:
 
             console.log('AI response sent and stored successfully (parts:', parts.length, ')')
 
-            // M3/R5: Auto-pause after handoff detection (Stage 8)
-            const handoffPatterns = [
-              'encaminhar para um especialista',
-              'encaminhar para um atendente',
-              'vou te encaminhar',
-              'transfer you to',
-              'te voy a transferir',
-              'derivar tu caso',
-              'um especialista vai',
-              'a specialist will',
-              'un especialista va',
-            ]
-            const isHandoff = handoffPatterns.some(p => aiResponse.toLowerCase().includes(p))
-            if (isHandoff) {
-              await supabase.from('mensagens_cliente').insert({
-                id_lead: lead.id,
-                mensagem_IA: '🤖 Handoff automático — IA pausada após encaminhamento ao atendente.',
-                origem: 'SISTEMA',
-              })
-              console.log('Auto-pause: AI handoff detected, inserting SISTEMA marker to pause AI')
+            // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3-H4
+            // nas partes enviadas neste turno. Idempotente — só faz UPDATE se mudou algo.
+            try {
+              const sentJoined = parts.join('\n')
+              const newPreSent = !funnelStateLive.pre_handoff_sent && preHandoffSummarySent(sentJoined)
+              const newHandSent = !funnelStateLive.handoff_sent && handoffTransferSent(sentJoined)
+              if (newPreSent || newHandSent) {
+                const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+                if (newPreSent) patch.pre_handoff_sent = true
+                if (newHandSent) patch.handoff_sent = true
+                await supabase.from('lead_funnel_state').update(patch).eq('lead_id', lead.id)
+                funnelStateLive = { ...funnelStateLive, ...patch } as typeof funnelStateLive
+                console.log('[BPMN-3] flags persisted:', JSON.stringify(patch))
+              }
+            } catch (flagErr) {
+              console.warn('[BPMN-3] flag persist non-blocking error:', flagErr instanceof Error ? flagErr.message : flagErr)
             }
+
+            // Nota: NÃO inserimos mais marker SISTEMA de auto-pausa ao detectar handoff por padrão de texto.
+            // BPMN-3 mantém a IA disponível em MODO PÓS-HANDOFF (KB + sufixo de aguardar).
+            // A pausa real continua acionada quando um humano responde via UI (origem='SISTEMA').
           } catch (sendErr) {
             console.error('Failed to send AI response via Twilio:', sendErr instanceof Error ? sendErr.message : sendErr)
           }
