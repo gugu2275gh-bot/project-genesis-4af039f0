@@ -153,17 +153,32 @@ Deno.test('forceAdvanceFromEntryDateQuestion: never-been-to-Spain advances to ag
   assertStringIncludes(result, 'Entendi.')
 })
 
-Deno.test('forceAdvanceFromInterestQuestion: replaces repeated interest question with location', () => {
+Deno.test('forceAdvanceFromInterestQuestion: D1 Bizagi — injects services list (Msg 6) before location', () => {
   const result = forceAdvanceFromInterestQuestion(
     'O que você busca hoje?',
     'arraigo',
     'Perfeito!\nO que você busca hoje?',
     'pt-BR',
+    '', // transcript vazio → ainda não enviou Msg 6
   )
   assertStringIncludes(result, 'Perfeito!')
-  // Location question replaces the duplicate interest one
-  assertStringIncludes(result, 'já está na Espanha')
+  // Msg 6: serviços atendidos antes de pedir localização
+  assertStringIncludes(result, 'arraigo')
+  assertStringIncludes(result, 'reagrupamento')
   assert(!/o que voc[eê] busca hoje/i.test(result), 'should not still ask about interest')
+  assert(!/já está na Espanha/i.test(result), 'should NOT yet ask location — services first')
+})
+
+Deno.test('forceAdvanceFromInterestQuestion: D1 Bizagi — after services sent, advances to location', () => {
+  const transcript = 'Na CB trabalhamos com: residência (NIE/TIE), nacionalidade espanhola, arraigo (social, laboral, familiar, formação), reagrupamento familiar, homologação de diploma e autorização de regresso.'
+  const result = forceAdvanceFromInterestQuestion(
+    'O que você busca hoje?',
+    'arraigo',
+    'Perfeito!\nO que você busca hoje?',
+    'pt-BR',
+    transcript,
+  )
+  assertStringIncludes(result, 'já está na Espanha')
 })
 
 // ---------- Loop detection ----------
