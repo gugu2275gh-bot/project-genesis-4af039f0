@@ -20,6 +20,7 @@ import {
   getOutsideSpainAgeQuestion,
   getEmpadronadoQuestion,
   getEmpadronamientoCityQuestion,
+  getEmpadronamientoSinceQuestion,
   getLocationQuestion,
   getFullNameReaskQuestion,
   countAlphaWords,
