@@ -299,6 +299,7 @@ import {
   normalizeForLanguageChecks,
   looksPortuguese,
   getLanguageName,
+  getPromptTemplates,
 } from './lib/language.ts'
 
 export { detectChatLanguage }
