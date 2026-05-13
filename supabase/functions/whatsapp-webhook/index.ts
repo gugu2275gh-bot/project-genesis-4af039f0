@@ -1988,6 +1988,13 @@ Regras:
             aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
             aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, { nameKnown: !nameMissing, emailKnown: !emailMissing, interestKnown: !serviceMissing, locationKnown: !!funnelStateLive.location_known })
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
+            aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, {
+              locationKnown: funnelStateLive.location_known,
+              entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+              empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+              empadronadoCity: funnelStateLive.empadronado_city,
+              assistantTranscript: allAssistant,
+            })
           } catch (e) {
             console.error('[F1-HARD] retry failed:', e instanceof Error ? e.message : e)
           }
