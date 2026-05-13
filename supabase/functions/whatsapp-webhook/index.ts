@@ -1673,7 +1673,7 @@ Regras:
           key: 'interesse', label: 'INTERESSE / SERVIÇO',
           done: interesseDone,
           instruction:
-            `Pergunte sobre o interesse do cliente em DUAS mensagens curtas, nesta ordem (ambas JÁ no idioma travado, NÃO traduza nem altere): (1) "${t.interestQuestion}" (2) "${t.servicesCatalog}". NÃO consulte a Base de Conhecimento.`,
+            `BPMN v2: envie Msg5 e Msg6 na MESMA rodada como DUAS bolhas separadas por "|||" (ambas JÁ no idioma travado, NÃO traduza nem altere): "${t.interestQuestion}|||${t.servicesCatalog}". A resposta do cliente deve ser uma das opções de Msg5; se vier algo fora, peça para escolher uma das opções (sem reenviar Msg5+Msg6). NÃO consulte a Base de Conhecimento.`,
         })
 
         // Etapa 5 — Localização (Msg7) — exige a pergunta exata "Espanha OU outro país"
