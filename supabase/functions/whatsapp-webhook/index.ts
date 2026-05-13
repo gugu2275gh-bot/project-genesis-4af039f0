@@ -2058,6 +2058,7 @@ Regras:
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
             aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
+            aiResponse = stripRepeatedOpener(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = preventRepeatedCanonicalQuestion(aiResponse, detectedChatLanguage, blockFlags)
           } catch (e) {
             console.error('[F1-HARD] retry failed:', e instanceof Error ? e.message : e)
