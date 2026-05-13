@@ -228,6 +228,41 @@ export async function applyTurnUpdates(
   return (data as FunnelState) || merged
 }
 
+/**
+ * Merge incremental no jsonb `outside_spain_progress` (não substitui o objeto inteiro).
+ * Idempotente: se nenhum campo NOVO precisa ser gravado, faz no-op.
+ */
+export async function mergeOutsideProgress(
+  supabase: any,
+  state: FunnelState,
+  patch: OutsideProgress,
+): Promise<FunnelState> {
+  const current = (state.outside_spain_progress || {}) as OutsideProgress
+  const next: OutsideProgress = { ...current }
+  let changed = false
+  for (const k of Object.keys(patch) as Array<keyof OutsideProgress>) {
+    const v = patch[k]
+    if (v === undefined || v === null) continue
+    if (current[k] === undefined || current[k] === null) {
+      ;(next as any)[k] = v
+      changed = true
+    }
+  }
+  if (!changed) return state
+  const { data, error } = await supabase
+    .from('lead_funnel_state')
+    .update({ outside_spain_progress: next })
+    .eq('lead_id', state.lead_id)
+    .select('*')
+    .single()
+  if (error) {
+    console.warn('[FUNNEL_STATE] outside_progress merge error:', error.message)
+    return { ...state, outside_spain_progress: next } as FunnelState
+  }
+  console.log('[OUTSIDE_PROGRESS] merged:', JSON.stringify(patch))
+  return data as FunnelState
+}
+
 export function buildStateDirective(state: FunnelState, language: ChatLanguage): string {
   const confirmed: string[] = []
   if (state.name_confirmed) confirmed.push('nome completo')
