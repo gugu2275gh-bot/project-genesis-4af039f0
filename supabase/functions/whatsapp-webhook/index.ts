@@ -355,6 +355,8 @@ import {
   forceServicesMessageAfterInterest,
   ensureServicesAttachedToInterest,
   computeDeterministicFunnelPatch,
+  extractOutsideProgressPatch,
+  preventRepeatedCanonicalQuestion,
   stripLockedSentinel,
   stripPreambleBeforePreHandoff,
   isLocked,
