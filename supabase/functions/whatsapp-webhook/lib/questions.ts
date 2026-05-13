@@ -186,6 +186,25 @@ export function getLocationQuestion(language: ChatLanguage): string {
   return 'Perfeito. Hoje você já está na Espanha?'
 }
 
+/**
+ * Detector multi-idioma para a pergunta de localização ("Você está na Espanha?",
+ * "Hoje você já está na Espanha?", "¿Estás en España?", etc.).
+ */
+export function isQuestionAboutLocationSpain(question: string): boolean {
+  const n = normalizeForLanguageChecks(question)
+  if (!n) return false
+  if (!/(espanha|espana|spain|espagne)/.test(n)) return false
+  return /(voce esta na|voce ja esta na|hoje voce|esta na espanha|estas en espana|ya estas en|hoy ya estas|are you (already|currently)? in|are you in spain|etes vous (deja )?en espagne|deja en espagne)/.test(n)
+}
+
+/**
+ * Detector multi-idioma para B5 ("Em qual cidade você está empadronado?").
+ */
+export function isQuestionAboutEmpadronamientoCity(question: string): boolean {
+  return /(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)/i.test(question || '')
+    || /(no reconoc|did not recognize|n[ãa]o reconheci|n ai pas reconnu|reconnu cette ville)/i.test(question || '')
+}
+
 export function getEmpadronadoQuestion(language: ChatLanguage): string {
   if (language === 'es') return 'Perfecto. ¿Estás empadronado?'
   if (language === 'en') return 'Got it. Are you registered at the town hall (empadronado)?'
