@@ -1307,6 +1307,7 @@ Seu objetivo é, ao longo de uma conversa fluida, descobrir:
 - Se o cliente fizer uma pergunta fora do roteiro, responda brevemente com base no conhecimento e retome o ponto onde estava — sem repetir contexto que já foi dito.
 - REGRA DE SEGMENTAÇÃO (objetivo 7): após saber a localização, escolha APENAS UM dos blocos (fora da Espanha OU dentro da Espanha) e siga só esse. NUNCA misture perguntas dos dois blocos.
 - Faça uma pergunta de cada vez também dentro do bloco 7. Não despeje a lista toda.
+- REGRA UNIVERSAL: SEMPRE faça UMA ÚNICA pergunta por mensagem em TODO o fluxo. NUNCA combine duas perguntas no mesmo turno (ex.: "Você está empadronado? Se sim, desde quando?" é PROIBIDO — divida em duas mensagens). Apenas um "?" por resposta.
 - Após o objetivo 9 (encerramento/handoff), PARE de responder. O atendente humano assume.
 
 ## EXEMPLOS DE TOM (referência apenas, NÃO copie literalmente — sempre reformule no idioma do cliente)
@@ -1696,14 +1697,16 @@ Regras:
           // Bloco B — Na Espanha (B1-B5)
           const bIntro = sentAny(/\bagora preciso entender como est[áa] sua situa[çc][ãa]o aqui|ahora necesito entender|now i need to understand\b/i)
           const askedEntryDate = sentAny(/\b(data (exata )?da sua entrada|fecha (exacta )?de tu entrada|date you entered)\b/i)
-          const askedEmpadronado = sentAny(/\bempadronad/i)
-          const askedCidade = sentAny(/\b(em qual cidade|en qu[eé] ciudad|which city)\b.*empadronad/i) || sentAny(/\bcidade.*empadronad/i)
-          aprofundamentoDone = bIntro && askedEntryDate && askedEmpadronado && askedCidade
+          const askedEmpadronado = sentAny(/voc[êe] est[áa] empadronad|est[áa]s empadronad|are you (registered|empadronad)|[êe]tes-vous empadronad/i)
+          const askedDesdeQuando = sentAny(/\b(desde quando|desde cu[áa]ndo|since when|depuis quand)\b/i)
+          const askedCidade = sentAny(/\b(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)\b/i)
+          aprofundamentoDone = bIntro && askedEntryDate && askedEmpadronado && askedDesdeQuando && askedCidade
           aprofundamentoInstruction =
-            'O cliente JÁ ESTÁ na Espanha. Avance pelo bloco B na ordem, UMA pergunta por turno: ' +
+            'O cliente JÁ ESTÁ na Espanha. Avance pelo bloco B na ordem, UMA pergunta por turno (NUNCA combine duas perguntas no mesmo turno): ' +
             (!bIntro ? '(B1) "Perfeito. Agora preciso entender como está sua situação aqui." então ' : '') +
             (!askedEntryDate ? '(B2) "Qual foi a data exata da sua entrada na Espanha?". ' :
-             !askedEmpadronado ? '(B3) "Você está empadronado? Se sim, desde quando?". ' :
+             !askedEmpadronado ? '(B3) "Você está empadronado?" (APENAS sim/não, NÃO inclua "se sim, desde quando"). ' :
+             !askedDesdeQuando ? '(B4) "Desde quando você está empadronado?". ' :
              !askedCidade ? '(B5) "Em qual cidade você está empadronado?". ' :
              'Bloco completo, avance para o Pré-Handoff.')
         } else if (userOutsideSpain) {

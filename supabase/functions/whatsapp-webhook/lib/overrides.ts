@@ -20,6 +20,7 @@ import {
   getOutsideSpainAgeQuestion,
   getEmpadronadoQuestion,
   getEmpadronamientoCityQuestion,
+  getEmpadronamientoSinceQuestion,
   getLocationQuestion,
   getFullNameReaskQuestion,
   countAlphaWords,
@@ -212,21 +213,28 @@ export function forceAdvanceFromInterestQuestion(
 }
 
 /**
- * Após "Você está empadronado?" (B3), se o cliente respondeu SIM e a IA não
- * perguntou a cidade (B5), substitui a última pergunta da IA por
- * `getEmpadronamientoCityQuestion`. Se o cliente disse NÃO ou já mencionou
- * cidade, deixa a IA seguir o fluxo natural (Pré-Handoff).
+ * Encadeia o bloco de empadronamento (uma pergunta por vez):
+ *   B3 (yes/no) → B4 (desde quando) → B5 (cidade) → Pré-Handoff
+ * - Se cliente já incluiu data na resposta de B3, pula B4 → vai a B5.
+ * - Se previousQuestion já é B5 (cidade), libera o LLM (não força nada).
+ * - Se cliente disse "não" em B3, libera o LLM (Pré-Handoff).
  */
 const YES_ANSWER_RE = /^\s*(sim|si|s[ií]|yes|yeah|yep|claro|estou|to[uy]|aham|aha|positivo|afirmativo|oui|of course|sure)\b/i
 const NO_ANSWER_RE = /^\s*(n[ãa]o|no|nope|nay|negativo|nunca|jamais|non)\b/i
-const CITY_HINT_RE = /\b(em|en|in|à|a|de|do|na|no)\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\w-]+/i
 
-function isQuestionAboutEmpadronado(q: string): boolean {
-  return /\bempadron/i.test(q || '')
+function isEmpadronadoYesNoQuestion(q: string): boolean {
+  if (!q) return false
+  if (isEmpadronamientoCityQuestion(q)) return false
+  if (isEmpadronamientoSinceQuestion(q)) return false
+  return /\bempadron/i.test(q)
 }
 
-function questionAlreadyAsksCity(q: string): boolean {
+function isEmpadronamientoCityQuestion(q: string): boolean {
   return /(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)/i.test(q || '')
+}
+
+function isEmpadronamientoSinceQuestion(q: string): boolean {
+  return /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i.test(q || '')
 }
 
 export function forceAdvanceFromEmpadronadoQuestion(
@@ -236,27 +244,45 @@ export function forceAdvanceFromEmpadronadoQuestion(
   language: ChatLanguage,
 ): string {
   const previousQuestion = extractLastQuestion(previousAssistantMessage)
-  if (!isQuestionAboutEmpadronado(previousQuestion)) return aiResponse
-
   const msg = (currentMessage || '').trim()
   if (!msg) return aiResponse
 
-  // Cliente respondeu NÃO → segue fluxo (Pré-Handoff). Não força nada.
-  if (NO_ANSWER_RE.test(msg)) return aiResponse
+  const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
+  const wrap = (q: string) => (preamble ? `${preamble}\n${q}` : q)
 
-  // Cliente já mencionou cidade no texto → não re-pergunta cidade.
-  if (CITY_HINT_RE.test(msg) && /madrid|barcelona|valencia|sevilla|m[áa]laga|bilbao|zaragoza|murcia|palma|granada|alicante|c[óo]rdoba|valladolid|vigo|gij[óo]n|toledo|salamanca/i.test(msg)) {
+  // B5 (cidade) já foi feita → não force nada (fix bug imagem 2: re-pergunta cidade).
+  if (isEmpadronamientoCityQuestion(previousQuestion)) {
     return aiResponse
   }
 
-  // Resposta SIM (ou texto livre não-negativo) → garante pergunta de cidade.
-  const nextQuestion = extractLastQuestion(aiResponse)
-  if (questionAlreadyAsksCity(nextQuestion)) return aiResponse
+  // B4 (desde quando) → próxima é B5 (cidade).
+  if (isEmpadronamientoSinceQuestion(previousQuestion)) {
+    const nextQ = extractLastQuestion(aiResponse)
+    if (isEmpadronamientoCityQuestion(nextQ)) return aiResponse
+    return wrap(getEmpadronamientoCityQuestion(language))
+  }
 
+  // B3 (yes/no).
+  if (!isEmpadronadoYesNoQuestion(previousQuestion)) return aiResponse
+
+  // NÃO → libera LLM (Pré-Handoff).
+  if (NO_ANSWER_RE.test(msg)) return aiResponse
+
+  // SIM com data embutida ("sim, desde fevereiro de 2024") → pula B4, vai a B5.
+  const hasDate = parseEntryDateFromText(msg) !== null
+    || /\b(20\d{2}|19\d{2})\b/.test(msg)
+    || /\b(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|enero|febrero|marzo|mayo|junio|julio|septiembre|octubre|noviembre|diciembre|january|february|march|april|june|july|august|september|october|november|december)\b/i.test(msg)
+  if (hasDate) {
+    const nextQ = extractLastQuestion(aiResponse)
+    if (isEmpadronamientoCityQuestion(nextQ)) return aiResponse
+    return wrap(getEmpadronamientoCityQuestion(language))
+  }
+
+  // SIM puro (ou texto curto não-negativo) → pergunta B4 (desde quando).
   if (YES_ANSWER_RE.test(msg) || msg.length < 60) {
-    const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
-    const replacement = getEmpadronamientoCityQuestion(language)
-    return preamble ? `${preamble}\n${replacement}` : replacement
+    const nextQ = extractLastQuestion(aiResponse)
+    if (isEmpadronamientoSinceQuestion(nextQ)) return aiResponse
+    return wrap(getEmpadronamientoSinceQuestion(language))
   }
 
   return aiResponse
