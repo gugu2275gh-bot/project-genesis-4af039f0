@@ -19,6 +19,7 @@ import {
   getEntryDateFutureConfirmQuestion,
   getOutsideSpainAgeQuestion,
   getEmpadronadoQuestion,
+  getEmpadronamientoCityQuestion,
   getLocationQuestion,
   getFullNameReaskQuestion,
   countAlphaWords,
