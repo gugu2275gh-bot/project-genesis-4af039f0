@@ -1756,6 +1756,26 @@ Regras:
             'Envie o PRÉ-HANDOFF em duas frases curtas, nesta ordem: (1) "Perfeito. Já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." NÃO faça novas perguntas e NÃO envie o Handoff (encaminhar para atendente) agora. Após esta mensagem, a Base de Conhecimento será liberada e você entrará em modo tira-dúvidas usando a KB.',
         })
 
+        // ⚡ Pré-Handoff é o sinal definitivo de "cadastro concluído". Se ele já foi enviado,
+        // marca todas as etapas anteriores como done para liberar a KB imediatamente — mesmo
+        // que algum regex de sub-etapa do APROFUNDAMENTO não tenha batido (ex.: a IA reformulou
+        // a frase). Sem isso, perguntas factuais pós-Pré-Handoff são incorretamente adiadas.
+        if (preHandoffDone) {
+          for (const s of steps) s.done = true
+          // Housekeeping: marca o funil como 'livre' para consistência futura.
+          if (funnelStateLive.step !== 'livre') {
+            try {
+              await supabase
+                .from('lead_funnel_state')
+                .update({ step: 'livre', updated_at: new Date().toISOString() })
+                .eq('lead_id', lead.id)
+              funnelStateLive = { ...funnelStateLive, step: 'livre' }
+            } catch (e) {
+              console.warn('[FUNNEL] livre update failed:', e instanceof Error ? e.message : e)
+            }
+          }
+        }
+
         // Etapa 8 — Handoff (H3 + H4) — opcional, apenas se a equipe for assumir
         const handoffDone = sentAny(/encaminhar suas informa[çc][õo]es|forward your information/i)
           && sentAny(/encaminhar para um atendente|derivar a un agente|forward you to an agent/i)
