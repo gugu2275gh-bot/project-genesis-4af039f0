@@ -839,8 +839,10 @@ export function preventRepeatedCanonicalQuestion(
   ]
 
   for (const a of anchors) {
-    if (a.guard && !a.guard()) continue
-    if (a.q.test(q) && a.t.test(transcript)) {
+    const guardForce = a.guard ? a.guard() : false
+    // Para anchors com guard ativo (ex.: nameKnown/emailKnown/locationKnown),
+    // basta que a IA tenha emitido a pergunta — independente do transcript.
+    if (a.q.test(q) && (guardForce || a.t.test(transcript))) {
       // Pergunta já foi feita. Pega próxima canônica.
       console.warn(`[ANTI_REPEAT] pergunta canônica ${a.name} já feita — substituindo por próxima pendente`)
       // Reusa enforceBlockCompletion injetando "fake H1" para forçar próxima pergunta.
