@@ -382,10 +382,10 @@ export function getOutsideSpainNextQuestion(
     return 'Você possui formação superior?'
   }
 
-  if (language === 'es') return 'Perfecto. Ya puedo tener una visión inicial de tu caso.\nEn CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
-  if (language === 'en') return 'Perfect. I can already get an initial view of your case.\nAt CB, we analyze each case individually, always looking for the safest path within the law.'
-  if (language === 'fr') return 'Parfait. Je peux déjà avoir une première vision de votre cas.\nChez CB, nous analysons chaque cas individuellement, en cherchant toujours la voie la plus sûre et conforme à la loi.'
-  return 'Perfeito. Já consigo ter uma visão inicial do seu caso.\nNa CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
+  // D3 Bizagi: pré-handoff em 2 mensagens (summary ||| transfer). Idempotência via transcript.
+  const payload = buildPreHandoffPayload(language, assistantTranscript || '')
+  if (payload) return payload
+  return getPreHandoffSummaryMessage(language)
 }
 
 export function isQuestionAboutEmail(question: string): boolean {
