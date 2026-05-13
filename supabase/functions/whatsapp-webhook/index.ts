@@ -2248,6 +2248,23 @@ Regras:
               console.warn('[BPMN-3] flag persist non-blocking error:', flagErr instanceof Error ? flagErr.message : flagErr)
             }
 
+            // Auditoria v2-5: persiste flags A1/B1 (preâmbulos) para evitar repetição.
+            try {
+              const sentJoined2 = parts.join('\n')
+              const op = (funnelStateLive.outside_spain_progress || {}) as any
+              const a1Pat = /(seguimos pelo seu cen[áa]rio fora da espanha|seguimos por tu escenario fuera de espa[ñn]a|continue with your situation outside spain|continuons.*hors d.{1,3}espagne)/i
+              const b1Pat = /(agora preciso entender sua situa[çc][ãa]o aqui|ahora necesito entender tu situaci[óo]n|now i need to understand your situation here|maintenant.*comprendre votre situation)/i
+              const patch: Record<string, any> = {}
+              if (!op.a1_scenario_sent && a1Pat.test(sentJoined2)) patch.a1_scenario_sent = true
+              if (!op.b1_situation_sent && b1Pat.test(sentJoined2)) patch.b1_situation_sent = true
+              if (Object.keys(patch).length > 0) {
+                funnelStateLive = await mergeOutsideProgress(supabase, funnelStateLive, patch as any)
+                console.log('[A1_B1_FLAGS] persisted:', JSON.stringify(patch))
+              }
+            } catch (preErr) {
+              console.warn('[A1_B1_FLAGS] non-blocking error:', preErr instanceof Error ? preErr.message : preErr)
+            }
+
             // Nota: NÃO inserimos mais marker SISTEMA de auto-pausa ao detectar handoff por padrão de texto.
             // BPMN-3 mantém a IA disponível em MODO PÓS-HANDOFF (KB + sufixo de aguardar).
             // A pausa real continua acionada quando um humano responde via UI (origem='SISTEMA').
