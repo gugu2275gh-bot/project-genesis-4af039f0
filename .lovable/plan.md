@@ -1,53 +1,64 @@
-# Liberar KB no Pré-Handoff e responder pergunta pendente
+# Bug: bot pulou B5 após "sim" ao empadronamento
 
-## Problema
+## O que aconteceu
 
-No exemplo do print:
-1. Bot enviou as 2 frases do **Pré-Handoff** ("Já consigo ter uma visão inicial do seu caso." + "Na CB analisamos cada caso de forma individual…").
-2. Cliente perguntou "o que é autorização de regresso?".
-3. Bot respondeu "Ótima pergunta, te explico assim que terminarmos esse rapidíssimo levantamento." — adiando uma pergunta legítima de KB.
+Sequência real (lead `51b2…3f`):
+1. Bot: "Perfeito. Você está empadronado?" (B3 reduzida — sem "se sim, desde quando")
+2. Cliente: "sim"
+3. Bot: "Perfeito! Me conta com calma: o que você busca hoje? …" ← **voltou para INTERESSE**
 
-Causa raiz: em `supabase/functions/whatsapp-webhook/index.ts` (linhas 1749–1766), o gate de coleta (`collectionGateActive`) só cai quando TODAS as 7 etapas estão `done`. A detecção das sub-etapas de **APROFUNDAMENTO** (A1–A6 / B1–B5) usa regex sobre as mensagens já enviadas — se a IA reformulou alguma frase, a etapa permanece pendente e a KB nunca é liberada, mesmo o agente já tendo enviado o Pré-Handoff (que por definição significa "cadastro concluído").
+Estado do funil: `step=interesse`, `location_known=spain`, `empadronado_confirmed=null`. As regex do roteiro classificam o `aprofundamento` como **não concluído** (faltava B5 "em qual cidade…empadronad"), mas a IA, livre, escolheu reemitir a pergunta de interesse em vez de seguir a instrução `(B5)`.
+
+## Causa raiz
+
+Não existe override determinístico entre B3 (empadronado?) e B5 (cidade) — toda a transição depende do LLM obedecer `aprofundamentoInstruction`. Quando ele desvia, nada corrige. Além disso, `getEmpadronadoQuestion` envia apenas o yes/no, sem o "se sim, desde quando", então a B4 (data) também depende exclusivamente do LLM.
 
 ## Correção
 
-### 1. Pré-Handoff é o sinal definitivo de fim de cadastro
+### 1. `lib/questions.ts`
 
-Em `whatsapp-webhook/index.ts`, logo após calcular `preHandoffDone` (linha 1750–1751), forçar:
+Reescrever `getEmpadronadoQuestion` para incluir B3+B4 numa só pergunta natural:
+- PT: "Perfeito. Você está empadronado? Se sim, desde quando?"
+- ES/EN/FR equivalentes.
 
-```ts
-if (preHandoffDone) {
-  // Pré-Handoff já enviado → cadastro concluído por definição.
-  // Marca todas as etapas anteriores como done para liberar a KB.
-  for (const s of steps) s.done = true
-}
-```
+Criar `getEmpadronamientoCityQuestion(language)`:
+- PT: "Perfeito. Em qual cidade você está empadronado?"
+- ES/EN/FR equivalentes.
 
-Isso garante que `nextStep` fica `undefined`, `flowComplete = true`, `collectionGateActive = false`, e a KB é consultada no mesmo turno (via `getKnowledgeBaseContext` na linha 1807).
+### 2. `lib/overrides.ts`
 
-### 2. Consumir `pending_question` mesmo quando a pergunta atual é nova
+Adicionar `forceAdvanceFromEmpadronadoQuestion(previous, current, ai, language)`:
+- Detecta que a `previousQuestion` é a pergunta de empadronado (regex `empadronad/`).
+- Se o cliente respondeu **sim** (`isYesAnswer`) e a `aiResponse` não pergunta cidade → substitui a última pergunta da IA por `getEmpadronamientoCityQuestion`.
+- Se o cliente respondeu **não** (`isNoAnswer`) → libera o LLM para avançar ao Pré-Handoff (não força nada).
+- Se o cliente respondeu sim + já incluiu cidade no texto → também avança para Pré-Handoff (não re-pergunta).
 
-O bloco de linhas 1786–1793 só recupera `pending_question` se o gate caiu. Com a correção acima isso já passa a funcionar. Manter a lógica como está, apenas validar que a query da KB inclui tanto `pending_question` quanto a mensagem atual (já está em `kbQueryParts`).
+Helpers auxiliares: `isYesAnswer` / `isNoAnswer` cobrindo `sim|si|sí|yes|claro|estou|aham` e negações comuns nos 4 idiomas.
 
-### 3. Reforçar instrução do modo tira-dúvidas
+### 3. `index.ts`
 
-No bloco `if (!handoffDone)` (linha 1836+), adicionar regra explícita:
+Logo após o bloco que chama `forceAdvanceFromEntryDateQuestion`, encadear `forceAdvanceFromEmpadronadoQuestion` com a mesma assinatura (previousAssistantMessage, currentMessage, aiResponse, language).
 
-> "Se o cliente fez uma pergunta factual (o que é X, como funciona Y, prazos, valores) e há `pending_question` ou a mensagem atual contém '?', RESPONDA AGORA usando a KB. NÃO use mais a frase 'assim que terminarmos esse rapidíssimo levantamento' — o levantamento já acabou."
+Manter o detector `askedCidade` da etapa 6 (B5) — agora ele baterá quando o override emitir a pergunta de cidade.
 
-### 4. Backfill defensivo do funnel state
+### 4. Persistência (opcional, sem bloquear)
 
-Quando `preHandoffDone` é detectado e `funnelStateLive.step !== 'livre'`, marcar `step = 'livre'` no `lead_funnel_state` para consistência futura (não bloqueia, é só housekeeping).
-
-## Arquivos alterados
-
-- `supabase/functions/whatsapp-webhook/index.ts` — fix do gate + reforço da instrução tira-dúvidas.
-
-## Deploy
-
-- Redeploy `whatsapp-webhook`.
+Em `lib/extract.ts` o LLM já extrai `empadronamiento_city` e `empadronamiento_since`. Garantir que esses campos, quando vierem populados, sejam gravados em `lead_funnel_state.empadronado_confirmed=true` (e idealmente em colunas próprias se existirem) para que B5 não seja re-perguntada em sessões futuras.
 
 ## Validação
 
-- Reproduzir o cenário do print: enviar mensagens até o Pré-Handoff, fazer pergunta factual ("o que é autorização de regresso?"), confirmar que a resposta vem da KB no mesmo turno.
-- Verificar logs `[GATE] flow complete — KB liberada` aparecendo após o Pré-Handoff.
+1. Reproduzir o cenário do print: pergunta de empadronado → cliente diz "sim" → confirmar que o próximo turno é "Em qual cidade você está empadronado?".
+2. Variante: cliente responde "sim, desde 2023 em Madrid" → bot avança direto para Pré-Handoff (não re-pergunta).
+3. Variante: cliente responde "não" → bot avança para Pré-Handoff.
+4. Adicionar testes unitários em `funnel_persistence_test.ts` cobrindo as três variantes.
+
+## Arquivos alterados
+
+- `supabase/functions/whatsapp-webhook/lib/questions.ts`
+- `supabase/functions/whatsapp-webhook/lib/overrides.ts`
+- `supabase/functions/whatsapp-webhook/index.ts`
+- `supabase/functions/whatsapp-webhook/funnel_persistence_test.ts` (testes)
+
+## Deploy
+
+Redeploy `whatsapp-webhook`.
