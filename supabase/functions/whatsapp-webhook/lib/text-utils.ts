@@ -57,6 +57,8 @@ export function removeRepeatedQuestionIntro(
   previousAssistantMessage: string,
   aiResponse: string,
 ): string {
+  // Honra o sentinel anti-clobber definido em overrides.ts
+  if (typeof aiResponse === 'string' && aiResponse.includes('\u200B[LOCKED]\u200B')) return aiResponse
   const previousQuestion = extractLastQuestion(previousAssistantMessage)
   const nextQuestion = extractLastQuestion(aiResponse)
 
