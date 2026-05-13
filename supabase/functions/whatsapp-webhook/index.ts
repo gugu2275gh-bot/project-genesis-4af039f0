@@ -1825,7 +1825,7 @@ Regras:
           console.log(`[GATE] flow complete — KB liberada (handoff=${handoffDone})`)
           if (!handoffDone) {
             messageForAI = `${messageForAI}\n\n[MODO TIRA-DÚVIDAS — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
-              `IDIOMA OBRIGATÓRIO DA RESPOSTA AO CLIENTE: ${langName}. NÃO misture idiomas.\n` +
+              `IDIOMA OBRIGATÓRIO E TRAVADO DA RESPOSTA: ${langName}. Definido no início da conversa, NÃO MUDA — mesmo se o cliente enviar mensagem em outro idioma, RESPONDA em ${langName}. NÃO misture idiomas.\n` +
               `O cadastro inicial e o Pré-Handoff já foram enviados. Agora você está em MODO TIRA-DÚVIDAS.\n` +
               `REGRAS:\n` +
               `1. Use a Base de Conhecimento (KB) fornecida no contexto para responder dúvidas do cliente de forma breve, clara e baseada exclusivamente nos trechos disponíveis.\n` +
