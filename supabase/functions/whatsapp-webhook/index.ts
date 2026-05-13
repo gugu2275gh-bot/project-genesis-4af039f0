@@ -358,6 +358,7 @@ import {
   extractOutsideProgressPatch,
   extractEmpadronadoSincePatch,
   preventRepeatedCanonicalQuestion,
+  stripRepeatedOpener,
   stripLockedSentinel,
   stripPreambleBeforePreHandoff,
   isLocked,
@@ -2026,6 +2027,8 @@ Regras:
         // BLOCK-LOCK: impede que a IA misture perguntas dos blocos Espanha vs fora
         aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, blockFlags)
         aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
+        // Anti-repetição da ABERTURA (Msg1 greeting + Msg2 consent + re-greeting pós-nome).
+        aiResponse = stripRepeatedOpener(aiResponse, detectedChatLanguage, blockFlags)
         // Anti-repetição global: se IA repetiu pergunta canônica já feita, força próxima pendente.
         aiResponse = preventRepeatedCanonicalQuestion(aiResponse, detectedChatLanguage, blockFlags)
         // BPMN v2: Msg5 + Msg6 na MESMA rodada — anexa Msg6 quando IA emite Msg5 sozinha.
@@ -2055,6 +2058,7 @@ Regras:
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
             aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
+            aiResponse = stripRepeatedOpener(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = preventRepeatedCanonicalQuestion(aiResponse, detectedChatLanguage, blockFlags)
           } catch (e) {
             console.error('[F1-HARD] retry failed:', e instanceof Error ? e.message : e)
@@ -2081,6 +2085,7 @@ Regras:
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
             aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
+            aiResponse = stripRepeatedOpener(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = preventRepeatedCanonicalQuestion(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = forceServicesMessageAfterInterest(aiResponse, detectedChatLanguage, {
               interestKnown: !serviceMissing,
@@ -2254,9 +2259,12 @@ Regras:
               const op = (funnelStateLive.outside_spain_progress || {}) as any
               const a1Pat = /(seguimos pelo seu cen[áa]rio fora da espanha|seguimos por tu escenario fuera de espa[ñn]a|continue with your situation outside spain|continuons.*hors d.{1,3}espagne)/i
               const b1Pat = /(agora preciso entender sua situa[çc][ãa]o aqui|ahora necesito entender tu situaci[óo]n|now i need to understand your situation here|maintenant.*comprendre votre situation)/i
+              // Opener (Msg1 greeting OU Msg2 consent) — basta um dos dois aparecer no turno enviado.
+              const openerPat = /\b(obrigad[oa] por (falar|escrever|entrar|contat)|gracias por (hablar|escribir|contact)|thank(s)? you for (reaching|contacting|writing)|merci de (nous|m'avoir) contact|perguntas? r[áa]pidas?|preguntas r[áa]pidas?|quick questions?|questions rapides)/i
               const patch: Record<string, any> = {}
               if (!op.a1_scenario_sent && a1Pat.test(sentJoined2)) patch.a1_scenario_sent = true
               if (!op.b1_situation_sent && b1Pat.test(sentJoined2)) patch.b1_situation_sent = true
+              if (!op.opener_sent && openerPat.test(sentJoined2)) patch.opener_sent = true
               if (Object.keys(patch).length > 0) {
                 funnelStateLive = await mergeOutsideProgress(supabase, funnelStateLive, patch as any)
                 console.log('[A1_B1_FLAGS] persisted:', JSON.stringify(patch))

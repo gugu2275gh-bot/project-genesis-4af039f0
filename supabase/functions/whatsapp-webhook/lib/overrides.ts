@@ -868,3 +868,93 @@ export function preventRepeatedCanonicalQuestion(
   }
   return aiResponse
 }
+
+// ============================================================================
+// Anti-repetição da ABERTURA (Msg1 greeting + Msg2 consent)
+// ============================================================================
+
+/** Greeting tokens (Msg1) — agradecimento por contato em 4 línguas. */
+const OPENER_GREETING_RE =
+  /\b(obrigad[oa] por (falar|escrever|entrar|contat)|gracias por (hablar|escribir|contact)|thank(s)? you for (reaching|contacting|writing)|merci de (nous|m'avoir) contact)/i
+
+/** Consent question (Msg2) — "perguntas rápidas … pode ser/is that okay/can we proceed". */
+const OPENER_CONSENT_RE =
+  /\b(perguntas? r[áa]pidas?|preguntas r[áa]pidas?|quick questions?|questions rapides)\b[\s\S]{0,200}\b(pode ser|podemos (continuar|seguir|proceder)|est[áa] bien|is that ok(ay)?|can we proceed|d['’]accord|on continue)\b\s*[?¿]?/i
+
+/** Re-greeting que reabre opener pós-nome (ex.: "Great to meet you, X! ..."). */
+const REGREETING_RE =
+  /^\s*(prazer em (te )?conhecer|encantad[oa] de conocer|nice to meet you|great to meet you|enchant[ée] de (vous|te) conna[iî]tre|muito (prazer|bom)|oi[, ]+|ol[áa][, ]+|hola[, ]+|hello[, ]+|hi[, ]+|bonjour[, ]+|salut[, ]+)/i
+
+/** Próxima pergunta canônica pendente (Msg3 → Msg4 → próxima do bloco). */
+function nextPendingCanonical(
+  language: ChatLanguage,
+  flags: {
+    locationKnown: 'spain' | 'outside' | null | undefined
+    entryDateConfirmed: string | null | undefined
+    empadronadoConfirmed: boolean | null | undefined
+    empadronadoCity: string | null | undefined
+    assistantTranscript: string
+    outsideProgress?: any
+    nameKnown?: boolean
+    emailKnown?: boolean
+  },
+): string {
+  if (!flags.nameKnown) {
+    if (language === 'es') return 'Perfecto. Para empezar, ¿cuál es tu nombre completo?'
+    if (language === 'en') return 'Perfect. First of all, what is your full name?'
+    if (language === 'fr') return 'Parfait. Tout d’abord, quel est votre nom complet ?'
+    return 'Perfeito. Antes de mais nada, qual é o seu nome completo?'
+  }
+  if (!flags.emailKnown) return getEmailQuestion(language)
+  const fakeH1 = language === 'es' ? 'Perfecto. Ya puedo tener una visión inicial de tu caso.'
+    : language === 'en' ? 'Perfect. I can already get an initial view of your case.'
+    : language === 'fr' ? 'Parfait. Je peux déjà avoir une première vision de votre cas.'
+    : 'Perfeito. Já consigo ter uma visão inicial do seu caso.'
+  const replacement = enforceBlockCompletion(fakeH1, language, flags as any)
+  if (replacement === fakeH1) {
+    if (language === 'es') return 'Perfecto, sigamos.'
+    if (language === 'en') return 'Perfect, let’s continue.'
+    if (language === 'fr') return 'Parfait, continuons.'
+    return 'Perfeito, vamos seguir.'
+  }
+  return stripLockedSentinel(replacement)
+}
+
+/**
+ * Suprime repetição da ABERTURA (greeting/consent) e do RE-GREETING pós-nome.
+ * Quando `openerSent=true` (ou eco no transcript), substitui pela próxima
+ * canônica pendente. Idempotência via flag persistida em outside_spain_progress.
+ */
+export function stripRepeatedOpener(
+  aiResponse: string,
+  language: ChatLanguage,
+  flags: {
+    locationKnown: 'spain' | 'outside' | null | undefined
+    entryDateConfirmed: string | null | undefined
+    empadronadoConfirmed: boolean | null | undefined
+    empadronadoCity: string | null | undefined
+    assistantTranscript: string
+    outsideProgress?: { opener_sent?: boolean; [k: string]: any } | null
+    nameKnown?: boolean
+    emailKnown?: boolean
+    openerSent?: boolean
+  },
+): string {
+  if (!aiResponse) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
+  const transcript = flags.assistantTranscript || ''
+  const openerAlreadySent =
+    !!flags.openerSent
+    || !!(flags.outsideProgress && flags.outsideProgress.opener_sent)
+    || OPENER_GREETING_RE.test(transcript)
+    || OPENER_CONSENT_RE.test(transcript)
+  if (!openerAlreadySent) return aiResponse
+
+  const hasGreeting = OPENER_GREETING_RE.test(aiResponse)
+  const hasConsent = OPENER_CONSENT_RE.test(aiResponse)
+  const hasRegreeting = REGREETING_RE.test(aiResponse) && !!flags.nameKnown
+  if (!hasGreeting && !hasConsent && !hasRegreeting) return aiResponse
+
+  console.warn('[ANTI_REPEAT_OPENER] opener/re-greeting detectado — substituindo por próxima canônica', JSON.stringify({ hasGreeting, hasConsent, hasRegreeting }))
+  return lock(nextPendingCanonical(language, flags))
+}
