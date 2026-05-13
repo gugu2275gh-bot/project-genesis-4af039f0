@@ -2259,9 +2259,12 @@ Regras:
               const op = (funnelStateLive.outside_spain_progress || {}) as any
               const a1Pat = /(seguimos pelo seu cen[áa]rio fora da espanha|seguimos por tu escenario fuera de espa[ñn]a|continue with your situation outside spain|continuons.*hors d.{1,3}espagne)/i
               const b1Pat = /(agora preciso entender sua situa[çc][ãa]o aqui|ahora necesito entender tu situaci[óo]n|now i need to understand your situation here|maintenant.*comprendre votre situation)/i
+              // Opener (Msg1 greeting OU Msg2 consent) — basta um dos dois aparecer no turno enviado.
+              const openerPat = /\b(obrigad[oa] por (falar|escrever|entrar|contat)|gracias por (hablar|escribir|contact)|thank(s)? you for (reaching|contacting|writing)|merci de (nous|m'avoir) contact|perguntas? r[áa]pidas?|preguntas r[áa]pidas?|quick questions?|questions rapides)/i
               const patch: Record<string, any> = {}
               if (!op.a1_scenario_sent && a1Pat.test(sentJoined2)) patch.a1_scenario_sent = true
               if (!op.b1_situation_sent && b1Pat.test(sentJoined2)) patch.b1_situation_sent = true
+              if (!op.opener_sent && openerPat.test(sentJoined2)) patch.opener_sent = true
               if (Object.keys(patch).length > 0) {
                 funnelStateLive = await mergeOutsideProgress(supabase, funnelStateLive, patch as any)
                 console.log('[A1_B1_FLAGS] persisted:', JSON.stringify(patch))
