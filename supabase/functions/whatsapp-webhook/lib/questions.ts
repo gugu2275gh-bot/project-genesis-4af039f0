@@ -207,6 +207,13 @@ export function getEmpadronamientoCityQuestion(language: ChatLanguage): string {
   return 'Perfeito. Em qual cidade você está empadronado?'
 }
 
+export function getInvalidSpanishCityReprompt(language: ChatLanguage): string {
+  if (language === 'es') return 'No reconocí esa ciudad como un municipio español. ¿Puedes confirmar el nombre del municipio de España donde estás empadronado?'
+  if (language === 'en') return 'I did not recognize that as a Spanish municipality. Could you confirm the name of the city in Spain where you are registered (empadronado)?'
+  if (language === 'fr') return 'Je n’ai pas reconnu cette ville comme une commune espagnole. Pouvez-vous confirmer le nom de la ville en Espagne où vous êtes empadronado ?'
+  return 'Não reconheci essa cidade como um município espanhol. Pode confirmar o nome da cidade na Espanha onde você está empadronado?'
+}
+
 export function getOutsideSpainAgeQuestion(language: ChatLanguage): string {
   if (language === 'es') return 'Entendido. Entonces seguimos por tu escenario fuera de España. ¿Cuál es tu edad?'
   if (language === 'en') return 'Got it. Then we’ll continue with your situation outside Spain. How old are you?'

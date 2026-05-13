@@ -21,11 +21,13 @@ import {
   getEmpadronadoQuestion,
   getEmpadronamientoCityQuestion,
   getEmpadronamientoSinceQuestion,
+  getInvalidSpanishCityReprompt,
   getLocationQuestion,
   getFullNameReaskQuestion,
   countAlphaWords,
   parseEntryDateFromText,
 } from './questions.ts'
+import { isValidSpanishCity } from './spanish-cities.ts'
 
 /**
  * Wave 6: Trava determinística pós-IA.
@@ -250,8 +252,21 @@ export function forceAdvanceFromEmpadronadoQuestion(
   const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
   const wrap = (q: string) => (preamble ? `${preamble}\n${q}` : q)
 
-  // B5 (cidade) já foi feita → não force nada (fix bug imagem 2: re-pergunta cidade).
+  // B5 (cidade) já foi feita → validar se é cidade espanhola.
+  // Se inválida, repergunta. Se válida, libera o LLM.
   if (isEmpadronamientoCityQuestion(previousQuestion)) {
+    if (!isValidSpanishCity(msg)) {
+      console.log('[CITY_VALIDATION] invalid Spanish city in answer, reprompting:', msg.slice(0, 60))
+      return wrap(getInvalidSpanishCityReprompt(language))
+    }
+    return aiResponse
+  }
+
+  // Caso o previousQuestion já seja a reprompt de cidade inválida → continua validando.
+  if (/no reconoc|did not recognize|n[ãa]o reconheci|n ai pas reconnu|reconnu cette ville/i.test(previousQuestion || '')) {
+    if (!isValidSpanishCity(msg)) {
+      return wrap(getInvalidSpanishCityReprompt(language))
+    }
     return aiResponse
   }
 
