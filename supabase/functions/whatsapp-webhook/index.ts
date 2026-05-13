@@ -1666,7 +1666,7 @@ Regras:
         if (userInSpain) {
           // Bloco B — Na Espanha (B1-B5)
           const bIntro = sentAny(/\bagora preciso entender como est[áa] sua situa[çc][ãa]o aqui|ahora necesito entender|now i need to understand\b/i)
-          const askedEntryDate = sentAny(/\b(data (exata )?da sua entrada|fecha (exacta )?de tu entrada|date you entered)\b/i)
+          const askedEntryDate = sentAny(/\b(data (exata )?da sua entrada|fecha (exacta )?de tu entrada|cu[áa]ndo (entraste|llegaste)|date (exacte )?(de votre|of your) entr|date you entered|when did you (enter|arrive)|quand (etes|êtes)-vous (entre|arrive))\b/i)
           const askedEmpadronado = sentAny(/voc[êe] est[áa] empadronad|est[áa]s empadronad|are you (registered|empadronad)|[êe]tes-vous empadronad/i)
           const askedDesdeQuando = sentAny(/\b(desde quando|desde cu[áa]ndo|since when|depuis quand)\b/i)
           const askedCidade = sentAny(/\b(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)\b/i)
