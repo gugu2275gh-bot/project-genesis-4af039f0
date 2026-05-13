@@ -2027,6 +2027,8 @@ Regras:
         // BLOCK-LOCK: impede que a IA misture perguntas dos blocos Espanha vs fora
         aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, blockFlags)
         aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
+        // Anti-repetição da ABERTURA (Msg1 greeting + Msg2 consent + re-greeting pós-nome).
+        aiResponse = stripRepeatedOpener(aiResponse, detectedChatLanguage, blockFlags)
         // Anti-repetição global: se IA repetiu pergunta canônica já feita, força próxima pendente.
         aiResponse = preventRepeatedCanonicalQuestion(aiResponse, detectedChatLanguage, blockFlags)
         // BPMN v2: Msg5 + Msg6 na MESMA rodada — anexa Msg6 quando IA emite Msg5 sozinha.
