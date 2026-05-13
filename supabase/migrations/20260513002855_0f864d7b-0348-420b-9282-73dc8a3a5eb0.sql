@@ -1,0 +1,1 @@
+UPDATE public.lead_funnel_state SET pending_question='o que é autorização de regresso?', updated_at=now() WHERE lead_id='d952cf68-2ed6-4bc9-b217-c3cbe8d73599';
