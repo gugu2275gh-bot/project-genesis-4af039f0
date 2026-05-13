@@ -1,101 +1,72 @@
-## Diagnóstico (a partir dos logs reais do lead)
+## Diagnóstico — turno do Gustavo (lead `4f3dc442…`)
 
-Da tabela `interactions` + log `[TURN]` da conversa do Gustavo:
+Conversa real (espanhol):
 
 ```
-03:03:27 BOT  "Você está na Espanha?"
-03:03:47 USR  "sim"
-03:04:01 BOT  "Qual foi a data exata da sua entrada na Espanha?"  (avançou, OK)
-...
-03:06:19 BOT  "Em qual cidade você está empadronado?"
-03:06:28 USR  "paris"
-03:06:43 LOG  [CITY_VALIDATION] invalid Spanish city in answer, reprompting: paris
-03:06:43 LOG  [TURN] nextStep:"interesse", stepsDone:["abertura","nome","email"],
-              dataKnown.service:false, location.inSpain:false, outsideSpain:false
-03:06:44 BOT  "Me conta com calma: o que você busca hoje? ..."   ← reprompt SUMIU
-03:07:01 USR  "autorização de regressop"
-03:07:17 BOT  "Hoje você já está na Espanha?"                    ← repergunta localização
+BOT  Cuéntame con calma: ¿qué buscas hoy? ...
+USR  cuurso
+BOT  (mesma pergunta de novo)            ← deveria ter avançado
+USR  autorizacion de regresso
+BOT  (mesma pergunta de novo)            ← deveria ter avançado
 ```
 
-Três bugs reais, mesma raiz: **o estado do funil nunca foi persistido** para `interest_confirmed`, `location_known` nem `empadronado_city`. Como o GATE recompõe o roteiro a cada turno apenas a partir de `funnelStateLive` + regex no histórico, ele "esquece" tudo:
+Logs `[GATE] step=interesse done=3/7` em todos os turnos: **`interest_confirmed` nunca foi gravado**, então o GATE/IA fica preso pedindo interesse.
 
-- A IA gera a próxima pergunta pendente segundo o GATE (= INTERESSE).
-- `forceAdvanceFromEmpadronadoQuestion` gera o reprompt de cidade (log confirma).
-- Mas o GATE/diretiva de estado força o LLM a re-perguntar interesse no turno seguinte; e o reprompt acaba descartado porque `nextStep="interesse"` nunca avança (interesse continua "missing").
-- O mesmo motivo faz a IA voltar a perguntar "Você está na Espanha?" depois (`location_known` nunca foi gravado).
+A toolchain `computeDeterministicFunnelPatch` foi instalada exatamente para esse caso, mas tem dois bugs concretos:
 
-A correção tem que ser **transversal** (idiomas PT/ES/EN/FR) e baseada em **persistência determinística por turno**, não em extração best-effort.
+### Bug 1 — `isQuestionAboutInterest` não casa a pergunta real em ES
+`questions.ts` linha 149 procura `que busca hoy`, mas a pergunta de fato é "¿qué **buscas** hoy?" (2ª pessoa). `"que buscas hoy".includes("que busca hoy")` → false. Resultado: o ramo "se prevQ era a pergunta de interesse, qualquer resposta com ≥3 chars vira `interest_confirmed`" nunca dispara.
+
+Mesmo problema em PT/EN/FR: o detector é `includes` literal de uma única forma verbal e quebra a qualquer variação ("o que você busca hoje", "o que procura hoje", "what brings you here", etc.).
+
+### Bug 2 — `isPotentialInterestAnswer` é estrito demais
+- `"cuurso"` (typo de "curso") → não bate em `exactTokens` nem em `includes('curso')`.
+- `"autorizacion de regresso"` (grafia PT do usuário em conv. ES) → keyword cadastrada é `autorizacion de regreso` (uma s); `includes` falha.
+- Outras grafias comuns: `regreso`/`regresso`, `homologação`/`homologacao`/`homologación`, `família`/`familia`.
+
+Como nenhum dos dois caminhos grava `interest_confirmed`, o GATE recompõe a mesma pergunta e a IA repete (com paráfrase do F4, mas mesma pergunta).
 
 ## Plano
 
-### 1. `lib/funnel-state.ts` — adicionar `empadronado_city`
+### 1. `lib/questions.ts` — `isQuestionAboutInterest` baseado em regex multi-idioma
 
-- Nova coluna `empadronado_city text` em `lead_funnel_state` (migration).
-- `FunnelState` ganha `empadronado_city: string | null`.
-- `applyTurnUpdates` aceita o campo no `patch`.
+Substituir o `includes` por uma única regex normalizada que cubra:
 
-### 2. Persistência turn-a-turn baseada em `previousQuestion`
+- PT: `que (voce )?(busca|procura|esta procurando|deseja|gostaria|quer)\s+(hoje|agora)?`, `como posso (te )?ajudar`, `qual (e )?(o )?seu interesse`.
+- ES: `que (buscas|busca|estas buscando|deseas|necesitas|quieres)\s+(hoy|ahora)?`, `en que (te )?puedo ayudar`, `cual es tu interes`.
+- EN: `what (are you|brings you|can i help|do you need|are you looking for)`, `how can i help`.
+- FR: `que (cherchez|recherchez)[- ]vous`, `comment puis je (vous )?aider`, `quel est (votre|ton) (besoin|interet)`.
 
-Em `index.ts`, antes de chamar a IA, calcular um patch determinístico a partir de `(previousQuestion, rawCustomerMessage)` — zero LLM, zero heurística:
+Cobre também a variante curta usada em catálogos: `nacionalidad|residencia|estudios|arraigo`.
 
-| previousQuestion detectada por… | regra | grava |
-|---|---|---|
-| `getLocationQuestion` (PT/ES/EN/FR) e variantes "Você está na Espanha?" | `YES_ANSWER_RE` → `'spain'`; `NO_ANSWER_RE` → `'outside'` | `location_known` |
-| `isQuestionAboutInterest` | `isPotentialInterestAnswer(msg)` → `service_interest` (ou `'detected'`) | `interest_confirmed` |
-| `isQuestionAboutSpainEntryDate` + `parseEntryDateFromText` no passado | iso | `entry_date_confirmed` |
-| `isEmpadronamientoCityQuestion` + `isValidSpanishCity` | normalizado | `empadronado_city` |
-| `isEmpadronadoYesNoQuestion` | sim/não | `empadronado` (já existente) |
+### 2. `lib/questions.ts` — `isPotentialInterestAnswer` mais tolerante
 
-O patch é gravado **antes** da chamada à IA e usado em `funnelStateLive` no mesmo turno. Assim o GATE e os flags `interestKnown`/`locationKnown` refletem a realidade.
+- Acrescentar `regresso` (PT), `homologacion`, `família`, `família reagrupada`, `formación`.
+- Adicionar matching tolerante a typos para um conjunto fechado de tokens-chave (`curso, arraigo, nacionalidade, residencia, nie, tie, visa, visado, homologacao, reagrupamento, regresso, regreso`): aceitar quando a palavra do usuário tem distância de Levenshtein ≤ 1 (suficiente p/ "cuurso" → "curso", "residenccia" → "residencia"). Implementação curta in-file (sem dep externa).
+- Manter o restante da lógica.
 
-### 3. Reforçar a validação B5 (cidade) — sentinel anti-clobber
+### 3. `lib/overrides.ts` — fallback do interesse a partir do contexto
 
-- `forceAdvanceFromEmpadronadoQuestion` retorna o reprompt **e** marca `aiResponse` com prefixo invisível `\u200B[LOCKED_REPROMPT]\u200B` (removido antes do envio).
-- `lockConfirmedFieldsInResponse`, `removeRepeatedQuestionIntro`, F1‑HARD, F4 e o anti-loop checam o sentinel e devolvem `aiResponse` intacto.
-- Imediatamente antes de `sendWhatsAppMessage`, o sentinel é tirado.
-- Adiciona-se também `isQuestionAboutEmpadronamientoCity(q)` e o reprompt ao detector de "perguntas pendentes" para que, se o LLM tentar pular para outra etapa, o GATE volte ao B5.
+Em `computeDeterministicFunnelPatch`, quando `prevQ` é a pergunta de interesse (já corrigida em #1) e a mensagem do usuário tem ≥3 chars, **continuar** gravando como interesse (linha 76‑78 já faz isso). Adicionar log explícito `[DETERMINISTIC_PATCH]` com `prevQ`/`msg`/`patch` para auditoria nos próximos turnos.
 
-### 4. Dataset de cidades — cobrir lacunas que aceitariam estrangeiras
+### 4. Teste unitário (`wave6_test.ts` ou novo)
 
-- Auditoria do `spanish-cities.json`: garantir que **só** municípios INE estão lá; remover qualquer entrada com diacríticos truncados (ex.: "paris" não está, mas a normalização precisa rejeitar `paris` como qualquer outra estrangeira).
-- `isValidSpanishCity` passa a:
-  1. `extractCityFromAnswer` (já existe) com NFD + lowercase.
-  2. Rejeitar lista negra explícita de capitais não-espanholas comuns (`paris`, `lisboa`, `lisbon`, `roma`, `rome`, `londres`, `london`, `berlin`, `nova york`, `new york`, `buenos aires`, `mexico`, `bogota`, `lima`, …) — segurança extra mesmo se algum dia entrarem por engano.
-  3. Só aceita se bater no Set INE.
+- `isQuestionAboutInterest("Cuéntame con calma: ¿qué buscas hoy? ...")` → `true` (ES, 2ª pessoa).
+- `isQuestionAboutInterest("O que você busca hoje?")`, `("What are you looking for today?")`, `("Que recherchez-vous aujourd'hui ?")` → `true`.
+- `isPotentialInterestAnswer("cuurso")` → `true`.
+- `isPotentialInterestAnswer("autorizacion de regresso")` → `true`.
+- `computeDeterministicFunnelPatch(botInterestQ_es, "cuurso")` → `{interest_confirmed:"cuurso"}`.
 
-### 5. Localização — pergunta única, resposta gravada
+### 5. Deploy
 
-- `getLocationQuestion(language)` permanece a única forma sim/não.
-- Detector `isQuestionAboutLocationSpain(q)` cobre PT/ES/EN/FR (incluindo "Você está na Espanha?" e "Hoje você já está na Espanha?").
-- Quando previousQuestion bate o detector e a resposta é sim/não, grava `location_known` (regra 2).
-- O GATE só pergunta de novo se `funnelStateLive.location_known` continuar `null` — agora vai estar gravado.
+`supabase functions deploy whatsapp-webhook` (automático). Sem migration.
 
-### 6. Interesse — gravar mesmo quando vier antes do bot perguntar
+## Resultado esperado
 
-- Em todo turno, se `isPotentialInterestAnswer(rawCustomerMessage)` e `interest_confirmed` ainda nulo, grava `interest_confirmed = rawCustomerMessage` (mesmo sem ter passado pela pergunta).
-- Isso fecha o caso da imagem 3: o cliente já disse "autorização de regresso" e o GATE para de marcar "interesse" como pendente.
+No próximo turno do Gustavo após "cuurso" / "autorizacion de regresso", o patch determinístico grava `interest_confirmed`, o GATE avança para `localizacao` ("¿Hoy ya estás en España?") e o loop atual termina.
 
-### 7. Testes Deno (`wave6_test.ts`)
+## Arquivos
 
-- B5 `"paris"` → reprompt; resposta seguinte `"madrid"` → grava `empadronado_city='madrid'`, libera próximo passo.
-- B5 `"lisboa"`, `"londres"`, `"buenos aires"` → reprompt.
-- "Você está na Espanha?" + `"sim"` (PT/ES/EN/FR) → `location_known='spain'`.
-- Interesse: `"autorização de regresso"` antes do bot perguntar → `interest_confirmed` gravado, GATE pula etapa.
-- Sentinel: simula override + lockConfirmedFieldsInResponse + isLikelyQuestionLoop — reprompt sobrevive.
-
-### 8. Migration + deploy
-
-- `alter table public.lead_funnel_state add column if not exists empadronado_city text;`
-- `supabase functions deploy whatsapp-webhook`.
-
-## Arquivos a editar/criar
-
-- `supabase/functions/whatsapp-webhook/lib/funnel-state.ts`
-- `supabase/functions/whatsapp-webhook/lib/questions.ts` (novos detectores PT/ES/EN/FR)
-- `supabase/functions/whatsapp-webhook/lib/overrides.ts` (sentinel + guards)
-- `supabase/functions/whatsapp-webhook/lib/spanish-cities.ts` (blacklist de capitais estrangeiras)
-- `supabase/functions/whatsapp-webhook/index.ts` (patch determinístico por turno + remover sentinel antes do envio)
-- `supabase/migrations/<ts>_add_empadronado_city.sql`
-- `supabase/functions/whatsapp-webhook/wave6_test.ts`
-
-Resultado: as três correções já feitas em PT passam a valer para ES/EN/FR pelo mesmo caminho determinístico, e o reprompt de cidade não é mais sobrescrito pela IA no mesmo turno.
+- `supabase/functions/whatsapp-webhook/lib/questions.ts`
+- `supabase/functions/whatsapp-webhook/lib/overrides.ts` (apenas log)
+- `supabase/functions/whatsapp-webhook/wave6_test.ts` (novos casos)
