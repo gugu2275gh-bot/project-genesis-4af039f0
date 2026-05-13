@@ -348,6 +348,7 @@ import {
   lockConfirmedFieldsInResponse,
   sanitizeLocationQuestion,
   forceCorrectBlockForLocation,
+  forceServicesMessageAfterInterest,
   computeDeterministicFunnelPatch,
   stripLockedSentinel,
   isLocked,
