@@ -1,0 +1,1 @@
+ALTER TABLE public.lead_funnel_state ADD COLUMN IF NOT EXISTS empadronado_city text;

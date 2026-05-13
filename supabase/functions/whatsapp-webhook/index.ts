@@ -347,6 +347,9 @@ import {
   isLikelyQuestionLoop,
   lockConfirmedFieldsInResponse,
   sanitizeLocationQuestion,
+  computeDeterministicFunnelPatch,
+  stripLockedSentinel,
+  isLocked,
 } from './lib/overrides.ts'
 
 import {
@@ -1564,6 +1567,29 @@ Regras:
         if (funnelStateLive.email_confirmed) emailMissing = false
         if (funnelStateLive.interest_confirmed) serviceMissing = false
 
+        // === Patch determinístico turn-a-turn (multi-idioma) ===
+        // Captura localização/interesse/data/empadronamento/cidade ANTES de chamar a IA,
+        // baseado APENAS em (previousQuestion, rawCustomerMessage). Sem LLM, sem heurística.
+        try {
+          const detPatch = computeDeterministicFunnelPatch(lastAssistantMessage, rawCustomerMessage)
+          if (Object.keys(detPatch).length > 0) {
+            const safe: Record<string, unknown> = {}
+            if (detPatch.location_known && !funnelStateLive.location_known) safe.location_known = detPatch.location_known
+            if (detPatch.interest_confirmed && !funnelStateLive.interest_confirmed) safe.interest_confirmed = detPatch.interest_confirmed
+            if (detPatch.entry_date_confirmed && !funnelStateLive.entry_date_confirmed) safe.entry_date_confirmed = detPatch.entry_date_confirmed
+            if (detPatch.empadronado_confirmed !== undefined && (funnelStateLive.empadronado_confirmed === null || funnelStateLive.empadronado_confirmed === undefined)) safe.empadronado_confirmed = detPatch.empadronado_confirmed
+            if (detPatch.empadronado_city && !funnelStateLive.empadronado_city) safe.empadronado_city = detPatch.empadronado_city
+            if (Object.keys(safe).length > 0) {
+              funnelStateLive = await applyTurnUpdates(supabase, funnelStateLive, safe as any, { override_applied: 'deterministic_pre_ai' })
+              if (funnelStateLive.interest_confirmed) serviceMissing = false
+              console.log('[DET_PATCH]', JSON.stringify(safe))
+            }
+          }
+        } catch (detErr) {
+          console.warn('[DET_PATCH] non-blocking error:', detErr instanceof Error ? detErr.message : detErr)
+        }
+
+
         // Detecção de localização: buscar a RESPOSTA imediatamente após a pergunta de localização.
         // Suporta a nova pergunta yes/no ("já está na Espanha?") e a antiga disjuntiva (compatibilidade).
         const locQuestionRe = /(j[áa] est[áa]|j[áa] mora|ya est[áa]s|ya vives|already (in|live)|are you already in spain|hoje voc[êe] j[áa] est[áa] na espanha|hoy ya est[áa]s en espa[ñn]a|d[ée]j[àa] en espagne).{0,60}(espanha|espa[ñn]a|spain|espagne)/i
@@ -2006,7 +2032,10 @@ Regras:
           // Wave 5 (F4): dedup do bloco de catálogo. Se a resposta repete quase
           // literalmente uma das últimas 3 mensagens do assistente, força uma
           // nova geração com instrução de paráfrase + avanço.
+          // Honra o sentinel anti-clobber: se a resposta foi travada por uma
+          // validação determinística (ex.: cidade espanhola inválida), não retoca.
           try {
+            if (isLocked(aiResponse)) throw new Error('locked: skip F4')
             const lastThreeAssistant = history.filter((m) => m.role === 'assistant').slice(-3).map((m) => String(m.content || ''))
             const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
             const aiNorm = norm(aiResponse)
@@ -2067,7 +2096,9 @@ Regras:
 
           // Send AI response via Twilio (split on "|||" delimiter for multi-message replies)
           try {
-            const parts = aiResponse.split('|||').map(p => p.trim()).filter(Boolean)
+            // Remove sentinel anti-clobber antes de enviar (não deve aparecer ao cliente)
+            const aiResponseClean = stripLockedSentinel(aiResponse)
+            const parts = aiResponseClean.split('|||').map(p => p.trim()).filter(Boolean)
             for (let i = 0; i < parts.length; i++) {
               const part = parts[i]
               await sendWhatsAppMessage(phoneNumber, part)

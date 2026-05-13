@@ -20,6 +20,7 @@ export interface FunnelState {
   location_known: 'spain' | 'outside' | null
   entry_date_confirmed: string | null
   empadronado_confirmed: boolean | null
+  empadronado_city: string | null
   outside_spain_progress: Record<string, unknown>
   last_step_change: string
   updated_at: string

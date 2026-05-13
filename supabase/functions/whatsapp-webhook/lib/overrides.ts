@@ -7,6 +7,8 @@ import {
   isQuestionAboutEmail,
   isQuestionAboutSpainEntryDate,
   isQuestionAboutInterest,
+  isQuestionAboutLocationSpain,
+  isQuestionAboutEmpadronamientoCity,
   isNeverBeenToSpainAnswer,
   isPotentialEntryDateAnswer,
   isPotentialInterestAnswer,
@@ -27,7 +29,75 @@ import {
   countAlphaWords,
   parseEntryDateFromText,
 } from './questions.ts'
-import { isValidSpanishCity } from './spanish-cities.ts'
+import { isValidSpanishCity, extractCityFromAnswer, normalizeCity } from './spanish-cities.ts'
+
+// Sentinel invisível usado para "travar" a resposta após uma validação determinística
+// (ex.: reprompt de cidade espanhola). Outras camadas (lock, anti-loop, F4, dedup)
+// devem retornar a resposta intacta quando esse marcador estiver presente. Removido
+// antes do envio via stripLockedSentinel().
+export const LOCKED_SENTINEL = '\u200B[LOCKED]\u200B'
+export const isLocked = (s: string): boolean => typeof s === 'string' && s.includes(LOCKED_SENTINEL)
+export const stripLockedSentinel = (s: string): string => (s || '').replaceAll(LOCKED_SENTINEL, '').trim()
+const lock = (s: string): string => `${LOCKED_SENTINEL}${s}`
+
+/**
+ * Calcula um patch determinístico do funil baseado em (previousQuestion, currentMessage).
+ * Roda ANTES da chamada à IA — garante que interesse/localização/cidade já confirmados
+ * sejam refletidos no estado mesmo que a extração best-effort tenha falhado.
+ */
+export function computeDeterministicFunnelPatch(
+  previousAssistantMessage: string,
+  currentMessage: string,
+): {
+  location_known?: 'spain' | 'outside'
+  interest_confirmed?: string
+  empadronado_city?: string
+  empadronado_confirmed?: boolean
+  entry_date_confirmed?: string
+} {
+  const prevQ = extractLastQuestion(previousAssistantMessage || '')
+  const msg = String(currentMessage || '').trim()
+  const patch: Record<string, unknown> = {}
+  if (!msg) return patch as any
+
+  const YES = /^\s*(sim|si|s[ií]|yes|yeah|yep|claro|estou|to[uy]|aham|aha|positivo|afirmativo|oui|of course|sure|ok|okay)\b/i
+  const NO = /^\s*(n[ãa]o|no|nope|nay|negativo|nunca|jamais|non)\b/i
+
+  // Localização
+  if (isQuestionAboutLocationSpain(prevQ)) {
+    if (YES.test(msg)) patch.location_known = 'spain'
+    else if (NO.test(msg)) patch.location_known = 'outside'
+  }
+
+  // Interesse — capta resposta válida MESMO se ainda não havia sido perguntado
+  if (isPotentialInterestAnswer(msg)) {
+    patch.interest_confirmed = msg
+  }
+  if (isQuestionAboutInterest(prevQ) && msg.length >= 3) {
+    patch.interest_confirmed = msg
+  }
+
+  // Data de entrada
+  if (isQuestionAboutSpainEntryDate(prevQ)) {
+    const parsed = parseEntryDateFromText(msg)
+    if (parsed && !parsed.isFuture) patch.entry_date_confirmed = parsed.iso
+  }
+
+  // Empadronado yes/no
+  if (/\bempadron/i.test(prevQ) && !isQuestionAboutEmpadronamientoCity(prevQ) && !/(desde quando|desde cu[áa]ndo|since when|depuis quand)/i.test(prevQ)) {
+    if (YES.test(msg)) patch.empadronado_confirmed = true
+    else if (NO.test(msg)) patch.empadronado_confirmed = false
+  }
+
+  // Cidade de empadronamento — só grava se for cidade espanhola válida
+  if (isQuestionAboutEmpadronamientoCity(prevQ) && isValidSpanishCity(msg)) {
+    const extracted = extractCityFromAnswer(msg) || msg
+    patch.empadronado_city = normalizeCity(extracted)
+  }
+
+  return patch as any
+}
+
 
 /**
  * Wave 6: Trava determinística pós-IA.
@@ -46,6 +116,7 @@ export function lockConfirmedFieldsInResponse(
   },
 ): string {
   if (!aiResponse) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
   // Wave 7: se cadastro está COMPLETO, o lock é no-op — KB/tira-dúvidas livre.
   if (flags.nameKnown && flags.emailKnown && flags.interestKnown && flags.locationKnown) {
     return aiResponse
@@ -253,11 +324,11 @@ export function forceAdvanceFromEmpadronadoQuestion(
   const wrap = (q: string) => (preamble ? `${preamble}\n${q}` : q)
 
   // B5 (cidade) já foi feita → validar se é cidade espanhola.
-  // Se inválida, repergunta. Se válida, libera o LLM.
+  // Se inválida, repergunta E TRAVA a resposta com sentinel para que nada mais sobrescreva.
   if (isEmpadronamientoCityQuestion(previousQuestion)) {
     if (!isValidSpanishCity(msg)) {
       console.log('[CITY_VALIDATION] invalid Spanish city in answer, reprompting:', msg.slice(0, 60))
-      return wrap(getInvalidSpanishCityReprompt(language))
+      return lock(wrap(getInvalidSpanishCityReprompt(language)))
     }
     return aiResponse
   }
@@ -265,7 +336,7 @@ export function forceAdvanceFromEmpadronadoQuestion(
   // Caso o previousQuestion já seja a reprompt de cidade inválida → continua validando.
   if (/no reconoc|did not recognize|n[ãa]o reconheci|n ai pas reconnu|reconnu cette ville/i.test(previousQuestion || '')) {
     if (!isValidSpanishCity(msg)) {
-      return wrap(getInvalidSpanishCityReprompt(language))
+      return lock(wrap(getInvalidSpanishCityReprompt(language)))
     }
     return aiResponse
   }
@@ -316,6 +387,7 @@ export function isLikelyQuestionLoop(
   currentMessage: string,
   aiResponse: string,
 ): boolean {
+  if (isLocked(aiResponse)) return false
   const lastAssistantMessage = [...conversationHistory].reverse().find((msg) => msg.role === 'assistant')?.content || ''
   const previousQuestion = extractLastQuestion(lastAssistantMessage)
   const nextQuestion = extractLastQuestion(aiResponse)
@@ -347,6 +419,7 @@ export function sanitizeLocationQuestion(
   language: ChatLanguage,
 ): string {
   if (!aiResponse) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
   let out = aiResponse
   // Substitui a forma disjuntiva pela yes/no
   const disjunctivePatterns: Array<[RegExp, string]> = [
