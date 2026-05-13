@@ -19,6 +19,8 @@ import {
   getOutsideSpainAgeQuestion,
   getEmpadronadoQuestion,
   getLocationQuestion,
+  getFullNameReaskQuestion,
+  countAlphaWords,
 } from './questions.ts'
 
 /**
@@ -75,6 +77,34 @@ export function lockConfirmedFieldsInResponse(
     return replaceWithNext()
   }
   return aiResponse
+}
+
+/**
+ * Se o bot acabou de perguntar o NOME COMPLETO e o cliente respondeu com apenas
+ * 1 palavra alfabética (ex.: só primeiro nome) e NÃO é email/data, força a IA
+ * a re-perguntar o nome completo de forma explícita, sem "fingir aceitar" e
+ * avançar para a próxima etapa. Garante que o nome será fornecido com 2+ palavras
+ * antes de seguir.
+ */
+export function forceReaskFullNameIfSingleWord(
+  previousAssistantMessage: string,
+  currentMessage: string,
+  aiResponse: string,
+  language: ChatLanguage,
+  nameAlreadyKnown: boolean,
+): string {
+  if (nameAlreadyKnown) return aiResponse
+  const previousQuestion = extractLastQuestion(previousAssistantMessage)
+  if (!isQuestionAboutFullName(previousQuestion)) return aiResponse
+  const raw = String(currentMessage || '').trim()
+  if (!raw) return aiResponse
+  if (hasValidEmail(raw)) return aiResponse // email-as-name é tratado em outro override
+  if (isPotentialEntryDateAnswer(raw)) return aiResponse
+  const alpha = countAlphaWords(raw)
+  if (alpha >= 2) return aiResponse // já é nome completo válido
+  if (alpha < 1) return aiResponse // sem letras (ex.: só números) — outros guards lidam
+  // Substitui a resposta da IA por reask explícita do nome completo.
+  return getFullNameReaskQuestion(language)
 }
 
 export function forceSkipFullNameIfAlreadyKnown(

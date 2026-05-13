@@ -1,75 +1,65 @@
-# Diagnóstico (caso Roberto Barros — lead 49a59bf3)
+## Problema
 
-Confirmei no banco e nos logs de mensagens:
+O bot perguntou o nome do Gustavo **3 vezes** porque:
 
-- **20:39–20:47** Cadastro completo: nome, e-mail, interesse ("Nacionalidade"), localização ("Estou no Brasil"), bloco A (idade, Europa, familiar, remoto, formação) e Pré-Handoff (H1+H2) já enviados.
-- **20:47:56** Cliente perguntou: "Como tiro visto pra viajar pra Espanha".
-- **20:48:12** Bot: "Ótima pergunta…" + reabriu INTERESSE ("Me conta com calma…").
-- **20:49:58** Cliente: "Estudos".
-- **20:50:14** Bot reenviou o catálogo genérico, sem KB.
+1. 1ª resposta foi um email → corretamente rejeitada como nome.
+2. 2ª resposta ("Gustavo", 1 palavra) → rejeitada por `isLikelyFullNameAnswer()`, mas o bot **não insistiu explicitamente** por nome completo: agradeceu "Ótimo, Gustavo!" e foi para o interesse.
+3. Como `name_confirmed` continuou `false`, a cada turno seguinte o gate volta para a etapa "nome" e o bot **re-pergunta**.
 
-Estado real no banco:
-```
-leads.service_interest        = 'SEM_SERVICO'
-leads.interest_confirmed      = false
-lead_funnel_state.interest_confirmed = null
-lead_funnel_state.step        = 'interesse'
-```
+## Regras desejadas
 
-**Causa raiz:** quando o cliente respondeu "Nacionalidade" às 20:41:45, o webhook **não persistiu o interesse** em `leads` nem no `lead_funnel_state`. Como `serviceMissing` continuou `true`, a Wave 6 `lockConfirmedFieldsInResponse` interpretou que ainda havia etapa pendente e **sobrescreveu qualquer resposta da IA pela pergunta de interesse**, mesmo após o Pré-Handoff. Resultado: a KB nunca foi acionada ("flowComplete" só é `true` quando todas as etapas estão `done`, mas o lock pós-IA também depende dos mesmos flags e degrada o turno mesmo quando o gate libera).
+1. **Nome completo é obrigatório (≥ 2 palavras alfabéticas).** Se cliente mandar só uma palavra, o bot **insiste educadamente** na MESMA etapa, sem avançar e sem fingir que aceitou.
+2. **Assim que vier ≥ 2 palavras válidas:** gravar imediatamente em `contacts.full_name` + `name_source='USER_CONFIRMED'`, marcar `funnel_state.name_confirmed=true`, e **NUNCA mais perguntar nome** nesta conversa.
+3. **Mesmo número/contato voltando depois:** se `name_source ∈ {USER_CONFIRMED, STAFF_EDITED}`, o novo lead já nasce com `name_confirmed=true` (já existe via `isContactNameTrustworthy`, vamos reforçar).
 
-A regra do usuário continua válida: **durante o cadastro NÃO consultar KB; após o cadastro, consultar SEMPRE**. O bug é a perda de captura do interesse, que mantém o cadastro "eternamente aberto".
+## Mudanças
 
-# Plano de correção
+### 1. Manter validação estrita (≥ 2 palavras) em `lib/name-extraction.ts`
+Mantém `isLikelyFullNameAnswer` como está (já exige `alphaWords.length >= 2`). Não relaxar.
 
-## 1. Capturar interesse a partir de respostas livres do cliente
-Em `lib/extract.ts` (ou novo helper `extractInterestFromMessage`), mapear deterministicamente palavras-chave da resposta do cliente para `service_interest`:
-- `nacionalidade` → `NACIONALIDADE`
-- `estudo`, `estudos`, `homologa` → `ESTUDOS`
-- `residência`, `residencia`, `arraigo` → `RESIDENCIA`
-- `nômade`, `nomade`, `digital` → `NOMADE_DIGITAL`
-- `nie`, `tie`, `antecedentes`, `reagrupa` → respectivos enums
-- fallback: se a resposta vier logo após a pergunta INTERESSE e tiver ≤ 3 palavras, salvar a string crua em `service_interest` (uppercase, sem acento).
+### 2. Resposta determinística quando cliente manda só 1 palavra
+Em `supabase/functions/whatsapp-webhook/index.ts`, no bloco que detecta resposta à pergunta de nome:
 
-Aplicar imediatamente após detectar resposta à etapa INTERESSE no `index.ts` (logo antes do bloco do gate, ~linha 1539):
-```ts
-if (lastAssistantQuestion && /me conta com calma|cuéntame con calma/i.test(lastAssistantQuestion) && rawCustomerMessage) {
-  const detected = extractInterestFromMessage(rawCustomerMessage)
-  if (detected) {
-    await supabase.from('leads').update({ service_interest: detected, interest_confirmed: true }).eq('id', lead.id)
-    leadInterest = { ...leadInterest, service_interest: detected }
-    serviceMissing = false
-  }
-}
-```
+- Se a última pergunta do bot foi sobre nome completo E `messageForAI` tem 1 só palavra alfabética (não é email, data, etc.):
+  - **Não** agradecer/avançar.
+  - Substituir a próxima resposta da IA por uma **reask explícita**: "Obrigado! Para seguir, preciso do seu **nome e sobrenome** (nome completo). Pode me enviar?"
+  - Implementar via novo helper em `lib/overrides.ts` → `forceReaskFullNameIfSingleWord(prevQuestion, currentMsg, aiResponse, language)`.
 
-## 2. Sincronizar funil imediatamente
-Estender `syncFunnelFromCapturedData` (`lib/funnel-state.ts`) para também marcar `interest_confirmed=true` e avançar `step` para `localizacao` (ou `pre_handoff` se localização já conhecida) quando o interesse for detectado nesse turno. Hoje a função já recebe `interestRaw` mas o problema é que a fonte (`leads.service_interest`) ainda estava "SEM_SERVICO" — com o passo 1 isso passa a alimentar o sync corretamente.
+### 3. Trava firme após nome capturado
+No mesmo arquivo, quando `isLikelyFullNameAnswer(messageForAI) === true` e a pergunta anterior foi sobre nome:
 
-## 3. Memorizar perguntas factuais feitas durante o cadastro
-Adicionar nova coluna `pending_question` (text, nullable) em `lead_funnel_state` via migração. Quando o cliente fizer pergunta factual durante o cadastro (detectada por `topicHint` não vazio + presença de "?", "como", "quanto", "qual", "quais", "preciso"), gravar a frase original. No webhook:
-- Durante o cadastro: continuar respondendo "Ótima pergunta, te explico já já" + próxima etapa do roteiro (KB segue bloqueada — comportamento já correto).
-- No turno **imediatamente após o Pré-Handoff** (ou seja, primeira execução com `flowComplete=true`): se `pending_question` existir, usar essa string como `kbQuery` em vez da mensagem atual do cliente, responder com KB e limpar `pending_question`. Assim o agente "volta" exatamente na pergunta que ficou em aberto.
+- Atualizar `contacts.full_name` + `name_source='USER_CONFIRMED'` (já faz).
+- **Sincronizar imediatamente `funnel_state.name_confirmed=true`** antes do gate (já faz via `syncFunnelFromCapturedData`).
+- Em `lib/overrides.ts > lockConfirmedFieldsInResponse`, adicionar regra: **se em qualquer ponto do histórico o assistant já fez `isQuestionAboutFullName` E `nameKnown===true`**, qualquer nova pergunta sobre nome na resposta da IA é substituída pela próxima etapa pendente. Rede de segurança contra loop.
 
-## 4. Defesa em profundidade no `lockConfirmedFieldsInResponse`
-Em `lib/overrides.ts`: quando `flowComplete` (ou seja, `nameKnown && emailKnown && interestKnown && locationKnown`), o lock deve ser **no-op** — nunca substituir a resposta da IA por pergunta de cadastro. Adicionar guard early-return e teste de regressão.
+### 4. Reuso entre atendimentos do mesmo número
+Já funciona via `isContactNameTrustworthy()` em `loadFunnelState`. Reforçar:
+- Em `applyTurnUpdates`, **nunca permitir downgrade** de `name_confirmed: true → false`.
+- Adicionar log `[NAME_REUSE]` quando contato vem de lead anterior com nome confiável.
 
-## 5. Testes
-Em `funnel_persistence_test.ts` adicionar:
-- "Cliente responde 'Nacionalidade' → `service_interest` é capturado e `interest_confirmed=true`."
-- "Cliente faz pergunta factual no meio do cadastro → `pending_question` salvo, próxima resposta segue roteiro."
-- "Após Pré-Handoff com `pending_question` salvo → KB é consultada com a pergunta original e resposta NÃO contém perguntas de cadastro."
-- "Caso Roberto Barros: sequência exata de mensagens reproduzida → último turno responde sobre 'estudos na Espanha' usando KB e não repete o catálogo."
+### 5. Hotfix do Gustavo (lead atual `9b82823b...`)
+Migration única para destravar a conversa em curso:
+- `contacts.full_name = 'Gustavo'`, `name_source = 'USER_CONFIRMED'` no contato `4c2ed246-212e-431b-8f38-622b59fe810c` (cliente já se identificou; staff aceita "Gustavo" como nome válido manualmente).
+- `lead_funnel_state`: `name_confirmed=true`, `email_confirmed=true`, `interest_confirmed='VISTO_ESTUDANTE'`, `step='localizacao'`.
 
-Rodar `supabase--test_edge_functions` no `whatsapp-webhook`.
+(Atenção: pelas regras novas, "Gustavo" sozinho NÃO seria aceito automaticamente — o hotfix é manual porque a conversa atual já passou por loop e queremos destravar sem pedir mais nada redundante.)
 
-## 6. Backfill (one-shot, opcional)
-Migration corretiva para o lead atual: setar `leads.service_interest='NACIONALIDADE'`, `interest_confirmed=true`, e `lead_funnel_state.interest_confirmed=true, step='pre_handoff'` para Roberto. Assim a próxima mensagem dele já cai no modo TIRA-DÚVIDAS com KB.
+### 6. Testes
+Em `supabase/functions/whatsapp-webhook/index_test.ts`:
+- "bot perguntou nome → cliente respondeu 'Gustavo' (1 palavra) → IA deve **re-perguntar nome completo**, não avançar".
+- "bot perguntou nome → cliente respondeu 'Gustavo Silva' → IA deve **avançar para email**, gravar nome, e em turnos seguintes nunca mais perguntar nome".
+- "contato com `name_source='USER_CONFIRMED'` em lead novo → `loadFunnelState` retorna `name_confirmed=true`".
 
-## Arquivos
-- `supabase/functions/whatsapp-webhook/lib/extract.ts` (novo `extractInterestFromMessage`)
-- `supabase/functions/whatsapp-webhook/lib/funnel-state.ts` (sync + `pending_question`)
-- `supabase/functions/whatsapp-webhook/lib/overrides.ts` (no-op quando flowComplete)
-- `supabase/functions/whatsapp-webhook/index.ts` (captura interesse, salva/consome `pending_question`, usa `pending_question` como `kbQuery`)
-- `supabase/functions/whatsapp-webhook/funnel_persistence_test.ts` (4 novos testes)
-- Migração: `ALTER TABLE lead_funnel_state ADD COLUMN pending_question text;` + backfill do Roberto
+## Resultado
+
+- 1 palavra → bot insiste UMA vez de forma clara ("nome e sobrenome, por favor").
+- 2+ palavras → grava e sela. Nunca mais pergunta no lead atual nem em leads futuros do mesmo número.
+- Loop atual do Gustavo destravado pelo hotfix.
+
+## Arquivos afetados
+
+- `supabase/functions/whatsapp-webhook/index.ts` — lógica de detecção pós-pergunta-de-nome.
+- `supabase/functions/whatsapp-webhook/lib/overrides.ts` — `forceReaskFullNameIfSingleWord` + endurecer `lockConfirmedFieldsInResponse`.
+- `supabase/functions/whatsapp-webhook/lib/funnel-state.ts` — guard contra downgrade de `name_confirmed`.
+- `supabase/functions/whatsapp-webhook/index_test.ts` — novos testes.
+- Nova migration de hotfix para Gustavo.

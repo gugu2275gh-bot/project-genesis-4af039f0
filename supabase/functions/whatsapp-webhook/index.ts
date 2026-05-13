@@ -341,6 +341,7 @@ import {
   forceReaskEmailIfMissing,
   forceAdvanceFromEntryDateQuestion,
   forceAdvanceFromInterestQuestion,
+  forceReaskFullNameIfSingleWord,
   isLikelyQuestionLoop,
   lockConfirmedFieldsInResponse,
 } from './lib/overrides.ts'
@@ -361,6 +362,7 @@ export {
   forceReaskEmailIfMissing,
   forceAdvanceFromEntryDateQuestion,
   forceAdvanceFromInterestQuestion,
+  forceReaskFullNameIfSingleWord,
   isLikelyQuestionLoop,
   getOutsideSpainAgeQuestion,
   getEmailReaskQuestion,
@@ -1892,6 +1894,7 @@ Regras:
 
         const outsideSpainNextQuestion = getOutsideSpainNextQuestion(detectedChatLanguage, allAssistant)
         aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
+        aiResponse = forceReaskFullNameIfSingleWord(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !nameMissing)
         aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
         aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
         aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
@@ -1934,6 +1937,7 @@ Regras:
               detectedChatLanguage,
             )
             aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
+            aiResponse = forceReaskFullNameIfSingleWord(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !nameMissing)
             aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
             aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
             aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
