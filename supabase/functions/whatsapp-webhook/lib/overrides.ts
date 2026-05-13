@@ -443,3 +443,87 @@ export function sanitizeLocationQuestion(
   return out
 }
 
+/**
+ * Trava determinística de bloco por localização.
+ *
+ * Caso real: cliente diz que está FORA da Espanha (location_known='outside'),
+ * a IA mesmo assim pergunta "Qual a data exata da sua entrada na Espanha?" ou
+ * "Está empadronado?" (perguntas exclusivas do bloco B — dentro da Espanha).
+ * Aqui detectamos isso e substituímos pela próxima pergunta correta do bloco
+ * "fora da Espanha" (ou Pré-Handoff se já completo).
+ *
+ * Caso simétrico: location_known='spain' e IA pergunta "Qual sua idade?",
+ * "Esteve na Europa nos últimos 6 meses?", "Trabalha remoto?", "Formação superior?"
+ * (perguntas exclusivas do bloco A — fora da Espanha) → substituímos pela próxima
+ * pergunta correta do bloco "dentro da Espanha".
+ */
+export function forceCorrectBlockForLocation(
+  aiResponse: string,
+  language: ChatLanguage,
+  flags: {
+    locationKnown: 'spain' | 'outside' | null | undefined
+    entryDateConfirmed: string | null | undefined
+    empadronadoConfirmed: boolean | null | undefined
+    empadronadoCity: string | null | undefined
+    assistantTranscript: string
+  },
+): string {
+  if (!aiResponse) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
+  if (!flags.locationKnown) return aiResponse
+
+  const q = extractLastQuestion(aiResponse)
+  if (!q) return aiResponse
+  const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
+  const wrap = (replacement: string) => (preamble ? `${preamble}\n${replacement}` : replacement)
+
+  const isOutsideOnlyQuestion =
+    isQuestionAboutSpainEntryDate(q)
+    || /\bempadron/i.test(q)
+    || /(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)/i.test(q)
+
+  const isSpainOnlyQuestion =
+    /\b(qual sua idade|cu[áa]ntos a[ñn]os|how old|quel [âa]ge)\b/i.test(q)
+    || /\beuropa nos [úu]ltimos 6 meses|europa en los [úu]ltimos 6 meses|europe in the last 6 months\b/i.test(q)
+    || /\b(trabalha remoto|trabajas? remoto|work remotely|travaillez[- ]vous [àa] distance)\b/i.test(q)
+    || /\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree|formation sup[ée]rieure)\b/i.test(q)
+    || /\bfamiliar (europeu|europeo)|family member.*(eu|spain)|membre.*famille.*(europ|espagn)/i.test(q)
+
+  if (flags.locationKnown === 'outside' && isOutsideOnlyQuestion) {
+    console.log('[BLOCK_LOCK] outside cliente, IA fez pergunta de bloco-Espanha:', q.slice(0, 80))
+    // Importar dinamicamente para evitar ciclo
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getOutsideSpainNextQuestion } = require('./questions.ts')
+    const next = getOutsideSpainNextQuestion(language, flags.assistantTranscript || '', {
+      entryDateConfirmed: flags.entryDateConfirmed || null,
+      locationKnown: flags.locationKnown,
+    })
+    return lock(wrap(next))
+  }
+
+  if (flags.locationKnown === 'spain' && isSpainOnlyQuestion) {
+    console.log('[BLOCK_LOCK] cliente na Espanha, IA fez pergunta de bloco-fora:', q.slice(0, 80))
+    // Próxima pergunta correta do bloco B
+    let next: string
+    if (!flags.entryDateConfirmed) {
+      if (language === 'es') next = 'Perfecto. Ahora necesito entender tu situación aquí. ¿Cuál fue la fecha exacta de tu entrada en España?'
+      else if (language === 'en') next = 'Got it. Now I need to understand your situation here. What was the exact date you entered Spain?'
+      else if (language === 'fr') next = 'D’accord. Maintenant j’ai besoin de comprendre votre situation ici. Quelle est la date exacte de votre entrée en Espagne ?'
+      else next = 'Perfeito. Agora preciso entender sua situação aqui. Qual foi a data exata da sua entrada na Espanha?'
+    } else if (flags.empadronadoConfirmed === null || flags.empadronadoConfirmed === undefined) {
+      next = getEmpadronadoQuestion(language)
+    } else if (flags.empadronadoConfirmed && !flags.empadronadoCity) {
+      next = getEmpadronamientoCityQuestion(language)
+    } else {
+      // Bloco completo → Pré-Handoff
+      if (language === 'es') next = 'Perfecto. Ya puedo tener una visión inicial de tu caso.\nEn CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
+      else if (language === 'en') next = 'Perfect. I can already get an initial view of your case.\nAt CB, we analyze each case individually, always looking for the safest path within the law.'
+      else if (language === 'fr') next = 'Parfait. Je peux déjà avoir une première vision de votre cas.\nChez CB, nous analysons chaque cas individuellement.'
+      else next = 'Perfeito. Já consigo ter uma visão inicial do seu caso.\nNa CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
+    }
+    return lock(wrap(next))
+  }
+
+  return aiResponse
+}
+
