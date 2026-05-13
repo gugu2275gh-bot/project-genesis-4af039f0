@@ -276,9 +276,12 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 4. NÃO comece com saudação se já houve mensagens anteriores. Comece direto com o conteúdo.
 5. Cada resposta deve AVANÇAR a conversa.`
 
+  const trimmedHistory = conversationHistory.length > 24
+    ? conversationHistory.slice(-24)
+    : conversationHistory
   const messages = [
     { role: 'system', content: fullSystemPrompt },
-    ...conversationHistory.map(m => ({ role: m.role === 'assistant' ? 'assistant' as const : 'user' as const, content: m.content })),
+    ...trimmedHistory.map(m => ({ role: m.role === 'assistant' ? 'assistant' as const : 'user' as const, content: m.content })),
     { role: 'user' as const, content: currentMessage },
   ]
 
