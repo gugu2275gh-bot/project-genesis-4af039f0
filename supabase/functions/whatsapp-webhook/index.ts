@@ -355,6 +355,7 @@ import {
   ensureServicesAttachedToInterest,
   computeDeterministicFunnelPatch,
   stripLockedSentinel,
+  stripPreambleBeforePreHandoff,
   isLocked,
 } from './lib/overrides.ts'
 
