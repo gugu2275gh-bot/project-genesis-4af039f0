@@ -207,3 +207,21 @@ export function getEmailQuestion(language: ChatLanguage): string {
   if (language === 'fr') return 'Merci. Quel est le meilleur e-mail pour vous envoyer des orientations et suivre votre dossier ?'
   return 'Obrigado. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?'
 }
+
+export function getFullNameReaskQuestion(language: ChatLanguage): string {
+  if (language === 'es') return 'Gracias. Para continuar, necesito tu *nombre y apellido* (nombre completo). ¿Puedes enviármelo?'
+  if (language === 'en') return 'Thanks. To continue, I need your *first and last name* (full name). Could you send it?'
+  if (language === 'fr') return 'Merci. Pour continuer, j’ai besoin de votre *prénom et nom* (nom complet). Pouvez-vous me l’envoyer ?'
+  return 'Obrigado. Para seguir, preciso do seu *nome e sobrenome* (nome completo). Pode me enviar?'
+}
+
+/**
+ * Conta palavras "alfabéticas" (≥2 letras) em uma resposta de texto, ignorando
+ * pontuação, números e tokens curtos. Usado para detectar se o cliente respondeu
+ * só com primeiro nome (1 palavra) à pergunta de nome completo.
+ */
+export function countAlphaWords(text: string): number {
+  if (!text) return 0
+  const words = String(text).trim().split(/\s+/).filter(Boolean)
+  return words.filter((w) => /[A-Za-zÀ-ÖØ-öø-ÿ]{2,}/.test(w)).length
+}
