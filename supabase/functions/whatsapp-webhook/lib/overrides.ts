@@ -19,6 +19,8 @@ import {
   getOutsideSpainAgeQuestion,
   getEmpadronadoQuestion,
   getLocationQuestion,
+  getFullNameReaskQuestion,
+  countAlphaWords,
 } from './questions.ts'
 
 /**
