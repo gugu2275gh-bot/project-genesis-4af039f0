@@ -2026,8 +2026,13 @@ Regras:
               empadronadoCity: funnelStateLive.empadronado_city,
               assistantTranscript: allAssistant,
             })
-          } catch (e) {
-            console.error('[F1-HARD] retry failed:', e instanceof Error ? e.message : e)
+            aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, {
+              locationKnown: funnelStateLive.location_known,
+              entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+              empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+              empadronadoCity: funnelStateLive.empadronado_city,
+              assistantTranscript: allAssistant,
+            })
           }
         }
         if (aiResponse && isLikelyQuestionLoop(history, rawCustomerMessage, aiResponse)) {
