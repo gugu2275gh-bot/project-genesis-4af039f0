@@ -31,10 +31,10 @@ export function detectChatLanguage(text: string): ChatLanguage {
 }
 
 export function getLanguageDirective(language: ChatLanguage): string {
-  if (language === 'es') return 'RESPONDA EXCLUSIVAMENTE EM ESPANHOL. NÃO use português.'
-  if (language === 'en') return 'RESPOND EXCLUSIVELY IN ENGLISH. DO NOT use Portuguese.'
-  if (language === 'fr') return 'RÉPONDEZ EXCLUSIVEMENT EN FRANÇAIS. N’utilisez pas le portugais.'
-  return 'RESPONDA EXCLUSIVAMENTE EM PORTUGUÊS DO BRASIL.'
+  if (language === 'es') return 'IDIOMA TRAVADO: RESPONDA EXCLUSIVAMENTE EM ESPANHOL. Mesmo se o cliente enviar mensagens em português ou outro idioma, continue respondendo SEMPRE em espanhol. NÃO misture idiomas.'
+  if (language === 'en') return 'LOCKED LANGUAGE: RESPOND EXCLUSIVELY IN ENGLISH. Even if the customer writes in Portuguese or another language, keep responding in English. DO NOT mix languages.'
+  if (language === 'fr') return 'LANGUE VERROUILLÉE: RÉPONDEZ EXCLUSIVEMENT EN FRANÇAIS. Même si le client écrit dans une autre langue, continuez à répondre en français. NE mélangez pas les langues.'
+  return 'IDIOMA TRAVADO: RESPONDA EXCLUSIVAMENTE EM PORTUGUÊS DO BRASIL. Mesmo se o cliente enviar mensagens em outro idioma, continue respondendo em português. NÃO misture idiomas.'
 }
 
 export function getTransientErrorReply(language: ChatLanguage): string {
