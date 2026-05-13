@@ -588,18 +588,38 @@ export function forceCorrectBlockForLocation(
     } else if (flags.empadronadoConfirmed && !flags.empadronadoCity) {
       next = getEmpadronamientoCityQuestion(language)
     } else {
-      // BPMN-3: bloco B completo → H1|||H2|||H3|||H4 na mesma rodada (flags persistidas evitam reenvio)
+      // BPMN-3: bloco B completo → H1|||H2|||H3 na mesma rodada (flags persistidas evitam reenvio)
+      // IMPORTANTE: NÃO usar wrap() aqui — o payload deve sair literalmente sem
+      // qualquer preâmbulo inventado pelo LLM colado antes de H1.
       const payload = buildPreHandoffPayload(language, {
         preHandoffSent: flags.preHandoffSent,
         handoffSent: flags.handoffSent,
         transcript: flags.assistantTranscript || '',
       })
-      next = payload || ''
-      if (!next) return aiResponse
+      if (!payload) return aiResponse
+      return lock(payload)
     }
     return lock(wrap(next))
   }
 
   return aiResponse
+}
+
+/**
+ * Defesa final: se o texto contém H1 do pré-handoff (BPMN-v2) precedido por
+ * qualquer preâmbulo (separado por \n e não por |||), descarta tudo antes do H1.
+ * Garante que H1|||H2|||H3 saiam sem frases inventadas pelo LLM coladas antes.
+ */
+const PREHANDOFF_H1_RE = /Perfeito\. Já consigo ter uma visão inicial do seu caso\.|Perfecto\. Ya puedo tener una visión inicial de tu caso\.|Perfect\. I can already get an initial view of your case\.|Parfait\. Je peux déjà avoir une première vision de votre cas\./i
+
+export function stripPreambleBeforePreHandoff(text: string): string {
+  if (!text) return text
+  const match = text.match(PREHANDOFF_H1_RE)
+  if (!match || match.index === undefined || match.index === 0) return text
+  // Só descarta se o que vem antes NÃO contém o delimitador ||| (i.e., é preâmbulo solto).
+  const before = text.slice(0, match.index)
+  if (before.includes('|||')) return text
+  console.warn('[BPMN-v2] Preâmbulo descartado antes do H1:', before.trim().slice(0, 120))
+  return text.slice(match.index)
 }
 

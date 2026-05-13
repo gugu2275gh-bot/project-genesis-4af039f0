@@ -355,6 +355,7 @@ import {
   ensureServicesAttachedToInterest,
   computeDeterministicFunnelPatch,
   stripLockedSentinel,
+  stripPreambleBeforePreHandoff,
   isLocked,
 } from './lib/overrides.ts'
 
@@ -2149,6 +2150,8 @@ Regras:
           try {
             // Remove sentinel anti-clobber antes de enviar (não deve aparecer ao cliente)
             let aiResponseClean = stripLockedSentinel(aiResponse)
+            // BPMN-v2 defesa: remove qualquer preâmbulo inventado pelo LLM antes do H1.
+            aiResponseClean = stripPreambleBeforePreHandoff(aiResponseClean)
 
             // BPMN-3 MODO PÓS-HANDOFF: se H1-H4 já foram enviados, anexa o sufixo
             // localizado de "aguarde um especialista" ao final da resposta (uma única bolha).

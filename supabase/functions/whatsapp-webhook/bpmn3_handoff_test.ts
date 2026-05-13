@@ -15,7 +15,7 @@ import {
   preHandoffSummarySent,
   handoffTransferSent,
 } from './lib/questions.ts'
-import { forceCorrectBlockForLocation, ensureServicesAttachedToInterest } from './lib/overrides.ts'
+import { forceCorrectBlockForLocation, ensureServicesAttachedToInterest, stripPreambleBeforePreHandoff } from './lib/overrides.ts'
 
 // ---------- H1|||H2 são duas bolhas; H3 é UMA bolha ----------
 
@@ -157,4 +157,35 @@ Deno.test('BPMN v2 Msg5+Msg6: no-op quando IA não está perguntando interesse',
   const ai = 'Você está hoje na Espanha?'
   const result = ensureServicesAttachedToInterest(ai, 'pt-BR', '')
   assertEquals(result, ai)
+})
+
+// ---------- BPMN v2: defesa contra preâmbulo do LLM antes de H1 ----------
+
+Deno.test('stripPreambleBeforePreHandoff: descarta preâmbulo inventado pelo LLM antes do H1 (PT)', () => {
+  const h1h2h3 = buildPreHandoffPayload('pt-BR', { preHandoffSent: false, handoffSent: false, transcript: '' })
+  const polluted = `Perfeito. Agora preciso entender como está sua situação aqui.\n${h1h2h3}`
+  const cleaned = stripPreambleBeforePreHandoff(polluted)
+  assertEquals(cleaned, h1h2h3)
+  const parts = cleaned.split('|||').map(s => s.trim()).filter(Boolean)
+  assertEquals(parts.length, 3, 'deve resultar exatamente em 3 bolhas (H1, H2, H3)')
+  assertStringIncludes(parts[0], 'visão inicial do seu caso')
+  assert(!parts[0].includes('Agora preciso entender'), 'preâmbulo não pode aparecer em nenhuma bolha')
+})
+
+Deno.test('stripPreambleBeforePreHandoff: no-op quando H1 já está no início', () => {
+  const h1h2h3 = buildPreHandoffPayload('pt-BR', { preHandoffSent: false, handoffSent: false, transcript: '' })
+  assertEquals(stripPreambleBeforePreHandoff(h1h2h3), h1h2h3)
+})
+
+Deno.test('stripPreambleBeforePreHandoff: no-op quando texto não contém H1', () => {
+  const text = 'Qualquer outra mensagem do agente'
+  assertEquals(stripPreambleBeforePreHandoff(text), text)
+})
+
+Deno.test('stripPreambleBeforePreHandoff: funciona em ES/EN/FR', () => {
+  for (const lang of ['es', 'en', 'fr'] as const) {
+    const payload = buildPreHandoffPayload(lang, { preHandoffSent: false, handoffSent: false, transcript: '' })
+    const polluted = `Algum preâmbulo aleatório.\n${payload}`
+    assertEquals(stripPreambleBeforePreHandoff(polluted), payload)
+  }
 })
