@@ -1703,19 +1703,33 @@ Regras:
           const aIntro = sentAny(/\bperguntas? r[áa]pidas? s[óo] para entender melhor|preguntas r[áa]pidas? para entender mejor\b/i)
           const askedIdade = sentAny(/\b(qual sua idade|cu[áa]ntos a[ñn]os|how old)\b/i)
           const askedEuropa = sentAny(/\beuropa nos [úu]ltimos 6 meses|europa en los [úu]ltimos 6 meses|europe in the last 6 months\b/i)
+          // Pular a A3 quando já temos sinais inequívocos: cliente já está na Espanha
+          // OU informou data de entrada na Espanha dentro dos últimos 180 dias.
+          const entryDateInLast6Months = (() => {
+            const d = funnelStateLive.entry_date_confirmed
+            if (!d) return false
+            const t = Date.parse(d)
+            if (Number.isNaN(t)) return false
+            const days = (Date.now() - t) / 86_400_000
+            return days >= 0 && days <= 180
+          })()
+          const skipEuropaQuestion = userInSpain || entryDateInLast6Months
+          const askedEuropaEffective = askedEuropa || skipEuropaQuestion
           const askedFamiliar = sentAny(/\bfamiliar (europeu|europeo)|family member.*(eu|spain)\b/i)
           const askedRemoto = sentAny(/\b(trabalha remoto|trabajas? remoto|work remotely)\b/i)
           const askedFormacao = sentAny(/\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree)\b/i)
-          aprofundamentoDone = aIntro && askedIdade && askedEuropa && askedFamiliar && askedRemoto && askedFormacao
+          aprofundamentoDone = aIntro && askedIdade && askedEuropaEffective && askedFamiliar && askedRemoto && askedFormacao
           aprofundamentoInstruction =
             'O cliente está FORA da Espanha. Avance pelo bloco A na ordem, UMA pergunta por turno: ' +
             (!aIntro ? '(A1) "Perfeito. Vou te fazer perguntas rápidas só para entender melhor seu cenário." então ' : '') +
             (!askedIdade ? '(A2) "Qual sua idade?". ' :
-             !askedEuropa ? '(A3) "Você esteve na Europa nos últimos 6 meses?". ' :
+             !askedEuropaEffective ? '(A3) "Você esteve na Europa nos últimos 6 meses?". ' :
              !askedFamiliar ? '(A4) "Possui familiar europeu ou residente legal na Espanha?". ' :
              !askedRemoto ? '(A5) "Você trabalha remoto?". ' :
              !askedFormacao ? '(A6) "Você possui formação superior?". ' :
-             'Bloco completo, avance para o Pré-Handoff.')
+             'Bloco completo, avance para o Pré-Handoff.') +
+            (skipEuropaQuestion ? ' IMPORTANTE: NÃO pergunte "Você esteve na Europa nos últimos 6 meses?" — já temos a informação (cliente está/entrou na Espanha recentemente).' : '')
+
         } else {
           aprofundamentoInstruction = 'Aguardando resposta do cliente sobre localização antes de avançar.'
         }
@@ -1902,7 +1916,10 @@ Regras:
           }
         }
 
-        const outsideSpainNextQuestion = getOutsideSpainNextQuestion(detectedChatLanguage, allAssistant)
+        const outsideSpainNextQuestion = getOutsideSpainNextQuestion(detectedChatLanguage, allAssistant, {
+          entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+          locationKnown: funnelStateLive.location_known,
+        })
         aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
         aiResponse = forceReaskFullNameIfSingleWord(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !nameMissing)
         aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)

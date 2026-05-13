@@ -1,51 +1,60 @@
 ## Problema
 
-Pergunta atual é disjuntiva e ambígua:
-> "Hoje você já está na Espanha ou ainda está em outro país?"
+Bot perguntou "Você esteve na Europa nos últimos 6 meses?" depois que o cliente já informou data de entrada na Espanha (20/04/2026 = ~3 semanas atrás). Pergunta redundante — se ele entrou na Espanha há menos de 6 meses, obviamente esteve na Europa.
 
-"Sim", "já", "ainda não" não definem qual lado.
+## Regra desejada
 
-## Solução
+Pular a pergunta "Europa últimos 6 meses" quando:
+1. Cliente está **na Espanha agora** (`location_known = 'spain'`), **OU**
+2. Cliente informou `entry_date_confirmed` e essa data está **dentro dos últimos 6 meses** (≤ 180 dias atrás).
 
-Trocar por uma pergunta **fechada (sim/não)** sobre Espanha. Se não, deduzir logicamente que está em outro país — sem precisar perguntar de novo, sem números.
+Só perguntar se:
+- Cliente está fora da Espanha **e** não há data de entrada recente, **ou**
+- A data informada é **anterior a 6 meses** (ex.: 10/05/2025 com hoje em 13/05/2026).
 
-### Novo texto
+## Mudanças
 
-- **PT:** "Perfeito. Hoje você já está na Espanha?"
-- **ES:** "Perfecto. ¿Hoy ya estás en España?"
-- **EN:** "Perfect. Are you already in Spain today?"
-- **FR:** "Parfait. Êtes-vous déjà en Espagne aujourd'hui ?"
+### `supabase/functions/whatsapp-webhook/index.ts` (~ linha 1705)
 
-### Lógica determinística
+Bloco A (fora da Espanha), variável `askedEuropa`:
 
-Em `supabase/functions/whatsapp-webhook/index.ts` (linhas ~1587-1615), o parser de localização passa a interpretar a resposta como sim/não:
+Adicionar helper local:
+```ts
+const entryDateInLast6Months = (() => {
+  const d = funnelStateLive.entry_date_confirmed
+  if (!d) return false
+  const t = Date.parse(d)
+  if (Number.isNaN(t)) return false
+  const days = (Date.now() - t) / 86_400_000
+  return days >= 0 && days <= 180
+})()
+const skipEuropaQuestion = userInSpain || entryDateInLast6Months
+```
 
-- Resposta afirmativa (`sim`, `si`, `yes`, `já`, `ya`, `estou`, `aqui`, "estou em Madrid", menção a cidade espanhola) → `userInSpain = true` → `location_known = 'spain'`.
-- Resposta negativa (`não`, `no`, `ainda não`, `todavía no`, "estou no Brasil/Portugal/etc.", menção a outro país) → `userOutsideSpain = true` → `location_known = 'outside'`. **Não pergunta "em qual país?" aqui** — segue direto para o próximo bloco do funil (idade/Europa/etc.). Se em algum momento futuro o país de origem for relevante, será capturado naturalmente em outra etapa.
-- Resposta ambígua/irrelevante → bot repete a pergunta yes/no UMA vez.
+E tratar `askedEuropa` como satisfeito quando `skipEuropaQuestion === true`:
+```ts
+const askedEuropaEffective = askedEuropa || skipEuropaQuestion
+```
 
-### Mudanças concretas
+Usar `askedEuropaEffective` em:
+- `aprofundamentoDone = aIntro && askedIdade && askedEuropaEffective && askedFamiliar && askedRemoto && askedFormacao`
+- Na cadeia de `instruction`: `!askedEuropaEffective ? '(A3) ...' : !askedFamiliar ? ...`
 
-1. **`lib/questions.ts > getLocationQuestion`** (linhas 112-117) — substituir os 4 idiomas pelos textos acima.
+### `supabase/functions/whatsapp-webhook/lib/questions.ts > getOutsideSpainNextQuestion`
 
-2. **`index.ts > locQuestionRe`** (linha 1589) e **`localizacaoAsked`** (linhas 1664-1665) — atualizar regex para reconhecer a nova pergunta:
-   - PT: `/hoje voc[êe] j[áa] est[áa] na espanha\??$/i` (e similar para ES/EN/FR)
-   - Manter o regex antigo como fallback para conversas em andamento que já receberam a pergunta antiga.
+Receber também `entryDateConfirmed: string | null` e `locationKnown: string | null` como parâmetros opcionais; se algum implicar "já em Europa nos últimos 6 meses", pular para a próxima pergunta (familiar). Atualizar a única chamada (em `index.ts`, variável `outsideSpainNextQuestion`) para passar `funnelStateLive.entry_date_confirmed` e `funnelStateLive.location_known`.
 
-3. **Parser de resposta** (linhas 1604-1615) — manter o que já existe (`sim`/`não`/`estou`/`brasil`/etc.) que já cobre o cenário sim/não corretamente. Só revisar a ordem para garantir que `não` puro vire `userOutsideSpain` antes de qualquer match de "Espanha" mencionada na frase.
+### Sem migração
 
-4. **Instrução do passo no prompt** (`steps.push({ key: 'localizacao', ... instruction })` por volta de linha 1670+) — atualizar a instrução para a IA não voltar a usar a pergunta antiga: "Pergunte APENAS: 'Hoje você já está na Espanha?'. Se a resposta for negativa, NÃO pergunte em qual país está — siga direto para o próximo bloco (cenário fora da Espanha)."
-
-5. **Override defensivo em `lib/overrides.ts`** — se a IA gerar texto contendo "ou ainda está em outro país" / "o todavía está en otro país" / "or still in another country", substituir pela versão sim/não correspondente. Rede de segurança contra regressão do prompt.
+Mudança puramente lógica no edge function.
 
 ## Resultado
 
-- Pergunta clara, sem disjunção, fácil de responder.
-- "Não" → automaticamente entendido como "está em outro país", sem nova pergunta redundante.
-- Lógica de funil avança normalmente para o bloco "fora da Espanha".
+- Cliente disse "estou na Espanha desde 20/04/2026" → bot pula direto da idade para "familiar europeu/residente legal".
+- Cliente está fora da Espanha sem data → bot pergunta normalmente.
+- Cliente disse data antiga (10/05/2025) → bot pergunta normalmente.
 
 ## Arquivos afetados
 
+- `supabase/functions/whatsapp-webhook/index.ts`
 - `supabase/functions/whatsapp-webhook/lib/questions.ts`
-- `supabase/functions/whatsapp-webhook/index.ts` (regex, instrução do passo, parser ordering)
-- `supabase/functions/whatsapp-webhook/lib/overrides.ts` (sanitização)
