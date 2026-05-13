@@ -164,6 +164,28 @@ export function extractOutsideProgressPatch(
   return out as any
 }
 
+/**
+ * Extrai a resposta de B4 ("desde quando empadronado") quando a previousQuestion
+ * foi a pergunta de "desde quando". Retorna ISO YYYY-MM-DD se parseável,
+ * caso contrário retorna o texto cru (limitado) para preservar o dado.
+ * Persistido em outside_spain_progress.b4_empadronado_since.
+ */
+export function extractEmpadronadoSincePatch(
+  previousAssistantMessage: string,
+  currentMessage: string,
+): { b4_empadronado_since?: string } {
+  const prevQ = extractLastQuestion(previousAssistantMessage || '')
+  const msg = String(currentMessage || '').trim()
+  if (!prevQ || !msg) return {}
+  const isSince = /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i.test(prevQ)
+  if (!isSince) return {}
+  const parsed = parseEntryDateFromText(msg)
+  if (parsed && !parsed.isFuture) return { b4_empadronado_since: parsed.iso }
+  // fallback: salva o texto cru limitado a 60 chars (ex.: "fevereiro de 2024")
+  if (msg.length <= 60) return { b4_empadronado_since: msg }
+  return {}
+}
+
 
 /**
  * Wave 6: Trava determinística pós-IA.
