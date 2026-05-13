@@ -29,6 +29,10 @@ import {
   countAlphaWords,
   parseEntryDateFromText,
   getOutsideSpainNextQuestion,
+  getServicesOfferedMessage,
+  isServicesOfferedMessage,
+  buildPreHandoffPayload,
+  preHandoffSummarySent,
 } from './questions.ts'
 import { isValidSpanishCity, extractCityFromAnswer, normalizeCity } from './spanish-cities.ts'
 
@@ -286,6 +290,7 @@ export function forceAdvanceFromInterestQuestion(
   currentMessage: string,
   aiResponse: string,
   language: ChatLanguage,
+  assistantTranscript?: string,
 ): string {
   const previousQuestion = extractLastQuestion(previousAssistantMessage)
   const nextQuestion = extractLastQuestion(aiResponse)
@@ -296,11 +301,47 @@ export function forceAdvanceFromInterestQuestion(
 
   if (nextQuestion && areQuestionsEquivalent(previousQuestion, nextQuestion)) {
     const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
-    const replacement = getLocationQuestion(language)
+    // D1 Bizagi: antes de pedir localização, listar serviços atendidos (Msg 6).
+    const transcript = assistantTranscript || ''
+    const servicesAlreadySent = isServicesOfferedMessage(transcript)
+      || /(arraigo).{0,200}(reagrupa|reagrupacion|reunification|regroupement).{0,200}(homologa|homologation)/is.test(transcript)
+    const replacement = servicesAlreadySent
+      ? getLocationQuestion(language)
+      : getServicesOfferedMessage(language)
     return preamble ? `${preamble}\n${replacement}` : replacement
   }
 
   return aiResponse
+}
+
+/**
+ * D1 Bizagi (Msg 6): após `interest_confirmed`, garante que o bot envie a
+ * mensagem de "serviços atendidos" antes de avançar para a pergunta de
+ * localização. Se a IA gerou outra pergunta (ex.: pulou direto para localização
+ * ou começou outro assunto), substituímos pela Msg 6. Idempotente via transcript.
+ */
+export function forceServicesMessageAfterInterest(
+  aiResponse: string,
+  language: ChatLanguage,
+  flags: {
+    interestKnown: boolean
+    locationKnown: boolean
+    assistantTranscript: string
+  },
+): string {
+  if (!aiResponse) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
+  if (!flags.interestKnown) return aiResponse
+  if (flags.locationKnown) return aiResponse // já passou da etapa
+  const transcript = flags.assistantTranscript || ''
+  if (isServicesOfferedMessage(transcript)) return aiResponse
+  // Se a IA já gerou justamente a Msg 6, mantém.
+  if (isServicesOfferedMessage(aiResponse)) return aiResponse
+  // Substitui pela Msg 6 (mantém preâmbulo curto da IA, se houver).
+  const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
+  const replacement = getServicesOfferedMessage(language)
+  console.log('[D1_SERVICES] injecting Msg 6 (services offered) before location')
+  return preamble ? `${preamble}\n${replacement}` : replacement
 }
 
 /**
@@ -512,20 +553,20 @@ export function forceCorrectBlockForLocation(
     // Próxima pergunta correta do bloco B
     let next: string
     if (!flags.entryDateConfirmed) {
-      if (language === 'es') next = 'Perfecto. Ahora necesito entender tu situación aquí. ¿Cuál fue la fecha exacta de tu entrada en España?'
-      else if (language === 'en') next = 'Got it. Now I need to understand your situation here. What was the exact date you entered Spain?'
-      else if (language === 'fr') next = 'D’accord. Maintenant j’ai besoin de comprendre votre situation ici. Quelle est la date exacte de votre entrée en Espagne ?'
-      else next = 'Perfeito. Agora preciso entender sua situação aqui. Qual foi a data exata da sua entrada na Espanha?'
+      // D2 Bizagi: B1 (confirmar situação) e B2 (data) entregues como blocos visuais separados.
+      if (language === 'es') next = 'Perfecto. Ahora necesito entender tu situación aquí.\n\n¿Cuál fue la fecha exacta de tu entrada en España?'
+      else if (language === 'en') next = 'Got it. Now I need to understand your situation here.\n\nWhat was the exact date you entered Spain?'
+      else if (language === 'fr') next = 'D’accord. Maintenant j’ai besoin de comprendre votre situation ici.\n\nQuelle est la date exacte de votre entrée en Espagne ?'
+      else next = 'Perfeito. Agora preciso entender sua situação aqui.\n\nQual foi a data exata da sua entrada na Espanha?'
     } else if (flags.empadronadoConfirmed === null || flags.empadronadoConfirmed === undefined) {
       next = getEmpadronadoQuestion(language)
     } else if (flags.empadronadoConfirmed && !flags.empadronadoCity) {
       next = getEmpadronamientoCityQuestion(language)
     } else {
-      // Bloco completo → Pré-Handoff
-      if (language === 'es') next = 'Perfecto. Ya puedo tener una visión inicial de tu caso.\nEn CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
-      else if (language === 'en') next = 'Perfect. I can already get an initial view of your case.\nAt CB, we analyze each case individually, always looking for the safest path within the law.'
-      else if (language === 'fr') next = 'Parfait. Je peux déjà avoir une première vision de votre cas.\nChez CB, nous analysons chaque cas individuellement.'
-      else next = 'Perfeito. Já consigo ter uma visão inicial do seu caso.\nNa CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
+      // D3 Bizagi: bloco completo → Pré-Handoff em 2 mensagens (summary ||| transfer).
+      const payload = buildPreHandoffPayload(language, flags.assistantTranscript || '')
+      next = payload || ''
+      if (!next) return aiResponse // ambos já enviados → não sobrescreve
     }
     return lock(wrap(next))
   }

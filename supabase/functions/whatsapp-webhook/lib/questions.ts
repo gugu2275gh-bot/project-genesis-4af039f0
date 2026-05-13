@@ -261,10 +261,75 @@ export function getInvalidSpanishCityReprompt(language: ChatLanguage): string {
 }
 
 export function getOutsideSpainAgeQuestion(language: ChatLanguage): string {
-  if (language === 'es') return 'Entendido. Entonces seguimos por tu escenario fuera de España. ¿Cuál es tu edad?'
-  if (language === 'en') return 'Got it. Then we’ll continue with your situation outside Spain. How old are you?'
-  if (language === 'fr') return 'D’accord. Nous continuons donc avec votre situation hors d’Espagne. Quel âge avez-vous ?'
-  return 'Entendido. Então seguimos pelo seu cenário fora da Espanha. Qual sua idade?'
+  // D2 Bizagi: A1 (confirmar cenário) e A2 (idade) entregues como blocos visuais
+  // separados (mesma mensagem, separados por linha em branco) — sem +1 round-trip.
+  if (language === 'es') return 'Entendido. Entonces seguimos por tu escenario fuera de España.\n\n¿Cuál es tu edad?'
+  if (language === 'en') return 'Got it. Then we’ll continue with your situation outside Spain.\n\nHow old are you?'
+  if (language === 'fr') return 'D’accord. Nous continuons donc avec votre situation hors d’Espagne.\n\nQuel âge avez-vous ?'
+  return 'Entendido. Então seguimos pelo seu cenário fora da Espanha.\n\nQual sua idade?'
+}
+
+// D1 Bizagi (Msg 6): após o cliente declarar interesse, listar serviços atendidos
+// pela CB e validar antes de pedir a localização.
+export function getServicesOfferedMessage(language: ChatLanguage): string {
+  if (language === 'es') {
+    return 'En CB trabajamos con: residencia (NIE/TIE), nacionalidad española, arraigo (social, laboral, familiar, formación), reagrupación familiar, homologación de títulos y autorización de regreso.\n\n¿Tu caso encaja en alguno de estos?'
+  }
+  if (language === 'en') {
+    return 'At CB we handle: residence (NIE/TIE), Spanish nationality, arraigo (social, labor, family, training), family reunification, diploma homologation and return authorization.\n\nDoes your case fit any of these?'
+  }
+  if (language === 'fr') {
+    return 'Chez CB, nous traitons : résidence (NIE/TIE), nationalité espagnole, arraigo (social, professionnel, familial, formation), regroupement familial, homologation de diplômes et autorisation de retour.\n\nVotre cas correspond-il à l’un d’eux ?'
+  }
+  return 'Na CB trabalhamos com: residência (NIE/TIE), nacionalidade espanhola, arraigo (social, laboral, familiar, formação), reagrupamento familiar, homologação de diploma e autorização de regresso.\n\nO seu caso se encaixa em algum desses?'
+}
+
+export function isServicesOfferedMessage(text: string): boolean {
+  const n = normalizeForLanguageChecks(text || '')
+  if (!n) return false
+  // tokens-âncora multi-idioma estáveis
+  return /(arraigo)/.test(n)
+    && /(reagrupa|reagrupacion|reunification|regroupement)/.test(n)
+    && /(homologa|homologation)/.test(n)
+}
+
+// D3 Bizagi: pré-handoff em 2 mensagens distintas
+// (H1-H2 = visão inicial + filosofia CB; H3-H4 = encaminhamento ao especialista).
+export function getPreHandoffSummaryMessage(language: ChatLanguage): string {
+  if (language === 'es') return 'Perfecto. Ya puedo tener una visión inicial de tu caso.\nEn CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
+  if (language === 'en') return 'Perfect. I can already get an initial view of your case.\nAt CB, we analyze each case individually, always looking for the safest path within the law.'
+  if (language === 'fr') return 'Parfait. Je peux déjà avoir une première vision de votre cas.\nChez CB, nous analysons chaque cas individuellement, en cherchant toujours la voie la plus sûre et conforme à la loi.'
+  return 'Perfeito. Já consigo ter uma visão inicial do seu caso.\nNa CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
+}
+
+export function getHandoffTransferMessage(language: ChatLanguage): string {
+  if (language === 'es') return 'Voy a transferirte ahora a un especialista de CB. En breve un miembro de nuestro equipo asumirá esta conversación para orientarte con los detalles de tu caso.'
+  if (language === 'en') return 'I’ll now transfer you to a CB specialist. Shortly, a member of our team will take over this conversation to guide you through the details of your case.'
+  if (language === 'fr') return 'Je vais maintenant vous transférer à un spécialiste CB. Très bientôt, un membre de notre équipe reprendra cette conversation pour vous orienter en détail.'
+  return 'Vou te encaminhar agora para um especialista da CB. Em breve uma pessoa do nosso time vai assumir essa conversa para te orientar com detalhes do seu caso.'
+}
+
+const PRE_HANDOFF_SUMMARY_RE = /(vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case|premi[èe]re vision de votre cas)/i
+const HANDOFF_TRANSFER_RE = /(vou te encaminhar agora|voy a transferirte ahora|i.?ll now transfer you|je vais maintenant vous transf[ée]rer)/i
+export function preHandoffSummarySent(transcript: string): boolean {
+  return PRE_HANDOFF_SUMMARY_RE.test(transcript || '')
+}
+export function handoffTransferSent(transcript: string): boolean {
+  return HANDOFF_TRANSFER_RE.test(transcript || '')
+}
+
+/**
+ * Monta o pré-handoff completo respeitando idempotência via transcript.
+ * - Nada enviado ainda → "summary ||| transfer" (2 mensagens via split do index.ts).
+ * - Só summary enviado → apenas transfer.
+ * - Ambos enviados → string vazia (caller decide o que fazer).
+ */
+export function buildPreHandoffPayload(language: ChatLanguage, transcript: string): string {
+  const summarySent = preHandoffSummarySent(transcript)
+  const transferSent = handoffTransferSent(transcript)
+  if (summarySent && transferSent) return ''
+  if (summarySent && !transferSent) return getHandoffTransferMessage(language)
+  return `${getPreHandoffSummaryMessage(language)}|||${getHandoffTransferMessage(language)}`
 }
 
 export function getOutsideSpainNextQuestion(
@@ -317,10 +382,10 @@ export function getOutsideSpainNextQuestion(
     return 'Você possui formação superior?'
   }
 
-  if (language === 'es') return 'Perfecto. Ya puedo tener una visión inicial de tu caso.\nEn CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
-  if (language === 'en') return 'Perfect. I can already get an initial view of your case.\nAt CB, we analyze each case individually, always looking for the safest path within the law.'
-  if (language === 'fr') return 'Parfait. Je peux déjà avoir une première vision de votre cas.\nChez CB, nous analysons chaque cas individuellement, en cherchant toujours la voie la plus sûre et conforme à la loi.'
-  return 'Perfeito. Já consigo ter uma visão inicial do seu caso.\nNa CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
+  // D3 Bizagi: pré-handoff em 2 mensagens (summary ||| transfer). Idempotência via transcript.
+  const payload = buildPreHandoffPayload(language, assistantTranscript || '')
+  if (payload) return payload
+  return getPreHandoffSummaryMessage(language)
 }
 
 export function isQuestionAboutEmail(question: string): boolean {
