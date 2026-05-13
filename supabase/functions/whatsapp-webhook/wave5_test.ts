@@ -25,6 +25,7 @@ function makeState(overrides: Partial<FunnelState> = {}): FunnelState {
     location_known: 'spain',
     entry_date_confirmed: '2026-04-20',
     empadronado_confirmed: false,
+    empadronado_city: null,
     outside_spain_progress: {},
     last_step_change: new Date().toISOString(),
     updated_at: new Date().toISOString(),
