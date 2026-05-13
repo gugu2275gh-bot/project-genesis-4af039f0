@@ -1542,9 +1542,13 @@ Regras:
 
         // Wave 7: capturar interesse a partir de resposta livre à pergunta INTERESSE.
         // Sem isto, o cadastro fica "eternamente aberto" e a KB nunca é liberada.
+        // Wave 7.1: torna a captura PERMISSIVA — qualquer mensagem do cliente que case
+        // com palavra-chave de serviço (residencia, nacionalidade, estudos, etc.) é
+        // capturada enquanto serviceMissing=true, independente da última pergunta do bot.
+        // Isto garante recuperação retroativa se o turno em que o cliente respondeu
+        // o interesse não capturou (ex.: deploy propagou no meio da conversa).
         try {
-          const askedInterest = lastAssistantQuestion && /me conta com calma|cu[eé]ntame con calma|tell me what.*looking for|busca hoje/i.test(lastAssistantQuestion)
-          if (serviceMissing && askedInterest && rawCustomerMessage) {
+          if (serviceMissing && rawCustomerMessage) {
             const detectedInterest = extractInterestFromMessage(rawCustomerMessage)
             if (detectedInterest) {
               await supabase
