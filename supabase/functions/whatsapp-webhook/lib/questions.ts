@@ -110,10 +110,10 @@ export function isPotentialInterestAnswer(text: string): boolean {
 }
 
 export function getLocationQuestion(language: ChatLanguage): string {
-  if (language === 'es') return 'Perfecto. ¿Hoy ya estás en España o todavía estás en otro país?'
-  if (language === 'en') return 'Perfect. Are you already in Spain today, or are you still in another country?'
-  if (language === 'fr') return 'Parfait. Êtes-vous déjà en Espagne aujourd’hui ou êtes-vous encore dans un autre pays ?'
-  return 'Perfeito. Hoje você já está na Espanha ou ainda está em outro país?'
+  if (language === 'es') return 'Perfecto. ¿Hoy ya estás en España?'
+  if (language === 'en') return 'Perfect. Are you already in Spain today?'
+  if (language === 'fr') return 'Parfait. Êtes-vous déjà en Espagne aujourd’hui ?'
+  return 'Perfeito. Hoje você já está na Espanha?'
 }
 
 export function getEmpadronadoQuestion(language: ChatLanguage): string {
