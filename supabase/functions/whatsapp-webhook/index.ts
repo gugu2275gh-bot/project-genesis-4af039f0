@@ -1627,7 +1627,7 @@ Regras:
           key: 'email', label: 'E-MAIL',
           done: !emailMissing,
           instruction:
-            'Agradeça brevemente o nome e pergunte APENAS o melhor e-mail. Use exatamente: "Obrigado. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?". NÃO faça outras perguntas nem responda dúvidas factuais agora.',
+            'Agradeça brevemente o nome e pergunte APENAS o melhor e-mail. Use como REFERÊNCIA (traduza fielmente para o idioma do cliente — NUNCA envie em português se o cliente não estiver em português): "Obrigado. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?". NÃO faça outras perguntas nem responda dúvidas factuais agora.',
         })
 
         // Etapa 4 — Interesse (Msg5 + Msg6) — exige a pergunta explícita E a frase do catálogo
