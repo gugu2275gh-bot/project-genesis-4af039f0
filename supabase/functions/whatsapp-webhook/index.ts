@@ -1932,7 +1932,7 @@ Regras:
             )
             aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
             aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, { nameKnown: !nameMissing, emailKnown: !emailMissing, interestKnown: !serviceMissing, locationKnown: !!funnelStateLive.location_known })
-          } catch (e) {
+            aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
             console.error('[F1-HARD] retry failed:', e instanceof Error ? e.message : e)
           }
         }
