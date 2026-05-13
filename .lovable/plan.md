@@ -1,72 +1,65 @@
-## Diagnóstico — turno do Gustavo (lead `4f3dc442…`)
+**O que aconteceu**
 
-Conversa real (espanhol):
+Do I know what the issue is? **Sim.** O problema não é só a validação de cidade: o funil ainda está deixando o LLM decidir avanços críticos com base em perguntas “já feitas”, não em respostas válidas registradas.
 
-```
-BOT  Cuéntame con calma: ¿qué buscas hoy? ...
-USR  cuurso
-BOT  (mesma pergunta de novo)            ← deveria ter avançado
-USR  autorizacion de regresso
-BOT  (mesma pergunta de novo)            ← deveria ter avançado
-```
+Pelo histórico real do lead `Fred William`, aconteceu isto:
 
-Logs `[GATE] step=interesse done=3/7` em todos os turnos: **`interest_confirmed` nunca foi gravado**, então o GATE/IA fica preso pedindo interesse.
+1. O cliente respondeu `Não` para “Você está na Espanha?” e o estado foi salvo corretamente como `location_known = outside`.
+2. Depois, no bloco “fora da Espanha”, o sistema considerou etapas como concluídas apenas porque a pergunta apareceu no histórico (`sentAny(...)`), mesmo quando a resposta foi pergunta fora do roteiro ou incompleta.
+3. Quando o cliente perguntou `O que é isto?` sobre “trabalha remoto”, o gate mandou o LLM seguir para a próxima etapa em vez de explicar e repetir a pergunta atual. Isso pulou a resposta de trabalho remoto.
+4. Após `Tenho`, o LLM ignorou o gate e voltou para o bloco “já na Espanha”, perguntando data de entrada — mesmo com `location_known = outside`.
+5. Como não existe uma trava determinística final para o bloco correto, ele depois voltou a perguntar “familiar europeu...” de novo.
 
-A toolchain `computeDeterministicFunnelPatch` foi instalada exatamente para esse caso, mas tem dois bugs concretos:
+**Causa técnica principal**
 
-### Bug 1 — `isQuestionAboutInterest` não casa a pergunta real em ES
-`questions.ts` linha 149 procura `que busca hoy`, mas a pergunta de fato é "¿qué **buscas** hoy?" (2ª pessoa). `"que buscas hoy".includes("que busca hoy")` → false. Resultado: o ramo "se prevQ era a pergunta de interesse, qualquer resposta com ≥3 chars vira `interest_confirmed`" nunca dispara.
+- `index.ts` calcula o progresso do aprofundamento por **pergunta enviada** (`askedIdade`, `askedEuropa`, `askedFamiliar`, etc.), não por **resposta validada**.
+- `isStructuredQuestionAnswer` é permissivo demais para texto curto e pode tratar coisa fora de contexto como resposta.
+- O prompt/gate dá instruções, mas a resposta final ainda depende do LLM; não há um “roteador determinístico” que substitua a saída errada por exatamente a próxima pergunta válida.
+- `buildStateDirective` usa o estado antigo (`funnelState`) em vez do estado atualizado no turno (`funnelStateLive`) na hora de montar a instrução final.
 
-Mesmo problema em PT/EN/FR: o detector é `includes` literal de uma única forma verbal e quebra a qualquer variação ("o que você busca hoje", "o que procura hoje", "what brings you here", etc.).
+**Plano de correção**
 
-### Bug 2 — `isPotentialInterestAnswer` é estrito demais
-- `"cuurso"` (typo de "curso") → não bate em `exactTokens` nem em `includes('curso')`.
-- `"autorizacion de regresso"` (grafia PT do usuário em conv. ES) → keyword cadastrada é `autorizacion de regreso` (uma s); `includes` falha.
-- Outras grafias comuns: `regreso`/`regresso`, `homologação`/`homologacao`/`homologación`, `família`/`familia`.
+1. **Criar validação determinística por pergunta atual**
+   - Identificar a última pergunta real do bot.
+   - Validar se a mensagem do cliente responde aquela pergunta específica.
+   - Se não responder, não avançar.
+   - Para perguntas factuais como “O que é isto?”, responder curto e repetir a pergunta pendente.
 
-Como nenhum dos dois caminhos grava `interest_confirmed`, o GATE recompõe a mesma pergunta e a IA repete (com paráfrase do F4, mas mesma pergunta).
+2. **Registrar progresso por resposta, não por pergunta enviada**
+   - Usar o campo existente `outside_spain_progress` para marcar respostas válidas:
+     - `age_answered`
+     - `europe_recent_answered`
+     - `family_answered`
+     - `remote_answered`
+     - `education_answered`
+   - Não precisa criar tabela nem coluna nova.
 
-## Plano
+3. **Corrigir respostas ambíguas**
+   - Ex.: para “Possui familiar europeu ou residente legal na Espanha?”, `Minhas irmã` não confirma se é europeia/residente legal.
+   - O bot deve pedir clarificação: “Sua irmã é europeia ou residente legal na Espanha?” em vez de avançar.
 
-### 1. `lib/questions.ts` — `isQuestionAboutInterest` baseado em regex multi-idioma
+4. **Adicionar trava final de bloco**
+   - Se `location_known = outside`, bloquear qualquer resposta que pergunte data de entrada, empadronamento ou cidade.
+   - Se o LLM gerar uma pergunta do bloco errado, substituir deterministicamente pela próxima pergunta correta do bloco “fora da Espanha”.
+   - Se todas as respostas válidas do bloco fora da Espanha estiverem registradas, enviar Pré-Handoff, não voltar para perguntas anteriores.
 
-Substituir o `includes` por uma única regex normalizada que cubra:
+5. **Usar o estado atualizado no prompt**
+   - Trocar `buildStateDirective(funnelState, ...)` para `buildStateDirective(funnelStateLive, ...)` para evitar instruções stale dentro do mesmo turno.
 
-- PT: `que (voce )?(busca|procura|esta procurando|deseja|gostaria|quer)\s+(hoje|agora)?`, `como posso (te )?ajudar`, `qual (e )?(o )?seu interesse`.
-- ES: `que (buscas|busca|estas buscando|deseas|necesitas|quieres)\s+(hoy|ahora)?`, `en que (te )?puedo ayudar`, `cual es tu interes`.
-- EN: `what (are you|brings you|can i help|do you need|are you looking for)`, `how can i help`.
-- FR: `que (cherchez|recherchez)[- ]vous`, `comment puis je (vous )?aider`, `quel est (votre|ton) (besoin|interet)`.
+6. **Adicionar testes de regressão com o caso do print**
+   - `Não estou na Espanha` nunca deve levar a “qual data de entrada na Espanha?”.
+   - `O que é isto?` em “trabalha remoto?” deve explicar e repetir “Você trabalha remoto?”, não avançar.
+   - `Minhas irmã` deve pedir clarificação, não aceitar como resposta completa.
+   - Pergunta “familiar europeu...” não deve repetir depois de resposta validada.
 
-Cobre também a variante curta usada em catálogos: `nacionalidad|residencia|estudios|arraigo`.
+7. **Validar com testes da Edge Function**
+   - Rodar os testes existentes do `whatsapp-webhook` e os novos cenários antes de concluir.
 
-### 2. `lib/questions.ts` — `isPotentialInterestAnswer` mais tolerante
+**Resultado esperado**
 
-- Acrescentar `regresso` (PT), `homologacion`, `família`, `família reagrupada`, `formación`.
-- Adicionar matching tolerante a typos para um conjunto fechado de tokens-chave (`curso, arraigo, nacionalidade, residencia, nie, tie, visa, visado, homologacao, reagrupamento, regresso, regreso`): aceitar quando a palavra do usuário tem distância de Levenshtein ≤ 1 (suficiente p/ "cuurso" → "curso", "residenccia" → "residencia"). Implementação curta in-file (sem dep externa).
-- Manter o restante da lógica.
+O fluxo passa a funcionar como formulário conversacional com estado rígido: só avança quando a resposta é válida para a pergunta atual, não mistura blocos Espanha/fora da Espanha e não repete pergunta já respondida.
 
-### 3. `lib/overrides.ts` — fallback do interesse a partir do contexto
-
-Em `computeDeterministicFunnelPatch`, quando `prevQ` é a pergunta de interesse (já corrigida em #1) e a mensagem do usuário tem ≥3 chars, **continuar** gravando como interesse (linha 76‑78 já faz isso). Adicionar log explícito `[DETERMINISTIC_PATCH]` com `prevQ`/`msg`/`patch` para auditoria nos próximos turnos.
-
-### 4. Teste unitário (`wave6_test.ts` ou novo)
-
-- `isQuestionAboutInterest("Cuéntame con calma: ¿qué buscas hoy? ...")` → `true` (ES, 2ª pessoa).
-- `isQuestionAboutInterest("O que você busca hoje?")`, `("What are you looking for today?")`, `("Que recherchez-vous aujourd'hui ?")` → `true`.
-- `isPotentialInterestAnswer("cuurso")` → `true`.
-- `isPotentialInterestAnswer("autorizacion de regresso")` → `true`.
-- `computeDeterministicFunnelPatch(botInterestQ_es, "cuurso")` → `{interest_confirmed:"cuurso"}`.
-
-### 5. Deploy
-
-`supabase functions deploy whatsapp-webhook` (automático). Sem migration.
-
-## Resultado esperado
-
-No próximo turno do Gustavo após "cuurso" / "autorizacion de regresso", o patch determinístico grava `interest_confirmed`, o GATE avança para `localizacao` ("¿Hoy ya estás en España?") e o loop atual termina.
-
-## Arquivos
-
-- `supabase/functions/whatsapp-webhook/lib/questions.ts`
-- `supabase/functions/whatsapp-webhook/lib/overrides.ts` (apenas log)
-- `supabase/functions/whatsapp-webhook/wave6_test.ts` (novos casos)
+<presentation-actions>
+  <presentation-open-history>View History</presentation-open-history>
+  <presentation-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</presentation-link>
+</presentation-actions>

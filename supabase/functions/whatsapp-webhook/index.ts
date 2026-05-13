@@ -347,6 +347,7 @@ import {
   isLikelyQuestionLoop,
   lockConfirmedFieldsInResponse,
   sanitizeLocationQuestion,
+  forceCorrectBlockForLocation,
   computeDeterministicFunnelPatch,
   stripLockedSentinel,
   isLocked,
@@ -1881,7 +1882,7 @@ Regras:
         let aiResponse = ''
         let resolvedSystemPrompt = systemPrompt.replace('{nome}', promptContactName || '')
         // Wave 4: diretiva de estado do funil (anti F1/F4)
-        resolvedSystemPrompt += buildStateDirective(funnelState, detectedChatLanguage)
+        resolvedSystemPrompt += buildStateDirective(funnelStateLive, detectedChatLanguage)
 
         if (kbStrictMode) {
           if (!knowledgeContext) {
@@ -1962,6 +1963,14 @@ Regras:
           locationKnown: !!funnelStateLive.location_known,
         })
         aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
+        // BLOCK-LOCK: impede que a IA misture perguntas dos blocos Espanha vs fora
+        aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, {
+          locationKnown: funnelStateLive.location_known,
+          entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+          empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+          empadronadoCity: funnelStateLive.empadronado_city,
+          assistantTranscript: allAssistant,
+        })
 
         // F1-HARD: se o nome já é confiável e a IA mesmo assim perguntou nome (guard zerou ou
         // sobrou só o preâmbulo), forçar uma nova geração com instrução anti-nome explícita.
@@ -1979,6 +1988,13 @@ Regras:
             aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
             aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, { nameKnown: !nameMissing, emailKnown: !emailMissing, interestKnown: !serviceMissing, locationKnown: !!funnelStateLive.location_known })
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
+            aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, {
+              locationKnown: funnelStateLive.location_known,
+              entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+              empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+              empadronadoCity: funnelStateLive.empadronado_city,
+              assistantTranscript: allAssistant,
+            })
           } catch (e) {
             console.error('[F1-HARD] retry failed:', e instanceof Error ? e.message : e)
           }
@@ -2002,6 +2018,13 @@ Regras:
             aiResponse = forceAdvanceFromEmpadronadoQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
             aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, { nameKnown: !nameMissing, emailKnown: !emailMissing, interestKnown: !serviceMissing, locationKnown: !!funnelStateLive.location_known })
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
+            aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, {
+              locationKnown: funnelStateLive.location_known,
+              entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+              empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+              empadronadoCity: funnelStateLive.empadronado_city,
+              assistantTranscript: allAssistant,
+            })
           } catch (retryError) {
             console.error('Anti-repeat retry failed:', retryError instanceof Error ? retryError.message : retryError)
           }
