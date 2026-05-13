@@ -355,6 +355,8 @@ import {
   forceServicesMessageAfterInterest,
   ensureServicesAttachedToInterest,
   computeDeterministicFunnelPatch,
+  extractOutsideProgressPatch,
+  preventRepeatedCanonicalQuestion,
   stripLockedSentinel,
   stripPreambleBeforePreHandoff,
   isLocked,
@@ -363,6 +365,7 @@ import {
 import {
   loadFunnelState,
   applyTurnUpdates,
+  mergeOutsideProgress,
   buildStateDirective,
   isContactNameTrustworthy,
   syncFunnelFromCapturedData,
@@ -1187,11 +1190,14 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           console.log('Language locked (from contact):', detectedChatLanguage)
         } else {
           // Fallback (contato legado sem preferred_language e não é 1ª msg).
-          detectedChatLanguage = detectChatLanguage(currentCustomerMessage)
+          // Hardening: detectar pela PRIMEIRA mensagem do cliente no histórico,
+          // não pela atual (que pode ser curta tipo "ok" e induzir troca de idioma).
+          const firstUserMsg = (history.find((m: any) => m.role === 'user')?.content || currentCustomerMessage) as string
+          detectedChatLanguage = detectChatLanguage(firstUserMsg)
           const currentLangCode = langCodeMap[detectedChatLanguage]
           await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
           contact.preferred_language = currentLangCode
-          console.log('Language locked (fallback detection):', detectedChatLanguage)
+          console.log('Language locked (fallback detection from first user msg):', detectedChatLanguage)
         }
 
         // Wave 4: carregar estado persistente do funil
@@ -1606,6 +1612,18 @@ Regras:
           console.warn('[DET_PATCH] non-blocking error:', detErr instanceof Error ? detErr.message : detErr)
         }
 
+        // Persistência incremental do ramo A (idade, Europa 6m, familiar, remoto, formação).
+        try {
+          if (funnelStateLive.location_known === 'outside') {
+            const opPatch = extractOutsideProgressPatch(lastAssistantMessage, rawCustomerMessage)
+            if (Object.keys(opPatch).length > 0) {
+              funnelStateLive = await mergeOutsideProgress(supabase, funnelStateLive, opPatch as any)
+            }
+          }
+        } catch (opErr) {
+          console.warn('[OUTSIDE_PROGRESS] non-blocking error:', opErr instanceof Error ? opErr.message : opErr)
+        }
+
 
         // Detecção de localização: buscar a RESPOSTA imediatamente após a pergunta de localização.
         // Suporta a nova pergunta yes/no ("já está na Espanha?") e a antiga disjuntiva (compatibilidade).
@@ -1961,10 +1979,20 @@ Regras:
           }
         }
 
+        const outsideProgressLive = (funnelStateLive.outside_spain_progress || {}) as any
         const outsideSpainNextQuestion = getOutsideSpainNextQuestion(detectedChatLanguage, allAssistant, {
           entryDateConfirmed: funnelStateLive.entry_date_confirmed,
           locationKnown: funnelStateLive.location_known,
+          outsideProgress: outsideProgressLive,
         })
+        const blockFlags = {
+          locationKnown: funnelStateLive.location_known,
+          entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+          empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+          empadronadoCity: funnelStateLive.empadronado_city,
+          assistantTranscript: allAssistant,
+          outsideProgress: outsideProgressLive,
+        }
         aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
         aiResponse = forceReaskFullNameIfSingleWord(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !nameMissing)
         aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
@@ -1980,20 +2008,10 @@ Regras:
         })
         aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
         // BLOCK-LOCK: impede que a IA misture perguntas dos blocos Espanha vs fora
-        aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, {
-          locationKnown: funnelStateLive.location_known,
-          entryDateConfirmed: funnelStateLive.entry_date_confirmed,
-          empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
-          empadronadoCity: funnelStateLive.empadronado_city,
-          assistantTranscript: allAssistant,
-        })
-        aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, {
-          locationKnown: funnelStateLive.location_known,
-          entryDateConfirmed: funnelStateLive.entry_date_confirmed,
-          empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
-          empadronadoCity: funnelStateLive.empadronado_city,
-          assistantTranscript: allAssistant,
-        })
+        aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, blockFlags)
+        aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
+        // Anti-repetição global: se IA repetiu pergunta canônica já feita, força próxima pendente.
+        aiResponse = preventRepeatedCanonicalQuestion(aiResponse, detectedChatLanguage, blockFlags)
         // BPMN v2: Msg5 + Msg6 na MESMA rodada — anexa Msg6 quando IA emite Msg5 sozinha.
         aiResponse = ensureServicesAttachedToInterest(aiResponse, detectedChatLanguage, allAssistant)
         // D1 Bizagi (fallback): garante "serviços atendidos" caso interesse já confirmado e Msg6 nunca enviada.
@@ -2019,20 +2037,9 @@ Regras:
             aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
             aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, { nameKnown: !nameMissing, emailKnown: !emailMissing, interestKnown: !serviceMissing, locationKnown: !!funnelStateLive.location_known })
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
-            aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, {
-              locationKnown: funnelStateLive.location_known,
-              entryDateConfirmed: funnelStateLive.entry_date_confirmed,
-              empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
-              empadronadoCity: funnelStateLive.empadronado_city,
-              assistantTranscript: allAssistant,
-            })
-            aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, {
-              locationKnown: funnelStateLive.location_known,
-              entryDateConfirmed: funnelStateLive.entry_date_confirmed,
-              empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
-              empadronadoCity: funnelStateLive.empadronado_city,
-              assistantTranscript: allAssistant,
-            })
+            aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, blockFlags)
+            aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
+            aiResponse = preventRepeatedCanonicalQuestion(aiResponse, detectedChatLanguage, blockFlags)
           } catch (e) {
             console.error('[F1-HARD] retry failed:', e instanceof Error ? e.message : e)
           }
@@ -2056,20 +2063,9 @@ Regras:
             aiResponse = forceAdvanceFromEmpadronadoQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
             aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, { nameKnown: !nameMissing, emailKnown: !emailMissing, interestKnown: !serviceMissing, locationKnown: !!funnelStateLive.location_known })
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
-            aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, {
-              locationKnown: funnelStateLive.location_known,
-              entryDateConfirmed: funnelStateLive.entry_date_confirmed,
-              empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
-              empadronadoCity: funnelStateLive.empadronado_city,
-              assistantTranscript: allAssistant,
-            })
-            aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, {
-              locationKnown: funnelStateLive.location_known,
-              entryDateConfirmed: funnelStateLive.entry_date_confirmed,
-              empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
-              empadronadoCity: funnelStateLive.empadronado_city,
-              assistantTranscript: allAssistant,
-            })
+            aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, blockFlags)
+            aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
+            aiResponse = preventRepeatedCanonicalQuestion(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = forceServicesMessageAfterInterest(aiResponse, detectedChatLanguage, {
               interestKnown: !serviceMissing,
               locationKnown: !!funnelStateLive.location_known,

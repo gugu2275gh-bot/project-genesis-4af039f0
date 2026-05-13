@@ -120,6 +120,50 @@ export function computeDeterministicFunnelPatch(
   return patch as any
 }
 
+// ============================================================================
+// Ramo A (fora da Espanha) — extração determinística por pergunta-âncora
+// ============================================================================
+const A2_AGE_RE = /\b(qual sua idade|cu[áa]ntos a[ñn]os|how old|quel [âa]ge)\b/i
+const A3_EUROPA_RE = /\beuropa nos [úu]ltimos 6 meses|europa en los [úu]ltimos 6 meses|europe in the last 6 months|europe au cours des 6 derniers mois\b/i
+const A4_FAMILIAR_RE = /\bfamiliar (europeu|europeo)|family member.*(eu|spain|european)|membre.*famille.*(europ|espagn)/i
+const A5_REMOTO_RE = /\b(trabalha remoto|trabajas? remoto|trabajas? de forma remota|work remotely|travaillez[- ]vous [àa] distance)\b/i
+const A6_FORMACAO_RE = /\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree|formation sup[ée]rieure)\b/i
+
+const YES_RE = /^\s*(sim|si|s[ií]|yes|yeah|yep|claro|positivo|afirmativo|tenho|tengo|i (do|have)|oui|of course|sure)\b/i
+const NO_RE = /^\s*(n[ãa]o|no|nope|nay|negativo|nunca|jamais|non|i don'?t|no tengo|no he)\b/i
+
+export function extractOutsideProgressPatch(
+  previousAssistantMessage: string,
+  currentMessage: string,
+): {
+  a2_age?: string
+  a3_europe_6m?: 'yes' | 'no'
+  a4_eu_family?: 'yes' | 'no'
+  a5_remote?: 'yes' | 'no'
+  a6_higher_ed?: 'yes' | 'no'
+} {
+  const prevQ = extractLastQuestion(previousAssistantMessage || '')
+  const msg = String(currentMessage || '').trim()
+  const out: Record<string, unknown> = {}
+  if (!prevQ || !msg) return out as any
+
+  // A2 idade — extrai número 12-99
+  if (A2_AGE_RE.test(prevQ)) {
+    const m = msg.match(/\b(1[2-9]|[2-9]\d)\b/)
+    if (m) out.a2_age = m[1]
+  }
+  const yn = (): 'yes' | 'no' | null => (YES_RE.test(msg) ? 'yes' : NO_RE.test(msg) ? 'no' : null)
+  if (A3_EUROPA_RE.test(prevQ)) { const v = yn(); if (v) out.a3_europe_6m = v }
+  if (A4_FAMILIAR_RE.test(prevQ)) { const v = yn(); if (v) out.a4_eu_family = v }
+  if (A5_REMOTO_RE.test(prevQ)) { const v = yn(); if (v) out.a5_remote = v }
+  if (A6_FORMACAO_RE.test(prevQ)) { const v = yn(); if (v) out.a6_higher_ed = v }
+
+  if (Object.keys(out).length > 0) {
+    try { console.log('[OUTSIDE_PROGRESS_PATCH]', JSON.stringify({ prevQ: prevQ.slice(0, 80), msg: msg.slice(0, 60), out })) } catch { /* noop */ }
+  }
+  return out as any
+}
+
 
 /**
  * Wave 6: Trava determinística pós-IA.
@@ -636,6 +680,13 @@ export function enforceBlockCompletion(
     empadronadoConfirmed: boolean | null | undefined
     empadronadoCity: string | null | undefined
     assistantTranscript: string
+    outsideProgress?: {
+      a2_age?: string
+      a3_europe_6m?: 'yes' | 'no'
+      a4_eu_family?: 'yes' | 'no'
+      a5_remote?: 'yes' | 'no'
+      a6_higher_ed?: 'yes' | 'no'
+    } | null
   },
 ): string {
   if (!aiResponse) return aiResponse
@@ -672,17 +723,98 @@ export function enforceBlockCompletion(
     return aiResponse
   }
 
-  // Ramo A (outside)
+  // Ramo A (outside) — usa flags persistidas com fallback ao transcript.
   if (flags.locationKnown === 'outside') {
+    const op = flags.outsideProgress || {}
+    const askedInTranscript = (re: RegExp) => re.test(transcript)
+    const has = {
+      idade: !!op.a2_age || askedInTranscript(A2_AGE_RE),
+      europa: !!op.a3_europe_6m || askedInTranscript(A3_EUROPA_RE),
+      familiar: !!op.a4_eu_family || askedInTranscript(A4_FAMILIAR_RE),
+      remoto: !!op.a5_remote || askedInTranscript(A5_REMOTO_RE),
+      formacao: !!op.a6_higher_ed || askedInTranscript(A6_FORMACAO_RE),
+    }
+    // Se TODOS os flags A2-A6 estão preenchidos com RESPOSTA, libera H1.
+    const allAnswered = !!op.a2_age && !!op.a3_europe_6m && !!op.a4_eu_family && !!op.a5_remote && !!op.a6_higher_ed
+    if (allAnswered) return aiResponse
+    // Caso contrário, devolve a próxima pergunta canônica do ramo A.
     const next = getOutsideSpainNextQuestion(language, transcript, {
       entryDateConfirmed: flags.entryDateConfirmed || null,
       locationKnown: flags.locationKnown,
     })
-    // getOutsideSpainNextQuestion devolve o próprio payload pré-handoff quando o bloco está completo.
-    if (PREHANDOFF_H1_RE.test(next)) return aiResponse
-    console.warn('[BLOCK_GATE] H1 prematuro — bloco A incompleto. Forçando próxima pergunta A.')
+    if (PREHANDOFF_H1_RE.test(next)) {
+      // transcript diz "completo" mas flags não — não bloqueamos para evitar loop.
+      return aiResponse
+    }
+    console.warn('[BLOCK_GATE] H1 prematuro — bloco A incompleto. Flags:', JSON.stringify(has))
     return lock(next)
   }
 
+  return aiResponse
+}
+
+// ============================================================================
+// Anti-repetição global de perguntas canônicas
+// ============================================================================
+/**
+ * Cataloga perguntas canônicas (A1-A6, B1-B5, Msg7 localização) por âncoras.
+ * Se a IA emite uma pergunta cujo token-âncora JÁ consta no transcript
+ * (i.e., já foi feita), substitui pela próxima pergunta pendente do bloco
+ * via enforceBlockCompletion / getOutsideSpainNextQuestion.
+ */
+export function preventRepeatedCanonicalQuestion(
+  aiResponse: string,
+  language: ChatLanguage,
+  flags: {
+    locationKnown: 'spain' | 'outside' | null | undefined
+    entryDateConfirmed: string | null | undefined
+    empadronadoConfirmed: boolean | null | undefined
+    empadronadoCity: string | null | undefined
+    assistantTranscript: string
+    outsideProgress?: {
+      a2_age?: string
+      a3_europe_6m?: 'yes' | 'no'
+      a4_eu_family?: 'yes' | 'no'
+      a5_remote?: 'yes' | 'no'
+      a6_higher_ed?: 'yes' | 'no'
+    } | null
+  },
+): string {
+  if (!aiResponse) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
+  const q = extractLastQuestion(aiResponse)
+  if (!q) return aiResponse
+  const transcript = flags.assistantTranscript || ''
+
+  // Cada anchor: (regex pergunta, regex transcript "já feita").
+  // Se a pergunta atual bate E já há eco no transcript → repete.
+  const anchors: Array<{ name: string; q: RegExp; t: RegExp }> = [
+    { name: 'A2_idade', q: A2_AGE_RE, t: A2_AGE_RE },
+    { name: 'A3_europa', q: A3_EUROPA_RE, t: A3_EUROPA_RE },
+    { name: 'A4_familiar', q: A4_FAMILIAR_RE, t: A4_FAMILIAR_RE },
+    { name: 'A5_remoto', q: A5_REMOTO_RE, t: A5_REMOTO_RE },
+    { name: 'A6_formacao', q: A6_FORMACAO_RE, t: A6_FORMACAO_RE },
+    { name: 'B2_data', q: /\b(data exata|fecha exacta|exact date|date exacte).{0,40}(espanha|espa[ñn]a|spain|espagne)/i, t: /\b(data exata|fecha exacta|exact date|date exacte).{0,40}(espanha|espa[ñn]a|spain|espagne)/i },
+    { name: 'B3_empadronado', q: /\bestá empadron|estás empadron|are you (registered|empadron)|êtes-vous empadron/i, t: /\bestá empadron|estás empadron|are you (registered|empadron)|êtes-vous empadron/i },
+    { name: 'B4_desde_quando', q: /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i, t: /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i },
+    { name: 'B5_cidade', q: /(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)/i, t: /(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)/i },
+    { name: 'Msg7_local', q: /(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|d[ée]j[àa] en espagne)/i, t: /(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|d[ée]j[àa] en espagne)/i },
+  ]
+
+  for (const a of anchors) {
+    if (a.q.test(q) && a.t.test(transcript)) {
+      // Pergunta já foi feita. Pega próxima canônica.
+      console.warn(`[ANTI_REPEAT] pergunta canônica ${a.name} já feita — substituindo por próxima pendente`)
+      // Reusa enforceBlockCompletion injetando "fake H1" para forçar próxima pergunta.
+      const fakeH1 = language === 'es' ? 'Perfecto. Ya puedo tener una visión inicial de tu caso.'
+        : language === 'en' ? 'Perfect. I can already get an initial view of your case.'
+        : language === 'fr' ? 'Parfait. Je peux déjà avoir une première vision de votre cas.'
+        : 'Perfeito. Já consigo ter uma visão inicial do seu caso.'
+      const replacement = enforceBlockCompletion(fakeH1, language, flags)
+      // Se enforceBlockCompletion devolveu o próprio fakeH1 (i.e., bloco completo), libera resposta original.
+      if (replacement === fakeH1) return aiResponse
+      return replacement // já vem com lock()
+    }
+  }
   return aiResponse
 }
