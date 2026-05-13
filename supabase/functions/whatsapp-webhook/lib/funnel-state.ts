@@ -173,11 +173,19 @@ export async function applyTurnUpdates(
   patch: Partial<FunnelState>,
   meta?: { override_applied?: string | null },
 ): Promise<FunnelState> {
-  const merged: FunnelState = { ...state, ...patch }
+  // Anti-downgrade: NUNCA permitir voltar de true → false em flags de confirmação.
+  // Uma vez que nome/email/interesse/localização foram confirmados, não desfaz.
+  const safePatch: Partial<FunnelState> = { ...patch }
+  if (state.name_confirmed && safePatch.name_confirmed === false) delete safePatch.name_confirmed
+  if (state.email_confirmed && safePatch.email_confirmed === false) delete safePatch.email_confirmed
+  if (state.interest_confirmed && safePatch.interest_confirmed === null) delete safePatch.interest_confirmed
+  if (state.location_known && safePatch.location_known === null) delete safePatch.location_known
+
+  const merged: FunnelState = { ...state, ...safePatch }
   const nextStep = computeNextStep(merged)
   const stepChanged = nextStep !== state.step
   const update: Record<string, unknown> = {
-    ...patch,
+    ...safePatch,
     step: nextStep,
   }
   if (stepChanged) update.last_step_change = new Date().toISOString()
