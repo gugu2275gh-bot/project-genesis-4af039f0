@@ -120,6 +120,50 @@ export function computeDeterministicFunnelPatch(
   return patch as any
 }
 
+// ============================================================================
+// Ramo A (fora da Espanha) — extração determinística por pergunta-âncora
+// ============================================================================
+const A2_AGE_RE = /\b(qual sua idade|cu[áa]ntos a[ñn]os|how old|quel [âa]ge)\b/i
+const A3_EUROPA_RE = /\beuropa nos [úu]ltimos 6 meses|europa en los [úu]ltimos 6 meses|europe in the last 6 months|europe au cours des 6 derniers mois\b/i
+const A4_FAMILIAR_RE = /\bfamiliar (europeu|europeo)|family member.*(eu|spain|european)|membre.*famille.*(europ|espagn)/i
+const A5_REMOTO_RE = /\b(trabalha remoto|trabajas? remoto|trabajas? de forma remota|work remotely|travaillez[- ]vous [àa] distance)\b/i
+const A6_FORMACAO_RE = /\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree|formation sup[ée]rieure)\b/i
+
+const YES_RE = /^\s*(sim|si|s[ií]|yes|yeah|yep|claro|positivo|afirmativo|tenho|tengo|i (do|have)|oui|of course|sure)\b/i
+const NO_RE = /^\s*(n[ãa]o|no|nope|nay|negativo|nunca|jamais|non|i don'?t|no tengo|no he)\b/i
+
+export function extractOutsideProgressPatch(
+  previousAssistantMessage: string,
+  currentMessage: string,
+): {
+  a2_age?: string
+  a3_europe_6m?: 'yes' | 'no'
+  a4_eu_family?: 'yes' | 'no'
+  a5_remote?: 'yes' | 'no'
+  a6_higher_ed?: 'yes' | 'no'
+} {
+  const prevQ = extractLastQuestion(previousAssistantMessage || '')
+  const msg = String(currentMessage || '').trim()
+  const out: Record<string, unknown> = {}
+  if (!prevQ || !msg) return out as any
+
+  // A2 idade — extrai número 12-99
+  if (A2_AGE_RE.test(prevQ)) {
+    const m = msg.match(/\b(1[2-9]|[2-9]\d)\b/)
+    if (m) out.a2_age = m[1]
+  }
+  const yn = (): 'yes' | 'no' | null => (YES_RE.test(msg) ? 'yes' : NO_RE.test(msg) ? 'no' : null)
+  if (A3_EUROPA_RE.test(prevQ)) { const v = yn(); if (v) out.a3_europe_6m = v }
+  if (A4_FAMILIAR_RE.test(prevQ)) { const v = yn(); if (v) out.a4_eu_family = v }
+  if (A5_REMOTO_RE.test(prevQ)) { const v = yn(); if (v) out.a5_remote = v }
+  if (A6_FORMACAO_RE.test(prevQ)) { const v = yn(); if (v) out.a6_higher_ed = v }
+
+  if (Object.keys(out).length > 0) {
+    try { console.log('[OUTSIDE_PROGRESS_PATCH]', JSON.stringify({ prevQ: prevQ.slice(0, 80), msg: msg.slice(0, 60), out })) } catch { /* noop */ }
+  }
+  return out as any
+}
+
 
 /**
  * Wave 6: Trava determinística pós-IA.
