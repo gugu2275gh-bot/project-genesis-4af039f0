@@ -1567,6 +1567,29 @@ Regras:
         if (funnelStateLive.email_confirmed) emailMissing = false
         if (funnelStateLive.interest_confirmed) serviceMissing = false
 
+        // === Patch determinístico turn-a-turn (multi-idioma) ===
+        // Captura localização/interesse/data/empadronamento/cidade ANTES de chamar a IA,
+        // baseado APENAS em (previousQuestion, rawCustomerMessage). Sem LLM, sem heurística.
+        try {
+          const detPatch = computeDeterministicFunnelPatch(lastAssistantMessage, rawCustomerMessage)
+          if (Object.keys(detPatch).length > 0) {
+            const safe: Record<string, unknown> = {}
+            if (detPatch.location_known && !funnelStateLive.location_known) safe.location_known = detPatch.location_known
+            if (detPatch.interest_confirmed && !funnelStateLive.interest_confirmed) safe.interest_confirmed = detPatch.interest_confirmed
+            if (detPatch.entry_date_confirmed && !funnelStateLive.entry_date_confirmed) safe.entry_date_confirmed = detPatch.entry_date_confirmed
+            if (detPatch.empadronado_confirmed !== undefined && (funnelStateLive.empadronado_confirmed === null || funnelStateLive.empadronado_confirmed === undefined)) safe.empadronado_confirmed = detPatch.empadronado_confirmed
+            if (detPatch.empadronado_city && !funnelStateLive.empadronado_city) safe.empadronado_city = detPatch.empadronado_city
+            if (Object.keys(safe).length > 0) {
+              funnelStateLive = await applyTurnUpdates(supabase, funnelStateLive, safe as any, { override_applied: 'deterministic_pre_ai' })
+              if (funnelStateLive.interest_confirmed) serviceMissing = false
+              console.log('[DET_PATCH]', JSON.stringify(safe))
+            }
+          }
+        } catch (detErr) {
+          console.warn('[DET_PATCH] non-blocking error:', detErr instanceof Error ? detErr.message : detErr)
+        }
+
+
         // Detecção de localização: buscar a RESPOSTA imediatamente após a pergunta de localização.
         // Suporta a nova pergunta yes/no ("já está na Espanha?") e a antiga disjuntiva (compatibilidade).
         const locQuestionRe = /(j[áa] est[áa]|j[áa] mora|ya est[áa]s|ya vives|already (in|live)|are you already in spain|hoje voc[êe] j[áa] est[áa] na espanha|hoy ya est[áa]s en espa[ñn]a|d[ée]j[àa] en espagne).{0,60}(espanha|espa[ñn]a|spain|espagne)/i
