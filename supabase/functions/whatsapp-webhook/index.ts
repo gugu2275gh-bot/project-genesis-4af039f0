@@ -1915,6 +1915,7 @@ Regras:
           interestKnown: !serviceMissing,
           locationKnown: !!funnelStateLive.location_known,
         })
+        aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
 
         // F1-HARD: se o nome já é confiável e a IA mesmo assim perguntou nome (guard zerou ou
         // sobrou só o preâmbulo), forçar uma nova geração com instrução anti-nome explícita.
