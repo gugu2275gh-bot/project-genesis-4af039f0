@@ -365,6 +365,7 @@ import {
 import {
   loadFunnelState,
   applyTurnUpdates,
+  mergeOutsideProgress,
   buildStateDirective,
   isContactNameTrustworthy,
   syncFunnelFromCapturedData,
