@@ -135,7 +135,9 @@ Deno.test('D3: forceCorrectBlockForLocation final branch (Spain block complete) 
   assertStringIncludes(result, 'encaminhar')
 })
 
-Deno.test('D4: handoff transfer message matches auto-pause regex (vou te encaminhar)', () => {
-  const m = getHandoffTransferMessage('pt-BR').toLowerCase()
-  assert(m.includes('vou te encaminhar'), 'must trigger M3/R5 auto-pause')
+Deno.test('D4 (BPMN v2): handoff is single bubble H3 only (no H4)', () => {
+  const m = getHandoffTransferMessage('pt-BR')
+  assert(!m.includes('|||'), 'H4 was removed in BPMN v2; H3 must be a single bubble')
+  assertStringIncludes(m.toLowerCase(), 'encaminhar suas informações')
+  assert(!/encaminhar para um atendente/i.test(m), 'H4 text must not appear')
 })
