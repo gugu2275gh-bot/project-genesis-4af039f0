@@ -211,7 +211,56 @@ export function forceAdvanceFromInterestQuestion(
   return aiResponse
 }
 
-function questionBlockHash(assistantText: string): string {
+/**
+ * Após "Você está empadronado?" (B3), se o cliente respondeu SIM e a IA não
+ * perguntou a cidade (B5), substitui a última pergunta da IA por
+ * `getEmpadronamientoCityQuestion`. Se o cliente disse NÃO ou já mencionou
+ * cidade, deixa a IA seguir o fluxo natural (Pré-Handoff).
+ */
+const YES_ANSWER_RE = /^\s*(sim|si|s[ií]|yes|yeah|yep|claro|estou|to[uy]|aham|aha|positivo|afirmativo|oui|of course|sure)\b/i
+const NO_ANSWER_RE = /^\s*(n[ãa]o|no|nope|nay|negativo|nunca|jamais|non)\b/i
+const CITY_HINT_RE = /\b(em|en|in|à|a|de|do|na|no)\s+[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\w-]+/i
+
+function isQuestionAboutEmpadronado(q: string): boolean {
+  return /\bempadron/i.test(q || '')
+}
+
+function questionAlreadyAsksCity(q: string): boolean {
+  return /(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)/i.test(q || '')
+}
+
+export function forceAdvanceFromEmpadronadoQuestion(
+  previousAssistantMessage: string,
+  currentMessage: string,
+  aiResponse: string,
+  language: ChatLanguage,
+): string {
+  const previousQuestion = extractLastQuestion(previousAssistantMessage)
+  if (!isQuestionAboutEmpadronado(previousQuestion)) return aiResponse
+
+  const msg = (currentMessage || '').trim()
+  if (!msg) return aiResponse
+
+  // Cliente respondeu NÃO → segue fluxo (Pré-Handoff). Não força nada.
+  if (NO_ANSWER_RE.test(msg)) return aiResponse
+
+  // Cliente já mencionou cidade no texto → não re-pergunta cidade.
+  if (CITY_HINT_RE.test(msg) && /madrid|barcelona|valencia|sevilla|m[áa]laga|bilbao|zaragoza|murcia|palma|granada|alicante|c[óo]rdoba|valladolid|vigo|gij[óo]n|toledo|salamanca/i.test(msg)) {
+    return aiResponse
+  }
+
+  // Resposta SIM (ou texto livre não-negativo) → garante pergunta de cidade.
+  const nextQuestion = extractLastQuestion(aiResponse)
+  if (questionAlreadyAsksCity(nextQuestion)) return aiResponse
+
+  if (YES_ANSWER_RE.test(msg) || msg.length < 60) {
+    const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
+    const replacement = getEmpadronamientoCityQuestion(language)
+    return preamble ? `${preamble}\n${replacement}` : replacement
+  }
+
+  return aiResponse
+}
   if (!assistantText) return ''
   const lastQ = extractLastQuestion(assistantText) || ''
   const preamble = (extractTextBeforeLastQuestion(assistantText) || '').trim()
