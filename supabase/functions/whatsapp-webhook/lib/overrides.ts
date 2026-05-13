@@ -16,11 +16,13 @@ import {
   getEmailQuestion,
   getEmailReaskQuestion,
   getEntryDateNeedsYearQuestion,
+  getEntryDateFutureConfirmQuestion,
   getOutsideSpainAgeQuestion,
   getEmpadronadoQuestion,
   getLocationQuestion,
   getFullNameReaskQuestion,
   countAlphaWords,
+  parseEntryDateFromText,
 } from './questions.ts'
 
 /**
