@@ -2037,6 +2037,7 @@ Regras:
               empadronadoCity: funnelStateLive.empadronado_city,
               assistantTranscript: allAssistant,
             })
+            aiResponse = ensureServicesAttachedToInterest(aiResponse, detectedChatLanguage, allAssistant)
             aiResponse = forceServicesMessageAfterInterest(aiResponse, detectedChatLanguage, {
               interestKnown: !serviceMissing,
               locationKnown: !!funnelStateLive.location_known,
