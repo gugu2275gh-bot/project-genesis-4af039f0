@@ -315,6 +315,31 @@ export function forceAdvanceFromInterestQuestion(
 }
 
 /**
+ * BPMN v2 — Msg5 + Msg6 na MESMA rodada.
+ * Quando a IA emite a pergunta de interesse (Msg5) sem ter anexado o catálogo (Msg6),
+ * e Msg6 ainda não consta no transcript, anexa Msg6 como segunda bolha (separada por "|||").
+ * Idempotente: não duplica se Msg6 já estiver presente na própria resposta ou no histórico.
+ */
+export function ensureServicesAttachedToInterest(
+  aiResponse: string,
+  language: ChatLanguage,
+  assistantTranscript: string,
+): string {
+  if (!aiResponse) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
+  // Msg6 já está incluída na própria resposta? (texto literal ou já com âncoras)
+  if (isServicesOfferedMessage(aiResponse)) return aiResponse
+  // A resposta atual está pedindo o interesse?
+  const lastQ = extractLastQuestion(aiResponse)
+  if (!isQuestionAboutInterest(lastQ)) return aiResponse
+  // Já enviada antes no histórico? (não reenviar)
+  if (isServicesOfferedMessage(assistantTranscript || '')) return aiResponse
+  const msg6 = getServicesOfferedMessage(language)
+  console.log('[BPMN_V2] attaching Msg6 (services catalog) to Msg5 in same round')
+  return `${aiResponse}|||${msg6}`
+}
+
+/**
  * D1 Bizagi (Msg 6): após `interest_confirmed`, garante que o bot envie a
  * mensagem de "serviços atendidos" antes de avançar para a pergunta de
  * localização. Se a IA gerou outra pergunta (ex.: pulou direto para localização
