@@ -387,6 +387,7 @@ export function isLikelyQuestionLoop(
   currentMessage: string,
   aiResponse: string,
 ): boolean {
+  if (isLocked(aiResponse)) return false
   const lastAssistantMessage = [...conversationHistory].reverse().find((msg) => msg.role === 'assistant')?.content || ''
   const previousQuestion = extractLastQuestion(lastAssistantMessage)
   const nextQuestion = extractLastQuestion(aiResponse)
