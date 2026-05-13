@@ -28,6 +28,7 @@ import {
   getFullNameReaskQuestion,
   countAlphaWords,
   parseEntryDateFromText,
+  getOutsideSpainNextQuestion,
 } from './questions.ts'
 import { isValidSpanishCity, extractCityFromAnswer, normalizeCity } from './spanish-cities.ts'
 
