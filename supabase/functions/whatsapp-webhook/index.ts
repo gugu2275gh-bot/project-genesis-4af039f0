@@ -1809,7 +1809,7 @@ Regras:
         if (collectionGateActive && nextStep) {
           const stepsSummary = steps.map(s => `${s.done ? '✅' : '⏳'} ${s.label}`).join(' → ')
           messageForAI = `${messageForAI}\n\n[GATE DE FLUXO — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
-            `IDIOMA OBRIGATÓRIO DA RESPOSTA AO CLIENTE: ${langName}. NÃO misture idiomas. Se as frases-modelo abaixo estiverem em português, traduza-as fielmente para ${langName} antes de enviar.\n` +
+            `IDIOMA OBRIGATÓRIO E TRAVADO DA RESPOSTA: ${langName}. Esse idioma foi definido no início da conversa e NÃO MUDA por nada — mesmo que o cliente envie a mensagem atual em outro idioma (ex.: cliente respondendo "si"/"sim"/"yes"), VOCÊ DEVE responder em ${langName}. NÃO misture idiomas. Todas as frases-modelo abaixo estão em português APENAS como referência: traduza-as fielmente para ${langName} antes de enviar — JAMAIS copie literalmente em português se ${langName} não for português.\n` +
             `Roteiro oficial CB Asesoría em andamento. Etapas: ${stepsSummary}\n` +
             `PRÓXIMA ETAPA OBRIGATÓRIA: ${nextStep.label}\n` +
             `INSTRUÇÃO: ${nextStep.instruction}\n` +
