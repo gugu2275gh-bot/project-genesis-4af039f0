@@ -358,6 +358,7 @@ import {
   extractOutsideProgressPatch,
   extractEmpadronadoSincePatch,
   preventRepeatedCanonicalQuestion,
+  stripRepeatedOpener,
   stripLockedSentinel,
   stripPreambleBeforePreHandoff,
   isLocked,
