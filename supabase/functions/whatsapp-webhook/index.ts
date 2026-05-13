@@ -341,6 +341,7 @@ import {
   forceReaskEmailIfMissing,
   forceAdvanceFromEntryDateQuestion,
   forceAdvanceFromInterestQuestion,
+  forceAdvanceFromEmpadronadoQuestion,
   forceReaskFullNameIfSingleWord,
   isLikelyQuestionLoop,
   lockConfirmedFieldsInResponse,
@@ -1953,6 +1954,7 @@ Regras:
         aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
         aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
         aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
+        aiResponse = forceAdvanceFromEmpadronadoQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
         // Wave 6: trava determinística pós-IA — nunca re-perguntar dado já confirmado
         aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, {
           nameKnown: !nameMissing,
@@ -1998,6 +2000,7 @@ Regras:
             aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
             aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
             aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
+            aiResponse = forceAdvanceFromEmpadronadoQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
             aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, { nameKnown: !nameMissing, emailKnown: !emailMissing, interestKnown: !serviceMissing, locationKnown: !!funnelStateLive.location_known })
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
           } catch (retryError) {
