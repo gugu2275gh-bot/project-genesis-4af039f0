@@ -1,64 +1,65 @@
-# Bug: bot pulou B5 após "sim" ao empadronamento
+## Problemas
 
-## O que aconteceu
+**Imagem 1 — duas perguntas no mesmo balão.** A B3 atual envia "Você está empadronado? Se sim, desde quando?" — viola "uma pergunta por vez". O cliente respondeu as duas ("sim, desde fevereiro"), mas a regra precisa valer para todo o funil.
 
-Sequência real (lead `51b2…3f`):
-1. Bot: "Perfeito. Você está empadronado?" (B3 reduzida — sem "se sim, desde quando")
-2. Cliente: "sim"
-3. Bot: "Perfeito! Me conta com calma: o que você busca hoje? …" ← **voltou para INTERESSE**
+**Imagem 2 — re-pergunta da cidade.** Bot perguntou "Em qual cidade você está empadronado?", cliente respondeu "barcelona", e o bot perguntou de novo. Causa raiz no `forceAdvanceFromEmpadronadoQuestion` (`lib/overrides.ts`): o regex `isQuestionAboutEmpadronado` casa tanto a pergunta original (B3) quanto a pergunta de cidade (B5), porque ambas contêm "empadron". Quando a `previousQuestion` é a própria B5 e o cliente responde "barcelona" (texto curto, < 60 chars, sem preposição+cidade na lista hardcoded), o override entra no ramo `msg.length < 60` e **re-emite a pergunta de cidade**.
 
-Estado do funil: `step=interesse`, `location_known=spain`, `empadronado_confirmed=null`. As regex do roteiro classificam o `aprofundamento` como **não concluído** (faltava B5 "em qual cidade…empadronad"), mas a IA, livre, escolheu reemitir a pergunta de interesse em vez de seguir a instrução `(B5)`.
+## Correções
 
-## Causa raiz
+### 1. `lib/questions.ts` — separar perguntas
 
-Não existe override determinístico entre B3 (empadronado?) e B5 (cidade) — toda a transição depende do LLM obedecer `aprofundamentoInstruction`. Quando ele desvia, nada corrige. Além disso, `getEmpadronadoQuestion` envia apenas o yes/no, sem o "se sim, desde quando", então a B4 (data) também depende exclusivamente do LLM.
+- `getEmpadronadoQuestion(language)` → apenas "Perfeito. Você está empadronado?" (sem "se sim, desde quando").
+- Nova `getEmpadronamientoSinceQuestion(language)` → "Desde quando você está empadronado?".
+- `getEmpadronamientoCityQuestion` mantém-se.
 
-## Correção
+Sequência alvo do bloco:
+1. B3 — empadronado? (yes/no)
+2. Se SIM → B4 — desde quando?
+3. → B5 — em qual cidade?
+4. → Pré-Handoff
+5. Se NÃO em B3 → Pré-Handoff direto
 
-### 1. `lib/questions.ts`
+### 2. `lib/overrides.ts` — corrigir loop e encadear B3→B4→B5
 
-Reescrever `getEmpadronadoQuestion` para incluir B3+B4 numa só pergunta natural:
-- PT: "Perfeito. Você está empadronado? Se sim, desde quando?"
-- ES/EN/FR equivalentes.
+Refatorar `forceAdvanceFromEmpadronadoQuestion` para distinguir as três perguntas do bloco em vez de tratar todas como "empadron":
 
-Criar `getEmpadronamientoCityQuestion(language)`:
-- PT: "Perfeito. Em qual cidade você está empadronado?"
-- ES/EN/FR equivalentes.
+- Detectores específicos: `isEmpadronadoYesNoQuestion`, `isEmpadronamientoSinceQuestion`, `isEmpadronamientoCityQuestion`.
+- Lógica:
+  - `previousQuestion` = B3 (yes/no):
+    - resposta NÃO → não força (segue Pré-Handoff).
+    - resposta SIM (ou texto curto não-negativo sem data) → força `getEmpadronamientoSinceQuestion`.
+    - resposta contém data parseável (ex.: "sim, desde fevereiro de 2024") → força `getEmpadronamientoCityQuestion` (pula B4).
+  - `previousQuestion` = B4 (desde quando) → força `getEmpadronamientoCityQuestion`.
+  - `previousQuestion` = B5 (cidade) → **não força nada** (libera IA para Pré-Handoff). Esse é o fix do bug da imagem 2.
+- Remover a lista hardcoded de cidades (`madrid|barcelona|...`) — frágil; passa a confiar no detector de pergunta para decidir o próximo passo.
 
-### 2. `lib/overrides.ts`
+### 3. `index.ts` — manter chamada existente
 
-Adicionar `forceAdvanceFromEmpadronadoQuestion(previous, current, ai, language)`:
-- Detecta que a `previousQuestion` é a pergunta de empadronado (regex `empadronad/`).
-- Se o cliente respondeu **sim** (`isYesAnswer`) e a `aiResponse` não pergunta cidade → substitui a última pergunta da IA por `getEmpadronamientoCityQuestion`.
-- Se o cliente respondeu **não** (`isNoAnswer`) → libera o LLM para avançar ao Pré-Handoff (não força nada).
-- Se o cliente respondeu sim + já incluiu cidade no texto → também avança para Pré-Handoff (não re-pergunta).
+A integração no pipeline já existe (3 call sites). Apenas garantir que a função revisada é importada/chamada com a mesma assinatura.
 
-Helpers auxiliares: `isYesAnswer` / `isNoAnswer` cobrindo `sim|si|sí|yes|claro|estou|aham` e negações comuns nos 4 idiomas.
+### 4. Auditoria "uma pergunta por vez"
 
-### 3. `index.ts`
+Varrer `lib/questions.ts` por strings com mais de um `?` ou conjunções "e/ou/se sim". Casos a normalizar:
+- B3 (já listado acima).
+- `getEntryDateNeedsYearQuestion` — verificar se contém duas perguntas; manter só a frase final com `?`.
+- Prompts em `index.ts` que instruem o LLM ("aprofundamentoInstruction", "tira-dúvidas") — adicionar regra explícita: **"Faça SEMPRE uma única pergunta por mensagem. Nunca combine duas perguntas no mesmo turno."**
 
-Logo após o bloco que chama `forceAdvanceFromEntryDateQuestion`, encadear `forceAdvanceFromEmpadronadoQuestion` com a mesma assinatura (previousAssistantMessage, currentMessage, aiResponse, language).
+### 5. Testes
 
-Manter o detector `askedCidade` da etapa 6 (B5) — agora ele baterá quando o override emitir a pergunta de cidade.
+Em `funnel_persistence_test.ts`:
+- B3 "sim" → próxima pergunta é "Desde quando…".
+- B4 "fevereiro de 2024" → próxima é "Em qual cidade…".
+- B3 "sim, desde fevereiro de 2024" → pula B4, próxima é cidade.
+- B5 "barcelona" → override **não** re-emite cidade (regressão da imagem 2).
+- B3 "não" → override no-op.
 
-### 4. Persistência (opcional, sem bloquear)
+### 6. Deploy
 
-Em `lib/extract.ts` o LLM já extrai `empadronamiento_city` e `empadronamiento_since`. Garantir que esses campos, quando vierem populados, sejam gravados em `lead_funnel_state.empadronado_confirmed=true` (e idealmente em colunas próprias se existirem) para que B5 não seja re-perguntada em sessões futuras.
-
-## Validação
-
-1. Reproduzir o cenário do print: pergunta de empadronado → cliente diz "sim" → confirmar que o próximo turno é "Em qual cidade você está empadronado?".
-2. Variante: cliente responde "sim, desde 2023 em Madrid" → bot avança direto para Pré-Handoff (não re-pergunta).
-3. Variante: cliente responde "não" → bot avança para Pré-Handoff.
-4. Adicionar testes unitários em `funnel_persistence_test.ts` cobrindo as três variantes.
+Redeploy `whatsapp-webhook`.
 
 ## Arquivos alterados
 
 - `supabase/functions/whatsapp-webhook/lib/questions.ts`
 - `supabase/functions/whatsapp-webhook/lib/overrides.ts`
-- `supabase/functions/whatsapp-webhook/index.ts`
-- `supabase/functions/whatsapp-webhook/funnel_persistence_test.ts` (testes)
-
-## Deploy
-
-Redeploy `whatsapp-webhook`.
+- `supabase/functions/whatsapp-webhook/index.ts` (apenas reforço de instrução de "uma pergunta por vez")
+- `supabase/functions/whatsapp-webhook/funnel_persistence_test.ts`
