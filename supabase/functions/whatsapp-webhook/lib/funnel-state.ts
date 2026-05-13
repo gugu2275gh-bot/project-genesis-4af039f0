@@ -2,6 +2,16 @@
 // Wave 4 - Passo 2: estado persistente do funil de conversa
 import { type ChatLanguage } from './language.ts'
 
+export interface OutsideProgress {
+  a1_scenario_sent?: boolean
+  a2_age?: string
+  a3_europe_6m?: 'yes' | 'no'
+  a4_eu_family?: 'yes' | 'no'
+  a5_remote?: 'yes' | 'no'
+  a6_higher_ed?: 'yes' | 'no'
+  b1_situation_sent?: boolean
+}
+
 export type FunnelStep =
   | 'abertura'
   | 'nome'
