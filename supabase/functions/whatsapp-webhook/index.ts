@@ -2188,7 +2188,7 @@ Regras:
               })
 
               if (i < parts.length - 1) {
-                await new Promise(r => setTimeout(r, 800))
+                await new Promise(r => setTimeout(r, 350))
               }
             }
 
