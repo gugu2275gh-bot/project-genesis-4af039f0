@@ -821,7 +821,10 @@ export function preventRepeatedCanonicalQuestion(
 
   // Cada anchor: (regex pergunta, regex transcript "já feita").
   // Se a pergunta atual bate E já há eco no transcript → repete.
-  const anchors: Array<{ name: string; q: RegExp; t: RegExp }> = [
+  // Msg3/Msg4 são guardados por flags (nameKnown/emailKnown) para evitar repergunta.
+  const anchors: Array<{ name: string; q: RegExp; t: RegExp; guard?: () => boolean }> = [
+    { name: 'Msg3_nome', q: /\b(nome completo|nombre completo|full name|nom complet)\b/i, t: /.^/, guard: () => !!flags.nameKnown },
+    { name: 'Msg4_email', q: /\b(e ?mail|correo|email)\b.{0,40}\b(qual|cual|cu[áa]l|melhor|mejor|best|what|which)\b|\b(qual|cual|cu[áa]l|melhor|mejor|best|what|which)\b.{0,40}\b(e ?mail|correo|email)\b/i, t: /.^/, guard: () => !!flags.emailKnown },
     { name: 'A2_idade', q: A2_AGE_RE, t: A2_AGE_RE },
     { name: 'A3_europa', q: A3_EUROPA_RE, t: A3_EUROPA_RE },
     { name: 'A4_familiar', q: A4_FAMILIAR_RE, t: A4_FAMILIAR_RE },
@@ -831,10 +834,12 @@ export function preventRepeatedCanonicalQuestion(
     { name: 'B3_empadronado', q: /\bestá empadron|estás empadron|are you (registered|empadron)|êtes-vous empadron/i, t: /\bestá empadron|estás empadron|are you (registered|empadron)|êtes-vous empadron/i },
     { name: 'B4_desde_quando', q: /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i, t: /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i },
     { name: 'B5_cidade', q: /(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)/i, t: /(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)/i },
-    { name: 'Msg7_local', q: /(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|d[ée]j[àa] en espagne)/i, t: /(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|d[ée]j[àa] en espagne)/i },
+    // Msg7: padrão original + paráfrases ("ainda no/em outro país", "currently/where are you")
+    { name: 'Msg7_local', q: /(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|d[ée]j[àa] en espagne|ainda (est[áa]|mora|vive) (em outro|no) pa[íi]s|todav[ií]a (est[áa]s|vives) en otro pa[íi]s|where are you (currently|now)|currently in spain)/i, t: /(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|d[ée]j[àa] en espagne|j[áa] est[áa] aqui na espanha|ya vives en espa[ñn]a)/i, guard: () => !!flags.locationKnown },
   ]
 
   for (const a of anchors) {
+    if (a.guard && !a.guard()) continue
     if (a.q.test(q) && a.t.test(transcript)) {
       // Pergunta já foi feita. Pega próxima canônica.
       console.warn(`[ANTI_REPEAT] pergunta canônica ${a.name} já feita — substituindo por próxima pendente`)
