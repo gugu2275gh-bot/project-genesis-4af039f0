@@ -2096,7 +2096,9 @@ Regras:
 
           // Send AI response via Twilio (split on "|||" delimiter for multi-message replies)
           try {
-            const parts = aiResponse.split('|||').map(p => p.trim()).filter(Boolean)
+            // Remove sentinel anti-clobber antes de enviar (não deve aparecer ao cliente)
+            const aiResponseClean = stripLockedSentinel(aiResponse)
+            const parts = aiResponseClean.split('|||').map(p => p.trim()).filter(Boolean)
             for (let i = 0; i < parts.length; i++) {
               const part = parts[i]
               await sendWhatsAppMessage(phoneNumber, part)
