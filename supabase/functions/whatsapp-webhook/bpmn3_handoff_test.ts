@@ -15,7 +15,7 @@ import {
   preHandoffSummarySent,
   handoffTransferSent,
 } from './lib/questions.ts'
-import { forceCorrectBlockForLocation, ensureServicesAttachedToInterest, stripPreambleBeforePreHandoff } from './lib/overrides.ts'
+import { forceCorrectBlockForLocation, ensureServicesAttachedToInterest, stripPreambleBeforePreHandoff, enforceBlockCompletion, stripLockedSentinel, isLocked } from './lib/overrides.ts'
 
 // ---------- H1|||H2 são duas bolhas; H3 é UMA bolha ----------
 
