@@ -2005,20 +2005,10 @@ Regras:
         })
         aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
         // BLOCK-LOCK: impede que a IA misture perguntas dos blocos Espanha vs fora
-        aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, {
-          locationKnown: funnelStateLive.location_known,
-          entryDateConfirmed: funnelStateLive.entry_date_confirmed,
-          empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
-          empadronadoCity: funnelStateLive.empadronado_city,
-          assistantTranscript: allAssistant,
-        })
-        aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, {
-          locationKnown: funnelStateLive.location_known,
-          entryDateConfirmed: funnelStateLive.entry_date_confirmed,
-          empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
-          empadronadoCity: funnelStateLive.empadronado_city,
-          assistantTranscript: allAssistant,
-        })
+        aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, blockFlags)
+        aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
+        // Anti-repetição global: se IA repetiu pergunta canônica já feita, força próxima pendente.
+        aiResponse = preventRepeatedCanonicalQuestion(aiResponse, detectedChatLanguage, blockFlags)
         // BPMN v2: Msg5 + Msg6 na MESMA rodada — anexa Msg6 quando IA emite Msg5 sozinha.
         aiResponse = ensureServicesAttachedToInterest(aiResponse, detectedChatLanguage, allAssistant)
         // D1 Bizagi (fallback): garante "serviços atendidos" caso interesse já confirmado e Msg6 nunca enviada.
