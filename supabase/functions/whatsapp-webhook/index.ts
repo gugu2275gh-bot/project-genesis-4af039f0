@@ -1584,9 +1584,9 @@ Regras:
         if (funnelStateLive.email_confirmed) emailMissing = false
         if (funnelStateLive.interest_confirmed) serviceMissing = false
 
-        // Detecção de localização: buscar a RESPOSTA imediatamente após a pergunta de localização
-        // (não varrer histórico inteiro, que pode incluir menções a "Espanha" no contexto de interesse).
-        const locQuestionRe = /(j[áa] est[áa]|ya est[áa]s|already (in|live)).{0,30}(na )?espanha?.{0,30}(ou|o)\s+(ainda |todav[ií]a |still )?(est[áa]|en )?(em |en )?outro pa[íi]s|hoje voc[êe] j[áa] est[áa] na espanha/i
+        // Detecção de localização: buscar a RESPOSTA imediatamente após a pergunta de localização.
+        // Suporta a nova pergunta yes/no ("já está na Espanha?") e a antiga disjuntiva (compatibilidade).
+        const locQuestionRe = /(j[áa] est[áa]|j[áa] mora|ya est[áa]s|ya vives|already (in|live)|are you already in spain|hoje voc[êe] j[áa] est[áa] na espanha|hoy ya est[áa]s en espa[ñn]a|d[ée]j[àa] en espagne).{0,60}(espanha|espa[ñn]a|spain|espagne)/i
         let locationAnswer = ''
         for (let i = 0; i < history.length - 1; i++) {
           const m = history[i]
@@ -1601,18 +1601,23 @@ Regras:
             break
           }
         }
-        const ans = locationAnswer.toLowerCase()
-        const userOutsideSpain = !!ans && (
-          /\b(brasil|portugal|argentina|m[ée]xico|mexico|colombia|chile|uruguai|uruguay|venezuela|estados unidos|eua|usa)\b/i.test(ans)
-          || /\b(ainda n[ãa]o|todav[ií]a no|n[ãa]o (estou|moro)|no (estoy)|fora|outro pa[ií]s|other country|other)\b/i.test(ans)
-          || /\b(em outro|en otro)\b/i.test(ans)
-          || /^\s*(n[ãa]o|no|nope)\b/i.test(ans)
+        const ans = locationAnswer.toLowerCase().trim()
+        // Negativa pura tem prioridade: "não", "no", "ainda não", "todavía no" → fora da Espanha.
+        const isNegative = !!ans && (
+          /^\s*(n[ãa]o|no|nope|nah|non)\b/i.test(ans)
+          || /\b(ainda n[ãa]o|todav[ií]a no|not yet|pas encore)\b/i.test(ans)
+          || /\b(n[ãa]o (estou|moro|vivo)|no (estoy|vivo)|i'?m not|not in spain)\b/i.test(ans)
+          || /\b(brasil|portugal|argentina|m[ée]xico|mexico|colombia|chile|uruguai|uruguay|venezuela|estados unidos|eua|usa|fora|outro pa[ií]s|en otro|em outro|other country)\b/i.test(ans)
         )
-        const userInSpain = !!ans && !userOutsideSpain && (
-          /\b(estou|estoy|moro|vivo|j[áa] estou|ya estoy)\b/i.test(ans)
-          || /\b(espanha|espa[ñn]a|spain|aqui|aquí|here)\b/i.test(ans)
-          || /^\s*(sim|si|s[ií]|yes|yep)\b/i.test(ans)
+        const isAffirmative = !!ans && !isNegative && (
+          /^\s*(sim|si|s[ií]|yes|yep|yeah|claro|exato|exactamente|oui)\b/i.test(ans)
+          || /\b(j[áa] estou|ya estoy|estou (na |em )?espanha|estoy en espa[ñn]a|i'?m in spain|aqui na espanha|aqu[ií] en espa[ñn]a)\b/i.test(ans)
+          || /\b(estou|estoy|moro|vivo)\b/i.test(ans)
+          || /\b(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|valencia|sevilla|m[áa]laga|bilbao|alicante)\b/i.test(ans)
         )
+        const userOutsideSpain = isNegative
+        const userInSpain = isAffirmative
+
 
         // Definição das 8 etapas do roteiro (na ordem)
         type Step = {
