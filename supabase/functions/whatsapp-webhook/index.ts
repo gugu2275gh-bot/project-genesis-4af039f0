@@ -1612,12 +1612,25 @@ Regras:
           console.warn('[DET_PATCH] non-blocking error:', detErr instanceof Error ? detErr.message : detErr)
         }
 
-        // Persistência incremental do ramo A (idade, Europa 6m, familiar, remoto, formação).
+        // Persistência incremental do ramo A (idade, Europa 6m, familiar, remoto, formação)
+        // + B4 desde quando (empadronamiento_since) — sempre que aplicável.
         try {
-          if (funnelStateLive.location_known === 'outside') {
-            const opPatch = extractOutsideProgressPatch(lastAssistantMessage, rawCustomerMessage)
-            if (Object.keys(opPatch).length > 0) {
-              funnelStateLive = await mergeOutsideProgress(supabase, funnelStateLive, opPatch as any)
+          const opPatch = funnelStateLive.location_known === 'outside'
+            ? extractOutsideProgressPatch(lastAssistantMessage, rawCustomerMessage)
+            : {}
+          const sincePatch = extractEmpadronadoSincePatch(lastAssistantMessage, rawCustomerMessage)
+          const merged = { ...opPatch, ...sincePatch }
+          if (Object.keys(merged).length > 0) {
+            funnelStateLive = await mergeOutsideProgress(supabase, funnelStateLive, merged as any)
+          }
+          // Espelha B4 em contacts.empadronamiento_since quando ISO parseável.
+          if (sincePatch.b4_empadronado_since && /^\d{4}-\d{2}-\d{2}$/.test(sincePatch.b4_empadronado_since)) {
+            try {
+              await supabase.from('contacts')
+                .update({ empadronamiento_since: sincePatch.b4_empadronado_since })
+                .eq('id', contact.id)
+            } catch (cErr) {
+              console.warn('[B4_PERSIST] contacts.empadronamiento_since update failed:', cErr instanceof Error ? cErr.message : cErr)
             }
           }
         } catch (opErr) {
