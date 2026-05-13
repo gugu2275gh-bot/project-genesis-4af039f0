@@ -1,0 +1,2 @@
+UPDATE public.leads SET service_interest='RESIDENCIA_PARENTE_COMUNITARIO', interest_confirmed=true, updated_at=now() WHERE id='d952cf68-2ed6-4bc9-b217-c3cbe8d73599';
+UPDATE public.lead_funnel_state SET interest_confirmed='RESIDENCIA_PARENTE_COMUNITARIO', step='livre', last_step_change=now(), updated_at=now() WHERE lead_id='d952cf68-2ed6-4bc9-b217-c3cbe8d73599';
