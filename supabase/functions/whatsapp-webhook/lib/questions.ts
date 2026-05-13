@@ -410,7 +410,7 @@ export function getOutsideSpainNextQuestion(
   const skipEuropa = options?.locationKnown === 'spain' || entryDateInLast6Months
   const askedEuropaEffective = askedEuropa || skipEuropa
 
-  if (!askedIdade) return getOutsideSpainAgeQuestion(language)
+  if (!askedIdade) return getOutsideSpainAgeQuestion(language, !op.a1_scenario_sent)
   if (!askedEuropaEffective) {
     if (language === 'es') return '¿Estuviste en Europa en los últimos 6 meses?'
     if (language === 'en') return 'Have you been in Europe in the last 6 months?'
