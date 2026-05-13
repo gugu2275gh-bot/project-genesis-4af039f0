@@ -799,12 +799,18 @@ export function preventRepeatedCanonicalQuestion(
     empadronadoCity: string | null | undefined
     assistantTranscript: string
     outsideProgress?: {
+      a1_scenario_sent?: boolean
       a2_age?: string
       a3_europe_6m?: 'yes' | 'no'
       a4_eu_family?: 'yes' | 'no'
       a5_remote?: 'yes' | 'no'
       a6_higher_ed?: 'yes' | 'no'
+      b1_situation_sent?: boolean
+      b4_empadronado_since?: string
     } | null
+    /** Msg3 nome / Msg4 email já confirmados — evita repergunta canônica. */
+    nameKnown?: boolean
+    emailKnown?: boolean
   },
 ): string {
   if (!aiResponse) return aiResponse
