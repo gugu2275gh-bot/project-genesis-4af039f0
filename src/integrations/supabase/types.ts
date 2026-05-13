@@ -1435,6 +1435,7 @@ export type Database = {
           empadronado_city: string | null
           empadronado_confirmed: boolean | null
           entry_date_confirmed: string | null
+          handoff_sent: boolean
           interest_confirmed: string | null
           last_step_change: string
           lead_id: string
@@ -1442,6 +1443,7 @@ export type Database = {
           name_confirmed: boolean
           outside_spain_progress: Json
           pending_question: string | null
+          pre_handoff_sent: boolean
           step: string
           updated_at: string
         }
@@ -1450,6 +1452,7 @@ export type Database = {
           empadronado_city?: string | null
           empadronado_confirmed?: boolean | null
           entry_date_confirmed?: string | null
+          handoff_sent?: boolean
           interest_confirmed?: string | null
           last_step_change?: string
           lead_id: string
@@ -1457,6 +1460,7 @@ export type Database = {
           name_confirmed?: boolean
           outside_spain_progress?: Json
           pending_question?: string | null
+          pre_handoff_sent?: boolean
           step?: string
           updated_at?: string
         }
@@ -1465,6 +1469,7 @@ export type Database = {
           empadronado_city?: string | null
           empadronado_confirmed?: boolean | null
           entry_date_confirmed?: string | null
+          handoff_sent?: boolean
           interest_confirmed?: string | null
           last_step_change?: string
           lead_id?: string
@@ -1472,6 +1477,7 @@ export type Database = {
           name_confirmed?: boolean
           outside_spain_progress?: Json
           pending_question?: string | null
+          pre_handoff_sent?: boolean
           step?: string
           updated_at?: string
         }
