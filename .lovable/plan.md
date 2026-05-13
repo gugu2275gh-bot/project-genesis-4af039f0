@@ -1,81 +1,78 @@
-## Auditoria do agente vs `CB_pre-handoff_v2-4.bpm`
+## Auditoria pré-handoff (vs. CB_pre-handoff_v2-5.bpm)
 
-Estrutura canônica extraída do diagrama (Bizagi):
+### Mapeamento BPMN → código
 
-```text
-Início → Msg1-2 → Msg3 (nome) → Msg4 (email) → Msg5 (interesse) → Msg6 (serviços) → Msg7 (localização)
-        ├─ Sim → B1 confirmar situação → B2 data entrada → B3 empadronado? → B4 desde quando → B5 cidade
-        └─ Não → A1 confirmar cenário → A2 idade → A3 Europa 6m → A4 familiar EU → A5 remoto → A6 formação
-                             ↓
-                       Msg H1+H2 pré-handoff → Msg H3 encaminhar → Fim (humano)
-```
+| BPMN (v2-5) | Código (canônico) | Persistência |
+|---|---|---|
+| Msg 1-2 abertura | prompt LLM | — |
+| Msg 3 nome | `getFullNameReaskQuestion` | `contacts.full_name` + `name_confirmed` |
+| Msg 4 email | `getEmailQuestion` | `contacts.email` + `email_confirmed` |
+| Msg 5 interesse + Msg 6 catálogo | `ensureServicesAttachedToInterest` (mesma rodada `\|\|\|`) | `interest_confirmed` |
+| Msg 7 localização | `getLocationQuestion` | `location_known` |
+| A1 cenário + A2 idade | `getOutsideSpainAgeQuestion` (mesma bolha) | `outside_spain_progress.a2_age` |
+| A3 Europa 6m | regex em `getOutsideSpainNextQuestion` | `a3_europe_6m` |
+| A4 familiar | idem | `a4_eu_family` |
+| A5 remoto | idem | `a5_remote` |
+| A6 formação | idem | `a6_higher_ed` |
+| B1 + B2 data entrada | `forceCorrectBlockForLocation` (preâmbulo + pergunta na mesma bolha) | `entry_date_confirmed` |
+| B3 empadronado | `getEmpadronadoQuestion` | `empadronado_confirmed` |
+| B4 desde quando | `getEmpadronamientoSinceQuestion` | **somente via extract.ts (LLM)** ⚠ |
+| B5 cidade | `getEmpadronamientoCityQuestion` + `isValidSpanishCity` | `empadronado_city` |
+| H1 + H2 + H3 | `buildPreHandoffPayload` (3 bolhas) | `pre_handoff_sent`, `handoff_sent` |
 
-### Status atual (4 critérios pedidos)
+### Resultado vs. seus 4 critérios
 
-| # | Critério | Status | Observação |
-|---|----------|--------|------------|
-| 1 | Pergunta feita não pode ser repetida | ⚠️ Parcial | `isLikelyQuestionLoop` só compara última↔próxima; LLM pode pular para uma pergunta feita 3 turnos atrás sem ser barrado. |
-| 2 | Idioma travado no de início | ✅ OK | `contacts.preferred_language` gravado na 1ª msg e lido sempre depois (index.ts 1176-1194). Pequeno hardening sugerido no fallback. |
-| 3 | Campos respondidos gravados | ⚠️ Parcial | Persistidos: nome, email, interesse, location, entry_date, empadronado, cidade, pre_handoff_sent, handoff_sent. **Faltando**: A2 idade, A3 Europa, A4 familiar, A5 remoto, A6 formação (coluna `outside_spain_progress` jsonb existe mas nunca é populada). Toda a sequência A depende de regex no transcript — frágil a paráfrase/truncamento. |
-| 4 | Sequência correta | ✅ Após o gate `enforceBlockCompletion` do turno anterior, ramo B é seguro até H1. Ramo A continua dependendo só do transcript regex. |
+**1. Pergunta feita não pode ser repetida — ⚠ Parcial**
+- Anti-repetição cataloga A2-A6, B2-B5 e Msg7 em `preventRepeatedCanonicalQuestion` ✅
+- **Lacunas**:
+  - A1 ("confirmar cenário fora") e B1 ("confirmar situação aqui") não têm âncora nem flag persistida (`a1_scenario_sent`/`b1_situation_sent` declarados na interface mas nunca gravados). Se o LLM regerar o preâmbulo, sai duplicado.
+  - Msg 3 (nome) e Msg 4 (email) não estão no catálogo do anti-repeat. A proteção depende de `lockConfirmedFieldsInResponse` (só dispara se flag confirmado). Se cliente devolveu nome inválido (1 palavra), `forceReaskFullNameIfSingleWord` reformula — ok.
+  - Msg 6 (catálogo) — `ensureServicesAttachedToInterest` é idempotente via transcript ✅
+  - Msg 7 — anti-repeat tem âncora, mas só dispara se a IA emite a versão padrão; paráfrases ("você está aí no Brasil ainda?") não pegam.
 
-### Outros achados
+**2. Idioma travado — ✅ OK**
+- 1ª mensagem detecta e grava `contacts.preferred_language`; turnos seguintes leem dali; fallback usa **primeira** mensagem do histórico (não a atual). Sem regressão.
 
-- **B1 e A1** (confirmar situação/cenário) estão embutidos como preâmbulo de B2 e A2. Funciona, mas se o LLM resumir o preâmbulo o cliente pode pular B1/A1 sem confirmação explícita.
-- Coluna `outside_spain_progress` (jsonb) está declarada e inicializada `{}`, mas nenhum código a lê ou escreve.
-- Não há controle determinístico para "Msg5+Msg6 já enviadas" além de regex em transcript — pode repetir o catálogo se a IA reabrir.
+**3. Campos respondidos gravados — ⚠ Parcial**
+- ✅ Persistidos: nome, email, interesse, location_known, entry_date_confirmed, empadronado_confirmed, empadronado_city, A2-A6 em `outside_spain_progress`, `pre_handoff_sent`, `handoff_sent`.
+- ⚠ **B4 "desde quando"**: nenhuma escrita determinística para `contacts.empadronamiento_since` ou em `funnel-state` — depende 100% da extração best-effort em `extract.ts`. Se o LLM falhar a extração, perde-se o dado e o gate de "askedSince" só usa transcript regex.
+- ⚠ Flags `a1_scenario_sent` e `b1_situation_sent` existem na interface `OutsideProgress` mas **nunca são setados** — sem efeito prático, deveriam ser removidos ou populados.
 
-## Plano de correção
+**4. Sequência correta do fluxo — ✅ OK (com 1 ponto frágil)**
+- `enforceBlockCompletion` bloqueia H1 enquanto B (data → empadronado → desde quando → cidade) ou A (idade → Europa → familiar → remoto → formação) estiver incompleto, usando flags persistidas + fallback transcript.
+- `forceCorrectBlockForLocation` evita perguntar bloco errado (B em outside / A em spain).
+- Ramo B `askedSince` ainda depende de transcript regex, não de coluna persistida → se trecho histórico for purgado/truncado, gate falha.
 
-### 1. Persistir respostas do ramo A em `outside_spain_progress`
-Em `lib/funnel-state.ts` adicionar tipo `OutsideProgress`:
-```ts
-{ a1_scenario_confirmed?: boolean, a2_age?: string, a3_europe_6m?: 'yes'|'no',
-  a4_eu_family?: 'yes'|'no', a5_remote?: 'yes'|'no', a6_higher_ed?: 'yes'|'no' }
-```
-- Em `lib/overrides.ts` criar `extractOutsideProgressPatch(previousQuestion, currentMessage)` que detecta yes/no/idade pela pergunta anterior e devolve o campo correspondente.
-- Em `index.ts`, depois de aplicar `computeDeterministicFunnelPatch`, mesclar o patch novo no `outside_spain_progress` via `applyTurnUpdates`.
-- Atualizar `getOutsideSpainNextQuestion` para preferir os flags persistidos (com fallback ao transcript regex existente).
+### Correções propostas
 
-### 2. Estender `enforceBlockCompletion` ao ramo A com flags persistidas
-Hoje o gate do ramo A reusa o transcript. Trocar por:
-```text
-if !a2_age           → A2
-else if !a3_europe_6m → A3
-else if !a4_eu_family → A4
-else if !a5_remote   → A5
-else if !a6_higher_ed→ A6
-else                 → libera H1
-```
-A B-branch já está coberta — só ajustar para usar `outside_spain_progress` no A.
+1. **Persistir B4 (desde quando) determinístico**
+   - Adicionar `empadronado_since: string | null` em `FunnelState` (jsonb ou coluna nova) **e** gravar `contacts.empadronamiento_since` em `computeDeterministicFunnelPatch` quando `prevQ` é `isEmpadronamientoSinceQuestion` e a resposta é parseável por `parseEntryDateFromText`.
+   - Substituir o uso de transcript em `enforceBlockCompletion`/`forceCorrectBlockForLocation` por essa flag persistida (com fallback ao transcript).
 
-### 3. Anti-repetição global de perguntas canônicas
-Em `lib/overrides.ts`, nova `preventRepeatedCanonicalQuestion(aiResponse, transcript, language, flags)`:
-- Cataloga as 11 perguntas (A1-A6, B1-B5, Msg7 localização, Msg5+6 interesse) por tokens-âncora multi-idioma (regex já existentes, ex.: `isQuestionAboutSpainEntryDate`, `isEmpadronamientoCityQuestion`, etc.).
-- Se a IA emite uma pergunta cujo token-âncora **já consta no transcript**, substitui pela próxima pergunta canônica do bloco (chama `enforceBlockCompletion` ou `getOutsideSpainNextQuestion`).
-- Plugar no pipeline em `index.ts` logo antes de `stripPreambleBeforePreHandoff` nos 3 sites.
+2. **Persistir A1/B1 enviados (idempotência de preâmbulo)**
+   - Em `getOutsideSpainAgeQuestion` (caller `forceCorrectBlockForLocation` ramo outside) gravar `a1_scenario_sent=true` via `mergeOutsideProgress` na 1ª emissão; nas seguintes, omitir o preâmbulo "Entendido. Então seguimos…".
+   - Idem para B1: ao emitir o preâmbulo "Perfeito. Agora preciso entender sua situação aqui." gravar `b1_situation_sent=true` (campo já existe) e omitir nas próximas rodadas.
 
-### 4. Hardening de idioma
-- Em `index.ts:1189-1194` (fallback para contato legado): se `preferred_language` está null **mas** existem mensagens anteriores do cliente, detectar a partir da **primeira** mensagem do cliente, não da atual. Evita troca de idioma quando cliente envia "ok" curto em outro contexto.
+3. **Catalogar Msg3 e Msg4 no anti-repeat**
+   - Adicionar âncoras `Msg3_nome` (`isQuestionAboutFullName`) e `Msg4_email` (`isQuestionAboutEmail`) em `preventRepeatedCanonicalQuestion`, com substituição pela próxima pendente (`getEmailQuestion` / `getLocationQuestion`).
 
-### 5. Tornar B1/A1 idempotentes
-- Adicionar flags `b1_situation_sent` e `a1_scenario_sent` em `outside_spain_progress` (ou novas colunas booleanas, mais barato manter no jsonb).
-- `forceCorrectBlockForLocation` já injeta o preâmbulo "Perfeito. Agora preciso entender…" antes de B2; marcar a flag quando emitido. Em rounds seguintes, omitir o preâmbulo.
+4. **Reforçar âncora Msg7**
+   - Expandir o regex Msg7 para também detectar paráfrases ("ainda no Brasil/no exterior", "where are you currently", etc.) para evitar repergunta após `location_known` setado.
 
-### 6. Testes
-- `outside_progress_test.ts` (novo): extração yes/no por pergunta âncora; persistência via patch; gate A com flags persistidas.
-- `bpmn3_handoff_test.ts`: caso "IA repete B2 após B5 ter sido feita" → bloqueado pela `preventRepeatedCanonicalQuestion`.
-- `funnel_persistence_test.ts`: confirmar que `outside_spain_progress` mescla sem regredir flags.
+5. **Limpar flags mortas**
+   - Remover `a1_scenario_sent` e `b1_situation_sent` se a opção (2) não for adotada.
 
-## Fora de escopo
-- Mudança de texto das perguntas (mantém o atual em PT/ES/EN/FR).
-- Migração de schema (uso o jsonb `outside_spain_progress` que já existe).
-- Latência, prompt da IA, BPMN, Twilio.
+### Testes a adicionar
 
-## Arquivos editados
-- `supabase/functions/whatsapp-webhook/lib/funnel-state.ts` (tipo + applyTurnUpdates jsonb merge)
-- `supabase/functions/whatsapp-webhook/lib/overrides.ts` (extractOutsideProgressPatch, preventRepeatedCanonicalQuestion, gate A reescrito)
-- `supabase/functions/whatsapp-webhook/lib/questions.ts` (`getOutsideSpainNextQuestion` lê flags)
-- `supabase/functions/whatsapp-webhook/index.ts` (pipeline + idioma fallback)
-- `supabase/functions/whatsapp-webhook/outside_progress_test.ts` (novo)
-- `supabase/functions/whatsapp-webhook/bpmn3_handoff_test.ts` (novos casos)
+- `funnel_persistence_test.ts`: verifica gravação de `empadronamiento_since` ao responder B4.
+- `bpmn3_handoff_test.ts`: cenário em que LLM gera B1/A1 duas vezes — preâmbulo deve sumir na 2ª.
+- `outside_progress_test.ts`: cenário onde transcript foi truncado mas flags A2-A6 estão ok → H1 libera.
+
+### Arquivos a editar (na implementação)
+
+- `lib/funnel-state.ts` — adicionar `empadronado_since`; popular flags A1/B1.
+- `lib/overrides.ts` — gravar `empadronamiento_since` no patch determinístico; adicionar âncoras Msg3/Msg4 + paráfrases Msg7; usar flags em vez de transcript.
+- `lib/questions.ts` — versão "sem preâmbulo" de A1/B1 quando flag já setado.
+- `index.ts` — wiring (1 ponto onde já chamamos extractOutsideProgressPatch).
+- Migração SQL: opcional `lead_funnel_state.empadronado_since date` (ou usar `outside_spain_progress` jsonb).
+- Testes: 3 novos arquivos/cases.
