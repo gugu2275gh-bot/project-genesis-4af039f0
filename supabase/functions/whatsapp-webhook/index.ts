@@ -1050,10 +1050,19 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       console.error('Smart reactivation error (non-blocking):', reactivationError instanceof Error ? reactivationError.message : reactivationError)
     }
 
-    // ========== 5-SECOND BUFFER: wait and consolidate multiple client messages ==========
+    // ========== ADAPTIVE BUFFER: wait briefly to consolidate multiple client messages ==========
     if (!skipAIAgent) {
-      console.log('Buffer: waiting 5 seconds for additional messages...')
-      await new Promise(resolve => setTimeout(resolve, 5000))
+      // Buffer adaptativo: mensagens "completas" (longas ou terminando em pontuação)
+      // dispensam espera longa. Caso contrário, aguarda apenas 1.5s para consolidar
+      // múltiplos balões enviados em sequência pelo cliente.
+      // Buffer adaptativo: mensagens "completas" (longas ou terminando em pontuação)
+      // dispensam espera longa. Caso contrário, aguarda apenas 1.5s para consolidar
+      // múltiplos balões enviados em sequência pelo cliente.
+      const incomingText = (displayBody || message.body || '').trim()
+      const looksComplete = incomingText.length > 120 || /[.!?…]$/.test(incomingText)
+      const bufferMs = looksComplete ? 300 : 1500
+      console.log(`Buffer: waiting ${bufferMs}ms for additional messages (complete=${looksComplete})...`)
+      await new Promise(resolve => setTimeout(resolve, bufferMs))
 
       // Check if newer messages arrived from the same lead after our message was inserted
       const { data: newerMessages } = await supabase
@@ -2179,7 +2188,7 @@ Regras:
               })
 
               if (i < parts.length - 1) {
-                await new Promise(r => setTimeout(r, 800))
+                await new Promise(r => setTimeout(r, 350))
               }
             }
 

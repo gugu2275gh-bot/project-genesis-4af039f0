@@ -112,17 +112,16 @@ export async function rewriteResponseToLanguage(
 export async function enforceResponseLanguage(
   responseText: string,
   forcedLanguage: ChatLanguage,
-  apiKey: string,
+  _apiKey: string,
 ): Promise<string> {
   if (forcedLanguage === 'pt-BR') return responseText
   if (!looksPortuguese(responseText)) return responseText
 
-  console.warn('Response seems to be in Portuguese while forced language is', forcedLanguage, '- applying automatic rewrite')
-  const rewritten = await rewriteResponseToLanguage(responseText, forcedLanguage, apiKey)
-  if (rewritten === responseText) {
-    console.warn('Language rewrite returned unchanged content; keeping original response')
-  }
-  return rewritten
+  // Otimização de latência: o rewrite Gemini extra adicionava 1-3s por turno.
+  // A diretiva de idioma reforçada no system prompt + filtro de histórico já
+  // bastam na prática. Aqui apenas registramos para auditoria.
+  console.warn('Response seems to be in Portuguese while forced language is', forcedLanguage, '- skipping extra rewrite (latency optimization)')
+  return responseText
 }
 
 export async function generateAIResponse(
@@ -151,9 +150,16 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 5. Cada resposta deve AVANÇAR a conversa. Nunca volte uma etapa.
 6. Releia as últimas 3 mensagens do histórico antes de escrever. Se sua próxima resposta soa parecida com algo que você já disse, REESCREVA de outro jeito.`
 
-  const effectiveHistory = forcedLanguage === 'pt-BR'
+  const filteredHistory = forcedLanguage === 'pt-BR'
     ? conversationHistory
     : conversationHistory.filter((msg) => msg.role === 'user' || !looksPortuguese(msg.content))
+
+  // Otimização de latência: limita às últimas 24 mensagens (≈12 turnos).
+  // O suficiente para contexto do roteiro sem sobrecarregar o prompt.
+  const HISTORY_LIMIT = 24
+  const effectiveHistory = filteredHistory.length > HISTORY_LIMIT
+    ? filteredHistory.slice(-HISTORY_LIMIT)
+    : filteredHistory
 
   const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = []
 
@@ -270,9 +276,12 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 4. NÃO comece com saudação se já houve mensagens anteriores. Comece direto com o conteúdo.
 5. Cada resposta deve AVANÇAR a conversa.`
 
+  const trimmedHistory = conversationHistory.length > 24
+    ? conversationHistory.slice(-24)
+    : conversationHistory
   const messages = [
     { role: 'system', content: fullSystemPrompt },
-    ...conversationHistory.map(m => ({ role: m.role === 'assistant' ? 'assistant' as const : 'user' as const, content: m.content })),
+    ...trimmedHistory.map(m => ({ role: m.role === 'assistant' ? 'assistant' as const : 'user' as const, content: m.content })),
     { role: 'user' as const, content: currentMessage },
   ]
 
