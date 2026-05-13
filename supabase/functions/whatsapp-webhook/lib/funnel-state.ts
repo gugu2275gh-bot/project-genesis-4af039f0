@@ -10,6 +10,8 @@ export interface OutsideProgress {
   a5_remote?: 'yes' | 'no'
   a6_higher_ed?: 'yes' | 'no'
   b1_situation_sent?: boolean
+  /** B4 — texto cru da resposta "desde quando" (data ISO quando parseável). */
+  b4_empadronado_since?: string
 }
 
 export type FunnelStep =
