@@ -112,17 +112,16 @@ export async function rewriteResponseToLanguage(
 export async function enforceResponseLanguage(
   responseText: string,
   forcedLanguage: ChatLanguage,
-  apiKey: string,
+  _apiKey: string,
 ): Promise<string> {
   if (forcedLanguage === 'pt-BR') return responseText
   if (!looksPortuguese(responseText)) return responseText
 
-  console.warn('Response seems to be in Portuguese while forced language is', forcedLanguage, '- applying automatic rewrite')
-  const rewritten = await rewriteResponseToLanguage(responseText, forcedLanguage, apiKey)
-  if (rewritten === responseText) {
-    console.warn('Language rewrite returned unchanged content; keeping original response')
-  }
-  return rewritten
+  // Otimização de latência: o rewrite Gemini extra adicionava 1-3s por turno.
+  // A diretiva de idioma reforçada no system prompt + filtro de histórico já
+  // bastam na prática. Aqui apenas registramos para auditoria.
+  console.warn('Response seems to be in Portuguese while forced language is', forcedLanguage, '- skipping extra rewrite (latency optimization)')
+  return responseText
 }
 
 export async function generateAIResponse(
