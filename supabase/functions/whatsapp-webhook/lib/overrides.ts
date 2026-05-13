@@ -492,9 +492,6 @@ export function forceCorrectBlockForLocation(
 
   if (flags.locationKnown === 'outside' && isOutsideOnlyQuestion) {
     console.log('[BLOCK_LOCK] outside cliente, IA fez pergunta de bloco-Espanha:', q.slice(0, 80))
-    // Importar dinamicamente para evitar ciclo
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { getOutsideSpainNextQuestion } = require('./questions.ts')
     const next = getOutsideSpainNextQuestion(language, flags.assistantTranscript || '', {
       entryDateConfirmed: flags.entryDateConfirmed || null,
       locationKnown: flags.locationKnown,
