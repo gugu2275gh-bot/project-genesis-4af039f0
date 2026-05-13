@@ -143,12 +143,28 @@ export function getEntryDateNeedsYearQuestion(language: ChatLanguage): string {
 }
 
 export function isQuestionAboutInterest(question: string): boolean {
-  const normalized = normalizeForLanguageChecks(question)
-  return normalized.includes('o que voce busca hoje')
-    || normalized.includes('que voce busca hoje')
-    || normalized.includes('que busca hoy')
-    || normalized.includes('what are you looking for today')
-    || normalized.includes('ce que vous recherchez aujourd hui')
+  const n = normalizeForLanguageChecks(question)
+  if (!n) return false
+  // PT/ES/EN/FR — cobre 1ª/2ª/3ª pessoa e variantes ("buscas", "procura", "busca hoy", etc.)
+  const re = /(o que (voce |voces )?(busca|procura|deseja|gostaria|quer|esta procurando)\b)|(\bque (buscas|busca|estas buscando|deseas|necesitas|quieres|te interesa)\b)|(\bcomo posso (te )?ajudar\b)|(\bem que (te )?(posso )?ajudar\b)|(\bqual (e )?(o )?seu interesse\b)|(\ben que (te )?puedo ayudar\b)|(\bcual es tu interes\b)|(\bwhat (are you (looking for|seeking)|brings you|do you need|can i help)\b)|(\bhow can i help\b)|(\b(que|qu) (cherchez|recherchez)[- ]vous\b)|(\bcomment (puis je|puis-je) (vous )?aider\b)|(\bquel est (votre|ton) (besoin|interet)\b)/
+  return re.test(n)
+}
+
+// Levenshtein ≤ 1 para tolerar typos como "cuurso"→"curso", "residenccia"→"residencia"
+function levenshteinLE1(a: string, b: string): boolean {
+  if (a === b) return true
+  const la = a.length, lb = b.length
+  if (Math.abs(la - lb) > 1) return false
+  let i = 0, j = 0, edits = 0
+  while (i < la && j < lb) {
+    if (a[i] === b[j]) { i++; j++; continue }
+    if (++edits > 1) return false
+    if (la === lb) { i++; j++ }
+    else if (la > lb) { i++ }
+    else { j++ }
+  }
+  if (i < la || j < lb) edits++
+  return edits <= 1
 }
 
 export function isPotentialInterestAnswer(text: string): boolean {
@@ -161,20 +177,31 @@ export function isPotentialInterestAnswer(text: string): boolean {
     'resid', 'residir', 'morar', 'viver', 'espanha', 'espana', 'nacional', 'cidad', 'arraigo',
     'document', 'nie', 'tie', 'estudo', 'estudar', 'homologa', 'antecedente', 'reagrupa',
     'trabalh', 'trabalho', 'family', 'famil', 'mae', 'madre', 'visa', 'visto', 'visado',
-    // Wave 4: tokens isolados que apareceram em conversas reais
     'nacionalidade', 'nacionalidad', 'nationality',
-    'autorizacao de regresso', 'autorizacion de regreso', 'return authorization',
+    'autorizacao de regresso', 'autorizacao de regreso',
+    'autorizacion de regreso', 'autorizacion de regresso',
+    'return authorization',
     'curso', 'course', 'idioma', 'language',
-    'social', 'laboral', 'familiar', 'formacion', 'formacao',
+    'social', 'laboral', 'familiar', 'formacion', 'formacao', 'formación',
     'permiso', 'permit', 'reagrupacao', 'reagrupacion',
+    'regreso', 'regresso',
+    'homologacao', 'homologacion', 'homologação', 'homologación',
   ]
 
-  // Match exato para tokens curtos isolados
   const exactTokens = new Set([
     'nacionalidade', 'nacionalidad', 'arraigo', 'nie', 'tie', 'curso', 'residencia',
     'residência', 'visado', 'visa', 'visto', 'homologacao', 'homologação', 'reagrupamento',
+    'regreso', 'regresso',
   ])
-  if (exactTokens.has(normalized.trim())) return true
+  const trimmed = normalized.trim()
+  if (exactTokens.has(trimmed)) return true
+
+  // Tolerância a typos para tokens-chave isolados (uma única palavra)
+  if (!/\s/.test(trimmed)) {
+    const fuzzyTargets = ['curso', 'arraigo', 'nacionalidade', 'nacionalidad', 'residencia',
+      'visado', 'homologacao', 'reagrupamento', 'regreso', 'regresso']
+    if (fuzzyTargets.some((t) => levenshteinLE1(trimmed, t))) return true
+  }
 
   return interestKeywords.some((keyword) => normalized.includes(keyword))
 }

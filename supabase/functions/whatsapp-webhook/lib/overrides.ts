@@ -95,6 +95,15 @@ export function computeDeterministicFunnelPatch(
     patch.empadronado_city = normalizeCity(extracted)
   }
 
+  if (Object.keys(patch).length > 0) {
+    try {
+      console.log('[DETERMINISTIC_PATCH]', JSON.stringify({
+        prevQ: prevQ.slice(0, 120),
+        msg: msg.slice(0, 120),
+        patch,
+      }))
+    } catch { /* noop */ }
+  }
   return patch as any
 }
 
