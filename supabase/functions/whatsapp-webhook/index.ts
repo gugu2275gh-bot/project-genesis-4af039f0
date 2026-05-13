@@ -1153,17 +1153,24 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         const langCodeMap: Record<ChatLanguage, string> = { 'pt-BR': 'pt', 'es': 'es', 'en': 'en', 'fr': 'fr' }
 
         let detectedChatLanguage: ChatLanguage
-        if (contact.preferred_language && preferredLangMap[contact.preferred_language]) {
-          // Já travado — nunca reavaliar.
-          detectedChatLanguage = preferredLangMap[contact.preferred_language]
-          console.log('Language locked (from contact):', detectedChatLanguage)
-        } else {
-          // Primeira interação: detectar e persistir imediatamente.
+        if (isFirstInteraction) {
+          // Primeira interação: detectar a partir da mensagem (ignora o default 'pt' do schema) e travar.
           detectedChatLanguage = detectChatLanguage(currentCustomerMessage)
           const currentLangCode = langCodeMap[detectedChatLanguage]
           await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
           contact.preferred_language = currentLangCode
           console.log('Language locked (first detection):', detectedChatLanguage, 'sample:', currentCustomerMessage.slice(0, 80))
+        } else if (contact.preferred_language && preferredLangMap[contact.preferred_language]) {
+          // Mensagens subsequentes: usar o idioma travado, sem reavaliar.
+          detectedChatLanguage = preferredLangMap[contact.preferred_language]
+          console.log('Language locked (from contact):', detectedChatLanguage)
+        } else {
+          // Fallback (contato legado sem preferred_language e não é 1ª msg).
+          detectedChatLanguage = detectChatLanguage(currentCustomerMessage)
+          const currentLangCode = langCodeMap[detectedChatLanguage]
+          await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
+          contact.preferred_language = currentLangCode
+          console.log('Language locked (fallback detection):', detectedChatLanguage)
         }
 
         // Wave 4: carregar estado persistente do funil
