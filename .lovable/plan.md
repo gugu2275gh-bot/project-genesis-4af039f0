@@ -1,65 +1,41 @@
-## Problemas
+## Objetivo
 
-**Imagem 1 — duas perguntas no mesmo balão.** A B3 atual envia "Você está empadronado? Se sim, desde quando?" — viola "uma pergunta por vez". O cliente respondeu as duas ("sim, desde fevereiro"), mas a regra precisa valer para todo o funil.
+Quando a conversa começar e o idioma for identificado, ele fica **travado** para sempre naquele lead/contato. Nenhum sinal posterior (mensagens curtas, palavras ambíguas, "sim/não", áudio transcrito ruim, etc.) pode trocar o idioma.
 
-**Imagem 2 — re-pergunta da cidade.** Bot perguntou "Em qual cidade você está empadronado?", cliente respondeu "barcelona", e o bot perguntou de novo. Causa raiz no `forceAdvanceFromEmpadronadoQuestion` (`lib/overrides.ts`): o regex `isQuestionAboutEmpadronado` casa tanto a pergunta original (B3) quanto a pergunta de cidade (B5), porque ambas contêm "empadron". Quando a `previousQuestion` é a própria B5 e o cliente responde "barcelona" (texto curto, < 60 chars, sem preposição+cidade na lista hardcoded), o override entra no ramo `msg.length < 60` e **re-emite a pergunta de cidade**.
+## Estratégia (uma frase)
 
-## Correções
+`contact.preferred_language` vira a **única fonte da verdade**. Detecção só roda quando ele está vazio (1ª mensagem). A partir daí, todas as respostas usam o idioma travado, sem reavaliação.
 
-### 1. `lib/questions.ts` — separar perguntas
+## Mudanças em `supabase/functions/whatsapp-webhook/index.ts` (linhas ~1149–1208)
 
-- `getEmpadronadoQuestion(language)` → apenas "Perfeito. Você está empadronado?" (sem "se sim, desde quando").
-- Nova `getEmpadronamientoSinceQuestion(language)` → "Desde quando você está empadronado?".
-- `getEmpadronamientoCityQuestion` mantém-se.
+Substituir todo o bloco de detecção atual por:
 
-Sequência alvo do bloco:
-1. B3 — empadronado? (yes/no)
-2. Se SIM → B4 — desde quando?
-3. → B5 — em qual cidade?
-4. → Pré-Handoff
-5. Se NÃO em B3 → Pré-Handoff direto
+1. **Se `contact.preferred_language` já existe** → `detectedChatLanguage = preferredLangMap[contact.preferred_language]`. Ignorar `detectChatLanguage`, `strongPortuguese`, `twoTurnsPortuguese`. Sem update no contact.
+2. **Se vazio (primeira interação)** → rodar `detectChatLanguage(currentCustomerMessage)`, persistir imediatamente em `contacts.preferred_language` e usar.
+3. Remover o bloco `twoTurnsPortuguese` (não é mais necessário) e a lógica condicional de flip para PT.
+4. Log: `console.log('Language locked:', detectedChatLanguage, 'source:', contact.preferred_language ? 'contact' : 'first-detection')`.
 
-### 2. `lib/overrides.ts` — corrigir loop e encadear B3→B4→B5
+## Mudanças em `lib/language.ts`
 
-Refatorar `forceAdvanceFromEmpadronadoQuestion` para distinguir as três perguntas do bloco em vez de tratar todas como "empadron":
+Nenhuma. `detectChatLanguage` continua igual; só é chamada uma vez por contato.
 
-- Detectores específicos: `isEmpadronadoYesNoQuestion`, `isEmpadronamientoSinceQuestion`, `isEmpadronamientoCityQuestion`.
-- Lógica:
-  - `previousQuestion` = B3 (yes/no):
-    - resposta NÃO → não força (segue Pré-Handoff).
-    - resposta SIM (ou texto curto não-negativo sem data) → força `getEmpadronamientoSinceQuestion`.
-    - resposta contém data parseável (ex.: "sim, desde fevereiro de 2024") → força `getEmpadronamientoCityQuestion` (pula B4).
-  - `previousQuestion` = B4 (desde quando) → força `getEmpadronamientoCityQuestion`.
-  - `previousQuestion` = B5 (cidade) → **não força nada** (libera IA para Pré-Handoff). Esse é o fix do bug da imagem 2.
-- Remover a lista hardcoded de cidades (`madrid|barcelona|...`) — frágil; passa a confiar no detector de pergunta para decidir o próximo passo.
+## Casos de borda tratados
 
-### 3. `index.ts` — manter chamada existente
+- **1ª mensagem é áudio/imagem sem texto** → `detectChatLanguage('')` retorna `pt-BR` (default atual). Persistimos PT. Próxima mensagem com texto **não troca** mais — comportamento desejado pelo usuário ("nunca mude").
+- **Cliente troca de idioma no meio** (ex.: começou em ES, manda PT) → bot continua em ES. Operador humano pode editar `preferred_language` no painel se quiser destravar.
+- **Contatos legados sem `preferred_language`** → primeira mensagem após o deploy faz a detecção e trava.
 
-A integração no pipeline já existe (3 call sites). Apenas garantir que a função revisada é importada/chamada com a mesma assinatura.
+## Testes (`funnel_persistence_test.ts` ou novo `language_lock_test.ts`)
 
-### 4. Auditoria "uma pergunta por vez"
+- ES detectado na 1ª msg → 2ª msg em PT-BR ainda responde em ES.
+- PT detectado na 1ª msg → 2ª msg com "hello, how are you" ainda responde em PT.
+- Contato com `preferred_language='es'` pré-existente → mensagem PT não atualiza o contact e mantém ES.
 
-Varrer `lib/questions.ts` por strings com mais de um `?` ou conjunções "e/ou/se sim". Casos a normalizar:
-- B3 (já listado acima).
-- `getEntryDateNeedsYearQuestion` — verificar se contém duas perguntas; manter só a frase final com `?`.
-- Prompts em `index.ts` que instruem o LLM ("aprofundamentoInstruction", "tira-dúvidas") — adicionar regra explícita: **"Faça SEMPRE uma única pergunta por mensagem. Nunca combine duas perguntas no mesmo turno."**
-
-### 5. Testes
-
-Em `funnel_persistence_test.ts`:
-- B3 "sim" → próxima pergunta é "Desde quando…".
-- B4 "fevereiro de 2024" → próxima é "Em qual cidade…".
-- B3 "sim, desde fevereiro de 2024" → pula B4, próxima é cidade.
-- B5 "barcelona" → override **não** re-emite cidade (regressão da imagem 2).
-- B3 "não" → override no-op.
-
-### 6. Deploy
+## Deploy
 
 Redeploy `whatsapp-webhook`.
 
 ## Arquivos alterados
 
-- `supabase/functions/whatsapp-webhook/lib/questions.ts`
-- `supabase/functions/whatsapp-webhook/lib/overrides.ts`
-- `supabase/functions/whatsapp-webhook/index.ts` (apenas reforço de instrução de "uma pergunta por vez")
-- `supabase/functions/whatsapp-webhook/funnel_persistence_test.ts`
+- `supabase/functions/whatsapp-webhook/index.ts`
+- `supabase/functions/whatsapp-webhook/language_lock_test.ts` (novo)
