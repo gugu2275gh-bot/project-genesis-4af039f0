@@ -226,3 +226,30 @@ export function isLikelyQuestionLoop(
   const nextHash = questionBlockHash(aiResponse)
   return !!prevHash && prevHash === nextHash
 }
+
+/**
+ * Sanitiza a pergunta de localização: se a IA gerar a versão antiga disjuntiva
+ * ("ou ainda está em outro país"), reescreve para a forma yes/no clara.
+ * Também remove perguntas redundantes "em qual país você está?" quando a
+ * localização ainda não foi definida — o funil seguirá direto para o bloco
+ * "fora da Espanha" assim que o cliente disser "não".
+ */
+export function sanitizeLocationQuestion(
+  aiResponse: string,
+  language: ChatLanguage,
+): string {
+  if (!aiResponse) return aiResponse
+  let out = aiResponse
+  // Substitui a forma disjuntiva pela yes/no
+  const disjunctivePatterns: Array<[RegExp, string]> = [
+    [/hoje voc[êe] j[áa] est[áa] na espanha\s+ou\s+ainda\s+est[áa]\s+em\s+outro\s+pa[íi]s\??/gi, getLocationQuestion(language)],
+    [/hoy ya est[áa]s en espa[ñn]a\s+o\s+todav[ií]a\s+est[áa]s\s+en\s+otro\s+pa[íi]s\??/gi, getLocationQuestion(language)],
+    [/are you already in spain today,?\s+or\s+are\s+you\s+still\s+in\s+another\s+country\??/gi, getLocationQuestion(language)],
+    [/[êe]tes-vous d[ée]j[àa] en espagne aujourd[’']hui\s+ou\s+[êe]tes-vous\s+encore\s+dans\s+un\s+autre\s+pays\s*\??/gi, getLocationQuestion(language)],
+  ]
+  for (const [re, replacement] of disjunctivePatterns) {
+    out = out.replace(re, replacement)
+  }
+  return out
+}
+
