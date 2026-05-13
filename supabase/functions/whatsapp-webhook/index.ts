@@ -1666,14 +1666,18 @@ Regras:
         })
 
         // Etapa 5 — Localização (Msg7) — exige a pergunta exata "Espanha OU outro país"
-        const localizacaoAsked = sentAny(/(j[áa] est[áa]|j[áa] mora|ya est[áa]s|already (in|live)).{0,30}(na )?espanha?.{0,30}(ou|o)\s+(ainda |todav[ií]a |still )?(est[áa]|en )?(em |en )?outro pa[íi]s|en otro pa[íi]s\b/i)
-          || sentAny(/hoje voc[êe] j[áa] est[áa] na espanha/i)
+        const localizacaoAsked = sentAny(/hoje voc[êe] j[áa] est[áa] na espanha/i)
+          || sentAny(/hoy ya est[áa]s en espa[ñn]a/i)
+          || sentAny(/are you already in spain today/i)
+          || sentAny(/d[ée]j[àa] en espagne aujourd/i)
+          // compat com pergunta antiga (disjuntiva)
+          || sentAny(/(j[áa] est[áa]|j[áa] mora|ya est[áa]s|already (in|live)).{0,30}(na )?espanha?.{0,30}(ou|o)\s+(ainda |todav[ií]a |still )?(est[áa]|en )?(em |en )?outro pa[íi]s/i)
         const localizacaoAnswered = userInSpain || userOutsideSpain || !!funnelStateLive.location_known
         steps.push({
           key: 'localizacao', label: 'LOCALIZAÇÃO ATUAL',
           done: (localizacaoAsked && localizacaoAnswered) || !!funnelStateLive.location_known,
           instruction:
-            'Pergunte APENAS: "Hoje você já está na Espanha ou ainda está em outro país?". Aguarde a resposta antes de avançar.',
+            'Pergunte APENAS: "Hoje você já está na Espanha?" (sim/não). NÃO use a forma disjuntiva "ou ainda está em outro país". Se a resposta for negativa, NÃO pergunte em qual país a pessoa está — siga direto para o bloco "fora da Espanha". Aguarde a resposta antes de avançar.',
         })
 
         // Etapa 6 — Aprofundamento conforme localização
