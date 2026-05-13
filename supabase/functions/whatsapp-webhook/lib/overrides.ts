@@ -261,6 +261,8 @@ export function forceAdvanceFromEmpadronadoQuestion(
 
   return aiResponse
 }
+
+function questionBlockHash(assistantText: string): string {
   if (!assistantText) return ''
   const lastQ = extractLastQuestion(assistantText) || ''
   const preamble = (extractTextBeforeLastQuestion(assistantText) || '').trim()
