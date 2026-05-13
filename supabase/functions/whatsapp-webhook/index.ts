@@ -329,6 +329,9 @@ import {
   hasValidEmail,
   getEmailReaskQuestion,
   getEmailQuestion,
+  getPostHandoffWaitSuffix,
+  preHandoffSummarySent,
+  handoffTransferSent,
 } from './lib/questions.ts'
 
 import {
