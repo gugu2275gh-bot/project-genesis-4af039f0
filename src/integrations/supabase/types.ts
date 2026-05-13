@@ -1432,6 +1432,7 @@ export type Database = {
       lead_funnel_state: {
         Row: {
           email_confirmed: boolean
+          empadronado_city: string | null
           empadronado_confirmed: boolean | null
           entry_date_confirmed: string | null
           interest_confirmed: string | null
@@ -1446,6 +1447,7 @@ export type Database = {
         }
         Insert: {
           email_confirmed?: boolean
+          empadronado_city?: string | null
           empadronado_confirmed?: boolean | null
           entry_date_confirmed?: string | null
           interest_confirmed?: string | null
@@ -1460,6 +1462,7 @@ export type Database = {
         }
         Update: {
           email_confirmed?: boolean
+          empadronado_city?: string | null
           empadronado_confirmed?: boolean | null
           entry_date_confirmed?: string | null
           interest_confirmed?: string | null

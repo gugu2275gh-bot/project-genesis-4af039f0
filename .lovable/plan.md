@@ -1,50 +1,101 @@
-## Objetivo
-Validar que a cidade respondida na pergunta "Em qual cidade você está empadronado?" é uma cidade válida da Espanha. Se não for, repetir a pergunta até receber uma cidade espanhola válida.
+## Diagnóstico (a partir dos logs reais do lead)
 
-## Mudanças
+Da tabela `interactions` + log `[TURN]` da conversa do Gustavo:
 
-### 1. Nova lib `lib/spanish-cities.ts`
-- Lista canônica de municípios espanhóis (usar dataset estático com os ~8.100 municípios INE, ou no mínimo top ~500 + todas capitais de província + comunidades autônomas).
-- Função `isValidSpanishCity(input: string): boolean` — normaliza (lowercase, sem acentos, trim) e compara contra o set. Aceita variações comuns ("a coruña" / "la coruña", "donostia" / "san sebastian", "palma" / "palma de mallorca").
-- Função `extractCityFromAnswer(text: string): string | null` — extrai o token de cidade de respostas curtas ("barcelona", "en madrid", "vivo en sevilla").
+```
+03:03:27 BOT  "Você está na Espanha?"
+03:03:47 USR  "sim"
+03:04:01 BOT  "Qual foi a data exata da sua entrada na Espanha?"  (avançou, OK)
+...
+03:06:19 BOT  "Em qual cidade você está empadronado?"
+03:06:28 USR  "paris"
+03:06:43 LOG  [CITY_VALIDATION] invalid Spanish city in answer, reprompting: paris
+03:06:43 LOG  [TURN] nextStep:"interesse", stepsDone:["abertura","nome","email"],
+              dataKnown.service:false, location.inSpain:false, outsideSpain:false
+03:06:44 BOT  "Me conta com calma: o que você busca hoje? ..."   ← reprompt SUMIU
+03:07:01 USR  "autorização de regressop"
+03:07:17 BOT  "Hoje você já está na Espanha?"                    ← repergunta localização
+```
 
-### 2. `lib/questions.ts`
-- Adicionar `getInvalidCityReprompt(language)` em PT/ES/EN/FR — ex.: "No encontré esa ciudad en España. ¿Puedes confirmar el nombre del municipio español donde estás empadronado?"
-- Adicionar detector `isQuestionAboutEmpadronadoCity(q)` (regex multi-idioma para "qual cidade ... empadronad" / "qué/en qué ciudad ... empadronad" / "which city ... registered" / "quelle ville ... empadronad").
+Três bugs reais, mesma raiz: **o estado do funil nunca foi persistido** para `interest_confirmed`, `location_known` nem `empadronado_city`. Como o GATE recompõe o roteiro a cada turno apenas a partir de `funnelStateLive` + regex no histórico, ele "esquece" tudo:
 
-### 3. `lib/overrides.ts` — nova função `forceValidateSpanishCity`
-- Disparada quando a última pergunta do agente foi B5 (cidade de empadronamento).
-- Extrai cidade da resposta do cliente; se inválida, substitui a `aiResponse` pela reprompt traduzido e marca `empadronado_city_confirmed = false` no estado do funil para não avançar.
-- Se válida, deixa fluir e persiste a cidade.
+- A IA gera a próxima pergunta pendente segundo o GATE (= INTERESSE).
+- `forceAdvanceFromEmpadronadoQuestion` gera o reprompt de cidade (log confirma).
+- Mas o GATE/diretiva de estado força o LLM a re-perguntar interesse no turno seguinte; e o reprompt acaba descartado porque `nextStep="interesse"` nunca avança (interesse continua "missing").
+- O mesmo motivo faz a IA voltar a perguntar "Você está na Espanha?" depois (`location_known` nunca foi gravado).
 
-### 4. `lib/funnel-state.ts`
-- Adicionar campo `empadronado_city: string | null` ao `FunnelState` (+ migration).
-- `computeNextStep` / `buildStateDirective` continuam iguais (cidade faz parte do levantamento B5).
+A correção tem que ser **transversal** (idiomas PT/ES/EN/FR) e baseada em **persistência determinística por turno**, não em extração best-effort.
 
-### 5. `index.ts`
-- Após o bloco de overrides do empadronamento (linha ~1976), invocar `forceValidateSpanishCity(...)` quando a pergunta anterior foi B5.
-- Atualizar a regex `askedCidade` no funnel tracker para considerar B5 só completa quando uma cidade válida foi capturada (`state.empadronado_city != null`), forçando o LLM a permanecer no passo até obter cidade válida.
-- Acrescentar instrução no prompt B5: "Se a cidade respondida não for um município espanhol válido, peça para reconfirmar — NÃO avance para o próximo passo."
+## Plano
 
-### 6. Migration
-`alter table lead_funnel_state add column empadronado_city text;`
+### 1. `lib/funnel-state.ts` — adicionar `empadronado_city`
 
-### 7. Testes
-- `wave5_test.ts`: novo teste — após pergunta B5, resposta "Lisboa" → reprompt; resposta "Barcelona" → avança.
+- Nova coluna `empadronado_city text` em `lead_funnel_state` (migration).
+- `FunnelState` ganha `empadronado_city: string | null`.
+- `applyTurnUpdates` aceita o campo no `patch`.
 
-### 8. Deploy
-Redeploy `whatsapp-webhook` e teste via curl simulando B5 com "lisboa" (deve repergutar) e "barcelona" (deve avançar).
+### 2. Persistência turn-a-turn baseada em `previousQuestion`
 
-## Detalhes técnicos
-- Dataset de municípios: incluir como JSON estático em `lib/spanish-cities.json` (gerado a partir do INE; ~8.100 entradas, ~150 KB). Normalização via `String.prototype.normalize('NFD').replace(/[\u0300-\u036f]/g, '')`.
-- Aceitar nomes co-oficiais (ex.: "Girona"/"Gerona", "Lleida"/"Lérida", "A Coruña"/"La Coruña", "Donostia"/"San Sebastián", "Bilbo"/"Bilbao", "Iruña"/"Pamplona", "Eivissa"/"Ibiza") via tabela de aliases.
-- Não bloquear se cliente escrever província ("Cataluña") — tratar como inválido e pedir o município específico.
+Em `index.ts`, antes de chamar a IA, calcular um patch determinístico a partir de `(previousQuestion, rawCustomerMessage)` — zero LLM, zero heurística:
 
-## Arquivos editados
-- novo: `supabase/functions/whatsapp-webhook/lib/spanish-cities.ts` (+ json)
-- `supabase/functions/whatsapp-webhook/lib/questions.ts`
-- `supabase/functions/whatsapp-webhook/lib/overrides.ts`
+| previousQuestion detectada por… | regra | grava |
+|---|---|---|
+| `getLocationQuestion` (PT/ES/EN/FR) e variantes "Você está na Espanha?" | `YES_ANSWER_RE` → `'spain'`; `NO_ANSWER_RE` → `'outside'` | `location_known` |
+| `isQuestionAboutInterest` | `isPotentialInterestAnswer(msg)` → `service_interest` (ou `'detected'`) | `interest_confirmed` |
+| `isQuestionAboutSpainEntryDate` + `parseEntryDateFromText` no passado | iso | `entry_date_confirmed` |
+| `isEmpadronamientoCityQuestion` + `isValidSpanishCity` | normalizado | `empadronado_city` |
+| `isEmpadronadoYesNoQuestion` | sim/não | `empadronado` (já existente) |
+
+O patch é gravado **antes** da chamada à IA e usado em `funnelStateLive` no mesmo turno. Assim o GATE e os flags `interestKnown`/`locationKnown` refletem a realidade.
+
+### 3. Reforçar a validação B5 (cidade) — sentinel anti-clobber
+
+- `forceAdvanceFromEmpadronadoQuestion` retorna o reprompt **e** marca `aiResponse` com prefixo invisível `\u200B[LOCKED_REPROMPT]\u200B` (removido antes do envio).
+- `lockConfirmedFieldsInResponse`, `removeRepeatedQuestionIntro`, F1‑HARD, F4 e o anti-loop checam o sentinel e devolvem `aiResponse` intacto.
+- Imediatamente antes de `sendWhatsAppMessage`, o sentinel é tirado.
+- Adiciona-se também `isQuestionAboutEmpadronamientoCity(q)` e o reprompt ao detector de "perguntas pendentes" para que, se o LLM tentar pular para outra etapa, o GATE volte ao B5.
+
+### 4. Dataset de cidades — cobrir lacunas que aceitariam estrangeiras
+
+- Auditoria do `spanish-cities.json`: garantir que **só** municípios INE estão lá; remover qualquer entrada com diacríticos truncados (ex.: "paris" não está, mas a normalização precisa rejeitar `paris` como qualquer outra estrangeira).
+- `isValidSpanishCity` passa a:
+  1. `extractCityFromAnswer` (já existe) com NFD + lowercase.
+  2. Rejeitar lista negra explícita de capitais não-espanholas comuns (`paris`, `lisboa`, `lisbon`, `roma`, `rome`, `londres`, `london`, `berlin`, `nova york`, `new york`, `buenos aires`, `mexico`, `bogota`, `lima`, …) — segurança extra mesmo se algum dia entrarem por engano.
+  3. Só aceita se bater no Set INE.
+
+### 5. Localização — pergunta única, resposta gravada
+
+- `getLocationQuestion(language)` permanece a única forma sim/não.
+- Detector `isQuestionAboutLocationSpain(q)` cobre PT/ES/EN/FR (incluindo "Você está na Espanha?" e "Hoje você já está na Espanha?").
+- Quando previousQuestion bate o detector e a resposta é sim/não, grava `location_known` (regra 2).
+- O GATE só pergunta de novo se `funnelStateLive.location_known` continuar `null` — agora vai estar gravado.
+
+### 6. Interesse — gravar mesmo quando vier antes do bot perguntar
+
+- Em todo turno, se `isPotentialInterestAnswer(rawCustomerMessage)` e `interest_confirmed` ainda nulo, grava `interest_confirmed = rawCustomerMessage` (mesmo sem ter passado pela pergunta).
+- Isso fecha o caso da imagem 3: o cliente já disse "autorização de regresso" e o GATE para de marcar "interesse" como pendente.
+
+### 7. Testes Deno (`wave6_test.ts`)
+
+- B5 `"paris"` → reprompt; resposta seguinte `"madrid"` → grava `empadronado_city='madrid'`, libera próximo passo.
+- B5 `"lisboa"`, `"londres"`, `"buenos aires"` → reprompt.
+- "Você está na Espanha?" + `"sim"` (PT/ES/EN/FR) → `location_known='spain'`.
+- Interesse: `"autorização de regresso"` antes do bot perguntar → `interest_confirmed` gravado, GATE pula etapa.
+- Sentinel: simula override + lockConfirmedFieldsInResponse + isLikelyQuestionLoop — reprompt sobrevive.
+
+### 8. Migration + deploy
+
+- `alter table public.lead_funnel_state add column if not exists empadronado_city text;`
+- `supabase functions deploy whatsapp-webhook`.
+
+## Arquivos a editar/criar
+
 - `supabase/functions/whatsapp-webhook/lib/funnel-state.ts`
-- `supabase/functions/whatsapp-webhook/index.ts`
-- nova migration
-- `supabase/functions/whatsapp-webhook/wave5_test.ts`
+- `supabase/functions/whatsapp-webhook/lib/questions.ts` (novos detectores PT/ES/EN/FR)
+- `supabase/functions/whatsapp-webhook/lib/overrides.ts` (sentinel + guards)
+- `supabase/functions/whatsapp-webhook/lib/spanish-cities.ts` (blacklist de capitais estrangeiras)
+- `supabase/functions/whatsapp-webhook/index.ts` (patch determinístico por turno + remover sentinel antes do envio)
+- `supabase/migrations/<ts>_add_empadronado_city.sql`
+- `supabase/functions/whatsapp-webhook/wave6_test.ts`
+
+Resultado: as três correções já feitas em PT passam a valer para ES/EN/FR pelo mesmo caminho determinístico, e o reprompt de cidade não é mais sobrescrito pela IA no mesmo turno.
