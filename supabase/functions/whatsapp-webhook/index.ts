@@ -1619,7 +1619,7 @@ Regras:
           key: 'nome', label: 'NOME COMPLETO',
           done: !nameMissing,
           instruction:
-            'Pergunte APENAS o NOME COMPLETO do cliente. Use exatamente: "Antes de tudo, como é seu nome completo?". Se o cliente fez outra pergunta, agradeça em UMA frase ("Ótima pergunta, já te explico em seguida.") e em seguida faça SOMENTE a pergunta do nome.',
+            'Pergunte APENAS o NOME COMPLETO do cliente. Use como REFERÊNCIA (traduza fielmente para o idioma do cliente, mantendo o sentido e o tom — NUNCA envie em português se o cliente não estiver em português): "Antes de tudo, como é seu nome completo?". Se o cliente fez outra pergunta, agradeça em UMA frase (referência: "Ótima pergunta, já te explico em seguida." — também traduza) e em seguida faça SOMENTE a pergunta do nome.',
         })
 
         // Etapa 3 — Email (Msg4)
@@ -1627,7 +1627,7 @@ Regras:
           key: 'email', label: 'E-MAIL',
           done: !emailMissing,
           instruction:
-            'Agradeça brevemente o nome e pergunte APENAS o melhor e-mail. Use exatamente: "Obrigado. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?". NÃO faça outras perguntas nem responda dúvidas factuais agora.',
+            'Agradeça brevemente o nome e pergunte APENAS o melhor e-mail. Use como REFERÊNCIA (traduza fielmente para o idioma do cliente — NUNCA envie em português se o cliente não estiver em português): "Obrigado. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?". NÃO faça outras perguntas nem responda dúvidas factuais agora.',
         })
 
         // Etapa 4 — Interesse (Msg5 + Msg6) — exige a pergunta explícita E a frase do catálogo
@@ -1809,7 +1809,7 @@ Regras:
         if (collectionGateActive && nextStep) {
           const stepsSummary = steps.map(s => `${s.done ? '✅' : '⏳'} ${s.label}`).join(' → ')
           messageForAI = `${messageForAI}\n\n[GATE DE FLUXO — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
-            `IDIOMA OBRIGATÓRIO DA RESPOSTA AO CLIENTE: ${langName}. NÃO misture idiomas. Se as frases-modelo abaixo estiverem em português, traduza-as fielmente para ${langName} antes de enviar.\n` +
+            `IDIOMA OBRIGATÓRIO E TRAVADO DA RESPOSTA: ${langName}. Esse idioma foi definido no início da conversa e NÃO MUDA por nada — mesmo que o cliente envie a mensagem atual em outro idioma (ex.: cliente respondendo "si"/"sim"/"yes"), VOCÊ DEVE responder em ${langName}. NÃO misture idiomas. Todas as frases-modelo abaixo estão em português APENAS como referência: traduza-as fielmente para ${langName} antes de enviar — JAMAIS copie literalmente em português se ${langName} não for português.\n` +
             `Roteiro oficial CB Asesoría em andamento. Etapas: ${stepsSummary}\n` +
             `PRÓXIMA ETAPA OBRIGATÓRIA: ${nextStep.label}\n` +
             `INSTRUÇÃO: ${nextStep.instruction}\n` +
@@ -1825,7 +1825,7 @@ Regras:
           console.log(`[GATE] flow complete — KB liberada (handoff=${handoffDone})`)
           if (!handoffDone) {
             messageForAI = `${messageForAI}\n\n[MODO TIRA-DÚVIDAS — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
-              `IDIOMA OBRIGATÓRIO DA RESPOSTA AO CLIENTE: ${langName}. NÃO misture idiomas.\n` +
+              `IDIOMA OBRIGATÓRIO E TRAVADO DA RESPOSTA: ${langName}. Definido no início da conversa, NÃO MUDA — mesmo se o cliente enviar mensagem em outro idioma, RESPONDA em ${langName}. NÃO misture idiomas.\n` +
               `O cadastro inicial e o Pré-Handoff já foram enviados. Agora você está em MODO TIRA-DÚVIDAS.\n` +
               `REGRAS:\n` +
               `1. Use a Base de Conhecimento (KB) fornecida no contexto para responder dúvidas do cliente de forma breve, clara e baseada exclusivamente nos trechos disponíveis.\n` +
