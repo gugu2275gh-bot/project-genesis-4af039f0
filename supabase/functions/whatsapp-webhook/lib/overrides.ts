@@ -324,11 +324,11 @@ export function forceAdvanceFromEmpadronadoQuestion(
   const wrap = (q: string) => (preamble ? `${preamble}\n${q}` : q)
 
   // B5 (cidade) já foi feita → validar se é cidade espanhola.
-  // Se inválida, repergunta. Se válida, libera o LLM.
+  // Se inválida, repergunta E TRAVA a resposta com sentinel para que nada mais sobrescreva.
   if (isEmpadronamientoCityQuestion(previousQuestion)) {
     if (!isValidSpanishCity(msg)) {
       console.log('[CITY_VALIDATION] invalid Spanish city in answer, reprompting:', msg.slice(0, 60))
-      return wrap(getInvalidSpanishCityReprompt(language))
+      return lock(wrap(getInvalidSpanishCityReprompt(language)))
     }
     return aiResponse
   }
@@ -336,7 +336,7 @@ export function forceAdvanceFromEmpadronadoQuestion(
   // Caso o previousQuestion já seja a reprompt de cidade inválida → continua validando.
   if (/no reconoc|did not recognize|n[ãa]o reconheci|n ai pas reconnu|reconnu cette ville/i.test(previousQuestion || '')) {
     if (!isValidSpanishCity(msg)) {
-      return wrap(getInvalidSpanishCityReprompt(language))
+      return lock(wrap(getInvalidSpanishCityReprompt(language)))
     }
     return aiResponse
   }
