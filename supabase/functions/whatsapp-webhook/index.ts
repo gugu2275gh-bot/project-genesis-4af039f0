@@ -1623,7 +1623,7 @@ Regras:
           key: 'nome', label: 'NOME COMPLETO',
           done: !nameMissing,
           instruction:
-            'Pergunte APENAS o NOME COMPLETO do cliente. Use como REFERÊNCIA (traduza fielmente para o idioma do cliente, mantendo o sentido e o tom — NUNCA envie em português se o cliente não estiver em português): "Antes de tudo, como é seu nome completo?". Se o cliente fez outra pergunta, agradeça em UMA frase (referência: "Ótima pergunta, já te explico em seguida." — também traduza) e em seguida faça SOMENTE a pergunta do nome.',
+            `Pergunte APENAS o NOME COMPLETO do cliente. Envie EXATAMENTE esta frase, JÁ no idioma travado da conversa, sem traduzir nem alterar: "${t.askName}". Se o cliente fez outra pergunta, agradeça em UMA frase ("${t.oneMomentPlease}") e em seguida faça SOMENTE a pergunta do nome.`,
         })
 
         // Etapa 3 — Email (Msg4)
