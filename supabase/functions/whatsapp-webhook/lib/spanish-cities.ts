@@ -30,14 +30,36 @@ export function extractCityFromAnswer(text: string): string | null {
   return raw || null
 }
 
+// Capitais/cidades estrangeiras conhecidas — rejeição explícita mesmo se um dia
+// algum nome ambíguo entrar no dataset INE.
+const FOREIGN_CITY_BLACKLIST: Set<string> = new Set([
+  'paris', 'lisboa', 'lisbon', 'porto', 'londres', 'london', 'roma', 'rome',
+  'milao', 'milan', 'milano', 'berlim', 'berlin', 'munique', 'munich',
+  'amsterda', 'amsterdam', 'bruxelas', 'brussels', 'bruxelles', 'viena', 'vienna',
+  'dublin', 'edimburgo', 'edinburgh', 'manchester', 'liverpool',
+  'nova york', 'new york', 'los angeles', 'miami', 'chicago', 'boston', 'houston',
+  'buenos aires', 'cordoba', 'rosario', 'santiago', 'lima', 'quito', 'bogota',
+  'caracas', 'la paz', 'asuncion', 'montevideu', 'montevideo',
+  'cidade do mexico', 'ciudad de mexico', 'mexico df', 'mexico',
+  'rio de janeiro', 'sao paulo', 'brasilia', 'salvador', 'fortaleza', 'recife',
+  'belo horizonte', 'curitiba', 'manaus', 'belem', 'goiania', 'natal',
+  'florianopolis', 'porto alegre', 'campinas', 'vitoria', 'cuiaba',
+  'tokyo', 'toquio', 'pequim', 'beijing', 'xangai', 'shanghai',
+  'sydney', 'melbourne', 'auckland', 'wellington',
+  'casablanca', 'tunis', 'cairo', 'el cairo', 'rabat',
+])
+
 export function isValidSpanishCity(text: string): boolean {
   const city = extractCityFromAnswer(text)
   if (!city) return false
   const n = normalizeCity(city)
   if (!n) return false
+  if (FOREIGN_CITY_BLACKLIST.has(n)) return false
   if (CITY_SET.has(n)) return true
   // tenta sem artigo inicial
   const noArt = n.replace(/^(el|la|los|las|els|les|lo|os|as|a|o|l|ses)\s+/, '')
-  if (noArt && CITY_SET.has(noArt)) return true
+  if (!noArt) return false
+  if (FOREIGN_CITY_BLACKLIST.has(noArt)) return false
+  if (CITY_SET.has(noArt)) return true
   return false
 }
