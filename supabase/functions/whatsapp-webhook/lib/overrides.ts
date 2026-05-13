@@ -29,6 +29,10 @@ import {
   countAlphaWords,
   parseEntryDateFromText,
   getOutsideSpainNextQuestion,
+  getServicesOfferedMessage,
+  isServicesOfferedMessage,
+  buildPreHandoffPayload,
+  preHandoffSummarySent,
 } from './questions.ts'
 import { isValidSpanishCity, extractCityFromAnswer, normalizeCity } from './spanish-cities.ts'
 
