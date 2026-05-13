@@ -735,8 +735,10 @@ export function enforceBlockCompletion(
       return lock(getEmpadronadoQuestion(language))
     }
     if (flags.empadronadoConfirmed === true) {
-      const askedSince = /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i.test(transcript)
-      if (!askedSince) {
+      const op = (flags.outsideProgress || {}) as any
+      const sinceAnswered = !!op.b4_empadronado_since
+        || /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i.test(transcript)
+      if (!sinceAnswered) {
         console.warn('[BLOCK_GATE] H1 prematuro — falta "desde quando". Forçando B3.')
         return lock(getEmpadronamientoSinceQuestion(language))
       }
