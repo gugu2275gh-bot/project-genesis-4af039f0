@@ -341,6 +341,7 @@ import {
   forceReaskEmailIfMissing,
   forceAdvanceFromEntryDateQuestion,
   forceAdvanceFromInterestQuestion,
+  forceReaskFullNameIfSingleWord,
   isLikelyQuestionLoop,
   lockConfirmedFieldsInResponse,
 } from './lib/overrides.ts'
@@ -361,6 +362,7 @@ export {
   forceReaskEmailIfMissing,
   forceAdvanceFromEntryDateQuestion,
   forceAdvanceFromInterestQuestion,
+  forceReaskFullNameIfSingleWord,
   isLikelyQuestionLoop,
   getOutsideSpainAgeQuestion,
   getEmailReaskQuestion,
