@@ -130,15 +130,32 @@ export function getOutsideSpainAgeQuestion(language: ChatLanguage): string {
   return 'Entendido. Então seguimos pelo seu cenário fora da Espanha. Qual sua idade?'
 }
 
-export function getOutsideSpainNextQuestion(language: ChatLanguage, assistantTranscript: string): string {
+export function getOutsideSpainNextQuestion(
+  language: ChatLanguage,
+  assistantTranscript: string,
+  options?: { entryDateConfirmed?: string | null; locationKnown?: string | null },
+): string {
   const askedIdade = /\b(qual sua idade|cu[áa]ntos a[ñn]os|how old)\b/i.test(assistantTranscript)
   const askedEuropa = /\beuropa nos [úu]ltimos 6 meses|europa en los [úu]ltimos 6 meses|europe in the last 6 months\b/i.test(assistantTranscript)
   const askedFamiliar = /\bfamiliar (europeu|europeo)|family member.*(eu|spain)\b/i.test(assistantTranscript)
   const askedRemoto = /\b(trabalha remoto|trabajas? remoto|work remotely)\b/i.test(assistantTranscript)
   const askedFormacao = /\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree)\b/i.test(assistantTranscript)
 
+  // Pular A3 quando já temos a informação implícita: cliente está na Espanha
+  // OU informou data de entrada nos últimos 180 dias.
+  const entryDateInLast6Months = (() => {
+    const d = options?.entryDateConfirmed
+    if (!d) return false
+    const t = Date.parse(d)
+    if (Number.isNaN(t)) return false
+    const days = (Date.now() - t) / 86_400_000
+    return days >= 0 && days <= 180
+  })()
+  const skipEuropa = options?.locationKnown === 'spain' || entryDateInLast6Months
+  const askedEuropaEffective = askedEuropa || skipEuropa
+
   if (!askedIdade) return getOutsideSpainAgeQuestion(language)
-  if (!askedEuropa) {
+  if (!askedEuropaEffective) {
     if (language === 'es') return '¿Estuviste en Europa en los últimos 6 meses?'
     if (language === 'en') return 'Have you been in Europe in the last 6 months?'
     if (language === 'fr') return 'Êtes-vous allé en Europe au cours des 6 derniers mois ?'
