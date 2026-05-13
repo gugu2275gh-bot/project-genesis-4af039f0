@@ -1642,7 +1642,7 @@ Regras:
           key: 'interesse', label: 'INTERESSE / SERVIÇO',
           done: interesseDone,
           instruction:
-            'Pergunte sobre o interesse do cliente em DUAS mensagens curtas, nesta ordem: (1) "Me conta com calma: o que você busca hoje? Pode ser nacionalidade, residência, estudos, arraigo ou algum documento específico." (2) "Trabalhamos com cidadania espanhola, nômade digital, residências, NIE, TIE, homologação de estudos, antecedentes, reagrupação e outros processos." NÃO consulte a Base de Conhecimento.',
+            `Pergunte sobre o interesse do cliente em DUAS mensagens curtas, nesta ordem (ambas JÁ no idioma travado, NÃO traduza nem altere): (1) "${t.interestQuestion}" (2) "${t.servicesCatalog}". NÃO consulte a Base de Conhecimento.`,
         })
 
         // Etapa 5 — Localização (Msg7) — exige a pergunta exata "Espanha OU outro país"
