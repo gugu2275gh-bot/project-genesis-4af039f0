@@ -2033,6 +2033,8 @@ Regras:
               empadronadoCity: funnelStateLive.empadronado_city,
               assistantTranscript: allAssistant,
             })
+          } catch (e) {
+            console.error('[F1-HARD] retry failed:', e instanceof Error ? e.message : e)
           }
         }
         if (aiResponse && isLikelyQuestionLoop(history, rawCustomerMessage, aiResponse)) {
