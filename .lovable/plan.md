@@ -1,65 +1,51 @@
 ## Problema
 
-O bot perguntou o nome do Gustavo **3 vezes** porque:
+Pergunta atual é disjuntiva e ambígua:
+> "Hoje você já está na Espanha ou ainda está em outro país?"
 
-1. 1ª resposta foi um email → corretamente rejeitada como nome.
-2. 2ª resposta ("Gustavo", 1 palavra) → rejeitada por `isLikelyFullNameAnswer()`, mas o bot **não insistiu explicitamente** por nome completo: agradeceu "Ótimo, Gustavo!" e foi para o interesse.
-3. Como `name_confirmed` continuou `false`, a cada turno seguinte o gate volta para a etapa "nome" e o bot **re-pergunta**.
+"Sim", "já", "ainda não" não definem qual lado.
 
-## Regras desejadas
+## Solução
 
-1. **Nome completo é obrigatório (≥ 2 palavras alfabéticas).** Se cliente mandar só uma palavra, o bot **insiste educadamente** na MESMA etapa, sem avançar e sem fingir que aceitou.
-2. **Assim que vier ≥ 2 palavras válidas:** gravar imediatamente em `contacts.full_name` + `name_source='USER_CONFIRMED'`, marcar `funnel_state.name_confirmed=true`, e **NUNCA mais perguntar nome** nesta conversa.
-3. **Mesmo número/contato voltando depois:** se `name_source ∈ {USER_CONFIRMED, STAFF_EDITED}`, o novo lead já nasce com `name_confirmed=true` (já existe via `isContactNameTrustworthy`, vamos reforçar).
+Trocar por uma pergunta **fechada (sim/não)** sobre Espanha. Se não, deduzir logicamente que está em outro país — sem precisar perguntar de novo, sem números.
 
-## Mudanças
+### Novo texto
 
-### 1. Manter validação estrita (≥ 2 palavras) em `lib/name-extraction.ts`
-Mantém `isLikelyFullNameAnswer` como está (já exige `alphaWords.length >= 2`). Não relaxar.
+- **PT:** "Perfeito. Hoje você já está na Espanha?"
+- **ES:** "Perfecto. ¿Hoy ya estás en España?"
+- **EN:** "Perfect. Are you already in Spain today?"
+- **FR:** "Parfait. Êtes-vous déjà en Espagne aujourd'hui ?"
 
-### 2. Resposta determinística quando cliente manda só 1 palavra
-Em `supabase/functions/whatsapp-webhook/index.ts`, no bloco que detecta resposta à pergunta de nome:
+### Lógica determinística
 
-- Se a última pergunta do bot foi sobre nome completo E `messageForAI` tem 1 só palavra alfabética (não é email, data, etc.):
-  - **Não** agradecer/avançar.
-  - Substituir a próxima resposta da IA por uma **reask explícita**: "Obrigado! Para seguir, preciso do seu **nome e sobrenome** (nome completo). Pode me enviar?"
-  - Implementar via novo helper em `lib/overrides.ts` → `forceReaskFullNameIfSingleWord(prevQuestion, currentMsg, aiResponse, language)`.
+Em `supabase/functions/whatsapp-webhook/index.ts` (linhas ~1587-1615), o parser de localização passa a interpretar a resposta como sim/não:
 
-### 3. Trava firme após nome capturado
-No mesmo arquivo, quando `isLikelyFullNameAnswer(messageForAI) === true` e a pergunta anterior foi sobre nome:
+- Resposta afirmativa (`sim`, `si`, `yes`, `já`, `ya`, `estou`, `aqui`, "estou em Madrid", menção a cidade espanhola) → `userInSpain = true` → `location_known = 'spain'`.
+- Resposta negativa (`não`, `no`, `ainda não`, `todavía no`, "estou no Brasil/Portugal/etc.", menção a outro país) → `userOutsideSpain = true` → `location_known = 'outside'`. **Não pergunta "em qual país?" aqui** — segue direto para o próximo bloco do funil (idade/Europa/etc.). Se em algum momento futuro o país de origem for relevante, será capturado naturalmente em outra etapa.
+- Resposta ambígua/irrelevante → bot repete a pergunta yes/no UMA vez.
 
-- Atualizar `contacts.full_name` + `name_source='USER_CONFIRMED'` (já faz).
-- **Sincronizar imediatamente `funnel_state.name_confirmed=true`** antes do gate (já faz via `syncFunnelFromCapturedData`).
-- Em `lib/overrides.ts > lockConfirmedFieldsInResponse`, adicionar regra: **se em qualquer ponto do histórico o assistant já fez `isQuestionAboutFullName` E `nameKnown===true`**, qualquer nova pergunta sobre nome na resposta da IA é substituída pela próxima etapa pendente. Rede de segurança contra loop.
+### Mudanças concretas
 
-### 4. Reuso entre atendimentos do mesmo número
-Já funciona via `isContactNameTrustworthy()` em `loadFunnelState`. Reforçar:
-- Em `applyTurnUpdates`, **nunca permitir downgrade** de `name_confirmed: true → false`.
-- Adicionar log `[NAME_REUSE]` quando contato vem de lead anterior com nome confiável.
+1. **`lib/questions.ts > getLocationQuestion`** (linhas 112-117) — substituir os 4 idiomas pelos textos acima.
 
-### 5. Hotfix do Gustavo (lead atual `9b82823b...`)
-Migration única para destravar a conversa em curso:
-- `contacts.full_name = 'Gustavo'`, `name_source = 'USER_CONFIRMED'` no contato `4c2ed246-212e-431b-8f38-622b59fe810c` (cliente já se identificou; staff aceita "Gustavo" como nome válido manualmente).
-- `lead_funnel_state`: `name_confirmed=true`, `email_confirmed=true`, `interest_confirmed='VISTO_ESTUDANTE'`, `step='localizacao'`.
+2. **`index.ts > locQuestionRe`** (linha 1589) e **`localizacaoAsked`** (linhas 1664-1665) — atualizar regex para reconhecer a nova pergunta:
+   - PT: `/hoje voc[êe] j[áa] est[áa] na espanha\??$/i` (e similar para ES/EN/FR)
+   - Manter o regex antigo como fallback para conversas em andamento que já receberam a pergunta antiga.
 
-(Atenção: pelas regras novas, "Gustavo" sozinho NÃO seria aceito automaticamente — o hotfix é manual porque a conversa atual já passou por loop e queremos destravar sem pedir mais nada redundante.)
+3. **Parser de resposta** (linhas 1604-1615) — manter o que já existe (`sim`/`não`/`estou`/`brasil`/etc.) que já cobre o cenário sim/não corretamente. Só revisar a ordem para garantir que `não` puro vire `userOutsideSpain` antes de qualquer match de "Espanha" mencionada na frase.
 
-### 6. Testes
-Em `supabase/functions/whatsapp-webhook/index_test.ts`:
-- "bot perguntou nome → cliente respondeu 'Gustavo' (1 palavra) → IA deve **re-perguntar nome completo**, não avançar".
-- "bot perguntou nome → cliente respondeu 'Gustavo Silva' → IA deve **avançar para email**, gravar nome, e em turnos seguintes nunca mais perguntar nome".
-- "contato com `name_source='USER_CONFIRMED'` em lead novo → `loadFunnelState` retorna `name_confirmed=true`".
+4. **Instrução do passo no prompt** (`steps.push({ key: 'localizacao', ... instruction })` por volta de linha 1670+) — atualizar a instrução para a IA não voltar a usar a pergunta antiga: "Pergunte APENAS: 'Hoje você já está na Espanha?'. Se a resposta for negativa, NÃO pergunte em qual país está — siga direto para o próximo bloco (cenário fora da Espanha)."
+
+5. **Override defensivo em `lib/overrides.ts`** — se a IA gerar texto contendo "ou ainda está em outro país" / "o todavía está en otro país" / "or still in another country", substituir pela versão sim/não correspondente. Rede de segurança contra regressão do prompt.
 
 ## Resultado
 
-- 1 palavra → bot insiste UMA vez de forma clara ("nome e sobrenome, por favor").
-- 2+ palavras → grava e sela. Nunca mais pergunta no lead atual nem em leads futuros do mesmo número.
-- Loop atual do Gustavo destravado pelo hotfix.
+- Pergunta clara, sem disjunção, fácil de responder.
+- "Não" → automaticamente entendido como "está em outro país", sem nova pergunta redundante.
+- Lógica de funil avança normalmente para o bloco "fora da Espanha".
 
 ## Arquivos afetados
 
-- `supabase/functions/whatsapp-webhook/index.ts` — lógica de detecção pós-pergunta-de-nome.
-- `supabase/functions/whatsapp-webhook/lib/overrides.ts` — `forceReaskFullNameIfSingleWord` + endurecer `lockConfirmedFieldsInResponse`.
-- `supabase/functions/whatsapp-webhook/lib/funnel-state.ts` — guard contra downgrade de `name_confirmed`.
-- `supabase/functions/whatsapp-webhook/index_test.ts` — novos testes.
-- Nova migration de hotfix para Gustavo.
+- `supabase/functions/whatsapp-webhook/lib/questions.ts`
+- `supabase/functions/whatsapp-webhook/index.ts` (regex, instrução do passo, parser ordering)
+- `supabase/functions/whatsapp-webhook/lib/overrides.ts` (sanitização)
