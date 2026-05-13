@@ -12,6 +12,8 @@ export interface OutsideProgress {
   b1_situation_sent?: boolean
   /** B4 — texto cru da resposta "desde quando" (data ISO quando parseável). */
   b4_empadronado_since?: string
+  /** Msg1 (greeting) + Msg2 (consent) já foram enviados — não repetir abertura. */
+  opener_sent?: boolean
 }
 
 export type FunnelStep =
