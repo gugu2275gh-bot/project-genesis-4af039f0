@@ -1697,14 +1697,16 @@ Regras:
           // Bloco B — Na Espanha (B1-B5)
           const bIntro = sentAny(/\bagora preciso entender como est[áa] sua situa[çc][ãa]o aqui|ahora necesito entender|now i need to understand\b/i)
           const askedEntryDate = sentAny(/\b(data (exata )?da sua entrada|fecha (exacta )?de tu entrada|date you entered)\b/i)
-          const askedEmpadronado = sentAny(/\bempadronad/i)
-          const askedCidade = sentAny(/\b(em qual cidade|en qu[eé] ciudad|which city)\b.*empadronad/i) || sentAny(/\bcidade.*empadronad/i)
-          aprofundamentoDone = bIntro && askedEntryDate && askedEmpadronado && askedCidade
+          const askedEmpadronado = sentAny(/voc[êe] est[áa] empadronad|est[áa]s empadronad|are you (registered|empadronad)|[êe]tes-vous empadronad/i)
+          const askedDesdeQuando = sentAny(/\b(desde quando|desde cu[áa]ndo|since when|depuis quand)\b/i)
+          const askedCidade = sentAny(/\b(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)\b/i)
+          aprofundamentoDone = bIntro && askedEntryDate && askedEmpadronado && askedDesdeQuando && askedCidade
           aprofundamentoInstruction =
-            'O cliente JÁ ESTÁ na Espanha. Avance pelo bloco B na ordem, UMA pergunta por turno: ' +
+            'O cliente JÁ ESTÁ na Espanha. Avance pelo bloco B na ordem, UMA pergunta por turno (NUNCA combine duas perguntas no mesmo turno): ' +
             (!bIntro ? '(B1) "Perfeito. Agora preciso entender como está sua situação aqui." então ' : '') +
             (!askedEntryDate ? '(B2) "Qual foi a data exata da sua entrada na Espanha?". ' :
-             !askedEmpadronado ? '(B3) "Você está empadronado? Se sim, desde quando?". ' :
+             !askedEmpadronado ? '(B3) "Você está empadronado?" (APENAS sim/não, NÃO inclua "se sim, desde quando"). ' :
+             !askedDesdeQuando ? '(B4) "Desde quando você está empadronado?". ' :
              !askedCidade ? '(B5) "Em qual cidade você está empadronado?". ' :
              'Bloco completo, avance para o Pré-Handoff.')
         } else if (userOutsideSpain) {
