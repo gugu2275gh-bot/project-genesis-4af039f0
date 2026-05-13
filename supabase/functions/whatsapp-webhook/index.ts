@@ -344,6 +344,7 @@ import {
   forceReaskFullNameIfSingleWord,
   isLikelyQuestionLoop,
   lockConfirmedFieldsInResponse,
+  sanitizeLocationQuestion,
 } from './lib/overrides.ts'
 
 import {
