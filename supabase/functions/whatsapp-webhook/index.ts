@@ -1657,7 +1657,7 @@ Regras:
           key: 'localizacao', label: 'LOCALIZAÇÃO ATUAL',
           done: (localizacaoAsked && localizacaoAnswered) || !!funnelStateLive.location_known,
           instruction:
-            'Pergunte APENAS: "Hoje você já está na Espanha?" (sim/não). NÃO use a forma disjuntiva "ou ainda está em outro país". Se a resposta for negativa, NÃO pergunte em qual país a pessoa está — siga direto para o bloco "fora da Espanha". Aguarde a resposta antes de avançar.',
+            `Pergunte APENAS: "${t.askLocationSpain}" — pergunta SIM/NÃO, JÁ no idioma travado da conversa, NÃO traduza nem altere. PROIBIDO usar a forma disjuntiva "ou ainda está em outro país" / "o aún estás en otro país" / "or still in another country". Se a resposta for negativa, NÃO pergunte em qual país a pessoa está — siga direto para o bloco "fora da Espanha". Aguarde a resposta antes de avançar.`,
         })
 
         // Etapa 6 — Aprofundamento conforme localização
