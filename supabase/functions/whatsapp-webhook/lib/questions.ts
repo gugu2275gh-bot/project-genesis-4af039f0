@@ -293,9 +293,9 @@ export function isServicesOfferedMessage(text: string): boolean {
     && /(homologa|homologation)/.test(n)
 }
 
-// BPMN-3 (CB_pre-handoff-3.bpm): pré-handoff + handoff são 4 mensagens distintas (H1, H2, H3, H4),
-// enviadas na MESMA rodada após A/B-completos. Cada função retorna duas bolhas separadas
-// pelo delimitador "|||" (o caller faz split e envia mensagens individuais).
+// BPMN v2 (CB_pre-handoff_v2.bpm): pré-handoff + handoff = 3 mensagens distintas (H1, H2, H3),
+// enviadas na MESMA rodada após A/B-completos. H4 foi REMOVIDA — o fluxo termina em H3.
+// Cada função retorna bolhas separadas pelo delimitador "|||" (o caller faz split e envia mensagens individuais).
 
 // H1 ||| H2  — texto literal do diagrama
 export function getPreHandoffSummaryMessage(language: ChatLanguage): string {
@@ -311,21 +311,21 @@ export function getPreHandoffSummaryMessage(language: ChatLanguage): string {
   return 'Perfeito. Já consigo ter uma visão inicial do seu caso.|||Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
 }
 
-// H3 ||| H4 — texto literal do diagrama
+// H3 — texto literal do diagrama (única bolha; H4 removida na v2)
 export function getHandoffTransferMessage(language: ChatLanguage): string {
   if (language === 'es') {
-    return 'Voy a remitir tu información a un especialista para que la analice con más profundidad.|||¡Estoy a tu disposición para ayudarte! Te voy a derivar a un agente.'
+    return 'Voy a remitir tu información a un especialista para que la analice con más profundidad.'
   }
   if (language === 'en') {
-    return 'I will forward your information to a specialist to analyze it in more depth.|||I am here to help if you need! I will forward you to an agent.'
+    return 'I will forward your information to a specialist to analyze it in more depth.'
   }
   if (language === 'fr') {
-    return 'Je vais transmettre vos informations à un spécialiste pour qu’il les analyse plus en profondeur.|||Je suis à votre disposition pour vous aider ! Je vais vous transférer à un agent.'
+    return 'Je vais transmettre vos informations à un spécialiste pour qu’il les analyse plus en profondeur.'
   }
-  return 'Vou encaminhar suas informações para um especialista analisar com mais profundidade.|||Estou à disposição para ajudar se precisa! Vou te encaminhar para um atendente.'
+  return 'Vou encaminhar suas informações para um especialista analisar com mais profundidade.'
 }
 
-// Sufixo localizado anexado a cada resposta de KB no MODO PÓS-HANDOFF (após H3+H4).
+// Sufixo localizado anexado a cada resposta de KB no MODO PÓS-HANDOFF (após H3).
 export function getPostHandoffWaitSuffix(language: ChatLanguage): string {
   if (language === 'es') return 'En breve uno de nuestros especialistas podrá ayudarte con eso. Por favor, aguarda.'
   if (language === 'en') return 'One of our specialists will be able to help you with this shortly. Please wait.'
@@ -334,7 +334,8 @@ export function getPostHandoffWaitSuffix(language: ChatLanguage): string {
 }
 
 const PRE_HANDOFF_SUMMARY_RE = /(vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case|premi[èe]re vision de votre cas)/i
-const HANDOFF_TRANSFER_RE = /(encaminhar suas informa[çc][õo]es|remitir tu informaci[óo]n|forward your information|transmettre vos informations|vou te encaminhar para um atendente|te voy a derivar a un agente|forward you to an agent|vous transf[ée]rer [àa] un agent)/i
+// BPMN v2: âncoras só de H3 (H4 removida)
+const HANDOFF_TRANSFER_RE = /(encaminhar suas informa[çc][õo]es|remitir tu informaci[óo]n|forward your information|transmettre vos informations)/i
 export function preHandoffSummarySent(transcript: string): boolean {
   return PRE_HANDOFF_SUMMARY_RE.test(transcript || '')
 }
@@ -343,7 +344,7 @@ export function handoffTransferSent(transcript: string): boolean {
 }
 
 /**
- * Monta o payload BPMN-3: H1|||H2|||H3|||H4 numa única rodada.
+ * Monta o payload BPMN v2: H1|||H2|||H3 numa única rodada (3 bolhas).
  * Aceita um transcript (legado, fallback por regex) OU flags persistidas (preferido).
  * Retorna string vazia quando ambos já foram enviados.
  */
@@ -363,7 +364,7 @@ export function buildPreHandoffPayload(
   if (summarySent && transferSent) return ''
   if (summarySent && !transferSent) return getHandoffTransferMessage(language)
   if (!summarySent && transferSent) return getPreHandoffSummaryMessage(language)
-  // Nada enviado → BPMN-3 manda H1-H4 na mesma rodada
+  // Nada enviado → BPMN v2 manda H1-H2-H3 na mesma rodada (3 bolhas)
   return `${getPreHandoffSummaryMessage(language)}|||${getHandoffTransferMessage(language)}`
 }
 
