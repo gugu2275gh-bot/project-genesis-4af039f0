@@ -404,9 +404,6 @@ export function forceAdvanceFromEmpadronadoQuestion(
   const msg = (currentMessage || '').trim()
   if (!msg) return aiResponse
 
-  const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
-  const wrap = (q: string) => (preamble ? `${preamble}\n${q}` : q)
-
   // B5 (cidade) já foi feita → validar se é cidade espanhola.
   if (isEmpadronamientoCityQuestion(previousQuestion)) {
     if (!isValidSpanishCity(msg)) {
