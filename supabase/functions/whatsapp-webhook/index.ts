@@ -329,6 +329,9 @@ import {
   hasValidEmail,
   getEmailReaskQuestion,
   getEmailQuestion,
+  getPostHandoffWaitSuffix,
+  preHandoffSummarySent,
+  handoffTransferSent,
 } from './lib/questions.ts'
 
 import {
@@ -1258,14 +1261,13 @@ Seu objetivo é, ao longo de uma conversa fluida, descobrir:
      3. "Você está empadronado?"
      4. "Se sim, desde quando?" (só faça se a resposta anterior for afirmativa; se negativa, pule)
      5. "Em qual cidade você está empadronado?" (só faça se empadronado)
-8. **Pré Handoff** — envie EXATAMENTE estas duas frases (traduza fielmente ao idioma do cliente), em UMA ÚNICA mensagem (pode unir as duas frases num só envio, separadas por quebra de linha; NUNCA use "|||"):
+8. **Pré-Handoff + Handoff (BPMN-3) — UMA ÚNICA RODADA, 4 mensagens** — assim que o aprofundamento (A ou B) terminar, envie as 4 frases abaixo NA MESMA RESPOSTA, separadas pelo delimitador "|||" (4 bolhas), nesta ordem exata, traduzidas fielmente ao idioma travado:
    - "Perfeito. Já consigo ter uma visão inicial do seu caso."
    - "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei."
-   APÓS enviar o Pré-Handoff, NÃO envie o Handoff automaticamente. Entre em MODO TIRA-DÚVIDAS: pergunte algo como "Tem alguma dúvida que eu possa esclarecer agora sobre seu caso?" e RESPONDA as perguntas do cliente consultando a Base de Conhecimento (KB), de forma breve, clara e baseada exclusivamente nos trechos disponíveis. Continue nesse modo enquanto o cliente tiver dúvidas.
-9. **Handoff Humanizado** — só envie quando o cliente sinalizar que NÃO TEM MAIS DÚVIDAS (ex.: "é só isso", "obrigado", "ok", "depois falo com o especialista"), OU pedir explicitamente para falar com um humano. NUNCA envie o handoff logo após o Pré-Handoff sem ter passado pelo modo tira-dúvidas. Quando for o momento, envie EXATAMENTE estas duas frases (traduza fielmente ao idioma do cliente), em UMA ÚNICA mensagem (pode unir as duas frases num só envio, separadas por quebra de linha; NUNCA use "|||"):
    - "Vou encaminhar suas informações para um especialista analisar com mais profundidade."
-   - "Estou à disposição para ajudar se precisar! Vou te encaminhar para um atendente."
-   Após enviar, PARE de responder — o atendente humano assume.
+   - "Estou à disposição para ajudar se precisa! Vou te encaminhar para um atendente."
+   NÃO faça novas perguntas. NÃO insira "modo tira-dúvidas" ANTES dessas 4 mensagens. APÓS o envio, todas as próximas respostas vêm da Base de Conhecimento e DEVEM terminar com a frase localizada de "aguarde um especialista" (a infraestrutura adiciona automaticamente — não a duplique).
+9. **Pós-Handoff (KB)** — depois das 4 mensagens acima, responda dúvidas APENAS com base na KB, de forma breve e clara, no idioma travado. NÃO repita H1-H4. NÃO peça novamente nenhum dado já coletado.
 
 ## PERGUNTAS FORA DO ROTEIRO (Base de Conhecimento)
 - REGRA CRÍTICA: enquanto o cadastro inicial (objetivos 2 a 7) NÃO estiver concluído, NÃO responda dúvidas técnicas do cliente (ex.: autorização de regresso, arraigo, NIE, valores, prazos, documentos). Em vez disso, reconheça brevemente a pergunta UMA ÚNICA VEZ, diga que primeiro precisa terminar de coletar os dados para encaminhar ao especialista certo, e retome EXATAMENTE a próxima pergunta pendente do roteiro.
@@ -1749,22 +1751,26 @@ Regras:
         })
 
         // Etapa 7 — Pré-Handoff (H1 + H2) — APÓS isso a KB é liberada
-        const preHandoffDone = sentAny(/vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case/i)
+        // BPMN-3: Etapa 7 — PRÉ-HANDOFF + HANDOFF combinados (H1|||H2|||H3|||H4 numa rodada)
+        const preHandoffSentFlag = !!funnelStateLive.pre_handoff_sent
+        const handoffSentFlag = !!funnelStateLive.handoff_sent
+        const preHandoffDoneByRegex = sentAny(/vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case/i)
           && sentAny(/cada caso de forma individual|each case individually|caminho mais seguro/i)
+        const handoffDoneByRegex = sentAny(/encaminhar suas informa[çc][õo]es|remitir tu informaci[óo]n|forward your information|transmettre vos informations/i)
+          && sentAny(/encaminhar para um atendente|derivar a un agente|forward you to an agent|vous transf[ée]rer [àa] un agent/i)
+        const preHandoffDone = preHandoffSentFlag || preHandoffDoneByRegex
+        const handoffDone = handoffSentFlag || handoffDoneByRegex
+
         steps.push({
-          key: 'preHandoff', label: 'PRÉ-HANDOFF',
-          done: preHandoffDone,
+          key: 'preHandoff', label: 'PRÉ-HANDOFF + HANDOFF (BPMN-3)',
+          done: preHandoffDone && handoffDone,
           instruction:
-            'Envie o PRÉ-HANDOFF em duas frases curtas, nesta ordem: (1) "Perfeito. Já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." NÃO faça novas perguntas e NÃO envie o Handoff (encaminhar para atendente) agora. Após esta mensagem, a Base de Conhecimento será liberada e você entrará em modo tira-dúvidas usando a KB.',
+            'Envie EXATAMENTE 4 frases curtas, NESTA ORDEM, separadas pelo delimitador "|||" (4 bolhas em UMA resposta): (1) "Perfeito. Já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." (3) "Vou encaminhar suas informações para um especialista analisar com mais profundidade." (4) "Estou à disposição para ajudar se precisa! Vou te encaminhar para um atendente." NÃO faça novas perguntas. NÃO insira "modo tira-dúvidas" ANTES dessas 4 mensagens.',
         })
 
-        // ⚡ Pré-Handoff é o sinal definitivo de "cadastro concluído". Se ele já foi enviado,
-        // marca todas as etapas anteriores como done para liberar a KB imediatamente — mesmo
-        // que algum regex de sub-etapa do APROFUNDAMENTO não tenha batido (ex.: a IA reformulou
-        // a frase). Sem isso, perguntas factuais pós-Pré-Handoff são incorretamente adiadas.
-        if (preHandoffDone) {
+        // Concluiu cadastro: KB liberada e funil = 'livre'.
+        if (preHandoffDone && handoffDone) {
           for (const s of steps) s.done = true
-          // Housekeeping: marca o funil como 'livre' para consistência futura.
           if (funnelStateLive.step !== 'livre') {
             try {
               await supabase
@@ -1777,10 +1783,6 @@ Regras:
             }
           }
         }
-
-        // Etapa 8 — Handoff (H3 + H4) — opcional, apenas se a equipe for assumir
-        const handoffDone = sentAny(/encaminhar suas informa[çc][õo]es|forward your information/i)
-          && sentAny(/encaminhar para um atendente|derivar a un agente|forward you to an agent/i)
 
         // Próxima etapa pendente
         const nextStep = steps.find(s => !s.done)
@@ -1855,21 +1857,21 @@ Regras:
           console.log(`[GATE] step=${nextStep.key} done=${steps.filter(s=>s.done).length}/${steps.length} inSpain=${userInSpain} outside=${userOutsideSpain}`)
         } else {
           console.log(`[GATE] flow complete — KB liberada (handoff=${handoffDone})`)
-          if (!handoffDone) {
-            messageForAI = `${messageForAI}\n\n[MODO TIRA-DÚVIDAS — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
-              `IDIOMA OBRIGATÓRIO E TRAVADO DA RESPOSTA: ${langName}. Definido no início da conversa, NÃO MUDA — mesmo se o cliente enviar mensagem em outro idioma, RESPONDA em ${langName}. NÃO misture idiomas.\n` +
-              `O cadastro inicial e o Pré-Handoff já foram enviados. Agora você está em MODO TIRA-DÚVIDAS.\n` +
-              `REGRAS:\n` +
-              `1. Use a Base de Conhecimento (KB) fornecida no contexto para responder dúvidas do cliente de forma breve, clara e baseada exclusivamente nos trechos disponíveis.\n` +
-              `2. NÃO envie o Handoff ("Vou encaminhar suas informações..." / "Vou te encaminhar para um atendente") automaticamente. Só envie o Handoff quando o cliente sinalizar que NÃO TEM MAIS DÚVIDAS (ex.: "é só isso", "obrigado", "ok") OU pedir explicitamente para falar com um humano.\n` +
-              `3. Se o cliente acabou de receber o Pré-Handoff e ainda não fez perguntas, convide-o gentilmente: "Tem alguma dúvida que eu possa esclarecer agora sobre seu caso?".\n` +
-              `4. Se a KB realmente não tiver a informação, diga honestamente que vai confirmar com o especialista — mas NÃO faça o handoff por isso, continue disponível para outras dúvidas.\n` +
-              `5. PROIBIDO usar a frase "assim que terminarmos esse rapidíssimo levantamento" ou variações ("vou te explicar quando terminar o levantamento", etc.). O levantamento JÁ ACABOU. Se o cliente fez uma pergunta factual ("o que é X", "como funciona Y", prazos, valores, requisitos), RESPONDA AGORA com base na KB. Adiar a resposta neste momento é ERRO grave.\n` +
-              (pendingQuestionToAnswer
-                ? `6. PRIORIDADE MÁXIMA: o cliente havia feito esta pergunta DURANTE o cadastro e ficou aguardando: "${pendingQuestionToAnswer}". Responda-a AGORA, com base na KB, antes de qualquer outra coisa. Comece com algo como "Como prometi, sobre sua dúvida..." e responda objetivamente.\n`
-                : '') +
-              `[FIM DO MODO TIRA-DÚVIDAS]`
-          }
+          // BPMN-3 MODO PÓS-HANDOFF: H1-H4 já foram enviados. Toda resposta vem da KB
+          // e termina com o sufixo localizado de "aguarde um especialista".
+          messageForAI = `${messageForAI}\n\n[MODO PÓS-HANDOFF (BPMN-3) — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
+            `IDIOMA OBRIGATÓRIO E TRAVADO DA RESPOSTA: ${langName}. Definido no início da conversa, NÃO MUDA.\n` +
+            `As 4 mensagens H1-H4 (pré-handoff + handoff) JÁ FORAM ENVIADAS. NÃO repita nenhuma delas.\n` +
+            `REGRAS:\n` +
+            `1. Responda APENAS com base na Base de Conhecimento (KB) fornecida no contexto, de forma breve e clara, no idioma travado.\n` +
+            `2. Se a KB não tiver a informação, diga honestamente que o especialista confirmará — sem inventar.\n` +
+            `3. PROIBIDO usar "assim que terminarmos esse rapidíssimo levantamento" — o cadastro acabou.\n` +
+            `4. NÃO peça novamente nenhum dado já coletado (nome, e-mail, interesse, localização, idade, data de entrada, empadronamento).\n` +
+            `5. NÃO escreva você mesmo a frase "Em breve um de nossos especialistas..." — a infraestrutura adiciona automaticamente como sufixo. Responda apenas o conteúdo da dúvida.\n` +
+            (pendingQuestionToAnswer
+              ? `6. PRIORIDADE MÁXIMA: o cliente havia feito esta pergunta DURANTE o cadastro e ficou aguardando: "${pendingQuestionToAnswer}". Responda-a AGORA com base na KB. Comece com algo como "Como prometi, sobre sua dúvida...".\n`
+              : '') +
+            `[FIM DO MODO PÓS-HANDOFF]`
         }
 
         console.log(`[KB] query currentTopic="${currentMessageTopicHint}" finalTopic="${topicHint}" len=${kbQuery.length} -> context ${knowledgeContext.length} chars`)
@@ -2132,13 +2134,29 @@ Regras:
           // Send AI response via Twilio (split on "|||" delimiter for multi-message replies)
           try {
             // Remove sentinel anti-clobber antes de enviar (não deve aparecer ao cliente)
-            const aiResponseClean = stripLockedSentinel(aiResponse)
+            let aiResponseClean = stripLockedSentinel(aiResponse)
+
+            // BPMN-3 MODO PÓS-HANDOFF: se H1-H4 já foram enviados, anexa o sufixo
+            // localizado de "aguarde um especialista" ao final da resposta (uma única bolha).
+            const wasHandoffSentBefore = !!funnelStateLive.handoff_sent
+            if (wasHandoffSentBefore) {
+              const suffix = getPostHandoffWaitSuffix(detectedChatLanguage)
+              // não duplica se a IA por engano colocou parte do sufixo
+              const lower = aiResponseClean.toLowerCase()
+              const sigPT = 'em breve um de nossos especialistas'
+              const sigES = 'en breve uno de nuestros especialistas'
+              const sigEN = 'one of our specialists'
+              const sigFR = 'un de nos spécialistes'
+              if (!lower.includes(sigPT) && !lower.includes(sigES) && !lower.includes(sigEN) && !lower.includes(sigFR)) {
+                aiResponseClean = `${aiResponseClean.trim()}\n\n${suffix}`
+              }
+            }
+
             const parts = aiResponseClean.split('|||').map(p => p.trim()).filter(Boolean)
             for (let i = 0; i < parts.length; i++) {
               const part = parts[i]
               await sendWhatsAppMessage(phoneNumber, part)
 
-              // Store each part in mensagens_cliente
               await supabase.from('mensagens_cliente').insert({
                 id_lead: lead.id,
                 phone_id: parseInt(phoneNumber),
@@ -2146,7 +2164,6 @@ Regras:
                 origem: 'IA',
               })
 
-              // Create outbound interaction per part
               await supabase.from('interactions').insert({
                 lead_id: lead.id,
                 contact_id: contact.id,
@@ -2156,7 +2173,6 @@ Regras:
                 origin_bot: true,
               })
 
-              // Small delay between consecutive messages so they arrive in order
               if (i < parts.length - 1) {
                 await new Promise(r => setTimeout(r, 800))
               }
@@ -2164,27 +2180,27 @@ Regras:
 
             console.log('AI response sent and stored successfully (parts:', parts.length, ')')
 
-            // M3/R5: Auto-pause after handoff detection (Stage 8)
-            const handoffPatterns = [
-              'encaminhar para um especialista',
-              'encaminhar para um atendente',
-              'vou te encaminhar',
-              'transfer you to',
-              'te voy a transferir',
-              'derivar tu caso',
-              'um especialista vai',
-              'a specialist will',
-              'un especialista va',
-            ]
-            const isHandoff = handoffPatterns.some(p => aiResponse.toLowerCase().includes(p))
-            if (isHandoff) {
-              await supabase.from('mensagens_cliente').insert({
-                id_lead: lead.id,
-                mensagem_IA: '🤖 Handoff automático — IA pausada após encaminhamento ao atendente.',
-                origem: 'SISTEMA',
-              })
-              console.log('Auto-pause: AI handoff detected, inserting SISTEMA marker to pause AI')
+            // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3-H4
+            // nas partes enviadas neste turno. Idempotente — só faz UPDATE se mudou algo.
+            try {
+              const sentJoined = parts.join('\n')
+              const newPreSent = !funnelStateLive.pre_handoff_sent && preHandoffSummarySent(sentJoined)
+              const newHandSent = !funnelStateLive.handoff_sent && handoffTransferSent(sentJoined)
+              if (newPreSent || newHandSent) {
+                const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+                if (newPreSent) patch.pre_handoff_sent = true
+                if (newHandSent) patch.handoff_sent = true
+                await supabase.from('lead_funnel_state').update(patch).eq('lead_id', lead.id)
+                funnelStateLive = { ...funnelStateLive, ...patch } as typeof funnelStateLive
+                console.log('[BPMN-3] flags persisted:', JSON.stringify(patch))
+              }
+            } catch (flagErr) {
+              console.warn('[BPMN-3] flag persist non-blocking error:', flagErr instanceof Error ? flagErr.message : flagErr)
             }
+
+            // Nota: NÃO inserimos mais marker SISTEMA de auto-pausa ao detectar handoff por padrão de texto.
+            // BPMN-3 mantém a IA disponível em MODO PÓS-HANDOFF (KB + sufixo de aguardar).
+            // A pausa real continua acionada quando um humano responde via UI (origem='SISTEMA').
           } catch (sendErr) {
             console.error('Failed to send AI response via Twilio:', sendErr instanceof Error ? sendErr.message : sendErr)
           }

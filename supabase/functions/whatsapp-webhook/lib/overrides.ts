@@ -516,6 +516,8 @@ export function forceCorrectBlockForLocation(
     empadronadoConfirmed: boolean | null | undefined
     empadronadoCity: string | null | undefined
     assistantTranscript: string
+    preHandoffSent?: boolean
+    handoffSent?: boolean
   },
 ): string {
   if (!aiResponse) return aiResponse
@@ -550,10 +552,8 @@ export function forceCorrectBlockForLocation(
 
   if (flags.locationKnown === 'spain' && isSpainOnlyQuestion) {
     console.log('[BLOCK_LOCK] cliente na Espanha, IA fez pergunta de bloco-fora:', q.slice(0, 80))
-    // Próxima pergunta correta do bloco B
     let next: string
     if (!flags.entryDateConfirmed) {
-      // D2 Bizagi: B1 (confirmar situação) e B2 (data) entregues como blocos visuais separados.
       if (language === 'es') next = 'Perfecto. Ahora necesito entender tu situación aquí.\n\n¿Cuál fue la fecha exacta de tu entrada en España?'
       else if (language === 'en') next = 'Got it. Now I need to understand your situation here.\n\nWhat was the exact date you entered Spain?'
       else if (language === 'fr') next = 'D’accord. Maintenant j’ai besoin de comprendre votre situation ici.\n\nQuelle est la date exacte de votre entrée en Espagne ?'
@@ -563,10 +563,14 @@ export function forceCorrectBlockForLocation(
     } else if (flags.empadronadoConfirmed && !flags.empadronadoCity) {
       next = getEmpadronamientoCityQuestion(language)
     } else {
-      // D3 Bizagi: bloco completo → Pré-Handoff em 2 mensagens (summary ||| transfer).
-      const payload = buildPreHandoffPayload(language, flags.assistantTranscript || '')
+      // BPMN-3: bloco B completo → H1|||H2|||H3|||H4 na mesma rodada (flags persistidas evitam reenvio)
+      const payload = buildPreHandoffPayload(language, {
+        preHandoffSent: flags.preHandoffSent,
+        handoffSent: flags.handoffSent,
+        transcript: flags.assistantTranscript || '',
+      })
       next = payload || ''
-      if (!next) return aiResponse // ambos já enviados → não sobrescreve
+      if (!next) return aiResponse
     }
     return lock(wrap(next))
   }

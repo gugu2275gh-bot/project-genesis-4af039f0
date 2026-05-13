@@ -293,24 +293,48 @@ export function isServicesOfferedMessage(text: string): boolean {
     && /(homologa|homologation)/.test(n)
 }
 
-// D3 Bizagi: pré-handoff em 2 mensagens distintas
-// (H1-H2 = visão inicial + filosofia CB; H3-H4 = encaminhamento ao especialista).
+// BPMN-3 (CB_pre-handoff-3.bpm): pré-handoff + handoff são 4 mensagens distintas (H1, H2, H3, H4),
+// enviadas na MESMA rodada após A/B-completos. Cada função retorna duas bolhas separadas
+// pelo delimitador "|||" (o caller faz split e envia mensagens individuais).
+
+// H1 ||| H2  — texto literal do diagrama
 export function getPreHandoffSummaryMessage(language: ChatLanguage): string {
-  if (language === 'es') return 'Perfecto. Ya puedo tener una visión inicial de tu caso.\nEn CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
-  if (language === 'en') return 'Perfect. I can already get an initial view of your case.\nAt CB, we analyze each case individually, always looking for the safest path within the law.'
-  if (language === 'fr') return 'Parfait. Je peux déjà avoir une première vision de votre cas.\nChez CB, nous analysons chaque cas individuellement, en cherchant toujours la voie la plus sûre et conforme à la loi.'
-  return 'Perfeito. Já consigo ter uma visão inicial do seu caso.\nNa CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
+  if (language === 'es') {
+    return 'Perfecto. Ya puedo tener una visión inicial de tu caso.|||En CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
+  }
+  if (language === 'en') {
+    return 'Perfect. I can already get an initial view of your case.|||At CB we analyze each case individually, always looking for the safest path within the law.'
+  }
+  if (language === 'fr') {
+    return 'Parfait. Je peux déjà avoir une première vision de votre cas.|||Chez CB, nous analysons chaque cas individuellement, en cherchant toujours la voie la plus sûre et conforme à la loi.'
+  }
+  return 'Perfeito. Já consigo ter uma visão inicial do seu caso.|||Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
 }
 
+// H3 ||| H4 — texto literal do diagrama
 export function getHandoffTransferMessage(language: ChatLanguage): string {
-  if (language === 'es') return 'Voy a transferirte ahora a un especialista de CB. En breve un miembro de nuestro equipo asumirá esta conversación para orientarte con los detalles de tu caso.'
-  if (language === 'en') return 'I’ll now transfer you to a CB specialist. Shortly, a member of our team will take over this conversation to guide you through the details of your case.'
-  if (language === 'fr') return 'Je vais maintenant vous transférer à un spécialiste CB. Très bientôt, un membre de notre équipe reprendra cette conversation pour vous orienter en détail.'
-  return 'Vou te encaminhar agora para um especialista da CB. Em breve uma pessoa do nosso time vai assumir essa conversa para te orientar com detalhes do seu caso.'
+  if (language === 'es') {
+    return 'Voy a remitir tu información a un especialista para que la analice con más profundidad.|||¡Estoy a tu disposición para ayudarte! Te voy a derivar a un agente.'
+  }
+  if (language === 'en') {
+    return 'I will forward your information to a specialist to analyze it in more depth.|||I am here to help if you need! I will forward you to an agent.'
+  }
+  if (language === 'fr') {
+    return 'Je vais transmettre vos informations à un spécialiste pour qu’il les analyse plus en profondeur.|||Je suis à votre disposition pour vous aider ! Je vais vous transférer à un agent.'
+  }
+  return 'Vou encaminhar suas informações para um especialista analisar com mais profundidade.|||Estou à disposição para ajudar se precisa! Vou te encaminhar para um atendente.'
+}
+
+// Sufixo localizado anexado a cada resposta de KB no MODO PÓS-HANDOFF (após H3+H4).
+export function getPostHandoffWaitSuffix(language: ChatLanguage): string {
+  if (language === 'es') return 'En breve uno de nuestros especialistas podrá ayudarte con eso. Por favor, aguarda.'
+  if (language === 'en') return 'One of our specialists will be able to help you with this shortly. Please wait.'
+  if (language === 'fr') return 'Un de nos spécialistes pourra vous aider avec cela très bientôt. Merci de patienter.'
+  return 'Em breve um de nossos especialistas poderá lhe ajudar com isso. Por favor aguarde.'
 }
 
 const PRE_HANDOFF_SUMMARY_RE = /(vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case|premi[èe]re vision de votre cas)/i
-const HANDOFF_TRANSFER_RE = /(vou te encaminhar agora|voy a transferirte ahora|i.?ll now transfer you|je vais maintenant vous transf[ée]rer)/i
+const HANDOFF_TRANSFER_RE = /(encaminhar suas informa[çc][õo]es|remitir tu informaci[óo]n|forward your information|transmettre vos informations|vou te encaminhar para um atendente|te voy a derivar a un agente|forward you to an agent|vous transf[ée]rer [àa] un agent)/i
 export function preHandoffSummarySent(transcript: string): boolean {
   return PRE_HANDOFF_SUMMARY_RE.test(transcript || '')
 }
@@ -319,16 +343,27 @@ export function handoffTransferSent(transcript: string): boolean {
 }
 
 /**
- * Monta o pré-handoff completo respeitando idempotência via transcript.
- * - Nada enviado ainda → "summary ||| transfer" (2 mensagens via split do index.ts).
- * - Só summary enviado → apenas transfer.
- * - Ambos enviados → string vazia (caller decide o que fazer).
+ * Monta o payload BPMN-3: H1|||H2|||H3|||H4 numa única rodada.
+ * Aceita um transcript (legado, fallback por regex) OU flags persistidas (preferido).
+ * Retorna string vazia quando ambos já foram enviados.
  */
-export function buildPreHandoffPayload(language: ChatLanguage, transcript: string): string {
-  const summarySent = preHandoffSummarySent(transcript)
-  const transferSent = handoffTransferSent(transcript)
+export function buildPreHandoffPayload(
+  language: ChatLanguage,
+  source: string | { preHandoffSent?: boolean; handoffSent?: boolean; transcript?: string },
+): string {
+  let summarySent = false
+  let transferSent = false
+  if (typeof source === 'string') {
+    summarySent = preHandoffSummarySent(source)
+    transferSent = handoffTransferSent(source)
+  } else {
+    summarySent = !!source.preHandoffSent || (!!source.transcript && preHandoffSummarySent(source.transcript))
+    transferSent = !!source.handoffSent || (!!source.transcript && handoffTransferSent(source.transcript))
+  }
   if (summarySent && transferSent) return ''
   if (summarySent && !transferSent) return getHandoffTransferMessage(language)
+  if (!summarySent && transferSent) return getPreHandoffSummaryMessage(language)
+  // Nada enviado → BPMN-3 manda H1-H4 na mesma rodada
   return `${getPreHandoffSummaryMessage(language)}|||${getHandoffTransferMessage(language)}`
 }
 
