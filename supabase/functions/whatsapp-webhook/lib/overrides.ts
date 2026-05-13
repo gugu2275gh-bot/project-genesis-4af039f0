@@ -419,6 +419,7 @@ export function sanitizeLocationQuestion(
   language: ChatLanguage,
 ): string {
   if (!aiResponse) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
   let out = aiResponse
   // Substitui a forma disjuntiva pela yes/no
   const disjunctivePatterns: Array<[RegExp, string]> = [
