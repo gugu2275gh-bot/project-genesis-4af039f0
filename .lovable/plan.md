@@ -1,65 +1,82 @@
-**O que aconteceu**
 
-Do I know what the issue is? **Sim.** O problema não é só a validação de cidade: o funil ainda está deixando o LLM decidir avanços críticos com base em perguntas “já feitas”, não em respostas válidas registradas.
+# Plano: alinhar pré-handoff ao diagrama Bizagi (4 divergências)
 
-Pelo histórico real do lead `Fred William`, aconteceu isto:
+Aplicar correções determinísticas em `supabase/functions/whatsapp-webhook/lib/` preservando:
+- Validação de cidade espanhola (B5)
+- Lock de blocos (`forceCorrectBlockForLocation`)
+- Multi-idioma PT/ES/EN/FR
+- Lock de campos confirmados (`lockConfirmedFieldsInResponse`)
+- Detecção de data futura, reprompts existentes
 
-1. O cliente respondeu `Não` para “Você está na Espanha?” e o estado foi salvo corretamente como `location_known = outside`.
-2. Depois, no bloco “fora da Espanha”, o sistema considerou etapas como concluídas apenas porque a pergunta apareceu no histórico (`sentAny(...)`), mesmo quando a resposta foi pergunta fora do roteiro ou incompleta.
-3. Quando o cliente perguntou `O que é isto?` sobre “trabalha remoto”, o gate mandou o LLM seguir para a próxima etapa em vez de explicar e repetir a pergunta atual. Isso pulou a resposta de trabalho remoto.
-4. Após `Tenho`, o LLM ignorou o gate e voltou para o bloco “já na Espanha”, perguntando data de entrada — mesmo com `location_known = outside`.
-5. Como não existe uma trava determinística final para o bloco correto, ele depois voltou a perguntar “familiar europeu...” de novo.
+## D1 — Inserir "Msg 6: serviços atendidos" entre interesse e localização
 
-**Causa técnica principal**
+**Arquivo:** `lib/overrides.ts` + `lib/questions.ts`
 
-- `index.ts` calcula o progresso do aprofundamento por **pergunta enviada** (`askedIdade`, `askedEuropa`, `askedFamiliar`, etc.), não por **resposta validada**.
-- `isStructuredQuestionAnswer` é permissivo demais para texto curto e pode tratar coisa fora de contexto como resposta.
-- O prompt/gate dá instruções, mas a resposta final ainda depende do LLM; não há um “roteador determinístico” que substitua a saída errada por exatamente a próxima pergunta válida.
-- `buildStateDirective` usa o estado antigo (`funnelState`) em vez do estado atualizado no turno (`funnelStateLive`) na hora de montar a instrução final.
+- Nova função em `questions.ts`: `getServicesOfferedMessage(language)` retornando texto multi-idioma curto listando categorias (residência/NIE/TIE, nacionalidade, arraigo, reagrupamento familiar, homologação, autorização de regresso) e perguntando "faz sentido para o seu caso?".
+- Novo flag de estado: `services_acknowledged` (boolean) salvo em funnel-state junto com `interest_confirmed`.
+- Novo override em `overrides.ts`: `forceServicesMessageAfterInterest`
+  - Dispara quando `interest_confirmed = true` E `services_acknowledged != true` E última msg do bot não foi a de serviços.
+  - Substitui a resposta do LLM por `getServicesOfferedMessage`.
+- Ajustar `forceAdvanceFromInterestQuestion`: só avança para `getLocationQuestion` quando `services_acknowledged = true` (qualquer resposta curta afirmativa OU qualquer mensagem do cliente após Msg 6 marca como acknowledged — não bloqueia o fluxo).
+- Detector `isQuestionAboutServicesOffered(question)` para reconhecer a Msg 6 no transcript (evita repetir).
 
-**Plano de correção**
+## D2 — Separar A1/B1 ("confirmar cenário/situação") de A2/B2
 
-1. **Criar validação determinística por pergunta atual**
-   - Identificar a última pergunta real do bot.
-   - Validar se a mensagem do cliente responde aquela pergunta específica.
-   - Se não responder, não avançar.
-   - Para perguntas factuais como “O que é isto?”, responder curto e repetir a pergunta pendente.
+**Arquivo:** `lib/questions.ts` + `lib/overrides.ts`
 
-2. **Registrar progresso por resposta, não por pergunta enviada**
-   - Usar o campo existente `outside_spain_progress` para marcar respostas válidas:
-     - `age_answered`
-     - `europe_recent_answered`
-     - `family_answered`
-     - `remote_answered`
-     - `education_answered`
-   - Não precisa criar tabela nem coluna nova.
+- Quebrar mensagens fundidas em duas frases entregues no mesmo turno separadas por `\n\n` (mantém 1 turno só, mas visualmente são 2 blocos — preserva UX e evita +1 round-trip):
+  - A1+A2: "Entendido. Então seguimos pelo seu cenário fora da Espanha.\n\nQual sua idade?"
+  - B1+B2: "Perfeito. Agora preciso entender melhor sua situação aqui na Espanha.\n\nQual foi a data exata da sua entrada?"
+- Aplicar em todos os 4 idiomas em `getOutsideSpainAgeQuestion` e na string usada por `forceAdvanceFromLocationQuestion` (bloco B).
 
-3. **Corrigir respostas ambíguas**
-   - Ex.: para “Possui familiar europeu ou residente legal na Espanha?”, `Minhas irmã` não confirma se é europeia/residente legal.
-   - O bot deve pedir clarificação: “Sua irmã é europeia ou residente legal na Espanha?” em vez de avançar.
+## D3 — Pré-handoff em 2 mensagens (H1-H2 + H3-H4)
 
-4. **Adicionar trava final de bloco**
-   - Se `location_known = outside`, bloquear qualquer resposta que pergunte data de entrada, empadronamento ou cidade.
-   - Se o LLM gerar uma pergunta do bloco errado, substituir deterministicamente pela próxima pergunta correta do bloco “fora da Espanha”.
-   - Se todas as respostas válidas do bloco fora da Espanha estiverem registradas, enviar Pré-Handoff, não voltar para perguntas anteriores.
+**Arquivo:** `lib/questions.ts` + `lib/overrides.ts` (ou `index.ts` no ponto de envio)
 
-5. **Usar o estado atualizado no prompt**
-   - Trocar `buildStateDirective(funnelState, ...)` para `buildStateDirective(funnelStateLive, ...)` para evitar instruções stale dentro do mesmo turno.
+- Renomear/dividir o texto atual de pré-handoff em duas funções multi-idioma:
+  - `getPreHandoffSummaryMessage(language)` — H1-H2 atual ("Perfeito. Já consigo ter uma visão inicial... Na CB analisamos cada caso de forma individual...").
+  - `getHandoffTransferMessage(language)` — H3-H4 nova ("Vou te encaminhar agora para um especialista da CB. Em breve uma pessoa do nosso time vai assumir essa conversa para te orientar com detalhes do seu caso.").
+- No ponto onde o pré-handoff é disparado (override de fechamento do funil):
+  - Enviar H1-H2 e em seguida H3-H4 como **duas mensagens WhatsApp separadas** (dois `sendWhatsAppMessage` consecutivos com pequeno delay opcional via `await`), antes de acionar a auto-pausa do AI.
+- Garantir idempotência: flags `pre_handoff_summary_sent` e `pre_handoff_transfer_sent` em funnel-state para não reenviar se o webhook reentrar.
 
-6. **Adicionar testes de regressão com o caso do print**
-   - `Não estou na Espanha` nunca deve levar a “qual data de entrada na Espanha?”.
-   - `O que é isto?` em “trabalha remoto?” deve explicar e repetir “Você trabalha remoto?”, não avançar.
-   - `Minhas irmã` deve pedir clarificação, não aceitar como resposta completa.
-   - Pergunta “familiar europeu...” não deve repetir depois de resposta validada.
+## D4 — Mensagem determinística de "encaminhar para especialista"
 
-7. **Validar com testes da Edge Function**
-   - Rodar os testes existentes do `whatsapp-webhook` e os novos cenários antes de concluir.
+Coberto pelo `getHandoffTransferMessage` de D3. Adicional:
+- Logar no histórico de interações `origem: SISTEMA` com tipo `HANDOFF_HUMANO` (mantém padrão de SLA Integration).
+- A auto-pausa do AI (já existente — memory: AI Resilience) só é acionada **após** confirmação de envio das duas mensagens.
 
-**Resultado esperado**
+## Preservação de regras existentes (não tocar)
 
-O fluxo passa a funcionar como formulário conversacional com estado rígido: só avança quando a resposta é válida para a pergunta atual, não mistura blocos Espanha/fora da Espanha e não repete pergunta já respondida.
+- `validateSpanishCity` + reprompt de B5 — mantido.
+- `forceCorrectBlockForLocation` — continua bloqueando mistura A/B; novos overrides D1/D3 rodam DEPOIS dessa trava.
+- `lockConfirmedFieldsInResponse` — aplicado também sobre os textos novos (D1/D3 não contêm campos do cliente, então é no-op seguro).
+- Detecção de data futura em B2 — intacta.
+- Multi-idioma PT/ES/EN/FR — todas as novas strings cobrem os 4 idiomas seguindo o padrão de `getOutsideSpainAgeQuestion`.
+- `parseEntryDateFromText`, `looksLikeIncompleteEntryDateWithoutYear`, etc. — intactos.
 
-<presentation-actions>
-  <presentation-open-history>View History</presentation-open-history>
-  <presentation-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</presentation-link>
-</presentation-actions>
+## Testes
+
+Adicionar `wave7_test.ts` em `supabase/functions/whatsapp-webhook/`:
+- D1: após `interest_confirmed`, próxima resposta do bot é Msg 6; após cliente responder qualquer coisa, vem `getLocationQuestion`.
+- D1: Msg 6 não é repetida se já enviada.
+- D2: A2 contém `\n\n` separando confirmação e pergunta de idade (PT/ES/EN/FR).
+- D3: ao fechar funil, são enviadas 2 mensagens (mock conta `sendWhatsAppMessage` chamado 2×).
+- D3: reentrada do webhook não duplica mensagens (flags idempotentes).
+- Regressão: `wave5_test.ts` e `wave6_test.ts` continuam passando.
+
+## Ordem de execução
+
+1. `lib/questions.ts` — adicionar funções novas e quebrar A2/B2 com `\n\n`.
+2. `lib/funnel-state.ts` — adicionar flags `services_acknowledged`, `pre_handoff_summary_sent`, `pre_handoff_transfer_sent`.
+3. `lib/overrides.ts` — `forceServicesMessageAfterInterest` + ajuste em `forceAdvanceFromInterestQuestion`.
+4. `index.ts` — split do envio do pré-handoff em 2 mensagens com guards idempotentes.
+5. `wave7_test.ts` — cobertura.
+6. `supabase--test_edge_functions` em `whatsapp-webhook` para validar tudo verde.
+
+## Detalhes técnicos
+
+- Nenhum schema novo no Postgres — flags ficam dentro do JSON `funnel_state` já persistido.
+- Sem migrations.
+- Sem mudança de prompts do LLM — tudo determinístico via overrides.
+- Sem mudança no contrato do webhook nem nas chamadas Twilio (só +1 chamada extra no momento do handoff).
