@@ -1976,10 +1976,20 @@ Regras:
           }
         }
 
+        const outsideProgressLive = (funnelStateLive.outside_spain_progress || {}) as any
         const outsideSpainNextQuestion = getOutsideSpainNextQuestion(detectedChatLanguage, allAssistant, {
           entryDateConfirmed: funnelStateLive.entry_date_confirmed,
           locationKnown: funnelStateLive.location_known,
+          outsideProgress: outsideProgressLive,
         })
+        const blockFlags = {
+          locationKnown: funnelStateLive.location_known,
+          entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+          empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+          empadronadoCity: funnelStateLive.empadronado_city,
+          assistantTranscript: allAssistant,
+          outsideProgress: outsideProgressLive,
+        }
         aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
         aiResponse = forceReaskFullNameIfSingleWord(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !nameMissing)
         aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
