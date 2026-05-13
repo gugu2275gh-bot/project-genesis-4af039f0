@@ -150,9 +150,16 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 5. Cada resposta deve AVANÇAR a conversa. Nunca volte uma etapa.
 6. Releia as últimas 3 mensagens do histórico antes de escrever. Se sua próxima resposta soa parecida com algo que você já disse, REESCREVA de outro jeito.`
 
-  const effectiveHistory = forcedLanguage === 'pt-BR'
+  const filteredHistory = forcedLanguage === 'pt-BR'
     ? conversationHistory
     : conversationHistory.filter((msg) => msg.role === 'user' || !looksPortuguese(msg.content))
+
+  // Otimização de latência: limita às últimas 24 mensagens (≈12 turnos).
+  // O suficiente para contexto do roteiro sem sobrecarregar o prompt.
+  const HISTORY_LIMIT = 24
+  const effectiveHistory = filteredHistory.length > HISTORY_LIMIT
+    ? filteredHistory.slice(-HISTORY_LIMIT)
+    : filteredHistory
 
   const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = []
 
