@@ -26,6 +26,10 @@ export interface FunnelState {
   updated_at: string
   /** Pergunta factual feita pelo cliente DURANTE o cadastro, a ser respondida assim que o cadastro terminar. */
   pending_question?: string | null
+  /** BPMN-3: H1+H2 já foram enviados (idempotência persistida, não depende de regex). */
+  pre_handoff_sent?: boolean
+  /** BPMN-3: H3+H4 já foram enviados (entra em modo pós-handoff/KB com sufixo de aguardar). */
+  handoff_sent?: boolean
 }
 
 export type NameSource = 'AUTO' | 'USER_CONFIRMED' | 'STAFF_EDITED'
