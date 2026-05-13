@@ -164,6 +164,28 @@ export function extractOutsideProgressPatch(
   return out as any
 }
 
+/**
+ * Extrai a resposta de B4 ("desde quando empadronado") quando a previousQuestion
+ * foi a pergunta de "desde quando". Retorna ISO YYYY-MM-DD se parseável,
+ * caso contrário retorna o texto cru (limitado) para preservar o dado.
+ * Persistido em outside_spain_progress.b4_empadronado_since.
+ */
+export function extractEmpadronadoSincePatch(
+  previousAssistantMessage: string,
+  currentMessage: string,
+): { b4_empadronado_since?: string } {
+  const prevQ = extractLastQuestion(previousAssistantMessage || '')
+  const msg = String(currentMessage || '').trim()
+  if (!prevQ || !msg) return {}
+  const isSince = /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i.test(prevQ)
+  if (!isSince) return {}
+  const parsed = parseEntryDateFromText(msg)
+  if (parsed && !parsed.isFuture) return { b4_empadronado_since: parsed.iso }
+  // fallback: salva o texto cru limitado a 60 chars (ex.: "fevereiro de 2024")
+  if (msg.length <= 60) return { b4_empadronado_since: msg }
+  return {}
+}
+
 
 /**
  * Wave 6: Trava determinística pós-IA.
@@ -611,18 +633,28 @@ export function forceCorrectBlockForLocation(
     const next = getOutsideSpainNextQuestion(language, flags.assistantTranscript || '', {
       entryDateConfirmed: flags.entryDateConfirmed || null,
       locationKnown: flags.locationKnown,
+      outsideProgress: (flags as any).outsideProgress || null,
     })
     return lock(wrap(next))
   }
 
   if (flags.locationKnown === 'spain' && isSpainOnlyQuestion) {
     console.log('[BLOCK_LOCK] cliente na Espanha, IA fez pergunta de bloco-fora:', q.slice(0, 80))
+    const op = ((flags as any).outsideProgress || {}) as any
+    const b1Sent = !!op.b1_situation_sent
     let next: string
     if (!flags.entryDateConfirmed) {
-      if (language === 'es') next = 'Perfecto. Ahora necesito entender tu situación aquí.\n\n¿Cuál fue la fecha exacta de tu entrada en España?'
-      else if (language === 'en') next = 'Got it. Now I need to understand your situation here.\n\nWhat was the exact date you entered Spain?'
-      else if (language === 'fr') next = 'D’accord. Maintenant j’ai besoin de comprendre votre situation ici.\n\nQuelle est la date exacte de votre entrée en Espagne ?'
-      else next = 'Perfeito. Agora preciso entender sua situação aqui.\n\nQual foi a data exata da sua entrada na Espanha?'
+      if (b1Sent) {
+        if (language === 'es') next = '¿Cuál fue la fecha exacta de tu entrada en España?'
+        else if (language === 'en') next = 'What was the exact date you entered Spain?'
+        else if (language === 'fr') next = 'Quelle est la date exacte de votre entrée en Espagne ?'
+        else next = 'Qual foi a data exata da sua entrada na Espanha?'
+      } else {
+        if (language === 'es') next = 'Perfecto. Ahora necesito entender tu situación aquí.\n\n¿Cuál fue la fecha exacta de tu entrada en España?'
+        else if (language === 'en') next = 'Got it. Now I need to understand your situation here.\n\nWhat was the exact date you entered Spain?'
+        else if (language === 'fr') next = 'D’accord. Maintenant j’ai besoin de comprendre votre situation ici.\n\nQuelle est la date exacte de votre entrée en Espagne ?'
+        else next = 'Perfeito. Agora preciso entender sua situação aqui.\n\nQual foi a data exata da sua entrada na Espanha?'
+      }
     } else if (flags.empadronadoConfirmed === null || flags.empadronadoConfirmed === undefined) {
       next = getEmpadronadoQuestion(language)
     } else if (flags.empadronadoConfirmed && !flags.empadronadoCity) {
@@ -681,11 +713,14 @@ export function enforceBlockCompletion(
     empadronadoCity: string | null | undefined
     assistantTranscript: string
     outsideProgress?: {
+      a1_scenario_sent?: boolean
       a2_age?: string
       a3_europe_6m?: 'yes' | 'no'
       a4_eu_family?: 'yes' | 'no'
       a5_remote?: 'yes' | 'no'
       a6_higher_ed?: 'yes' | 'no'
+      b1_situation_sent?: boolean
+      b4_empadronado_since?: string
     } | null
   },
 ): string {
@@ -710,8 +745,10 @@ export function enforceBlockCompletion(
       return lock(getEmpadronadoQuestion(language))
     }
     if (flags.empadronadoConfirmed === true) {
-      const askedSince = /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i.test(transcript)
-      if (!askedSince) {
+      const op = (flags.outsideProgress || {}) as any
+      const sinceAnswered = !!op.b4_empadronado_since
+        || /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i.test(transcript)
+      if (!sinceAnswered) {
         console.warn('[BLOCK_GATE] H1 prematuro — falta "desde quando". Forçando B3.')
         return lock(getEmpadronamientoSinceQuestion(language))
       }
@@ -772,12 +809,18 @@ export function preventRepeatedCanonicalQuestion(
     empadronadoCity: string | null | undefined
     assistantTranscript: string
     outsideProgress?: {
+      a1_scenario_sent?: boolean
       a2_age?: string
       a3_europe_6m?: 'yes' | 'no'
       a4_eu_family?: 'yes' | 'no'
       a5_remote?: 'yes' | 'no'
       a6_higher_ed?: 'yes' | 'no'
+      b1_situation_sent?: boolean
+      b4_empadronado_since?: string
     } | null
+    /** Msg3 nome / Msg4 email já confirmados — evita repergunta canônica. */
+    nameKnown?: boolean
+    emailKnown?: boolean
   },
 ): string {
   if (!aiResponse) return aiResponse
@@ -788,7 +831,10 @@ export function preventRepeatedCanonicalQuestion(
 
   // Cada anchor: (regex pergunta, regex transcript "já feita").
   // Se a pergunta atual bate E já há eco no transcript → repete.
-  const anchors: Array<{ name: string; q: RegExp; t: RegExp }> = [
+  // Msg3/Msg4 são guardados por flags (nameKnown/emailKnown) para evitar repergunta.
+  const anchors: Array<{ name: string; q: RegExp; t: RegExp; guard?: () => boolean }> = [
+    { name: 'Msg3_nome', q: /\b(nome completo|nombre completo|full name|nom complet)\b/i, t: /.^/, guard: () => !!flags.nameKnown },
+    { name: 'Msg4_email', q: /\b(e ?mail|correo|email)\b.{0,40}\b(qual|cual|cu[áa]l|melhor|mejor|best|what|which)\b|\b(qual|cual|cu[áa]l|melhor|mejor|best|what|which)\b.{0,40}\b(e ?mail|correo|email)\b/i, t: /.^/, guard: () => !!flags.emailKnown },
     { name: 'A2_idade', q: A2_AGE_RE, t: A2_AGE_RE },
     { name: 'A3_europa', q: A3_EUROPA_RE, t: A3_EUROPA_RE },
     { name: 'A4_familiar', q: A4_FAMILIAR_RE, t: A4_FAMILIAR_RE },
@@ -798,11 +844,15 @@ export function preventRepeatedCanonicalQuestion(
     { name: 'B3_empadronado', q: /\bestá empadron|estás empadron|are you (registered|empadron)|êtes-vous empadron/i, t: /\bestá empadron|estás empadron|are you (registered|empadron)|êtes-vous empadron/i },
     { name: 'B4_desde_quando', q: /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i, t: /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i },
     { name: 'B5_cidade', q: /(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)/i, t: /(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)/i },
-    { name: 'Msg7_local', q: /(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|d[ée]j[àa] en espagne)/i, t: /(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|d[ée]j[àa] en espagne)/i },
+    // Msg7: padrão original + paráfrases ("ainda no/em outro país", "currently/where are you")
+    { name: 'Msg7_local', q: /(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|d[ée]j[àa] en espagne|ainda (est[áa]|mora|vive) (em outro|no) pa[íi]s|todav[ií]a (est[áa]s|vives) en otro pa[íi]s|where are you (currently|now)|currently in spain)/i, t: /(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|d[ée]j[àa] en espagne|j[áa] est[áa] aqui na espanha|ya vives en espa[ñn]a)/i, guard: () => !!flags.locationKnown },
   ]
 
   for (const a of anchors) {
-    if (a.q.test(q) && a.t.test(transcript)) {
+    const guardForce = a.guard ? a.guard() : false
+    // Para anchors com guard ativo (ex.: nameKnown/emailKnown/locationKnown),
+    // basta que a IA tenha emitido a pergunta — independente do transcript.
+    if (a.q.test(q) && (guardForce || a.t.test(transcript))) {
       // Pergunta já foi feita. Pega próxima canônica.
       console.warn(`[ANTI_REPEAT] pergunta canônica ${a.name} já feita — substituindo por próxima pendente`)
       // Reusa enforceBlockCompletion injetando "fake H1" para forçar próxima pergunta.

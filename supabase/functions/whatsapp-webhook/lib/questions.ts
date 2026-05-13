@@ -260,9 +260,16 @@ export function getInvalidSpanishCityReprompt(language: ChatLanguage): string {
   return 'Não reconheci essa cidade como um município espanhol. Pode confirmar o nome da cidade na Espanha onde você está empadronado?'
 }
 
-export function getOutsideSpainAgeQuestion(language: ChatLanguage): string {
+export function getOutsideSpainAgeQuestion(language: ChatLanguage, includePreamble: boolean = true): string {
   // D2 Bizagi: A1 (confirmar cenário) e A2 (idade) entregues como blocos visuais
-  // separados (mesma mensagem, separados por linha em branco) — sem +1 round-trip.
+  // separados (mesma mensagem, separados por linha em branco). Quando A1 já foi
+  // enviado anteriormente (a1_scenario_sent), omitimos o preâmbulo para não repetir.
+  if (!includePreamble) {
+    if (language === 'es') return '¿Cuál es tu edad?'
+    if (language === 'en') return 'How old are you?'
+    if (language === 'fr') return 'Quel âge avez-vous ?'
+    return 'Qual sua idade?'
+  }
   if (language === 'es') return 'Entendido. Entonces seguimos por tu escenario fuera de España.\n\n¿Cuál es tu edad?'
   if (language === 'en') return 'Got it. Then we’ll continue with your situation outside Spain.\n\nHow old are you?'
   if (language === 'fr') return 'D’accord. Nous continuons donc avec votre situation hors d’Espagne.\n\nQuel âge avez-vous ?'
@@ -403,7 +410,7 @@ export function getOutsideSpainNextQuestion(
   const skipEuropa = options?.locationKnown === 'spain' || entryDateInLast6Months
   const askedEuropaEffective = askedEuropa || skipEuropa
 
-  if (!askedIdade) return getOutsideSpainAgeQuestion(language)
+  if (!askedIdade) return getOutsideSpainAgeQuestion(language, !op.a1_scenario_sent)
   if (!askedEuropaEffective) {
     if (language === 'es') return '¿Estuviste en Europa en los últimos 6 meses?'
     if (language === 'en') return 'Have you been in Europe in the last 6 months?'
