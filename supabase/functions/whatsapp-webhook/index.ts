@@ -352,6 +352,7 @@ import {
   sanitizeLocationQuestion,
   forceCorrectBlockForLocation,
   forceServicesMessageAfterInterest,
+  ensureServicesAttachedToInterest,
   computeDeterministicFunnelPatch,
   stripLockedSentinel,
   isLocked,
