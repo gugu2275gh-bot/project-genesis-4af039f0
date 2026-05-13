@@ -1609,6 +1609,18 @@ Regras:
           console.warn('[DET_PATCH] non-blocking error:', detErr instanceof Error ? detErr.message : detErr)
         }
 
+        // Persistência incremental do ramo A (idade, Europa 6m, familiar, remoto, formação).
+        try {
+          if (funnelStateLive.location_known === 'outside') {
+            const opPatch = extractOutsideProgressPatch(lastAssistantMessage, rawCustomerMessage)
+            if (Object.keys(opPatch).length > 0) {
+              funnelStateLive = await mergeOutsideProgress(supabase, funnelStateLive, opPatch as any)
+            }
+          }
+        } catch (opErr) {
+          console.warn('[OUTSIDE_PROGRESS] non-blocking error:', opErr instanceof Error ? opErr.message : opErr)
+        }
+
 
         // Detecção de localização: buscar a RESPOSTA imediatamente após a pergunta de localização.
         // Suporta a nova pergunta yes/no ("já está na Espanha?") e a antiga disjuntiva (compatibilidade).
