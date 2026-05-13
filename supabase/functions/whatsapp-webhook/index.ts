@@ -1882,7 +1882,7 @@ Regras:
         let aiResponse = ''
         let resolvedSystemPrompt = systemPrompt.replace('{nome}', promptContactName || '')
         // Wave 4: diretiva de estado do funil (anti F1/F4)
-        resolvedSystemPrompt += buildStateDirective(funnelState, detectedChatLanguage)
+        resolvedSystemPrompt += buildStateDirective(funnelStateLive, detectedChatLanguage)
 
         if (kbStrictMode) {
           if (!knowledgeContext) {
