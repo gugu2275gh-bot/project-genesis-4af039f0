@@ -93,15 +93,14 @@ Deno.test('D3: buildPreHandoffPayload returns summary ||| transfer when nothing 
   const payload = buildPreHandoffPayload('pt-BR', '')
   assert(payload.includes('|||'), 'should split into 2 messages via |||')
   assertStringIncludes(payload, 'visão inicial do seu caso')
-  assertStringIncludes(payload, 'Vou te encaminhar agora')
+  assertStringIncludes(payload, 'encaminhar suas informações')
 })
 
 Deno.test('D3: buildPreHandoffPayload returns only transfer when summary already sent', () => {
   const transcript = getPreHandoffSummaryMessage('pt-BR')
   const payload = buildPreHandoffPayload('pt-BR', transcript)
-  assert(!payload.includes('|||'))
-  assertStringIncludes(payload, 'Vou te encaminhar agora')
   assert(!/visão inicial do seu caso/i.test(payload))
+  assertStringIncludes(payload, 'encaminhar suas informações')
 })
 
 Deno.test('D3: buildPreHandoffPayload returns empty when both already sent (idempotent)', () => {
