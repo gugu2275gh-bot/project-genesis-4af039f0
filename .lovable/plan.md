@@ -1,25 +1,34 @@
 ## Problema
 
-Cliente respondeu `01/01/2026` (data válida — hoje é 13/05/2026). O bot achou impossível e pediu confirmação sugerindo `01/01/2023`. Causa: o LLM (Gemini) não recebe a data atual no prompt da etapa conversacional, então usa o conhecimento do seu treinamento e trata 2026 como futuro.
+Mesmo com a data de hoje injetada no prompt, o Gemini ainda respondeu "Essa data parece no futuro, você pode confirmar?" para `01/01/2026` (que é passado em relação a 13/05/2026). Instruções em prosa não são confiáveis — o modelo continua aplicando o viés do seu cutoff de treinamento.
+
+## Solução: validação determinística no código (não confiar no LLM)
+
+Fazer a comparação passado/futuro em código TypeScript antes de chamar o Gemini. Quando estivermos no passo "data de entrada na Espanha" (Bloco B2) e a última mensagem do cliente for uma data válida, decidir no servidor:
+
+- **Data válida no passado (≤ hoje):** persistir em `entry_date_confirmed`, marcar B2 como concluído e injetar instrução forçada: "DATA JÁ CONFIRMADA pelo sistema (`YYYY-MM-DD`). NÃO peça confirmação. NÃO mencione 'futuro'. Apenas dê uma confirmação curta natural ('Anotado.') e siga IMEDIATAMENTE para a próxima pergunta do bloco (B3 empadronamento)."
+- **Data no futuro:** instrução forçada: "A data informada (`YYYY-MM-DD`) é POSTERIOR a hoje (`YYYY-MM-DD`). Peça confirmação neutra, sem sugerir ano alternativo."
+- **Data sem ano ou ambígua:** instrução forçada: "Falta o ano. Peça a data completa com dia, mês e ano."
+
+Assim, mesmo se o Gemini "achar" que 2026 é futuro, ele recebe um fato determinístico que sobrepõe seu palpite.
 
 ## Mudanças
 
-### 1. `supabase/functions/whatsapp-webhook/index.ts`
-- No início do system prompt do agente conversacional (perto da linha 1240, antes do bloco `## OBJETIVOS`), injetar dinamicamente:
-  ```
-  Hoje é ${new Date().toISOString().slice(0,10)} (use SEMPRE essa referência ao avaliar datas; NUNCA assuma que um ano é "futuro" só com base no seu conhecimento de treinamento).
-  ```
-- Na instrução do passo "data exata da entrada na Espanha" (linha 1273-1274), adicionar regra explícita:
-  - A data informada deve ser **anterior ou igual a hoje**. Se for futura em relação a hoje, peça confirmação. Se for passada (mesmo que recente, como há poucos meses), **aceite sem questionar** o ano.
-  - Não sugira anos alternativos baseados em suposição própria.
+### `supabase/functions/whatsapp-webhook/index.ts`
+- Adicionar helper `parseUserDate(text)` que tenta extrair uma data em formatos comuns (`DD/MM/YYYY`, `DD-MM-YYYY`, `YYYY-MM-DD`, `D de mês de YYYY` em pt/es/en) e retorna `{ iso, hasYear }` ou `null`.
+- Antes do bloco do passo `aprofundamento` (linha ~1694), quando `userInSpain && !askedEmpadronado && askedEntryDate` (ou seja, acabamos de fazer B2 e a última msg do cliente deve ser a data) **OU** quando `userInSpain && !funnelStateLive.entry_date_confirmed`, processar a última mensagem do usuário:
+  - Se `parseUserDate` retornar data com ano e ela for ≤ hoje → fazer `update` em `whatsapp_funnel_state.entry_date_confirmed` e construir instrução "data já validada, apenas siga para empadronamento (B3)".
+  - Se for > hoje → instrução "peça confirmação neutra".
+  - Se sem ano → instrução "peça data completa".
+- Substituir `aprofundamentoInstruction` quando essa validação determinística disparar, para que ela tenha prioridade sobre a instrução genérica.
 
-### 2. `supabase/functions/whatsapp-webhook/lib/extract.ts`
-- Reforçar (a referência `today` já existe na linha 137) que para `spain_arrival_date`, datas no passado próximo são válidas e não devem ser reinterpretadas como erro de digitação.
+### Sem mudanças em `extract.ts` ou `questions.ts`
+A regra antiga continua valendo como fallback. A nova lógica é uma camada determinística antes do LLM.
 
-## Resultado
+## Resultado esperado
 
-- `01/01/2026` (passado) → aceito sem perguntar.
-- `01/01/2027` (futuro) → bot pede confirmação de forma neutra (sem sugerir um ano específico inventado).
-- `20/04` sem ano → continua pedindo o ano completo (regra existente preservada).
+- `01/01/2026` (hoje 13/05/2026) → sistema grava data, bot responde algo curto e já pergunta sobre empadronamento. **Nunca mais** menciona "no futuro".
+- `01/01/2027` → bot pede confirmação neutra.
+- `20/04` sem ano → bot pede ano completo.
 
-Sem mudança de UI, sem mudança de schema — apenas prompt do edge function `whatsapp-webhook`.
+Sem mudança de UI, sem mudança de schema. Apenas o edge function `whatsapp-webhook`.

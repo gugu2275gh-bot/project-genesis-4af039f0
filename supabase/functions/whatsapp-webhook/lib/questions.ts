@@ -51,6 +51,73 @@ export function isPotentialEntryDateAnswer(text: string): boolean {
   return hasDateRange || hasSingleDate || hasFullMonthNameDate
 }
 
+/**
+ * Tenta extrair uma data completa (com ano) da mensagem do cliente.
+ * Retorna { iso: 'YYYY-MM-DD', isPast: boolean, isFuture: boolean } ou null.
+ * Considera "hoje" como referência (UTC date-only).
+ */
+export function parseEntryDateFromText(text: string, today: Date = new Date()): { iso: string; isPast: boolean; isFuture: boolean } | null {
+  if (!text) return null
+  const raw = text.trim()
+  const normalized = normalizeForLanguageChecks(text)
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+
+  const buildResult = (y: number, m: number, d: number) => {
+    if (!y || !m || !d) return null
+    if (m < 1 || m > 12 || d < 1 || d > 31) return null
+    if (y < 1900 || y > 2100) return null
+    const ts = Date.UTC(y, m - 1, d)
+    if (Number.isNaN(ts)) return null
+    const iso = `${y.toString().padStart(4, '0')}-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`
+    return { iso, isPast: ts <= todayUtc, isFuture: ts > todayUtc }
+  }
+
+  // YYYY-MM-DD or YYYY/MM/DD
+  let m = raw.match(/\b(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})\b/)
+  if (m) return buildResult(+m[1], +m[2], +m[3])
+
+  // DD/MM/YYYY or DD-MM-YYYY (assume DD/MM, not US MM/DD)
+  m = raw.match(/\b(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})\b/)
+  if (m) {
+    let y = +m[3]
+    if (y < 100) y += y < 50 ? 2000 : 1900
+    return buildResult(y, +m[2], +m[1])
+  }
+
+  // "D de mês de YYYY" / "D month YYYY"
+  const months: Record<string, number> = {
+    janeiro: 1, fevereiro: 2, marco: 3, março: 3, abril: 4, maio: 5, junho: 6, julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12,
+    enero: 1, febrero: 2, marzo: 3, mayo: 5, junio: 6, julio: 7, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12,
+    january: 1, february: 2, march: 3, april: 4, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
+    janvier: 1, fevrier: 2, février: 2, mars: 3, avril: 4, mai: 5, juin: 6, juillet: 7, aout: 8, août: 8, septembre: 9, octobre: 10, novembre: 11, decembre: 12, décembre: 12,
+  }
+  const monthRe = Object.keys(months).join('|')
+  const re1 = new RegExp(`\\b(\\d{1,2})\\s*(?:de\\s+|del\\s+|do\\s+)?(${monthRe})\\s*(?:de\\s+|del\\s+|do\\s+)?(\\d{2,4})\\b`, 'i')
+  m = normalized.match(re1)
+  if (m) {
+    let y = +m[3]
+    if (y < 100) y += y < 50 ? 2000 : 1900
+    return buildResult(y, months[m[2].toLowerCase()], +m[1])
+  }
+  // "month D, YYYY"
+  const re2 = new RegExp(`\\b(${monthRe})\\s+(\\d{1,2})(?:st|nd|rd|th)?[,]?\\s+(\\d{2,4})\\b`, 'i')
+  m = normalized.match(re2)
+  if (m) {
+    let y = +m[3]
+    if (y < 100) y += y < 50 ? 2000 : 1900
+    return buildResult(y, months[m[1].toLowerCase()], +m[2])
+  }
+
+  return null
+}
+
+export function getEntryDateFutureConfirmQuestion(language: ChatLanguage, iso: string): string {
+  if (language === 'es') return `La fecha que mencionaste (${iso}) parece estar en el futuro. ¿Puedes confirmarla?`
+  if (language === 'en') return `The date you mentioned (${iso}) appears to be in the future. Can you confirm it?`
+  if (language === 'fr') return `La date que vous avez indiquée (${iso}) semble être dans le futur. Pouvez-vous la confirmer ?`
+  return `A data que você informou (${iso}) parece estar no futuro. Pode confirmar?`
+}
+
 export function looksLikeIncompleteEntryDateWithoutYear(text: string): boolean {
   const normalized = normalizeForLanguageChecks(text)
   if (!normalized || normalized.includes('?')) return false
