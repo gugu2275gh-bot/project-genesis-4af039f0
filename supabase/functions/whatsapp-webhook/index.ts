@@ -1756,6 +1756,26 @@ Regras:
             'Envie o PRÉ-HANDOFF em duas frases curtas, nesta ordem: (1) "Perfeito. Já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." NÃO faça novas perguntas e NÃO envie o Handoff (encaminhar para atendente) agora. Após esta mensagem, a Base de Conhecimento será liberada e você entrará em modo tira-dúvidas usando a KB.',
         })
 
+        // ⚡ Pré-Handoff é o sinal definitivo de "cadastro concluído". Se ele já foi enviado,
+        // marca todas as etapas anteriores como done para liberar a KB imediatamente — mesmo
+        // que algum regex de sub-etapa do APROFUNDAMENTO não tenha batido (ex.: a IA reformulou
+        // a frase). Sem isso, perguntas factuais pós-Pré-Handoff são incorretamente adiadas.
+        if (preHandoffDone) {
+          for (const s of steps) s.done = true
+          // Housekeeping: marca o funil como 'livre' para consistência futura.
+          if (funnelStateLive.step !== 'livre') {
+            try {
+              await supabase
+                .from('lead_funnel_state')
+                .update({ step: 'livre', updated_at: new Date().toISOString() })
+                .eq('lead_id', lead.id)
+              funnelStateLive = { ...funnelStateLive, step: 'livre' }
+            } catch (e) {
+              console.warn('[FUNNEL] livre update failed:', e instanceof Error ? e.message : e)
+            }
+          }
+        }
+
         // Etapa 8 — Handoff (H3 + H4) — opcional, apenas se a equipe for assumir
         const handoffDone = sentAny(/encaminhar suas informa[çc][õo]es|forward your information/i)
           && sentAny(/encaminhar para um atendente|derivar a un agente|forward you to an agent/i)
@@ -1842,8 +1862,9 @@ Regras:
               `2. NÃO envie o Handoff ("Vou encaminhar suas informações..." / "Vou te encaminhar para um atendente") automaticamente. Só envie o Handoff quando o cliente sinalizar que NÃO TEM MAIS DÚVIDAS (ex.: "é só isso", "obrigado", "ok") OU pedir explicitamente para falar com um humano.\n` +
               `3. Se o cliente acabou de receber o Pré-Handoff e ainda não fez perguntas, convide-o gentilmente: "Tem alguma dúvida que eu possa esclarecer agora sobre seu caso?".\n` +
               `4. Se a KB realmente não tiver a informação, diga honestamente que vai confirmar com o especialista — mas NÃO faça o handoff por isso, continue disponível para outras dúvidas.\n` +
+              `5. PROIBIDO usar a frase "assim que terminarmos esse rapidíssimo levantamento" ou variações ("vou te explicar quando terminar o levantamento", etc.). O levantamento JÁ ACABOU. Se o cliente fez uma pergunta factual ("o que é X", "como funciona Y", prazos, valores, requisitos), RESPONDA AGORA com base na KB. Adiar a resposta neste momento é ERRO grave.\n` +
               (pendingQuestionToAnswer
-                ? `5. PRIORIDADE MÁXIMA: o cliente havia feito esta pergunta DURANTE o cadastro e ficou aguardando: "${pendingQuestionToAnswer}". Responda-a AGORA, com base na KB, antes de qualquer outra coisa. Comece com algo como "Como prometi, sobre sua dúvida..." e responda objetivamente.\n`
+                ? `6. PRIORIDADE MÁXIMA: o cliente havia feito esta pergunta DURANTE o cadastro e ficou aguardando: "${pendingQuestionToAnswer}". Responda-a AGORA, com base na KB, antes de qualquer outra coisa. Comece com algo como "Como prometi, sobre sua dúvida..." e responda objetivamente.\n`
                 : '') +
               `[FIM DO MODO TIRA-DÚVIDAS]`
           }
