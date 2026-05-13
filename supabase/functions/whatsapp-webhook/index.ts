@@ -1992,6 +1992,8 @@ Regras:
           empadronadoCity: funnelStateLive.empadronado_city,
           assistantTranscript: allAssistant,
           outsideProgress: outsideProgressLive,
+          nameKnown: !nameMissing,
+          emailKnown: !emailMissing,
         }
         aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
         aiResponse = forceReaskFullNameIfSingleWord(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !nameMissing)
