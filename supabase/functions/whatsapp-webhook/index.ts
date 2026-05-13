@@ -1190,11 +1190,14 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           console.log('Language locked (from contact):', detectedChatLanguage)
         } else {
           // Fallback (contato legado sem preferred_language e não é 1ª msg).
-          detectedChatLanguage = detectChatLanguage(currentCustomerMessage)
+          // Hardening: detectar pela PRIMEIRA mensagem do cliente no histórico,
+          // não pela atual (que pode ser curta tipo "ok" e induzir troca de idioma).
+          const firstUserMsg = (history.find((m: any) => m.role === 'user')?.content || currentCustomerMessage) as string
+          detectedChatLanguage = detectChatLanguage(firstUserMsg)
           const currentLangCode = langCodeMap[detectedChatLanguage]
           await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
           contact.preferred_language = currentLangCode
-          console.log('Language locked (fallback detection):', detectedChatLanguage)
+          console.log('Language locked (fallback detection from first user msg):', detectedChatLanguage)
         }
 
         // Wave 4: carregar estado persistente do funil
