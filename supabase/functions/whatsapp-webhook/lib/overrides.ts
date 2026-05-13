@@ -404,15 +404,11 @@ export function forceAdvanceFromEmpadronadoQuestion(
   const msg = (currentMessage || '').trim()
   if (!msg) return aiResponse
 
-  const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
-  const wrap = (q: string) => (preamble ? `${preamble}\n${q}` : q)
-
   // B5 (cidade) já foi feita → validar se é cidade espanhola.
-  // Se inválida, repergunta E TRAVA a resposta com sentinel para que nada mais sobrescreva.
   if (isEmpadronamientoCityQuestion(previousQuestion)) {
     if (!isValidSpanishCity(msg)) {
       console.log('[CITY_VALIDATION] invalid Spanish city in answer, reprompting:', msg.slice(0, 60))
-      return lock(wrap(getInvalidSpanishCityReprompt(language)))
+      return lock(getInvalidSpanishCityReprompt(language))
     }
     return aiResponse
   }
@@ -420,16 +416,16 @@ export function forceAdvanceFromEmpadronadoQuestion(
   // Caso o previousQuestion já seja a reprompt de cidade inválida → continua validando.
   if (/no reconoc|did not recognize|n[ãa]o reconheci|n ai pas reconnu|reconnu cette ville/i.test(previousQuestion || '')) {
     if (!isValidSpanishCity(msg)) {
-      return lock(wrap(getInvalidSpanishCityReprompt(language)))
+      return lock(getInvalidSpanishCityReprompt(language))
     }
     return aiResponse
   }
 
-  // B4 (desde quando) → próxima é B5 (cidade).
+  // B4 (desde quando) → próxima é B5 (cidade). LOCK puro para impedir vazamento de H1.
   if (isEmpadronamientoSinceQuestion(previousQuestion)) {
     const nextQ = extractLastQuestion(aiResponse)
     if (isEmpadronamientoCityQuestion(nextQ)) return aiResponse
-    return wrap(getEmpadronamientoCityQuestion(language))
+    return lock(getEmpadronamientoCityQuestion(language))
   }
 
   // B3 (yes/no).
@@ -445,14 +441,14 @@ export function forceAdvanceFromEmpadronadoQuestion(
   if (hasDate) {
     const nextQ = extractLastQuestion(aiResponse)
     if (isEmpadronamientoCityQuestion(nextQ)) return aiResponse
-    return wrap(getEmpadronamientoCityQuestion(language))
+    return lock(getEmpadronamientoCityQuestion(language))
   }
 
   // SIM puro (ou texto curto não-negativo) → pergunta B4 (desde quando).
   if (YES_ANSWER_RE.test(msg) || msg.length < 60) {
     const nextQ = extractLastQuestion(aiResponse)
     if (isEmpadronamientoSinceQuestion(nextQ)) return aiResponse
-    return wrap(getEmpadronamientoSinceQuestion(language))
+    return lock(getEmpadronamientoSinceQuestion(language))
   }
 
   return aiResponse
@@ -623,3 +619,70 @@ export function stripPreambleBeforePreHandoff(text: string): string {
   return text.slice(match.index)
 }
 
+/**
+ * Gate determinístico: se o LLM emitiu H1 (pré-handoff) MAS o bloco A/B ainda
+ * não está completo segundo as flags persistidas, descarta o aiResponse e
+ * retorna a próxima pergunta canônica do ramo, com lock().
+ *
+ * Ramo B (location_known='spain'): data entrada → empadronado yes/no → desde quando → cidade
+ * Ramo A (location_known='outside'): idade → Europa 6m → familiar → remoto → formação
+ */
+export function enforceBlockCompletion(
+  aiResponse: string,
+  language: ChatLanguage,
+  flags: {
+    locationKnown: 'spain' | 'outside' | null | undefined
+    entryDateConfirmed: string | null | undefined
+    empadronadoConfirmed: boolean | null | undefined
+    empadronadoCity: string | null | undefined
+    assistantTranscript: string
+  },
+): string {
+  if (!aiResponse) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
+  if (!flags.locationKnown) return aiResponse
+  if (!PREHANDOFF_H1_RE.test(aiResponse)) return aiResponse
+
+  const transcript = flags.assistantTranscript || ''
+
+  if (flags.locationKnown === 'spain') {
+    if (!flags.entryDateConfirmed) {
+      const q = language === 'es' ? '¿Cuál fue la fecha exacta de tu entrada en España?'
+        : language === 'en' ? 'What was the exact date you entered Spain?'
+        : language === 'fr' ? 'Quelle est la date exacte de votre entrée en Espagne ?'
+        : 'Qual foi a data exata da sua entrada na Espanha?'
+      console.warn('[BLOCK_GATE] H1 prematuro — falta data entrada. Forçando B1.')
+      return lock(q)
+    }
+    if (flags.empadronadoConfirmed === null || flags.empadronadoConfirmed === undefined) {
+      console.warn('[BLOCK_GATE] H1 prematuro — falta empadronado yes/no. Forçando B2.')
+      return lock(getEmpadronadoQuestion(language))
+    }
+    if (flags.empadronadoConfirmed === true) {
+      const askedSince = /(desde quando|desde cu[áa]ndo|since when|depuis quand)/i.test(transcript)
+      if (!askedSince) {
+        console.warn('[BLOCK_GATE] H1 prematuro — falta "desde quando". Forçando B3.')
+        return lock(getEmpadronamientoSinceQuestion(language))
+      }
+      if (!flags.empadronadoCity) {
+        console.warn('[BLOCK_GATE] H1 prematuro — falta cidade empadronamento. Forçando B4.')
+        return lock(getEmpadronamientoCityQuestion(language))
+      }
+    }
+    return aiResponse
+  }
+
+  // Ramo A (outside)
+  if (flags.locationKnown === 'outside') {
+    const next = getOutsideSpainNextQuestion(language, transcript, {
+      entryDateConfirmed: flags.entryDateConfirmed || null,
+      locationKnown: flags.locationKnown,
+    })
+    // getOutsideSpainNextQuestion devolve o próprio payload pré-handoff quando o bloco está completo.
+    if (PREHANDOFF_H1_RE.test(next)) return aiResponse
+    console.warn('[BLOCK_GATE] H1 prematuro — bloco A incompleto. Forçando próxima pergunta A.')
+    return lock(next)
+  }
+
+  return aiResponse
+}

@@ -15,7 +15,7 @@ import {
   preHandoffSummarySent,
   handoffTransferSent,
 } from './lib/questions.ts'
-import { forceCorrectBlockForLocation, ensureServicesAttachedToInterest, stripPreambleBeforePreHandoff } from './lib/overrides.ts'
+import { forceCorrectBlockForLocation, ensureServicesAttachedToInterest, stripPreambleBeforePreHandoff, enforceBlockCompletion, stripLockedSentinel, isLocked } from './lib/overrides.ts'
 
 // ---------- H1|||H2 são duas bolhas; H3 é UMA bolha ----------
 
@@ -188,4 +188,109 @@ Deno.test('stripPreambleBeforePreHandoff: funciona em ES/EN/FR', () => {
     const polluted = `Algum preâmbulo aleatório.\n${payload}`
     assertEquals(stripPreambleBeforePreHandoff(polluted), payload)
   }
+})
+
+// ---------- enforceBlockCompletion: gate determinístico A/B antes do H1 ----------
+
+Deno.test('enforceBlockCompletion: ramo B sem cidade → substitui H1 pela pergunta de cidade (caso Roberto)', () => {
+  const h1 = buildPreHandoffPayload('pt-BR', { preHandoffSent: false, handoffSent: false, transcript: '' })
+  const transcript = [
+    'Você está na Espanha?',
+    'Perfeito. Agora preciso entender sua situação aqui. Qual foi a data exata da sua entrada na Espanha?',
+    'Perfeito. Você está empadronado?',
+    'Se sim, desde quando?',
+  ].join('\n')
+  const result = enforceBlockCompletion(h1, 'pt-BR', {
+    locationKnown: 'spain',
+    entryDateConfirmed: '2026-01-01',
+    empadronadoConfirmed: true,
+    empadronadoCity: null,
+    assistantTranscript: transcript,
+  })
+  assert(isLocked(result), 'deve estar travado contra overrides posteriores')
+  const clean = stripLockedSentinel(result)
+  assertStringIncludes(clean, 'Em qual cidade você está empadronado')
+  assert(!clean.includes('visão inicial'), 'H1 não pode passar enquanto cidade ausente')
+})
+
+Deno.test('enforceBlockCompletion: ramo B sem entry_date → força B1', () => {
+  const h1 = buildPreHandoffPayload('pt-BR', { preHandoffSent: false, handoffSent: false, transcript: '' })
+  const result = enforceBlockCompletion(h1, 'pt-BR', {
+    locationKnown: 'spain',
+    entryDateConfirmed: null,
+    empadronadoConfirmed: null,
+    empadronadoCity: null,
+    assistantTranscript: '',
+  })
+  assertStringIncludes(stripLockedSentinel(result), 'data exata da sua entrada na Espanha')
+})
+
+Deno.test('enforceBlockCompletion: ramo B sem empadronado → força B2', () => {
+  const h1 = buildPreHandoffPayload('pt-BR', { preHandoffSent: false, handoffSent: false, transcript: '' })
+  const result = enforceBlockCompletion(h1, 'pt-BR', {
+    locationKnown: 'spain',
+    entryDateConfirmed: '2026-01-01',
+    empadronadoConfirmed: null,
+    empadronadoCity: null,
+    assistantTranscript: 'Qual foi a data exata da sua entrada na Espanha?',
+  })
+  assertStringIncludes(stripLockedSentinel(result), 'empadronado')
+})
+
+Deno.test('enforceBlockCompletion: ramo B sem "desde quando" → força B3', () => {
+  const h1 = buildPreHandoffPayload('pt-BR', { preHandoffSent: false, handoffSent: false, transcript: '' })
+  const transcript = 'Qual foi a data exata da sua entrada na Espanha?\nVocê está empadronado?'
+  const result = enforceBlockCompletion(h1, 'pt-BR', {
+    locationKnown: 'spain',
+    entryDateConfirmed: '2026-01-01',
+    empadronadoConfirmed: true,
+    empadronadoCity: null,
+    assistantTranscript: transcript,
+  })
+  assertStringIncludes(stripLockedSentinel(result), 'Desde quando')
+})
+
+Deno.test('enforceBlockCompletion: ramo B completo → H1 passa intacto', () => {
+  const h1 = buildPreHandoffPayload('pt-BR', { preHandoffSent: false, handoffSent: false, transcript: '' })
+  const transcript = 'data\nempadronado?\ndesde quando?\nEm qual cidade você está empadronado?'
+  const result = enforceBlockCompletion(h1, 'pt-BR', {
+    locationKnown: 'spain',
+    entryDateConfirmed: '2026-01-01',
+    empadronadoConfirmed: true,
+    empadronadoCity: 'Madrid',
+    assistantTranscript: transcript,
+  })
+  assertEquals(result, h1)
+})
+
+Deno.test('enforceBlockCompletion: no-op quando location_known ausente', () => {
+  const h1 = buildPreHandoffPayload('pt-BR', { preHandoffSent: false, handoffSent: false, transcript: '' })
+  const result = enforceBlockCompletion(h1, 'pt-BR', {
+    locationKnown: null,
+    entryDateConfirmed: null,
+    empadronadoConfirmed: null,
+    empadronadoCity: null,
+    assistantTranscript: '',
+  })
+  assertEquals(result, h1)
+})
+
+Deno.test('enforceBlockCompletion: ramo A incompleto (sem formação) → força próxima A', () => {
+  const h1 = buildPreHandoffPayload('pt-BR', { preHandoffSent: false, handoffSent: false, transcript: '' })
+  const transcript = [
+    'Qual sua idade?',
+    'Você esteve na Europa nos últimos 6 meses?',
+    'Possui familiar europeu ou residente legal na Espanha?',
+    'Você trabalha remoto?',
+  ].join('\n')
+  const result = enforceBlockCompletion(h1, 'pt-BR', {
+    locationKnown: 'outside',
+    entryDateConfirmed: null,
+    empadronadoConfirmed: null,
+    empadronadoCity: null,
+    assistantTranscript: transcript,
+  })
+  const clean = stripLockedSentinel(result)
+  assertStringIncludes(clean, 'formação superior')
+  assert(!clean.includes('visão inicial'))
 })

@@ -1,80 +1,43 @@
-## O que aconteceu no fluxo do Roberto
+## Objetivo
+Garantir que o bot **sempre** complete todas as perguntas do ramo escolhido antes de emitir o pré-handoff (H1|||H2|||H3):
+- `location_known='spain'` → bloco B (data entrada → empadronado yes/no → desde quando → cidade) → só então H1
+- `location_known='outside'` → bloco A (idade → Europa 6m → familiar → remoto → formação) → só então H1
 
-### Mensagem suspeita (id 611)
-```
-Perfeito. Agora preciso entender como está sua situação aqui.
-Perfeito. Já consigo ter uma visão inicial do seu caso.
-```
+Sem isso, o LLM pode pular direto para H1 (caso Roberto: msgs 655→657 puladas a B5 "cidade").
 
-A **segunda linha** é o H1 oficial do BPMN-v2 (`lib/questions.ts:311`).
-A **primeira linha** **não existe em nenhum lugar do código** — foi **inventada pelo LLM** e ficou colada no H1 com `\n` em vez do delimitador `|||`.
+## Mudanças
 
-### Por que o LLM conseguiu colar texto extra antes do H1
+### 1. `lib/overrides.ts` — gate determinístico antes do pré-handoff
+Nova função exportada `enforceBlockCompletion(aiResponse, language, flags)`:
+- Detecta H1 no `aiResponse` (regex `PREHANDOFF_H1_RE` já existente).
+- Se H1 presente **e** o bloco ainda não está completo segundo as flags persistidas (`location_known`, `entry_date_confirmed`, `empadronado_confirmed`, `empadronado_city`, e para o ramo A as flags equivalentes de idade/Europa/familiar/remoto/formação derivadas do transcript), **descarta o aiResponse inteiro** e retorna a próxima pergunta canônica do ramo, com `lock()`.
+- Tabela de decisão para ramo B (`location_known='spain'`):
+  - faltando `entry_date_confirmed` → "Qual foi a data exata da sua entrada na Espanha?"
+  - faltando `empadronado_confirmed` → `getEmpadronadoQuestion`
+  - `empadronado_confirmed=true` e faltando "desde quando" no transcript → `getEmpadronamientoSinceQuestion`
+  - `empadronado_confirmed=true` e faltando `empadronado_city` → `getEmpadronamientoCityQuestion`
+- Para ramo A (`location_known='outside'`): reusa `getOutsideSpainNextQuestion` que já é encadeada por transcript.
 
-Na função `forceCorrectBlockQuestions` em `supabase/functions/whatsapp-webhook/lib/overrides.ts` (linhas 552-600):
+### 2. `lib/overrides.ts` — `forceAdvanceFromEmpadronadoQuestion`
+- Trocar `wrap(...)` por `lock(replacement)` puro nos branches que forçam B5/B4 (linhas 432, 448, 455). Isso elimina o vazamento de H1 colado como "preâmbulo".
+- Manter validação de cidade espanhola já travada com `lock()`.
 
-```ts
-const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
-const wrap = (replacement: string) => (preamble ? `${preamble}\n${replacement}` : replacement)
-...
-// no ramo BPMN-handoff (linhas 591-600):
-const payload = buildPreHandoffPayload(language, { ... })
-next = payload || ''
-return lock(wrap(next))   // ← AQUI o preamble inventado pelo LLM é colado antes de H1
-```
+### 3. `index.ts` — pipeline de overrides
+Adicionar `enforceBlockCompletion` **logo após** `forceCorrectBlockForLocation` e **antes** de `stripPreambleBeforePreHandoff`, em todos os 3 pontos onde o pipeline roda (1982, 2014, 2044). Como `enforceBlockCompletion` aplica `lock()`, qualquer override posterior respeita.
 
-Sequência:
-1. Cliente respondeu "Tenho" (última pergunta do bloco B = formação superior).
-2. O LLM gerou algo como:
-   *"Perfeito. Agora preciso entender como está sua situação aqui. <alguma pergunta extra>"*
-3. O override detectou que o bloco B está completo e disparou `buildPreHandoffPayload` → `H1|||H2|||H3`.
-4. `wrap()` colou o **preâmbulo do LLM** (a frase inventada) antes do payload, separado por `\n`.
-5. O `split("|||")` no envio quebrou em 3 bolhas:
-   - bolha 1 = `[preâmbulo inventado]\nH1` ← é o que o usuário viu como "resposta a uma pergunta B"
-   - bolha 2 = H2
-   - bolha 3 = H3
+### 4. Testes (`bpmn3_handoff_test.ts`)
+Adicionar casos:
+- Ramo B: prevQ="desde quando", cliente="05/02/2026", IA gera H1+H2+H3 puro → resultado deve ser apenas a pergunta de cidade.
+- Ramo B: empadronado_city ausente, IA gera H1 → resultado é cidade.
+- Ramo B: tudo preenchido → H1|||H2|||H3 passa intacto.
+- Ramo A: faltando "formação superior", IA gera H1 → resultado é a pergunta canônica de formação.
 
-Tem ainda um efeito secundário (Roberto respondeu "Nao" a "Você está na Espanha?" mas o bot rodou todo o bloco-Spain). Esse é outro bug, **fora deste plano** — focando só na frase fantasma.
+## Fora de escopo
+- BPMN, idiomas, latência, Msg5+Msg6, persistência de flags.
+- Mudança no texto das perguntas existentes.
+- Bug separado de roteamento Estudos vs Spain (não afeta este caso — Roberto está na Espanha, ramo B é o correto).
 
----
-
-## Correção proposta
-
-### 1. Não anexar preâmbulo do LLM ao payload de pré-handoff
-Em `lib/overrides.ts:591-600`, substituir `wrap(next)` por `next` puro nesse caso específico. As 3 bolhas H1|||H2|||H3 são canônicas e devem sair sem nenhuma frase de transição inventada.
-
-```ts
-} else {
-  const payload = buildPreHandoffPayload(language, { ... })
-  if (!payload) return aiResponse
-  return lock(payload)   // sem wrap() — H1|||H2|||H3 puros
-}
-```
-
-### 2. Defesa adicional no caller
-Em `supabase/functions/whatsapp-webhook/index.ts`, na seção em que `aiResponse` é processado, adicionar uma sanitização: se a resposta final contém `H2` ("visão inicial do seu caso") **e** algo antes dela separado por `\n` (não `|||`), descartar tudo antes de H1. Garante que regressões equivalentes em outros caminhos (ex.: paráfrase F4, KB-strict) também não emitam preâmbulo.
-
-Helper a criar em `lib/overrides.ts`:
-```ts
-export function stripPreambleBeforePreHandoff(text: string): string {
-  // Se H1 aparece no meio, descarta tudo antes dele.
-  const idx = text.search(/Perfeito\. Já consigo ter uma visão inicial|Perfecto\. Ya puedo tener|Perfect\. I can already get|Parfait\. Je peux déjà avoir/i)
-  if (idx > 0) return text.slice(idx)
-  return text
-}
-```
-Aplicado uma vez logo antes do `split('|||')` no envio (≈ `index.ts:2160`).
-
-### 3. Testes
-Adicionar caso em `bpmn3_handoff_test.ts`:
-- Input simulado: `aiResponse = "Perfeito. Agora preciso entender como está sua situação aqui.\n<H1>|||<H2>|||<H3>"`
-- Expectativa após sanitização: exatamente `H1|||H2|||H3` (3 bolhas, sem preâmbulo).
-
-### Como validar depois do deploy
-1. Reproduzir conversa similar (cliente fora da Espanha, completando bloco B).
-2. Conferir em `mensagens_cliente` para o lead que as 3 últimas inserções `origem='IA'` correspondem **literalmente** aos textos canônicos de `getPreHandoffSummaryMessage` (H1, H2) e `getHandoffTransferMessage` (H3), sem nada extra colado.
-
-## Itens fora deste plano
-- Bug do bloco-Spain rodar para cliente que disse "Não está na Espanha" (problema na detecção `userInSpain`/`locationKnown`) — tratar em sessão separada se você confirmar.
-- Latência (já otimizada na rodada anterior).
-- Mensagens H1-H3 (texto canônico permanece igual).
+## Arquivos editados
+- `supabase/functions/whatsapp-webhook/lib/overrides.ts`
+- `supabase/functions/whatsapp-webhook/index.ts`
+- `supabase/functions/whatsapp-webhook/bpmn3_handoff_test.ts`
