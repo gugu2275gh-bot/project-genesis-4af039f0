@@ -1,67 +1,80 @@
-## Objetivo
+## O que aconteceu no fluxo do Roberto
 
-Alinhar o agente WhatsApp ao novo BPMN `CB_pre-handoff_v2.bpm`:
-
-1. **Msg 5 + Msg 6** entregues na **mesma rodada** (um único turno do bot). A resposta do cliente deve ser interpretada como **uma das opções listadas em Msg 5** (interesse).
-2. **Remover Msg H4**. O fluxo de handoff termina em **Msg H3** (apenas uma bolha de encerramento). Sem H4, sem segunda bolha de "vou te encaminhar para um atendente".
-
-Tudo o que o usuário pediu para manter (3.4 deterministic path como está, 3.5 sem roteamento real) permanece intocado.
-
----
-
-## Mudanças
-
-### 1. `lib/questions.ts` — remover H4
-- `getHandoffTransferMessage(language)` passa a retornar **apenas H3** (sem `|||`, sem segunda bolha) nos 4 idiomas:
-  - PT: "Vou encaminhar suas informações para um especialista analisar com mais profundidade."
-  - ES: "Voy a remitir tu información a un especialista para que la analice con más profundidad."
-  - EN: "I will forward your information to a specialist to analyze it in more depth."
-  - FR: "Je vais transmettre vos informations à un spécialiste pour qu'il les analyse plus en profondeur."
-- `HANDOFF_TRANSFER_RE` reduzido às âncoras de H3 (remover âncoras de H4 — "vou te encaminhar para um atendente", "te voy a derivar a un agente", etc.).
-- `buildPreHandoffPayload` mantém a lógica idempotente (usando flags `pre_handoff_sent` / `handoff_sent`), mas o payload final completo agora é `H1|||H2|||H3` (3 bolhas, não 4).
-- Comentários do bloco BPMN-3 atualizados para BPMN-v2: "3 mensagens distintas" no lugar de "4".
-
-### 2. `index.ts` — Msg5 + Msg6 na mesma rodada
-- Bloco do prompt LLM (linhas ~1244-1245 e ~1675): substituir a instrução "envie Msg5, AGUARDE, depois Msg6" por **"envie Msg5 e Msg6 numa única rodada, separadas por `\n\n` (ou duas bolhas via `|||`), e aguarde a resposta — que deve ser uma das opções citadas em Msg5"**.
-- Reforçar no prompt que a resposta esperada é **uma das opções de Msg 5** (nacionalidade / residência / estudos / arraigo / documento específico). Se vier algo fora, o bot pede para o cliente escolher uma das opções (sem repetir Msg5+Msg6 inteiras — só uma reformulação curta).
-- O passo `interesse` na "trilha" passa a ser concluído quando **uma única rodada** com Msg5+Msg6 já foi enviada (não duas separadas).
-- Remover comentários e flags que assumiam Msg6 só depois de resposta.
-
-### 3. `lib/overrides.ts` — injeção determinística
-- `getServicesOfferedMessage` (Msg6) deixa de ser injetado **depois** de `interest_confirmed`. Em vez disso, quando o bot for emitir Msg5 (`interestQuestion`), o override garante que Msg6 (`servicesCatalog` / `getServicesOfferedMessage`) seja **anexado na mesma resposta** (com `|||` ou `\n\n`).
-- Validação de resposta: se `interest_confirmed` ainda não capturou e a resposta do cliente não bate com nenhum termo do catálogo Msg5, gerar uma mensagem curta pedindo escolha (sem reenviar Msg5+Msg6).
-
-### 4. Testes
-- Atualizar `bpmn3_handoff_test.ts` (renomear mentalmente para v2): remover asserts que esperavam H4; payload final passa a ter exatamente 3 bolhas (`H1`, `H2`, `H3`).
-- Atualizar `wave7_test.ts`: payload pré-handoff = 3 bolhas.
-- Adicionar caso novo: "Msg5 e Msg6 saem juntas em um único turno" e "resposta fora das opções pede reescolha sem reenviar Msg5+Msg6".
-
-### 5. Migration
-- **Nenhuma**. As colunas `pre_handoff_sent` / `handoff_sent` continuam válidas — `handoff_sent` agora marca o envio do H3 (único).
-
----
-
-## Arquivos afetados
-
-- `supabase/functions/whatsapp-webhook/lib/questions.ts`
-- `supabase/functions/whatsapp-webhook/lib/overrides.ts`
-- `supabase/functions/whatsapp-webhook/index.ts`
-- `supabase/functions/whatsapp-webhook/bpmn3_handoff_test.ts`
-- `supabase/functions/whatsapp-webhook/wave7_test.ts`
-
-## Como rodar os testes
-
-```bash
-# Testes do novo fluxo BPMN v2 (pré-handoff + Msg5/Msg6 + H3 único)
-deno test --allow-net --allow-env \
-  supabase/functions/whatsapp-webhook/bpmn3_handoff_test.ts \
-  supabase/functions/whatsapp-webhook/wave7_test.ts
-
-# Ou via Lovable:
-# tool: supabase--test_edge_functions { functions: ["whatsapp-webhook"] }
+### Mensagem suspeita (id 611)
+```
+Perfeito. Agora preciso entender como está sua situação aqui.
+Perfeito. Já consigo ter uma visão inicial do seu caso.
 ```
 
-## Confirmação antes de implementar
+A **segunda linha** é o H1 oficial do BPMN-v2 (`lib/questions.ts:311`).
+A **primeira linha** **não existe em nenhum lugar do código** — foi **inventada pelo LLM** e ficou colada no H1 com `\n` em vez do delimitador `|||`.
 
-1. **Msg H4 deve ser removida em todos os idiomas** (PT/ES/EN/FR), correto?
-2. Quando a resposta de Msg5 vier **fora** das opções (ex.: "quero ajuda jurídica genérica"), o bot deve **(a)** aceitar como "OUTRO" e seguir, ou **(b)** insistir até o cliente escolher uma das opções listadas? (BPMN sugere (b) — gateway com opções fixas.)
+### Por que o LLM conseguiu colar texto extra antes do H1
+
+Na função `forceCorrectBlockQuestions` em `supabase/functions/whatsapp-webhook/lib/overrides.ts` (linhas 552-600):
+
+```ts
+const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
+const wrap = (replacement: string) => (preamble ? `${preamble}\n${replacement}` : replacement)
+...
+// no ramo BPMN-handoff (linhas 591-600):
+const payload = buildPreHandoffPayload(language, { ... })
+next = payload || ''
+return lock(wrap(next))   // ← AQUI o preamble inventado pelo LLM é colado antes de H1
+```
+
+Sequência:
+1. Cliente respondeu "Tenho" (última pergunta do bloco B = formação superior).
+2. O LLM gerou algo como:
+   *"Perfeito. Agora preciso entender como está sua situação aqui. <alguma pergunta extra>"*
+3. O override detectou que o bloco B está completo e disparou `buildPreHandoffPayload` → `H1|||H2|||H3`.
+4. `wrap()` colou o **preâmbulo do LLM** (a frase inventada) antes do payload, separado por `\n`.
+5. O `split("|||")` no envio quebrou em 3 bolhas:
+   - bolha 1 = `[preâmbulo inventado]\nH1` ← é o que o usuário viu como "resposta a uma pergunta B"
+   - bolha 2 = H2
+   - bolha 3 = H3
+
+Tem ainda um efeito secundário (Roberto respondeu "Nao" a "Você está na Espanha?" mas o bot rodou todo o bloco-Spain). Esse é outro bug, **fora deste plano** — focando só na frase fantasma.
+
+---
+
+## Correção proposta
+
+### 1. Não anexar preâmbulo do LLM ao payload de pré-handoff
+Em `lib/overrides.ts:591-600`, substituir `wrap(next)` por `next` puro nesse caso específico. As 3 bolhas H1|||H2|||H3 são canônicas e devem sair sem nenhuma frase de transição inventada.
+
+```ts
+} else {
+  const payload = buildPreHandoffPayload(language, { ... })
+  if (!payload) return aiResponse
+  return lock(payload)   // sem wrap() — H1|||H2|||H3 puros
+}
+```
+
+### 2. Defesa adicional no caller
+Em `supabase/functions/whatsapp-webhook/index.ts`, na seção em que `aiResponse` é processado, adicionar uma sanitização: se a resposta final contém `H2` ("visão inicial do seu caso") **e** algo antes dela separado por `\n` (não `|||`), descartar tudo antes de H1. Garante que regressões equivalentes em outros caminhos (ex.: paráfrase F4, KB-strict) também não emitam preâmbulo.
+
+Helper a criar em `lib/overrides.ts`:
+```ts
+export function stripPreambleBeforePreHandoff(text: string): string {
+  // Se H1 aparece no meio, descarta tudo antes dele.
+  const idx = text.search(/Perfeito\. Já consigo ter uma visão inicial|Perfecto\. Ya puedo tener|Perfect\. I can already get|Parfait\. Je peux déjà avoir/i)
+  if (idx > 0) return text.slice(idx)
+  return text
+}
+```
+Aplicado uma vez logo antes do `split('|||')` no envio (≈ `index.ts:2160`).
+
+### 3. Testes
+Adicionar caso em `bpmn3_handoff_test.ts`:
+- Input simulado: `aiResponse = "Perfeito. Agora preciso entender como está sua situação aqui.\n<H1>|||<H2>|||<H3>"`
+- Expectativa após sanitização: exatamente `H1|||H2|||H3` (3 bolhas, sem preâmbulo).
+
+### Como validar depois do deploy
+1. Reproduzir conversa similar (cliente fora da Espanha, completando bloco B).
+2. Conferir em `mensagens_cliente` para o lead que as 3 últimas inserções `origem='IA'` correspondem **literalmente** aos textos canônicos de `getPreHandoffSummaryMessage` (H1, H2) e `getHandoffTransferMessage` (H3), sem nada extra colado.
+
+## Itens fora deste plano
+- Bug do bloco-Spain rodar para cliente que disse "Não está na Espanha" (problema na detecção `userInSpain`/`locationKnown`) — tratar em sessão separada se você confirmar.
+- Latência (já otimizada na rodada anterior).
+- Mensagens H1-H3 (texto canônico permanece igual).

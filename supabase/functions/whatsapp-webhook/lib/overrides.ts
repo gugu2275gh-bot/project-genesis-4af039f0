@@ -588,14 +588,16 @@ export function forceCorrectBlockForLocation(
     } else if (flags.empadronadoConfirmed && !flags.empadronadoCity) {
       next = getEmpadronamientoCityQuestion(language)
     } else {
-      // BPMN-3: bloco B completo → H1|||H2|||H3|||H4 na mesma rodada (flags persistidas evitam reenvio)
+      // BPMN-3: bloco B completo → H1|||H2|||H3 na mesma rodada (flags persistidas evitam reenvio)
+      // IMPORTANTE: NÃO usar wrap() aqui — o payload deve sair literalmente sem
+      // qualquer preâmbulo inventado pelo LLM colado antes de H1.
       const payload = buildPreHandoffPayload(language, {
         preHandoffSent: flags.preHandoffSent,
         handoffSent: flags.handoffSent,
         transcript: flags.assistantTranscript || '',
       })
-      next = payload || ''
-      if (!next) return aiResponse
+      if (!payload) return aiResponse
+      return lock(payload)
     }
     return lock(wrap(next))
   }
