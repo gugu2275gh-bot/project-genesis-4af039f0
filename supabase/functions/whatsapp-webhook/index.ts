@@ -1868,11 +1868,6 @@ Regras:
                 : '') +
               `[FIM DO MODO TIRA-DÚVIDAS]`
           }
-              (pendingQuestionToAnswer
-                ? `5. PRIORIDADE MÁXIMA: o cliente havia feito esta pergunta DURANTE o cadastro e ficou aguardando: "${pendingQuestionToAnswer}". Responda-a AGORA, com base na KB, antes de qualquer outra coisa. Comece com algo como "Como prometi, sobre sua dúvida..." e responda objetivamente.\n`
-                : '') +
-              `[FIM DO MODO TIRA-DÚVIDAS]`
-          }
         }
 
         console.log(`[KB] query currentTopic="${currentMessageTopicHint}" finalTopic="${topicHint}" len=${kbQuery.length} -> context ${knowledgeContext.length} chars`)
