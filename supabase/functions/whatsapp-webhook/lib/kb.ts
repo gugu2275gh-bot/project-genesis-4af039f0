@@ -175,7 +175,7 @@ export async function getKnowledgeBaseContext(
           ...topicPreloaded.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Tópico]\n${c.content}`),
           ...semanticRest.map((c: any) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Sim: ${c.similarity?.toFixed(2)}]\n${c.content}`),
         ]
-        return merged.join('\n\n').substring(0, 9000)
+        return merged.join('\n\n').substring(0, 3500)
       }
     }
     if (semErr) console.error('[KB] Semantic search error:', semErr)
@@ -217,5 +217,5 @@ export async function getKnowledgeBaseContext(
   return [
     ...topicPreloaded.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Tópico]\n${c.content}`),
     ...lexicalRest.map((c: any) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index}]\n${c.content}`),
-  ].join('\n\n').substring(0, 9000)
+  ].join('\n\n').substring(0, 3500)
 }
