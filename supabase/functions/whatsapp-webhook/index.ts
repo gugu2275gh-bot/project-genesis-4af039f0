@@ -2032,7 +2032,10 @@ Regras:
           // Wave 5 (F4): dedup do bloco de catálogo. Se a resposta repete quase
           // literalmente uma das últimas 3 mensagens do assistente, força uma
           // nova geração com instrução de paráfrase + avanço.
+          // Honra o sentinel anti-clobber: se a resposta foi travada por uma
+          // validação determinística (ex.: cidade espanhola inválida), não retoca.
           try {
+            if (isLocked(aiResponse)) throw new Error('locked: skip F4')
             const lastThreeAssistant = history.filter((m) => m.role === 'assistant').slice(-3).map((m) => String(m.content || ''))
             const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
             const aiNorm = norm(aiResponse)
