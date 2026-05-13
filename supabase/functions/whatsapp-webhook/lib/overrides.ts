@@ -633,18 +633,28 @@ export function forceCorrectBlockForLocation(
     const next = getOutsideSpainNextQuestion(language, flags.assistantTranscript || '', {
       entryDateConfirmed: flags.entryDateConfirmed || null,
       locationKnown: flags.locationKnown,
+      outsideProgress: (flags as any).outsideProgress || null,
     })
     return lock(wrap(next))
   }
 
   if (flags.locationKnown === 'spain' && isSpainOnlyQuestion) {
     console.log('[BLOCK_LOCK] cliente na Espanha, IA fez pergunta de bloco-fora:', q.slice(0, 80))
+    const op = ((flags as any).outsideProgress || {}) as any
+    const b1Sent = !!op.b1_situation_sent
     let next: string
     if (!flags.entryDateConfirmed) {
-      if (language === 'es') next = 'Perfecto. Ahora necesito entender tu situación aquí.\n\n¿Cuál fue la fecha exacta de tu entrada en España?'
-      else if (language === 'en') next = 'Got it. Now I need to understand your situation here.\n\nWhat was the exact date you entered Spain?'
-      else if (language === 'fr') next = 'D’accord. Maintenant j’ai besoin de comprendre votre situation ici.\n\nQuelle est la date exacte de votre entrée en Espagne ?'
-      else next = 'Perfeito. Agora preciso entender sua situação aqui.\n\nQual foi a data exata da sua entrada na Espanha?'
+      if (b1Sent) {
+        if (language === 'es') next = '¿Cuál fue la fecha exacta de tu entrada en España?'
+        else if (language === 'en') next = 'What was the exact date you entered Spain?'
+        else if (language === 'fr') next = 'Quelle est la date exacte de votre entrée en Espagne ?'
+        else next = 'Qual foi a data exata da sua entrada na Espanha?'
+      } else {
+        if (language === 'es') next = 'Perfecto. Ahora necesito entender tu situación aquí.\n\n¿Cuál fue la fecha exacta de tu entrada en España?'
+        else if (language === 'en') next = 'Got it. Now I need to understand your situation here.\n\nWhat was the exact date you entered Spain?'
+        else if (language === 'fr') next = 'D’accord. Maintenant j’ai besoin de comprendre votre situation ici.\n\nQuelle est la date exacte de votre entrée en Espagne ?'
+        else next = 'Perfeito. Agora preciso entender sua situação aqui.\n\nQual foi a data exata da sua entrada na Espanha?'
+      }
     } else if (flags.empadronadoConfirmed === null || flags.empadronadoConfirmed === undefined) {
       next = getEmpadronadoQuestion(language)
     } else if (flags.empadronadoConfirmed && !flags.empadronadoCity) {
