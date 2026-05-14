@@ -1093,6 +1093,18 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
             />
           </div>
 
+          {/* Permuta */}
+          <div className="flex items-center gap-2 rounded-lg border p-3">
+            <Checkbox
+              id="permuta-checkbox"
+              checked={isPermuta}
+              onCheckedChange={(checked) => setIsPermuta(checked === true)}
+            />
+            <Label htmlFor="permuta-checkbox" className="cursor-pointer font-normal">
+              Permuta
+            </Label>
+          </div>
+
           {readOnly ? (
             <div className="flex justify-end pointer-events-auto">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
