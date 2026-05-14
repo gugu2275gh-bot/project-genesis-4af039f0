@@ -88,8 +88,22 @@ export default function PaymentsList() {
   const toggleContract = (key: string) =>
     setExpandedContracts((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  const availableOpportunities = opportunities.filter(o => 
-    o.status === 'CONTRATO_ASSINADO' || o.status === 'PAGAMENTO_PENDENTE' || o.status === 'FECHADA_GANHA'
+  // Fetch opportunity ids that have an approved or signed contract
+  const { data: approvedContractOppIds = [] } = useQuery({
+    queryKey: ['approved-contract-opp-ids'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('opportunity_id')
+        .in('status', ['APROVADO', 'ASSINADO']);
+      if (error) throw error;
+      return Array.from(new Set((data || []).map((c: any) => c.opportunity_id).filter(Boolean)));
+    },
+  });
+
+  const availableOpportunities = useMemo(
+    () => opportunities.filter(o => approvedContractOppIds.includes(o.id)),
+    [opportunities, approvedContractOppIds]
   );
 
   // Group available opportunities by client (contact)
@@ -553,7 +567,7 @@ export default function PaymentsList() {
                   <Label>Cliente</Label>
                   {clientsWithOpportunities.length === 0 ? (
                     <p className="text-sm text-muted-foreground mt-2">
-                      Não há clientes com contrato assinado.
+                      Não há clientes com contrato aprovado.
                     </p>
                   ) : (
                     <Select
