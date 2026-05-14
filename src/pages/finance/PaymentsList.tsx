@@ -567,7 +567,7 @@ export default function PaymentsList() {
                   <Label>Cliente</Label>
                   {clientsWithOpportunities.length === 0 ? (
                     <p className="text-sm text-muted-foreground mt-2">
-                      Não há clientes com contrato assinado.
+                      Não há clientes com contrato aprovado.
                     </p>
                   ) : (
                     <Select
