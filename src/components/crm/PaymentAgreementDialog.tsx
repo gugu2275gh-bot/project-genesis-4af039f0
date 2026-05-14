@@ -116,6 +116,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
   const [form, setForm] = useState(defaultForm);
   const [referralName, setReferralName] = useState('');
+  const [isPermuta, setIsPermuta] = useState(false);
 
   // Load existing referral info from the contact only when editing an existing agreement.
   // For new services, leave it blank.
