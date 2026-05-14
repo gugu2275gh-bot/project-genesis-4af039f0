@@ -92,6 +92,41 @@ export default function PaymentsList() {
     o.status === 'CONTRATO_ASSINADO' || o.status === 'PAGAMENTO_PENDENTE' || o.status === 'FECHADA_GANHA'
   );
 
+  // Group available opportunities by client (contact)
+  const clientsWithOpportunities = useMemo(() => {
+    const map = new Map<string, { contactId: string; name: string; opportunities: typeof availableOpportunities }>();
+    for (const opp of availableOpportunities) {
+      const contact = opp.leads?.contacts;
+      if (!contact?.id) continue;
+      const existing = map.get(contact.id);
+      if (existing) {
+        existing.opportunities.push(opp);
+      } else {
+        map.set(contact.id, { contactId: contact.id, name: contact.full_name, opportunities: [opp] });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [availableOpportunities]);
+
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const selectedClient = clientsWithOpportunities.find(c => c.contactId === selectedClientId);
+  const clientOpportunities = selectedClient?.opportunities ?? [];
+
+  // Auto-select opportunity if client has only one
+  useEffect(() => {
+    if (clientOpportunities.length === 1) {
+      const onlyId = clientOpportunities[0].id;
+      if (newPayment.opportunity_id !== onlyId) {
+        setNewPayment((prev) => ({ ...prev, opportunity_id: onlyId }));
+      }
+    } else if (clientOpportunities.length === 0 && newPayment.opportunity_id) {
+      setNewPayment((prev) => ({ ...prev, opportunity_id: '' }));
+    } else if (clientOpportunities.length > 1 && newPayment.opportunity_id && !clientOpportunities.find(o => o.id === newPayment.opportunity_id)) {
+      setNewPayment((prev) => ({ ...prev, opportunity_id: '' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClientId, clientOpportunities.length]);
+
   const filteredPayments = payments.filter(p => {
     const contractStatus = (p as any).contracts?.status;
     const hasApprovedContract = contractStatus === 'APROVADO' || contractStatus === 'ASSINADO';
@@ -156,6 +191,7 @@ export default function PaymentsList() {
     });
     setIsDialogOpen(false);
     setOppBeneficiaries([]);
+    setSelectedClientId('');
     setNewPayment({
       opportunity_id: '',
       amount: '',
@@ -514,25 +550,25 @@ export default function PaymentsList() {
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label>Oportunidade</Label>
-                  {availableOpportunities.length === 0 ? (
+                  <Label>Cliente</Label>
+                  {clientsWithOpportunities.length === 0 ? (
                     <p className="text-sm text-muted-foreground mt-2">
-                      Não há oportunidades com contrato assinado.
+                      Não há clientes com contrato assinado.
                     </p>
                   ) : (
-                    <Select 
-                      value={newPayment.opportunity_id} 
-                      onValueChange={(v) => setNewPayment({ ...newPayment, opportunity_id: v })}
+                    <Select
+                      value={selectedClientId}
+                      onValueChange={(v) => setSelectedClientId(v)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma oportunidade" />
+                        <SelectValue placeholder="Selecione um cliente" />
                       </SelectTrigger>
                       <SelectContent>
-                        {availableOpportunities.map((opp) => (
-                          <SelectItem key={opp.id} value={opp.id}>
+                        {clientsWithOpportunities.map((c) => (
+                          <SelectItem key={c.contactId} value={c.contactId}>
                             <div className="flex items-center gap-2">
-                              <DollarSign className="h-4 w-4" />
-                              {opp.leads?.contacts?.full_name}
+                              <Users className="h-4 w-4" />
+                              {c.name}
                             </div>
                           </SelectItem>
                         ))}
@@ -540,6 +576,29 @@ export default function PaymentsList() {
                     </Select>
                   )}
                 </div>
+                {clientOpportunities.length > 1 && (
+                  <div>
+                    <Label>Oportunidade</Label>
+                    <Select
+                      value={newPayment.opportunity_id}
+                      onValueChange={(v) => setNewPayment({ ...newPayment, opportunity_id: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma oportunidade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clientOpportunities.map((opp) => (
+                          <SelectItem key={opp.id} value={opp.id}>
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="h-4 w-4" />
+                              {(opp as any).title || (opp as any).leads?.service_interest || opp.id.slice(0, 8)}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 {oppBeneficiaries.length > 0 && (
                   <div>
                     <Label>Beneficiário (opcional)</Label>
