@@ -313,6 +313,9 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     if (form.notes) {
       summary += `Observações: ${form.notes}\n`;
     }
+    if (isPermuta) {
+      summary += `Permuta: Sim\n`;
+    }
 
     // Determine which contact owns the lead/contract
     // For beneficiaries with a selected titular, the lead goes under the titular
