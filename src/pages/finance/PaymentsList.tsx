@@ -92,6 +92,41 @@ export default function PaymentsList() {
     o.status === 'CONTRATO_ASSINADO' || o.status === 'PAGAMENTO_PENDENTE' || o.status === 'FECHADA_GANHA'
   );
 
+  // Group available opportunities by client (contact)
+  const clientsWithOpportunities = useMemo(() => {
+    const map = new Map<string, { contactId: string; name: string; opportunities: typeof availableOpportunities }>();
+    for (const opp of availableOpportunities) {
+      const contact = opp.leads?.contacts;
+      if (!contact?.id) continue;
+      const existing = map.get(contact.id);
+      if (existing) {
+        existing.opportunities.push(opp);
+      } else {
+        map.set(contact.id, { contactId: contact.id, name: contact.full_name, opportunities: [opp] });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [availableOpportunities]);
+
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const selectedClient = clientsWithOpportunities.find(c => c.contactId === selectedClientId);
+  const clientOpportunities = selectedClient?.opportunities ?? [];
+
+  // Auto-select opportunity if client has only one
+  useEffect(() => {
+    if (clientOpportunities.length === 1) {
+      const onlyId = clientOpportunities[0].id;
+      if (newPayment.opportunity_id !== onlyId) {
+        setNewPayment((prev) => ({ ...prev, opportunity_id: onlyId }));
+      }
+    } else if (clientOpportunities.length === 0 && newPayment.opportunity_id) {
+      setNewPayment((prev) => ({ ...prev, opportunity_id: '' }));
+    } else if (clientOpportunities.length > 1 && newPayment.opportunity_id && !clientOpportunities.find(o => o.id === newPayment.opportunity_id)) {
+      setNewPayment((prev) => ({ ...prev, opportunity_id: '' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClientId, clientOpportunities.length]);
+
   const filteredPayments = payments.filter(p => {
     const contractStatus = (p as any).contracts?.status;
     const hasApprovedContract = contractStatus === 'APROVADO' || contractStatus === 'ASSINADO';
