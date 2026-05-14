@@ -191,6 +191,7 @@ export default function PaymentsList() {
     });
     setIsDialogOpen(false);
     setOppBeneficiaries([]);
+    setSelectedClientId('');
     setNewPayment({
       opportunity_id: '',
       amount: '',
