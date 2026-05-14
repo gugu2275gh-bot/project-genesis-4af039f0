@@ -116,6 +116,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
   const [form, setForm] = useState(defaultForm);
   const [referralName, setReferralName] = useState('');
+  const [isPermuta, setIsPermuta] = useState(false);
 
   // Load existing referral info from the contact only when editing an existing agreement.
   // For new services, leave it blank.
@@ -311,6 +312,9 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     }
     if (form.notes) {
       summary += `Observações: ${form.notes}\n`;
+    }
+    if (isPermuta) {
+      summary += `Permuta: Sim\n`;
     }
 
     // Determine which contact owns the lead/contract
@@ -1090,6 +1094,18 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               onChange={(e) => setReferralName(e.target.value)}
               placeholder="Nome de quem indicou (colaborador, parceiro, cliente...)"
             />
+          </div>
+
+          {/* Permuta */}
+          <div className="flex items-center gap-2 rounded-lg border p-3">
+            <Checkbox
+              id="permuta-checkbox"
+              checked={isPermuta}
+              onCheckedChange={(checked) => setIsPermuta(checked === true)}
+            />
+            <Label htmlFor="permuta-checkbox" className="cursor-pointer font-normal">
+              Permuta
+            </Label>
           </div>
 
           {readOnly ? (
