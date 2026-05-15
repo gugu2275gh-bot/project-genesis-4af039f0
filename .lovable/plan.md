@@ -1,109 +1,60 @@
-## Problema (do print)
+# Strict yes/no validation for the "Are you in Spain?" question
 
-Cliente, no meio do pré-handoff, mandou "Quero fazer um curso de idiomas" — não era resposta da pergunta corrente nem pergunta factual. O bot saiu do roteiro, deu uma explicação longa sobre cursos e só depois voltou para "¿Estás en España?". Comportamento esperado:
+## Problem
 
-1. **Durante o pré-handoff**: qualquer mensagem que não seja resposta válida à pergunta atual deve ser **acolhida em uma frase curta** ("Anotado — vou tratar disso assim que terminarmos esse cadastro rapidíssimo") e **a pergunta pendente do roteiro deve ser repetida imediatamente** na mesma resposta.
-2. **Após o pré-handoff (H1+H2+H3 enviados)**: o bot **automaticamente retoma TODAS as dúvidas/pedidos parqueados**, em ordem, respondendo cada uma com base na KB.
+Today the location detection (index.ts ~1664–1679) only looks for affirmative/negative signals. If neither is detected (e.g. "Não quero responder", "Fazer um doutorado", "talvez"), `userInSpain` and `userOutsideSpain` both stay `false` and the gate just keeps the step pending, so the LLM ends up free-styling — sometimes advancing to the next block ("Qual sua idade?") as seen in the attached WhatsApp screenshot, even though the location was never confirmed.
 
-Hoje já existe `funnelStateLive.pending_question` (lib/funnel-state.ts) mas:
-- Só guarda **1** pergunta (sobrescreve nunca — só salva se vazio).
-- Só dispara para mensagens com `?` ou palavras interrogativas. **Não pega pedidos** como "Quero fazer um curso de idiomas".
-- Confia no LLM para dizer "Anotado..." (a IA pode ignorar e improvisar).
-- Ao consumir, só usa como query de KB — pode misturar com a mensagem atual e perder a ordem.
+The user wants the same firm behavior already applied to name/email: never accept anything other than a clear Sim or Não, and if the answer is ambiguous, deterministically re-ask with **"Preciso saber se está na Espanha (Sim ou Não)"** (localized).
 
-## Solução
+## Implementation
 
-### 1. Schema — fila de off-topics (migração)
+### 1. New helpers in `lib/questions.ts`
+- `isQuestionAboutLocationSpain(text)` — already exists (re-use).
+- `getLocationSpainRequiredReaskQuestion(lang)` returning, per language:
+  - pt-BR: `Preciso saber se você está na Espanha (Sim ou Não).`
+  - es: `Necesito saber si estás en España (Sí o No).`
+  - en: `I need to know whether you are in Spain (Yes or No).`
+  - fr: `J'ai besoin de savoir si vous êtes en Espagne (Oui ou Non).`
 
-Adicionar coluna `pending_questions jsonb` em `lead_funnel_state` (default `'[]'::jsonb`). Manter a coluna `pending_question` legada por compatibilidade, mas migrar leitura/escrita para a fila.
+### 2. New classifier in `lib/name-extraction.ts` (or a new `lib/yesno.ts`)
+- `classifyYesNo(text, lang)` → `'yes' | 'no' | 'ambiguous'`.
+  - `'yes'` when matches the existing affirmative regex (`sim/si/yes/oui`, `estou/moro/vivo`, Spanish city names, etc.).
+  - `'no'` when matches the negative regex (`não/no/nope/non`, `ainda não/todavía no/not yet/pas encore`, "outro país", country names like Brasil/Portugal/EUA, etc.).
+  - `'ambiguous'` for everything else, including refusals (`não quero responder`, `prefiero no decir`), questions back at the bot, off-topic ("fazer um doutorado"), or unclear text.
 
-Item da fila:
-```json
-{ "text": "Quero fazer um curso de idiomas", "ts": "2026-05-15T09:54:00Z", "kind": "request" | "question" }
-```
+This becomes the single source of truth and replaces the inline regex at index.ts:1666–1677.
 
-### 2. Detecção determinística de off-topic (`lib/offtopic.ts`)
+### 3. New override `forceReaskLocationSpainIfAmbiguous` in `lib/overrides.ts`
+Mirrors `forceReaskFullNameIfSingleWord` / `forceReaskEmailIfMissing`:
+- Trigger only when the previous assistant question was the "Are you in Spain?" question (`isQuestionAboutLocationSpain(lastAssistantMessage)`).
+- Run `classifyYesNo(rawCustomerMessage, lang)`.
+- If `'ambiguous'`, replace the LLM output with `lock(getLocationSpainRequiredReaskQuestion(lang))` so it bypasses anti-loop/F4 dedup (the locked sentinel pattern already used).
+- If `'yes'` or `'no'`, keep the LLM output (the gate logic will then advance correctly).
 
-Nova função `classifyOffTopic(currentMessage, lastAssistantQuestion, funnelStateLive)`:
-- Se mensagem **é resposta válida** à `lastAssistantQuestion` (reusa heurísticas existentes: `isStructuredQuestionAnswer`, `isPotentialInterestAnswer`, `isPotentialEntryDateAnswer`, `isLikelyFullNameAnswer`, `hasValidEmail`, `isNeverBeenToSpainAnswer`, número para idade, sim/não para europa/familiar/remoto/formação/empadronado, cidade espanhola, data) → `null`.
-- Se é **recusa** tratada por `isNameRefusal` / `isEmailRefusal` → `null` (já tem guard).
-- Senão classifica `kind`:
-  - `question` se contém `?` ou palavras interrogativas (regra atual).
-  - `request` se começa com "quero", "queria", "preciso", "gostaria", "me interessa", "tenho dúvida", "quiero", "necesito", "me gustaría", "I want", "I need", "I'd like", "je veux", "j'aimerais", etc.
-  - `other` para o resto (descartado, segue fluxo).
+### 4. Wire into `index.ts`
+- Import the new override and call it right after the existing `forceReaskFullNameIfSingleWord` / `forceReaskEmailIfMissing` calls (lines 2030–2031 and 2095–2096).
+- Replace the inline `isAffirmative` / `isNegative` block (1664–1679) with `classifyYesNo(...)` so detection and override stay in sync.
+- Off-topic parking already in place will still record the off-topic message — but we no longer let the LLM choose the response: the deterministic re-ask wins.
 
-### 3. Park determinístico durante o pré-handoff
+### 5. Gate hardening
+At step `localizacao` in the gate (index.ts:1736–1741), update the instruction so when the previous turn already asked the location question and the customer answered ambiguously, the LLM instruction reads exactly: *"Reenvie literalmente: '{askLocationSpainRequiredReask}'. NÃO avance, NÃO faça nenhuma outra pergunta."* — but practically the override above makes this a fallback only.
 
-Em `index.ts` (área 1845–1875), substituir o bloco `pending_question` por:
+### 6. Tests
+New file `supabase/functions/whatsapp-webhook/location_spain_validation_test.ts`:
+- `classifyYesNo` returns `'yes'` for "sim", "si", "yes", "oui", "estoy en Madrid", "moro em Barcelona".
+- Returns `'no'` for "não", "no", "todavía no", "estou no Brasil", "Portugal".
+- Returns `'ambiguous'` for "não quero responder", "fazer um doutorado", "talvez", "?", "".
+- `forceReaskLocationSpainIfAmbiguous` replaces an LLM "Qual sua idade?" with the firm re-ask in PT/ES/EN/FR when the prior assistant turn was the Spain question and the user answered ambiguously.
+- Override is a no-op when the answer is `'yes'`/`'no'` or when the previous assistant question wasn't about location.
 
-```text
-if (collectionGateActive) {
-  const off = classifyOffTopic(rawCustomerMessage, lastAssistantQuestion, funnelStateLive)
-  if (off && (off.kind === 'question' || off.kind === 'request')) {
-    queue.push({ text: rawCustomerMessage, ts: now, kind: off.kind })
-    persist queue → lead_funnel_state.pending_questions
-    // FORÇA resposta = acolhimento + próxima pergunta do roteiro (BYPASS do LLM)
-    aiResponseClean = LOCKED(`${ackPhrase(language)}\n\n${nextStep.scriptQuestion(language)}`)
-  }
-}
-```
+Run `supabase--test_edge_functions { functions: ["whatsapp-webhook"] }` and ensure all existing tests still pass.
 
-`ackPhrase` localizado em `lib/questions.ts`:
-- pt: "Anotado! Vou tratar desse ponto assim que terminarmos esse cadastro rapidíssimo."
-- es: "¡Anotado! Trataré ese punto en cuanto terminemos este registro rapidísimo."
-- en: "Noted! I'll cover that as soon as we finish this quick intake."
-- fr: "Noté ! Je traiterai ce point dès que nous aurons terminé ce bref questionnaire."
+## Files touched (build phase)
 
-`nextStep.scriptQuestion(language)` reaproveita os getters existentes (`getEmailQuestion`, `getOutsideSpainAgeQuestion`, `getLocationQuestion`, `getEmpadronamientoCityQuestion`, etc.) selecionando pela próxima etapa do gate (steps já calculadas em `index.ts`). Se a etapa for o próprio H1/H2/H3 → emite o payload do pré-handoff.
+- `supabase/functions/whatsapp-webhook/lib/questions.ts` — add `getLocationSpainRequiredReaskQuestion`.
+- `supabase/functions/whatsapp-webhook/lib/name-extraction.ts` (or new `lib/yesno.ts`) — add `classifyYesNo`.
+- `supabase/functions/whatsapp-webhook/lib/overrides.ts` — add `forceReaskLocationSpainIfAmbiguous`.
+- `supabase/functions/whatsapp-webhook/index.ts` — replace inline yes/no detection with `classifyYesNo`, call the new override, tighten gate instruction.
+- `supabase/functions/whatsapp-webhook/location_spain_validation_test.ts` — new test file.
 
-Garantia: como o response é **lockado** com `LOCKED_SENTINEL`, todos os overrides downstream (`enforceBlockCompletion`, `forceReask*`, anti-loop) respeitam e não reescrevem.
-
-### 4. Replay automático pós-pré-handoff
-
-Imediatamente após persistir `pre_handoff_sent=true` (área 2244–2257 em `index.ts`), se `pending_questions.length > 0`:
-
-1. Drena a fila **na ordem FIFO**.
-2. Para cada item, gera 1 resposta via Gemini com prompt curto de KB:
-   ```
-   Como prometido, sobre "<text>": <resposta breve da KB no idioma travado>.
-   ```
-3. Envia como **bolhas separadas** via `sendWhatsAppMessage` (mesmo loop do split por `|||`), com 350 ms entre bolhas.
-4. Após cada envio bem-sucedido, remove o item da fila e persiste (idempotência: se Twilio falhar, item permanece).
-5. Sufixo pós-handoff (`getPostHandoffWaitSuffix`) é anexado **apenas à última** bolha do replay para não duplicar.
-6. Se um item depender de KB vazia → usa `kbStrictFallback` (já existe).
-
-Implementação como função separada `replayParkedQuestions(supabase, ctx, queue)` em `lib/parking.ts` para manter `index.ts` limpo.
-
-### 5. Persistência defensiva
-
-- `pending_questions` capped em 10 itens (LRU drop dos mais antigos) para evitar spam.
-- Cada `text` truncado a 500 chars antes de salvar.
-- Drenagem é transacional por item: lê → responde → remove. Falha de envio mantém o item.
-
-### 6. Testes (`offtopic_park_replay_test.ts`)
-
-- `classifyOffTopic`:
-  - Resposta válida à pergunta de idade ("32") → `null`.
-  - Pedido "Quero fazer um curso de idiomas" durante pergunta de localização → `request`.
-  - Pergunta "Quanto custa?" durante pergunta de email → `question`.
-  - Resposta "Sim" para "Você está na Espanha?" → `null`.
-  - Recusas pt/es/en/fr → `null` (delegadas aos guards de nome/email).
-- Park flow: enfileira ao detectar off-topic, response forçada = ack + próxima pergunta do roteiro.
-- Replay: fila com 3 itens → 3 bolhas após `pre_handoff_sent=true`, na ordem; sufixo pós-handoff só na última.
-- Idempotência: se Twilio "falhar" no item 2, item 2 permanece na fila e itens 1/3 não duplicam.
-- Multi-idioma: ackPhrase correto em es/en/fr.
-
-## Critérios de aceite
-
-- Off-topics durante pré-handoff sempre recebem ack curto + próxima pergunta do roteiro, sem alucinação.
-- Nenhuma off-topic é perdida — todas viram itens da fila.
-- Após H3, todas as dúvidas parqueadas são respondidas em ordem antes do bot voltar ao modo normal pós-handoff.
-- Validações de nome/email do guard anterior continuam intactas.
-- Suíte existente (151) verde + ~10 novos testes.
-
-## Notas técnicas
-
-- Migração SQL: `ALTER TABLE lead_funnel_state ADD COLUMN pending_questions jsonb NOT NULL DEFAULT '[]'::jsonb;`
-- Sem mudança no prompt do LLM para o caso off-topic — resposta é 100% determinística (LOCKED).
-- Replay usa o mesmo loop de envio/log já existente (mensagens_cliente + interactions).
-- Idiomas: pt, es, en, fr.
+No DB migration. No frontend changes.
