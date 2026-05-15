@@ -310,9 +310,12 @@ export function forceReaskEmailIfMissing(
   const previousQuestion = extractLastQuestion(previousAssistantMessage)
   if (!isQuestionAboutEmail(previousQuestion)) return aiResponse
   if (hasValidEmail(currentMessage)) return aiResponse
-  // Recusa explícita → reask FIRME (sem preâmbulo da IA).
-  if (isEmailRefusal(currentMessage)) return lock(getEmailRequiredReaskQuestion(language))
   const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
+  // Recusa explícita → reask FIRME, mantendo eventual preâmbulo da IA.
+  if (isEmailRefusal(currentMessage)) {
+    const firm = getEmailRequiredReaskQuestion(language)
+    return lock(preamble ? `${preamble}\n${firm}` : firm)
+  }
   const reask = getEmailReaskQuestion(language)
   return preamble ? `${preamble}\n${reask}` : reask
 }
