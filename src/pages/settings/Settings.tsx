@@ -108,6 +108,13 @@ export default function Settings() {
                 <Truck className="h-4 w-4 mr-2" />
                 Fornecedores
               </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => handleTableTabSelect('expense-categories')}
+                className={activeTab === 'expense-categories' ? 'bg-accent' : ''}
+              >
+                <Receipt className="h-4 w-4 mr-2" />
+                Despesas
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
