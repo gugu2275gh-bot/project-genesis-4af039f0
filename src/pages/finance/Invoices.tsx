@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { useInvoices, Invoice, InvoiceInsert } from '@/hooks/useInvoices';
 import { useContracts } from '@/hooks/useContracts';
+import { useContacts } from '@/hooks/useContacts';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
