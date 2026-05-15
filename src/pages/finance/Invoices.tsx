@@ -313,14 +313,20 @@ export default function Invoices() {
               </div>
 
               <div className="space-y-2">
-                <Label>Contrato *</Label>
+                <Label>Contrato</Label>
                 <Select
                   value={selectedContractId}
                   onValueChange={handleContractSelect}
-                  disabled={!selectedClientId}
+                  disabled={!selectedClientId || clientContracts.length === 0}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={selectedClientId ? 'Selecione um contrato' : 'Selecione um cliente primeiro'} />
+                    <SelectValue placeholder={
+                      !selectedClientId
+                        ? 'Selecione um cliente primeiro'
+                        : clientContracts.length === 0
+                          ? 'Nenhum contrato — preencha valor manualmente'
+                          : 'Selecione um contrato (opcional)'
+                    } />
                   </SelectTrigger>
                   <SelectContent>
                     {clientContracts.map((contract) => (
@@ -332,23 +338,25 @@ export default function Invoices() {
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label>Serviço *</Label>
-                <Select
-                  value={selectedServiceId}
-                  onValueChange={handleServiceSelect}
-                  disabled={!selectedContractId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={selectedContractId ? 'Selecione um serviço' : 'Selecione um contrato primeiro'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {contractServices.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {contractServices.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Serviço</Label>
+                  <Select
+                    value={selectedServiceId}
+                    onValueChange={handleServiceSelect}
+                    disabled={!selectedContractId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um serviço (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {contractServices.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
