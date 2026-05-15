@@ -1,74 +1,109 @@
-## Problema
+## Problema (do print)
 
-No print, o cliente respondeu "Não tenho nome" → o bot **aceitou** como nome e avançou para email. Depois "Não tenho email" → guard de email re-perguntou (ok). Faltam 3 garantias:
+Cliente, no meio do pré-handoff, mandou "Quero fazer um curso de idiomas" — não era resposta da pergunta corrente nem pergunta factual. O bot saiu do roteiro, deu uma explicação longa sobre cursos e só depois voltou para "¿Estás en España?". Comportamento esperado:
 
-1. Validar nome (rejeitar frases/recusas, não só 1-palavra).
-2. Garantir que email obrigatório nunca seja pulado.
-3. **Cada pergunta do pré-handoff é feita exatamente 1 vez por resposta válida** — não repetir perguntas já respondidas, e não avançar enquanto a resposta atual não passar na validação.
+1. **Durante o pré-handoff**: qualquer mensagem que não seja resposta válida à pergunta atual deve ser **acolhida em uma frase curta** ("Anotado — vou tratar disso assim que terminarmos esse cadastro rapidíssimo") e **a pergunta pendente do roteiro deve ser repetida imediatamente** na mesma resposta.
+2. **Após o pré-handoff (H1+H2+H3 enviados)**: o bot **automaticamente retoma TODAS as dúvidas/pedidos parqueados**, em ordem, respondendo cada uma com base na KB.
 
-## Causas
-
-- `isLikelyFullNameAnswer` (lib/name-extraction.ts) só checa denylist + ≥2 palavras. "Não tenho nome" passa.
-- `forceReaskFullNameIfSingleWord` (lib/overrides.ts) só dispara para 1 palavra alfabética.
-- Não existe um **gate determinístico de avanço de etapa**: a IA decide sozinha quando passar para a próxima pergunta, podendo (a) repetir pergunta já respondida, (b) avançar com resposta inválida.
+Hoje já existe `funnelStateLive.pending_question` (lib/funnel-state.ts) mas:
+- Só guarda **1** pergunta (sobrescreve nunca — só salva se vazio).
+- Só dispara para mensagens com `?` ou palavras interrogativas. **Não pega pedidos** como "Quero fazer um curso de idiomas".
+- Confia no LLM para dizer "Anotado..." (a IA pode ignorar e improvisar).
+- Ao consumir, só usa como query de KB — pode misturar com a mensagem atual e perder a ordem.
 
 ## Solução
 
-### 1. `lib/name-extraction.ts` — endurecer detecção de nome
-- `NAME_REFUSAL_PATTERNS` (pt/es/en/fr): "não tenho [nome]", "no tengo [nombre]", "I don't have [a name]", "je n'ai pas [de nom]", "sem nome", "sin nombre", "without a name", "prefiro não dizer", "no quiero decir", etc.
-- Heurística verbal: presença de verbos 1ª pessoa (`tenho|tengo|have|ai|quero|quiero|want|sou|soy|am|prefiro|prefer`) marca como frase, não nome.
-- `isLikelyFullNameAnswer` retorna `false` se qualquer padrão acima casar.
+### 1. Schema — fila de off-topics (migração)
 
-### 2. `lib/overrides.ts` — re-pergunta firme em qualquer recusa/frase
-- `forceReaskFullNameIfSingleWord`: além de 1-palavra, dispara também quando `!isLikelyFullNameAnswer(raw)` E a pergunta anterior era de nome.
-- Nova `getFullNameRequiredReaskQuestion(language)` em `questions.ts`: copy mais firme ("Preciso do seu *nome completo* para continuar atendendo seu caso. Pode me informar?").
-- `forceReaskEmailIfMissing`: já funciona; reforçar com `getEmailRequiredReaskQuestion` (copy firme após 2ª recusa).
+Adicionar coluna `pending_questions jsonb` em `lead_funnel_state` (default `'[]'::jsonb`). Manter a coluna `pending_question` legada por compatibilidade, mas migrar leitura/escrita para a fila.
 
-### 3. **Gate determinístico de etapa do pré-handoff** (novo)
-
-Criar `lib/prehandoff-gate.ts` exportando `enforcePreHandoffStepLock`:
-
-**Entradas:** `funnelStateLive`, `contact`, `lastAssistantMessage`, `currentUserMessage`, `aiResponseClean`, `language`.
-
-**Lógica (ordem de prioridade — primeira pergunta não-respondida vence):**
-
-```text
-step 1: nome completo válido?
-  -> contact.full_name não auto-gerado E isLikelyFullNameAnswer-compatível
-step 2: email válido?
-  -> hasValidEmail(contact.email)
-step 3: demais perguntas do pré-handoff (idade, país, data entrada, etc., conforme funil)
+Item da fila:
+```json
+{ "text": "Quero fazer um curso de idiomas", "ts": "2026-05-15T09:54:00Z", "kind": "request" | "question" }
 ```
 
-Para a primeira etapa **não satisfeita**:
-- Se `lastAssistantMessage` JÁ era essa pergunta e `currentUserMessage` é resposta inválida → substituir `aiResponseClean` pela re-pergunta firme dessa etapa (ignorar o que a IA gerou).
-- Se `lastAssistantMessage` era OUTRA pergunta e `aiResponseClean` está pulando → substituir pela pergunta correta dessa etapa.
-- Se `aiResponseClean` está repetindo pergunta de etapa **já satisfeita** → substituir pela próxima pergunta pendente.
+### 2. Detecção determinística de off-topic (`lib/offtopic.ts`)
 
-**Idempotência:** retorna `aiResponseClean` inalterado quando a IA já está fazendo exatamente a pergunta da etapa pendente atual.
+Nova função `classifyOffTopic(currentMessage, lastAssistantQuestion, funnelStateLive)`:
+- Se mensagem **é resposta válida** à `lastAssistantQuestion` (reusa heurísticas existentes: `isStructuredQuestionAnswer`, `isPotentialInterestAnswer`, `isPotentialEntryDateAnswer`, `isLikelyFullNameAnswer`, `hasValidEmail`, `isNeverBeenToSpainAnswer`, número para idade, sim/não para europa/familiar/remoto/formação/empadronado, cidade espanhola, data) → `null`.
+- Se é **recusa** tratada por `isNameRefusal` / `isEmailRefusal` → `null` (já tem guard).
+- Senão classifica `kind`:
+  - `question` se contém `?` ou palavras interrogativas (regra atual).
+  - `request` se começa com "quero", "queria", "preciso", "gostaria", "me interessa", "tenho dúvida", "quiero", "necesito", "me gustaría", "I want", "I need", "I'd like", "je veux", "j'aimerais", etc.
+  - `other` para o resto (descartado, segue fluxo).
 
-Wire em `index.ts` logo após `stripRepeatedPreHandoff` e antes do split por `|||`.
+### 3. Park determinístico durante o pré-handoff
 
-### 4. Persistência defensiva (`index.ts`)
-Quando a resposta do usuário falha em `isLikelyFullNameAnswer` ou `hasValidEmail`, **NÃO** persistir `contact.full_name`/`contact.email` nem marcar `name_source='client_provided'`. Garante que o gate da próxima volta veja o estado correto.
+Em `index.ts` (área 1845–1875), substituir o bloco `pending_question` por:
 
-### 5. Testes (`prehandoff_gate_test.ts` + ampliar `name_email_refusal_test.ts`)
+```text
+if (collectionGateActive) {
+  const off = classifyOffTopic(rawCustomerMessage, lastAssistantQuestion, funnelStateLive)
+  if (off && (off.kind === 'question' || off.kind === 'request')) {
+    queue.push({ text: rawCustomerMessage, ts: now, kind: off.kind })
+    persist queue → lead_funnel_state.pending_questions
+    // FORÇA resposta = acolhimento + próxima pergunta do roteiro (BYPASS do LLM)
+    aiResponseClean = LOCKED(`${ackPhrase(language)}\n\n${nextStep.scriptQuestion(language)}`)
+  }
+}
+```
 
-- Recusas pt/es/en/fr para nome e email → re-pergunta firme.
-- Bot tenta pular nome → gate força pergunta de nome.
-- Bot tenta repetir email já fornecido → gate força próxima pergunta.
-- Nome válido ("Gustavo Braga") + email válido → gate é no-op.
-- Falsos-positivos: "João Tenório", "Maria Tenente" → não bloqueados pela heurística verbal.
-- Sequência completa simulada: nome inválido → re-pergunta → nome válido → email inválido → re-pergunta → email válido → próxima etapa.
+`ackPhrase` localizado em `lib/questions.ts`:
+- pt: "Anotado! Vou tratar desse ponto assim que terminarmos esse cadastro rapidíssimo."
+- es: "¡Anotado! Trataré ese punto en cuanto terminemos este registro rapidísimo."
+- en: "Noted! I'll cover that as soon as we finish this quick intake."
+- fr: "Noté ! Je traiterai ce point dès que nous aurons terminé ce bref questionnaire."
+
+`nextStep.scriptQuestion(language)` reaproveita os getters existentes (`getEmailQuestion`, `getOutsideSpainAgeQuestion`, `getLocationQuestion`, `getEmpadronamientoCityQuestion`, etc.) selecionando pela próxima etapa do gate (steps já calculadas em `index.ts`). Se a etapa for o próprio H1/H2/H3 → emite o payload do pré-handoff.
+
+Garantia: como o response é **lockado** com `LOCKED_SENTINEL`, todos os overrides downstream (`enforceBlockCompletion`, `forceReask*`, anti-loop) respeitam e não reescrevem.
+
+### 4. Replay automático pós-pré-handoff
+
+Imediatamente após persistir `pre_handoff_sent=true` (área 2244–2257 em `index.ts`), se `pending_questions.length > 0`:
+
+1. Drena a fila **na ordem FIFO**.
+2. Para cada item, gera 1 resposta via Gemini com prompt curto de KB:
+   ```
+   Como prometido, sobre "<text>": <resposta breve da KB no idioma travado>.
+   ```
+3. Envia como **bolhas separadas** via `sendWhatsAppMessage` (mesmo loop do split por `|||`), com 350 ms entre bolhas.
+4. Após cada envio bem-sucedido, remove o item da fila e persiste (idempotência: se Twilio falhar, item permanece).
+5. Sufixo pós-handoff (`getPostHandoffWaitSuffix`) é anexado **apenas à última** bolha do replay para não duplicar.
+6. Se um item depender de KB vazia → usa `kbStrictFallback` (já existe).
+
+Implementação como função separada `replayParkedQuestions(supabase, ctx, queue)` em `lib/parking.ts` para manter `index.ts` limpo.
+
+### 5. Persistência defensiva
+
+- `pending_questions` capped em 10 itens (LRU drop dos mais antigos) para evitar spam.
+- Cada `text` truncado a 500 chars antes de salvar.
+- Drenagem é transacional por item: lê → responde → remove. Falha de envio mantém o item.
+
+### 6. Testes (`offtopic_park_replay_test.ts`)
+
+- `classifyOffTopic`:
+  - Resposta válida à pergunta de idade ("32") → `null`.
+  - Pedido "Quero fazer um curso de idiomas" durante pergunta de localização → `request`.
+  - Pergunta "Quanto custa?" durante pergunta de email → `question`.
+  - Resposta "Sim" para "Você está na Espanha?" → `null`.
+  - Recusas pt/es/en/fr → `null` (delegadas aos guards de nome/email).
+- Park flow: enfileira ao detectar off-topic, response forçada = ack + próxima pergunta do roteiro.
+- Replay: fila com 3 itens → 3 bolhas após `pre_handoff_sent=true`, na ordem; sufixo pós-handoff só na última.
+- Idempotência: se Twilio "falhar" no item 2, item 2 permanece na fila e itens 1/3 não duplicam.
+- Multi-idioma: ackPhrase correto em es/en/fr.
 
 ## Critérios de aceite
-- Cada pergunta do pré-handoff é emitida exatamente 1 vez por resposta válida.
-- Nunca avança com nome=frase/recusa nem email ausente/inválido.
-- Nunca repete pergunta cuja resposta já é válida.
-- Copy de re-pergunta fica progressivamente mais firme.
-- Suíte existente (132+) verde; ~12 novos testes verdes.
+
+- Off-topics durante pré-handoff sempre recebem ack curto + próxima pergunta do roteiro, sem alucinação.
+- Nenhuma off-topic é perdida — todas viram itens da fila.
+- Após H3, todas as dúvidas parqueadas são respondidas em ordem antes do bot voltar ao modo normal pós-handoff.
+- Validações de nome/email do guard anterior continuam intactas.
+- Suíte existente (151) verde + ~10 novos testes.
 
 ## Notas técnicas
-- Sem migração SQL.
-- Mudanças puramente determinísticas pós-LLM, sem alterar o prompt do agente.
+
+- Migração SQL: `ALTER TABLE lead_funnel_state ADD COLUMN pending_questions jsonb NOT NULL DEFAULT '[]'::jsonb;`
+- Sem mudança no prompt do LLM para o caso off-topic — resposta é 100% determinística (LOCKED).
+- Replay usa o mesmo loop de envio/log já existente (mensagens_cliente + interactions).
 - Idiomas: pt, es, en, fr.

@@ -374,6 +374,9 @@ import {
   syncFunnelFromCapturedData,
 } from './lib/funnel-state.ts'
 
+import { classifyOffTopic, getOffTopicAckPhrase } from './lib/offtopic.ts'
+import { normalizeQueue, pushPending, getReplayPreamble, type PendingItem } from './lib/parking.ts'
+
 export {
   FULL_NAME_DENYLIST_PATTERNS,
   isLikelyFullNameAnswer,
@@ -1836,35 +1839,44 @@ Regras:
         const flowComplete = !nextStep // todas as 7 primeiras etapas concluídas → KB liberada
         const collectionGateActive = !flowComplete
 
-        // Wave 7: detectar pergunta factual do cliente.
-        const isFactualQuestion = !!rawCustomerMessage && (
-          /\?/.test(rawCustomerMessage)
-          || /\b(como|quanto|qual|quais|quanto custa|preciso|posso|onde|quando|cu[áa]nto|c[óo]mo|d[óo]nde|how|what|where|when|how much)\b/i.test(rawCustomerMessage)
-        )
-
-        // Wave 7: durante o cadastro, MEMORIZAR a pergunta factual para responder
-        // assim que o cadastro terminar. Após o cadastro, RECUPERAR a pergunta pendente
-        // e usá-la como query da KB no lugar (ou em adição) à mensagem atual.
-        let pendingQuestionToAnswer: string | null = null
+        // ---------- Wave 9: fila de off-topics (parking) ----------
+        // Durante o pré-handoff, qualquer mensagem que não seja resposta válida à
+        // pergunta corrente é parqueada (perguntas E pedidos). Após o pré-handoff,
+        // a fila é drenada automaticamente.
+        let pendingQueue: PendingItem[] = normalizeQueue((funnelStateLive as any).pending_questions || [])
+        let parkedThisTurn: PendingItem | null = null
         try {
-          if (collectionGateActive && isFactualQuestion && !funnelStateLive.pending_question) {
-            await supabase
-              .from('lead_funnel_state')
-              .update({ pending_question: rawCustomerMessage, updated_at: new Date().toISOString() })
-              .eq('lead_id', lead.id)
-            funnelStateLive = { ...funnelStateLive, pending_question: rawCustomerMessage }
-            console.log(`[PENDING_Q] saved during cadastro: "${rawCustomerMessage}"`)
-          } else if (!collectionGateActive && funnelStateLive.pending_question) {
-            pendingQuestionToAnswer = funnelStateLive.pending_question
+          if (collectionGateActive && rawCustomerMessage) {
+            const off = classifyOffTopic(rawCustomerMessage, lastAssistantQuestion, { collectionGateActive: true })
+            if (off) {
+              const before = pendingQueue.length
+              pendingQueue = pushPending(pendingQueue, { text: rawCustomerMessage, kind: off.kind })
+              if (pendingQueue.length !== before || (pendingQueue[pendingQueue.length - 1]?.text === rawCustomerMessage)) {
+                parkedThisTurn = pendingQueue[pendingQueue.length - 1]
+                await supabase
+                  .from('lead_funnel_state')
+                  .update({ pending_questions: pendingQueue, updated_at: new Date().toISOString() })
+                  .eq('lead_id', lead.id)
+                ;(funnelStateLive as any).pending_questions = pendingQueue
+                console.log(`[PARK] enfileirado (${off.kind}) durante cadastro: "${rawCustomerMessage.slice(0, 80)}" | total=${pendingQueue.length}`)
+              }
+            }
+          }
+        } catch (parkErr) {
+          console.warn('[PARK] non-blocking error:', parkErr instanceof Error ? parkErr.message : parkErr)
+        }
+
+        // Compat com lógica legada de pending_question (para KB query pós-handoff)
+        let pendingQuestionToAnswer: string | null = null
+        if (!collectionGateActive && (funnelStateLive as any).pending_question && pendingQueue.length === 0) {
+          pendingQuestionToAnswer = (funnelStateLive as any).pending_question
+          try {
             await supabase
               .from('lead_funnel_state')
               .update({ pending_question: null, updated_at: new Date().toISOString() })
               .eq('lead_id', lead.id)
-            funnelStateLive = { ...funnelStateLive, pending_question: null }
-            console.log(`[PENDING_Q] consumed after cadastro: "${pendingQuestionToAnswer}"`)
-          }
-        } catch (pqErr) {
-          console.warn('[PENDING_Q] non-blocking error:', pqErr instanceof Error ? pqErr.message : pqErr)
+            ;(funnelStateLive as any).pending_question = null
+          } catch (_) { /* best-effort */ }
         }
 
         const kbQueryParts: string[] = []
@@ -1900,6 +1912,9 @@ Regras:
             `3. Siga o roteiro NA ORDEM. Não pule etapas. UMA pergunta principal por turno (a abertura e o pré-handoff têm 2 frases curtas).\n` +
             `4. Mantenha o tom natural, humanizado e curto. Use as frases sugeridas como base — pode adaptar levemente, mas mantenha o sentido e a ordem.\n` +
             `5. A Base de Conhecimento será liberada APÓS o Pré-Handoff (H1+H2) ser enviado e então você poderá responder em detalhes.\n` +
+            (parkedThisTurn
+              ? `6. ⚠️ ALERTA OFF-TOPIC: o cliente desviou do roteiro com "${parkedThisTurn.text.slice(0, 200)}". JÁ ANOTAMOS internamente para responder no fim. Sua resposta DEVE começar EXATAMENTE assim (traduzido para ${langName}): "${getOffTopicAckPhrase(detectedChatLanguage)}" e em seguida fazer SOMENTE a próxima pergunta do roteiro acima. PROIBIDO responder a dúvida agora. PROIBIDO mencionar serviços, valores ou catálogo. UMA frase de acolhimento + a próxima pergunta. Nada mais.\n`
+              : '') +
             `[FIM DO GATE]`
           console.log(`[GATE] step=${nextStep.key} done=${steps.filter(s=>s.done).length}/${steps.length} inSpain=${userInSpain} outside=${userOutsideSpain}`)
         } else {
@@ -2257,6 +2272,86 @@ Regras:
               }
             } catch (flagErr) {
               console.warn('[BPMN-3] flag persist non-blocking error:', flagErr instanceof Error ? flagErr.message : flagErr)
+            }
+
+            // Wave 9: REPLAY automático da fila de off-topics — drena assim que o
+            // pré-handoff (H1+H2+H3) for emitido. Cada item vira UMA bolha extra,
+            // respondida pela KB, com preâmbulo "Como prometido...". O sufixo
+            // pós-handoff é anexado APENAS à última bolha do replay.
+            try {
+              const preNowSent = !!funnelStateLive.pre_handoff_sent
+              const replayQueue = normalizeQueue((funnelStateLive as any).pending_questions || [])
+              if (preNowSent && replayQueue.length > 0) {
+                console.log(`[REPLAY] iniciando drenagem de ${replayQueue.length} item(ns) parqueado(s)`)
+                const replayPreamble = getReplayPreamble(detectedChatLanguage)
+                const replaySuffix = getPostHandoffWaitSuffix(detectedChatLanguage)
+                const remaining = [...replayQueue]
+                for (let idx = 0; idx < replayQueue.length; idx++) {
+                  const item = replayQueue[idx]
+                  const isLast = idx === replayQueue.length - 1
+                  const itemKb = await getKnowledgeBaseContext(supabase, item.text, undefined).catch(() => '')
+                  const replaySystem = `${resolvedSystemPrompt}\n\nVocê está RESPONDENDO uma dúvida que o cliente havia feito durante o cadastro inicial. Responda de forma BREVE (≤3 frases), no idioma travado. NÃO faça perguntas. NÃO repita H1/H2/H3. Comece literalmente com "${replayPreamble}: ".`
+                  let answer = ''
+                  try {
+                    answer = await generateAIResponse(
+                      [],
+                      item.text,
+                      replaySystem,
+                      geminiApiKey,
+                      itemKb,
+                      detectedChatLanguage,
+                    )
+                  } catch (e) {
+                    console.warn('[REPLAY] gemini error item', idx, e instanceof Error ? e.message : e)
+                  }
+                  if (!answer) {
+                    try {
+                      answer = await generateAIResponseOpenAI([], item.text, replaySystem, itemKb, detectedChatLanguage)
+                    } catch (_) { /* ignore */ }
+                  }
+                  if (!answer) {
+                    answer = `${replayPreamble}: ${kbStrictFallback}`
+                  }
+                  // Garante preâmbulo
+                  if (!answer.toLowerCase().startsWith(replayPreamble.toLowerCase())) {
+                    answer = `${replayPreamble}: ${answer.trim()}`
+                  }
+                  if (isLast) {
+                    answer = `${answer.trim()}\n\n${replaySuffix}`
+                  }
+                  try {
+                    await sendWhatsAppMessage(phoneNumber, answer)
+                    await supabase.from('mensagens_cliente').insert({
+                      id_lead: lead.id,
+                      phone_id: parseInt(phoneNumber),
+                      mensagem_IA: answer,
+                      origem: 'IA',
+                    })
+                    await supabase.from('interactions').insert({
+                      lead_id: lead.id,
+                      contact_id: contact.id,
+                      channel: 'WHATSAPP',
+                      direction: 'OUTBOUND',
+                      content: answer,
+                      origin_bot: true,
+                    })
+                    // Remove o item da fila persistida (idempotente).
+                    remaining.shift()
+                    await supabase
+                      .from('lead_funnel_state')
+                      .update({ pending_questions: remaining, updated_at: new Date().toISOString() })
+                      .eq('lead_id', lead.id)
+                    ;(funnelStateLive as any).pending_questions = remaining
+                    console.log(`[REPLAY] item ${idx + 1}/${replayQueue.length} entregue, restantes=${remaining.length}`)
+                    if (!isLast) await new Promise(r => setTimeout(r, 350))
+                  } catch (sendErr) {
+                    console.warn('[REPLAY] envio falhou — item permanece na fila:', sendErr instanceof Error ? sendErr.message : sendErr)
+                    break // não tenta os próximos para preservar a ordem
+                  }
+                }
+              }
+            } catch (replayErr) {
+              console.warn('[REPLAY] non-blocking error:', replayErr instanceof Error ? replayErr.message : replayErr)
             }
 
             // Auditoria v2-5: persiste flags A1/B1 (preâmbulos) para evitar repetição.
