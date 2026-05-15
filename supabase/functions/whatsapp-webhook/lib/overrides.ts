@@ -269,11 +269,17 @@ export function forceReaskFullNameIfSingleWord(
   if (!raw) return aiResponse
   if (hasValidEmail(raw)) return aiResponse // email-as-name é tratado em outro override
   if (isPotentialEntryDateAnswer(raw)) return aiResponse
-  const alpha = countAlphaWords(raw)
-  if (alpha >= 2) return aiResponse // já é nome completo válido
-  if (alpha < 1) return aiResponse // sem letras (ex.: só números) — outros guards lidam
-  // Substitui a resposta da IA por reask explícita do nome completo.
-  return getFullNameReaskQuestion(language)
+  // Recusa explícita ("não tenho nome", "no tengo", "I don't have a name", ...) → reask FIRME.
+  if (isNameRefusal(raw)) return lock(getFullNameRequiredReaskQuestion(language))
+  // Frase / verbo 1ª pessoa / qualquer coisa que não pareça nome próprio → reask FIRME.
+  if (!isLikelyFullNameAnswer(raw)) {
+    const alpha = countAlphaWords(raw)
+    if (alpha < 1) return aiResponse // sem letras — outros guards lidam
+    if (alpha >= 2) return lock(getFullNameRequiredReaskQuestion(language))
+    // 1 palavra alfabética: reask padrão (mais leve)
+    return lock(getFullNameReaskQuestion(language))
+  }
+  return aiResponse
 }
 
 export function forceSkipFullNameIfAlreadyKnown(
@@ -304,6 +310,8 @@ export function forceReaskEmailIfMissing(
   const previousQuestion = extractLastQuestion(previousAssistantMessage)
   if (!isQuestionAboutEmail(previousQuestion)) return aiResponse
   if (hasValidEmail(currentMessage)) return aiResponse
+  // Recusa explícita → reask FIRME (sem preâmbulo da IA).
+  if (isEmailRefusal(currentMessage)) return lock(getEmailRequiredReaskQuestion(language))
   const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
   const reask = getEmailReaskQuestion(language)
   return preamble ? `${preamble}\n${reask}` : reask
