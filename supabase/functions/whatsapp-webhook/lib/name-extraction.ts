@@ -15,16 +15,44 @@ export const FULL_NAME_DENYLIST_PATTERNS: RegExp[] = [
   /^\d/,
 ]
 
+// Padrões de RECUSA / FRASES (não são nomes) — pt/es/en/fr.
+export const NAME_REFUSAL_PATTERNS: RegExp[] = [
+  /\b(n[ãa]o\s+tenho|sem\s+nome|prefiro\s+n[ãa]o|n[ãa]o\s+quero\s+(dizer|informar|falar))\b/i, // pt
+  /\b(no\s+tengo|sin\s+nombre|prefiero\s+no|no\s+quiero\s+(decir|dar|informar))\b/i, // es
+  /\b(i\s+(do\s*n'?t|don'?t)\s+(have|want|wanna)|without\s+a?\s*name|i\s+have\s+no\s+name|prefer\s+not)\b/i, // en
+  /\b(je\s+n['’]?ai\s+pas|sans\s+nom|je\s+(ne\s+)?(veux|souhaite)\s+pas)\b/i, // fr
+]
+
+// Verbos em 1ª pessoa indicam frase, não nome próprio.
+const FIRST_PERSON_VERB_RE = /\b(tenho|tenha|quero|queria|preciso|sou|estou|vou|posso|gosto|acho|prefiro|tengo|tenga|quiero|necesito|soy|estoy|voy|puedo|prefiero|have|want|need|am|going|can|prefer|like|ai|veux|voudrais|suis|vais|peux|aime|pr[ée]f[èe]re)\b/i
+
 export function isLikelyFullNameAnswer(text: string): boolean {
   const raw = text.trim()
   const normalized = normalizeForLanguageChecks(raw)
   if (!raw || raw.length > 90 || normalized.includes('?')) return false
   if (hasValidEmail(raw) || isPotentialEntryDateAnswer(raw)) return false
   if (/^(ok|okay|vale|valeu|sim|si|sí|s|yes|no|não|nao|claro|certo|perfeito|obrigad[oa]|gracias)$/i.test(normalized)) return false
+  if (NAME_REFUSAL_PATTERNS.some((re) => re.test(raw) || re.test(normalized))) return false
+  if (FIRST_PERSON_VERB_RE.test(raw) || FIRST_PERSON_VERB_RE.test(normalized)) return false
   if (FULL_NAME_DENYLIST_PATTERNS.some((re) => re.test(raw) || re.test(normalized))) return false
   const words = raw.split(/\s+/).filter(Boolean)
   const alphaWords = words.filter((word) => /[A-Za-zÀ-ÖØ-öø-ÿ]{2,}/.test(word))
   return alphaWords.length >= 2
+}
+
+export function isNameRefusal(text: string): boolean {
+  const raw = String(text || '').trim()
+  if (!raw) return false
+  const normalized = normalizeForLanguageChecks(raw)
+  return NAME_REFUSAL_PATTERNS.some((re) => re.test(raw) || re.test(normalized))
+}
+
+export function isEmailRefusal(text: string): boolean {
+  const raw = String(text || '').trim()
+  if (!raw) return false
+  const normalized = normalizeForLanguageChecks(raw)
+  // Reusa padrões de recusa (são genéricos: "não tenho", "no tengo", etc.).
+  return NAME_REFUSAL_PATTERNS.some((re) => re.test(raw) || re.test(normalized))
 }
 
 export function findExplicitFullNameAnswer(

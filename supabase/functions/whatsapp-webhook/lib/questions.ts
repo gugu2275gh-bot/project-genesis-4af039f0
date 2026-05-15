@@ -488,6 +488,20 @@ export function getFullNameReaskQuestion(language: ChatLanguage): string {
   return 'Obrigado. Para seguir, preciso do seu *nome e sobrenome* (nome completo). Pode me enviar?'
 }
 
+export function getFullNameRequiredReaskQuestion(language: ChatLanguage): string {
+  if (language === 'es') return 'Para poder atender tu caso, *necesito tu nombre completo* (nombre y apellido). Sin esa información no puedo continuar. ¿Puedes informarlo, por favor?'
+  if (language === 'en') return 'To handle your case I *need your full name* (first and last name). I can’t continue without it. Could you please share it?'
+  if (language === 'fr') return 'Pour traiter votre dossier, j’ai *besoin de votre nom complet* (prénom et nom). Je ne peux pas continuer sans cette information. Pouvez-vous me l’indiquer ?'
+  return 'Para conseguir atender seu caso, *preciso do seu nome completo* (nome e sobrenome). Sem essa informação não consigo continuar. Pode me informar, por favor?'
+}
+
+export function getEmailRequiredReaskQuestion(language: ChatLanguage): string {
+  if (language === 'es') return 'Necesito *un correo electrónico válido* para enviarte las orientaciones y dar seguimiento a tu caso. Sin eso no puedo continuar. ¿Cuál es tu mejor email? (ej.: nombre@gmail.com)'
+  if (language === 'en') return 'I *need a valid email address* to send you the next steps and follow up on your case. I can’t continue without it. What is your best email? (e.g. name@gmail.com)'
+  if (language === 'fr') return 'J’ai *besoin d’une adresse e-mail valide* pour vous envoyer les orientations et suivre votre dossier. Je ne peux pas continuer sans cela. Quel est votre meilleur e-mail ? (ex. nom@gmail.com)'
+  return 'Preciso de *um e-mail válido* para te enviar as orientações e acompanhar seu caso. Sem isso não consigo continuar. Qual é o seu melhor e-mail? (ex.: nome@gmail.com)'
+}
+
 /**
  * Conta palavras "alfabéticas" (≥2 letras) em uma resposta de texto, ignorando
  * pontuação, números e tokens curtos. Usado para detectar se o cliente respondeu
