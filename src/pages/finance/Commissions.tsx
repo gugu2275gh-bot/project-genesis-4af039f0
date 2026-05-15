@@ -64,6 +64,20 @@ export default function Commissions() {
     totalPendingToReceive,
   } = useCommissions();
   const { contracts } = useContracts();
+
+  const { data: configuredRate } = useQuery({
+    queryKey: ['system-config', 'default_commission_rate'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('system_config')
+        .select('value')
+        .eq('key', 'default_commission_rate')
+        .maybeSingle();
+      const n = parseFloat(data?.value ?? '');
+      return Number.isFinite(n) ? n : 10;
+    },
+  });
+  const commissionRate = (configuredRate ?? 10) / 100;
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [payDialogOpen, setPayDialogOpen] = useState(false);
