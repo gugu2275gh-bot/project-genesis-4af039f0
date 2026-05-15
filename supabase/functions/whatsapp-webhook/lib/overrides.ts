@@ -317,6 +317,9 @@ export function forceReaskEmailIfMissing(
   if (isEmailRefusal(currentMessage)) {
     const firm = getEmailRequiredReaskQuestion(language)
     return lock(preamble ? `${preamble}\n${firm}` : firm)
+  }
+  const reask = getEmailReaskQuestion(language)
+  return preamble ? `${preamble}\n${reask}` : reask
 }
 
 /**
@@ -340,9 +343,6 @@ export function forceReaskLocationSpainIfAmbiguous(
     return lock(getLocationSpainRequiredReaskQuestion(language))
   }
   return aiResponse
-}
-  const reask = getEmailReaskQuestion(language)
-  return preamble ? `${preamble}\n${reask}` : reask
 }
 
 export function forceAdvanceFromEntryDateQuestion(
