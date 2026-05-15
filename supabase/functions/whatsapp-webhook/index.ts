@@ -2069,9 +2069,11 @@ Regras:
             catalogSent,
           })
           if (scripted && scripted.trim().length > 0) {
-            const ack = parkedThisTurn
-              ? getOffTopicAckPhrase(detectedChatLanguage)
-              : getShortAck(detectedChatLanguage, lastAssistantQuestion, rawCustomerMessage)
+            const ack = (nextStep.key === 'abertura' || !lastAssistantQuestion)
+              ? ''
+              : (parkedThisTurn
+                ? getOffTopicAckPhrase(detectedChatLanguage)
+                : getShortAck(detectedChatLanguage, lastAssistantQuestion, rawCustomerMessage))
             // Para etapas com múltiplas bolhas (abertura, interesse Msg5+Msg6,
             // pré-handoff H1|||H2|||H3), o ack vira a 1ª bolha; senão prefixa a única bolha.
             const composed = ack
