@@ -98,15 +98,8 @@ export function useCommissions() {
       
       if (error) throw error;
 
-      // Only show commissions whose linked contract has at least one CONFIRMADO payment
-      // AND whose client has a referral (indicação)
-      const filtered = (data || []).filter((c: any) => {
-        const payments = c.contracts?.payments || [];
-        const hasPaidPayment = payments.some((p: any) => p.status === 'CONFIRMADO');
-        const referral = c.contracts?.opportunities?.leads?.contacts?.referral_name;
-        const hasReferral = !!(referral && String(referral).trim());
-        return hasPaidPayment && hasReferral;
-      });
+      // Show all commissions; auto-creation trigger guarantees referral is present.
+      const filtered = (data || []);
 
       // Fetch approver names separately
       const approverIds = [...new Set(filtered.filter((c: any) => c.approved_by_user_id).map((c: any) => c.approved_by_user_id) || [])];
