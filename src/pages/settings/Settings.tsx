@@ -24,8 +24,9 @@ import DatabaseERD from './DatabaseERD';
 import PaymentSettings from './PaymentSettings';
 import WhatsAppTemplatesSettings from './WhatsAppTemplatesSettings';
 import SuppliersManagement from './SuppliersManagement';
+import ExpenseCategoriesManagement from './ExpenseCategoriesManagement';
 
-const TABLE_TABS = ['profiles', 'sectors', 'service-types', 'payment-settings', 'suppliers'] as const;
+const TABLE_TABS = ['profiles', 'sectors', 'service-types', 'payment-settings', 'suppliers', 'expense-categories'] as const;
 
 export default function Settings() {
   const { hasRole } = useAuth();
