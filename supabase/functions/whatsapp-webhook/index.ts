@@ -1912,6 +1912,9 @@ Regras:
             `3. Siga o roteiro NA ORDEM. Não pule etapas. UMA pergunta principal por turno (a abertura e o pré-handoff têm 2 frases curtas).\n` +
             `4. Mantenha o tom natural, humanizado e curto. Use as frases sugeridas como base — pode adaptar levemente, mas mantenha o sentido e a ordem.\n` +
             `5. A Base de Conhecimento será liberada APÓS o Pré-Handoff (H1+H2) ser enviado e então você poderá responder em detalhes.\n` +
+            (parkedThisTurn
+              ? `6. ⚠️ ALERTA OFF-TOPIC: o cliente desviou do roteiro com "${parkedThisTurn.text.slice(0, 200)}". JÁ ANOTAMOS internamente para responder no fim. Sua resposta DEVE começar EXATAMENTE assim (traduzido para ${langName}): "${getOffTopicAckPhrase(detectedChatLanguage)}" e em seguida fazer SOMENTE a próxima pergunta do roteiro acima. PROIBIDO responder a dúvida agora. PROIBIDO mencionar serviços, valores ou catálogo. UMA frase de acolhimento + a próxima pergunta. Nada mais.\n`
+              : '') +
             `[FIM DO GATE]`
           console.log(`[GATE] step=${nextStep.key} done=${steps.filter(s=>s.done).length}/${steps.length} inSpain=${userInSpain} outside=${userOutsideSpain}`)
         } else {
