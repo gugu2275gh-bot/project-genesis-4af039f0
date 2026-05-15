@@ -33,6 +33,7 @@ import {
   isServicesOfferedMessage,
   buildPreHandoffPayload,
   preHandoffSummarySent,
+  getPostHandoffWaitSuffix,
 } from './questions.ts'
 import { isValidSpanishCity, extractCityFromAnswer, normalizeCity } from './spanish-cities.ts'
 
@@ -957,4 +958,77 @@ export function stripRepeatedOpener(
 
   console.warn('[ANTI_REPEAT_OPENER] opener/re-greeting detectado — substituindo por próxima canônica', JSON.stringify({ hasGreeting, hasConsent, hasRegreeting }))
   return lock(nextPendingCanonical(language, flags))
+}
+
+// ============================================================================
+// Anti-repetição do PRÉ-HANDOFF (H1/H2/H3) após handoff já enviado
+// ============================================================================
+
+/** H2 — "cada caso de forma individual" / "each case individually" / "cada caso individualmente" / "chaque cas individuellement". */
+const PREHANDOFF_H2_RE =
+  /(cada caso de forma individual|each case individually|analizamos cada caso|analisamos cada caso|chaque cas individuellement|caminho mais seguro|camino m[áa]s seguro|safest path|voie la plus s[ûu]re)/i
+
+/** H3 — "encaminhar suas informações / remitir tu información / forward your information / transmettre vos informations". */
+const PREHANDOFF_H3_RE =
+  /(encaminhar suas informa[çc][õo]es|remitir tu informaci[óo]n|forward your information|transmettre vos informations|enviar tu informaci[óo]n a un especialista|enviar suas informa[çc][õo]es para um especialista)/i
+
+/** Frase final "estou à disposição… vou te encaminhar com um atendente". */
+const PREHANDOFF_TAIL_RE =
+  /(estou [àa] disposi[çc][ãa]o.{0,80}(atendente|especialista)|estoy a tu disposici[óo]n.{0,80}(asistente|atendente|especialista)|i('?m| am) (here|available).{0,80}(agent|specialist)|je suis [àa] (votre|ta) disposition.{0,80}(agent|sp[ée]cialiste))/i
+
+/**
+ * Após `pre_handoff_sent=true`, remove qualquer reemissão de H1/H2/H3 (e cauda).
+ * - Divide por "|||" e por parágrafos (\n\n); descarta partes que casem com qualquer âncora.
+ * - Se sobrar texto útil → devolve apenas ele (lock para impedir overrides posteriores).
+ * - Se sobrar nada → devolve o sufixo pós-handoff localizado, em uma única bolha.
+ */
+export function stripRepeatedPreHandoff(
+  aiResponse: string,
+  language: ChatLanguage,
+  flags: { preHandoffSent?: boolean },
+): string {
+  if (!aiResponse) return aiResponse
+  if (!flags?.preHandoffSent) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
+
+  const matchesPreHandoff = (s: string): boolean =>
+    PREHANDOFF_H1_RE.test(s) || PREHANDOFF_H2_RE.test(s) || PREHANDOFF_H3_RE.test(s) || PREHANDOFF_TAIL_RE.test(s)
+
+  const bubbles = aiResponse.split('|||').map(b => b.trim()).filter(Boolean)
+  const cleanedBubbles: string[] = []
+  let removedAny = false
+
+  for (const bubble of bubbles) {
+    // Dentro de cada bolha, filtra parágrafos (\n\n) que casem com âncora.
+    const paragraphs = bubble.split(/\n{2,}/).map(p => p.trim()).filter(Boolean)
+    const keptParagraphs: string[] = []
+    for (const p of paragraphs) {
+      if (matchesPreHandoff(p)) {
+        removedAny = true
+        continue
+      }
+      // Mesmo dentro de um parágrafo, se houver linhas individuais com âncoras, remove-as.
+      const lines = p.split(/\n/).map(l => l.trim())
+      const keptLines = lines.filter(l => !l || !matchesPreHandoff(l))
+      const remaining = keptLines.join('\n').trim()
+      if (remaining.length === 0) {
+        removedAny = true
+        continue
+      }
+      if (remaining !== p) removedAny = true
+      keptParagraphs.push(remaining)
+    }
+    const cleaned = keptParagraphs.join('\n\n').trim()
+    if (cleaned.length > 0) cleanedBubbles.push(cleaned)
+  }
+
+  if (!removedAny) return aiResponse
+
+  if (cleanedBubbles.length === 0) {
+    console.warn('[ANTI_REPEAT_PREHANDOFF] resposta era apenas bloco H1/H2/H3 — substituindo por sufixo pós-handoff')
+    return lock(getPostHandoffWaitSuffix(language))
+  }
+
+  console.warn('[ANTI_REPEAT_PREHANDOFF] removidas frases de fechamento; mantido conteúdo útil')
+  return lock(cleanedBubbles.join('|||'))
 }

@@ -1,48 +1,34 @@
-## Diagnóstico — o que ocorreu nos prints
+## Problema
 
-**Sequência observada (idioma EN, locked):**
+Após o pré-handoff/handoff ter sido emitido (flag `pre_handoff_sent=true` em `lead_funnel_state`), o LLM ainda gera novamente as frases de fechamento — "Perfecto. Ya tengo una visión inicial de tu caso…", "En CB analizamos cada caso de forma individual…" e "Voy a remitir tu información…" — duplicando a despedida no meio da conversa pós-handoff (visível no print enviado).
 
-1. User: "hi" → Bot: Msg1 (greeting "Thank you for reaching out…") + Msg2 (consent "quick questions…is that okay?") ✅
-2. User: "ok" → Bot: **repete Msg1+Msg2** ("Everything is good!… I'll ask you a few quick questions…Can we proceed?") ❌
-3. User: "ok" → Bot: **repete só Msg2** ("I'll ask you a few quick questions…is that okay? 😊") ❌
-4. User: "okay" → Bot: finalmente Msg3 ("what is your full name?") ✅
-5. User: "gustavo braga" → Bot: **re-greeting completo** ("Great to meet you, Gustavo! 😊 …I'll help you understand…I'll ask you a few quick questions…Can we proceed?") ❌
+Hoje há defesas para a abertura (`stripRepeatedOpener`) e para perguntas canônicas (`preventRepeatedCanonicalQuestion`), mas **nenhum guard que descarte a repetição de H1/H2/H3** quando o pré-handoff já está concluído. O sufixo "aguarde um especialista" é anexado, mas o bloco de fechamento continua sendo enviado.
 
-**Causa raiz:** o `preventRepeatedCanonicalQuestion` em `lib/overrides.ts` cataloga âncoras para Msg3, Msg4, Msg7, A2-A6, B2-B5 — mas **não tem âncora para Msg1 (greeting) nem Msg2 (consent)**. O LLM re-emite a abertura livremente e nada substitui pela próxima pergunta pendente. Além disso, quando o nome é capturado, o LLM gera um "re-greeting" ("Great to meet you, X! Thank you for reaching…") que reempacota Msg1+Msg2 — também sem guard.
+## Solução
 
-Não há flag persistida `opener_sent` no `outside_spain_progress` (ou equivalente), então o gate só depende do regex do transcript, que falha quando o LLM varia a frase ("Everything is good!" vs "Hello 👋 How are you?").
+Adicionar um stripper determinístico `stripRepeatedPreHandoff` em `supabase/functions/whatsapp-webhook/lib/overrides.ts`, executado na pipeline de overrides logo antes do envio (ou logo antes de `stripPreambleBeforePreHandoff`).
 
-## Plano de correção (mínimo, cirúrgico)
+Comportamento:
 
-### 1. `lib/funnel-state.ts` — persistir flag `opener_sent`
-Acrescentar campo opcional `opener_sent?: boolean` no shape de `outside_spain_progress`. Setar `true` na primeira vez que o webhook detectar greeting+consent já enviados (regex `aberturaDone` reutilizado de `index.ts`).
+1. **Gate de ativação:** roda apenas quando `funnelStateLive.pre_handoff_sent === true` (passado como flag `preHandoffSent`).
+2. **Detecção:** regex multilíngue para cada uma das 3 frases-âncora (reutiliza `PREHANDOFF_H1_RE` já existente + duas novas para H2 "cada caso de forma individual / each case individually / cada cas individuellement" e H3 "encaminhar suas informações / remitir tu información / forward your information / transmettre vos informations").
+3. **Ação por bolha:** divide a resposta por `|||` e por parágrafos; remove qualquer parte que case com H1/H2/H3.
+4. **Resultado vazio:** se sobrar nada significativo, substitui pelo sufixo localizado pós-handoff (`getPostHandoffWaitSuffix`) e marca como `lock()` — assim o usuário recebe uma única linha "Em breve um de nossos especialistas…" em vez do fechamento duplicado.
+5. **Resultado parcial:** se sobrar conteúdo útil (ex.: resposta a uma dúvida nova do cliente), devolve apenas essa parte limpa.
 
-### 2. `lib/overrides.ts` — adicionar 2 âncoras + 1 stripper
-- **Âncora `Msg1_greeting`** — regex pergunta: greeting ("thank you for reaching|gracias por hablar|obrigado por falar|merci de nous"). Guard: `openerSent === true` OR transcript já contém greeting. Substituição: próxima canônica pendente (Msg3 nome se !nameKnown, senão Msg4 email, etc.).
-- **Âncora `Msg2_consent`** — regex pergunta: "(quick questions?|perguntas rápidas|preguntas rápidas)…(is that okay|pode ser|can we proceed|está bien|d'accord)". Mesmo guard. Mesma substituição.
-- **Stripper `stripRepeatedOpener`** — função nova chamada antes de `preventRepeatedCanonicalQuestion`. Se `openerSent === true` E a resposta começa com greeting/welcome, remove o parágrafo de abertura mantendo apenas a pergunta final. Caso só sobre re-greeting (sem pergunta nova), substitui pela próxima canônica pendente via `enforceBlockCompletion`.
+## Arquivos afetados
 
-### 3. `index.ts` — wire-up
-- Após cada turno do assistente, se `aberturaDone` (regex existente nas linhas 1687-1688) for true e `outside_spain_progress.opener_sent` ainda for falso, persistir flag `opener_sent: true` no patch.
-- Passar `openerSent: outside_spain_progress?.opener_sent` para `preventRepeatedCanonicalQuestion` e para o novo `stripRepeatedOpener`.
-- Chamar `stripRepeatedOpener` na pipeline de overrides logo antes de `preventRepeatedCanonicalQuestion`.
-
-### 4. Testes Deno (novo arquivo `opener_idempotency_test.ts`)
-- Greeting repetido com `openerSent=true` + `nameKnown=false` → substituído por Msg3 (nome) nas 4 línguas.
-- Consent repetido com `openerSent=true` + `nameKnown=true` + `emailKnown=false` → substituído por Msg4 (email).
-- Re-greeting pós-nome ("Great to meet you, X! …I'll ask you a few quick questions…") com `openerSent=true` + `nameKnown=true` → strippado, restando apenas próxima canônica.
-- Sem `openerSent` (1ª emissão) → opener passa intacto.
-
-### 5. Validação
-Rodar `supabase--test_edge_functions` apenas em `whatsapp-webhook`. Esperado: 33 testes existentes verdes + ~6 novos verdes.
+- `supabase/functions/whatsapp-webhook/lib/overrides.ts` — nova função `stripRepeatedPreHandoff` + 2 regex (H2, H3 — H1 já existe).
+- `supabase/functions/whatsapp-webhook/index.ts` — chamar `stripRepeatedPreHandoff(aiResponseClean, detectedChatLanguage, { preHandoffSent: !!funnelStateLive.pre_handoff_sent })` logo após `stripPreambleBeforePreHandoff` (linha ~2192) e antes do split por `|||`.
+- Novo arquivo `supabase/functions/whatsapp-webhook/prehandoff_idempotency_test.ts` — testes Deno cobrindo: (a) bloco completo H1+H2+H3 com `preHandoffSent=true` → vira sufixo pós-handoff, (b) só H1 isolado → removido, (c) resposta híbrida (KB + H1 colado) → sobra só o KB, (d) `preHandoffSent=false` → passa intacto, (e) cobertura nas 4 línguas (pt/es/en/fr).
 
 ## Critérios de aceite
-- Idioma: travamento atual preservado (sem mudança).
-- Nenhuma das 4 perguntas (Msg1 greeting, Msg2 consent, Msg3 nome, Msg4 email) reaparece após enviada uma vez.
-- Após nome confirmado, o bot **não** re-emite greeting; vai direto para Msg4.
-- Sequência BPMN v2-6 mantida; flags persistidas em `outside_spain_progress` continuam a fonte da verdade.
 
-## Notas técnicas
-- Sem migração SQL: `outside_spain_progress` já é `jsonb` e aceita campos adicionais.
-- Sem mudança de fluxo no LLM/prompt; apenas guard pós-resposta determinístico.
-- Reutiliza `enforceBlockCompletion` + `lock()` existentes para a substituição.
+- Após `pre_handoff_sent=true`, o cliente nunca mais recebe "visión inicial / visão inicial / initial view / première vision".
+- O fluxo pós-handoff continua respondendo a perguntas livres (KB) com o sufixo "aguarde um especialista" — sem o bloco de despedida grudado.
+- Testes existentes (`bpmn3_handoff_test.ts`, `wave7_test.ts`, `opener_idempotency_test.ts`, etc.) continuam verdes.
+- Sem migração SQL — usa flag `pre_handoff_sent` que já existe em `lead_funnel_state`.
+
+## Validação
+
+Rodar `supabase--test_edge_functions` apenas em `whatsapp-webhook`. Esperado: testes existentes verdes + ~5 novos verdes.
