@@ -455,53 +455,82 @@ export default function Invoices() {
       </PageHeader>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Faturas</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{invoices.length}</div>
-            <p className="text-xs text-muted-foreground">Faturas emitidas</p>
-          </CardContent>
-        </Card>
+      {(() => {
+        const cancelled = invoices.filter(i => i.status === 'CANCELADA');
+        const valid = invoices.filter(i => i.status !== 'CANCELADA');
+        const totalSentValue = sentInvoices.reduce((s, i) => s + (i.total_amount || 0), 0);
+        const totalVat = valid.reduce((s, i) => s + (i.vat_amount || 0), 0);
+        const totalBase = valid.reduce((s, i) => s + (i.amount_without_vat || 0), 0);
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Emitidas</CardTitle>
+                <FileText className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{invoices.length}</div>
+                <p className="text-xs text-muted-foreground">Total geral</p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Aguardando Envio</CardTitle>
-            <Receipt className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-amber-500">{issuedInvoices.length}</div>
-            <p className="text-xs text-muted-foreground">€{totalIssued.toFixed(2)} em faturas</p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Canceladas</CardTitle>
+                <Ban className="h-4 w-4 text-destructive" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-destructive">{cancelled.length}</div>
+                <p className="text-xs text-muted-foreground">Anuladas</p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Enviadas</CardTitle>
-            <Send className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{sentInvoices.length}</div>
-            <p className="text-xs text-muted-foreground">€{totalSent.toFixed(2)} em faturas</p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Aguardando Envio</CardTitle>
+                <Receipt className="h-4 w-4 text-amber-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-amber-500">{issuedInvoices.length}</div>
+                <p className="text-xs text-muted-foreground">€{totalIssued.toFixed(2)}</p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">IVA a Recolher</CardTitle>
-            <Euro className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">
-              €{invoices.filter(i => i.status !== 'CANCELADA').reduce((sum, i) => sum + i.vat_amount, 0).toFixed(2)}
-            </div>
-            <p className="text-xs text-muted-foreground">Total de IVA</p>
-          </CardContent>
-        </Card>
-      </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Enviadas ao Contador</CardTitle>
+                <Send className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{sentInvoices.length}</div>
+                <p className="text-xs text-muted-foreground">Quantidade</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Valor Enviado</CardTitle>
+                <Euro className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">€{totalSentValue.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground">Total faturas enviadas</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">IVA</CardTitle>
+                <Euro className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-primary">€{totalVat.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground">Base €{totalBase.toFixed(2)}</p>
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* Tabela de faturas */}
       <InvoicesTable invoices={invoices} columns={columns} />
