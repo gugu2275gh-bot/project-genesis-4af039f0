@@ -38,8 +38,10 @@ export interface FunnelState {
   outside_spain_progress: Record<string, unknown>
   last_step_change: string
   updated_at: string
-  /** Pergunta factual feita pelo cliente DURANTE o cadastro, a ser respondida assim que o cadastro terminar. */
+  /** Pergunta factual feita pelo cliente DURANTE o cadastro, a ser respondida assim que o cadastro terminar. (legado — preferir pending_questions) */
   pending_question?: string | null
+  /** Wave 9: fila de off-topics (perguntas/pedidos) parqueados durante o pré-handoff. */
+  pending_questions?: Array<{ text: string; ts: string; kind: 'question' | 'request' }>
   /** BPMN-3: H1+H2 já foram enviados (idempotência persistida, não depende de regex). */
   pre_handoff_sent?: boolean
   /** BPMN-3: H3+H4 já foram enviados (entra em modo pós-handoff/KB com sufixo de aguardar). */
