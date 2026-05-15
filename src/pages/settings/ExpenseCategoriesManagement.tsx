@@ -17,6 +17,7 @@ interface ExpenseCategory {
   id: string;
   name: string;
   type: 'FIXA' | 'VARIAVEL';
+  flow: 'ENTRADA' | 'SAIDA';
   description: string | null;
   is_active: boolean;
 }
@@ -26,7 +27,7 @@ export default function ExpenseCategoriesManagement() {
   const qc = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseCategory | null>(null);
-  const [form, setForm] = useState({ name: '', type: 'FIXA' as 'FIXA' | 'VARIAVEL', description: '', is_active: true });
+  const [form, setForm] = useState({ name: '', type: 'FIXA' as 'FIXA' | 'VARIAVEL', flow: 'SAIDA' as 'ENTRADA' | 'SAIDA', description: '', is_active: true });
 
   const { data: categories = [], isLoading } = useQuery({
     queryKey: ['expense-categories-all'],
@@ -47,13 +48,13 @@ export default function ExpenseCategoriesManagement() {
       if (editing) {
         const { error } = await supabase
           .from('expense_categories')
-          .update({ name: form.name.trim(), type: form.type, description: form.description || null, is_active: form.is_active })
+          .update({ name: form.name.trim(), type: form.type, flow: form.flow, description: form.description || null, is_active: form.is_active })
           .eq('id', editing.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('expense_categories')
-          .insert({ name: form.name.trim(), type: form.type, description: form.description || null, is_active: form.is_active });
+          .insert({ name: form.name.trim(), type: form.type, flow: form.flow, description: form.description || null, is_active: form.is_active });
         if (error) throw error;
       }
     },
@@ -82,12 +83,12 @@ export default function ExpenseCategoriesManagement() {
   const reset = () => {
     setIsOpen(false);
     setEditing(null);
-    setForm({ name: '', type: 'FIXA', description: '', is_active: true });
+    setForm({ name: '', type: 'FIXA', flow: 'SAIDA', description: '', is_active: true });
   };
 
   const openEdit = (c: ExpenseCategory) => {
     setEditing(c);
-    setForm({ name: c.name, type: c.type, description: c.description || '', is_active: c.is_active });
+    setForm({ name: c.name, type: c.type, flow: c.flow, description: c.description || '', is_active: c.is_active });
     setIsOpen(true);
   };
 
@@ -102,7 +103,7 @@ export default function ExpenseCategoriesManagement() {
         </div>
         <Dialog open={isOpen} onOpenChange={(o) => (o ? setIsOpen(true) : reset())}>
           <DialogTrigger asChild>
-            <Button onClick={() => { setEditing(null); setForm({ name: '', type: 'FIXA', description: '', is_active: true }); }}>
+            <Button onClick={() => { setEditing(null); setForm({ name: '', type: 'FIXA', flow: 'SAIDA', description: '', is_active: true }); }}>
               <Plus className="h-4 w-4 mr-2" /> Nova Despesa
             </Button>
           </DialogTrigger>
@@ -116,12 +117,22 @@ export default function ExpenseCategoriesManagement() {
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex.: Aluguel, Internet, Material..." />
               </div>
               <div>
+                <Label>Movimento *</Label>
+                <Select value={form.flow} onValueChange={(v: 'ENTRADA' | 'SAIDA') => setForm({ ...form, flow: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ENTRADA">Entrada</SelectItem>
+                    <SelectItem value="SAIDA">Saída</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label>Tipo *</Label>
                 <Select value={form.type} onValueChange={(v: 'FIXA' | 'VARIAVEL') => setForm({ ...form, type: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="FIXA">Despesa Fixa</SelectItem>
-                    <SelectItem value="VARIAVEL">Despesa Variável</SelectItem>
+                    <SelectItem value="FIXA">Fixa</SelectItem>
+                    <SelectItem value="VARIAVEL">Variável</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -153,7 +164,10 @@ export default function ExpenseCategoriesManagement() {
             {categories.map((c) => (
               <div key={c.id} className="flex items-center justify-between border rounded-lg p-3">
                 <div className="flex items-center gap-3">
-                  <Badge variant={c.type === 'FIXA' ? 'default' : 'secondary'}>
+                  <Badge variant={c.flow === 'ENTRADA' ? 'default' : 'destructive'}>
+                    {c.flow === 'ENTRADA' ? 'Entrada' : 'Saída'}
+                  </Badge>
+                  <Badge variant={c.type === 'FIXA' ? 'secondary' : 'outline'}>
                     {c.type === 'FIXA' ? 'Fixa' : 'Variável'}
                   </Badge>
                   <div>
