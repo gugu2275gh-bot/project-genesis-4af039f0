@@ -50,6 +50,7 @@ const navItems: NavItem[] = [
       { label: 'Pagamentos', href: '/finance' },
       { label: 'Comissões', href: '/finance/commissions' },
       { label: 'Fluxo de Caixa', href: '/finance/cashflow' },
+      { label: 'Recibos', href: '/finance/receipts' },
       { label: 'Faturas', href: '/finance/invoices' },
       { label: 'Relatórios', href: '/finance/reports' },
     ]

@@ -32,6 +32,7 @@ import LegalDashboard from "./pages/legal/LegalDashboard";
 import PaymentsList from "./pages/finance/PaymentsList";
 import Commissions from "./pages/finance/Commissions";
 import CashFlow from "./pages/finance/CashFlow";
+import Receipts from "./pages/finance/Receipts";
 import Invoices from "./pages/finance/Invoices";
 import FinancialReports from "./pages/finance/FinancialReports";
 
@@ -120,6 +121,7 @@ function AppRoutes() {
         <Route path="/finance" element={<PaymentsList />} />
         <Route path="/finance/commissions" element={<Commissions />} />
         <Route path="/finance/cashflow" element={<CashFlow />} />
+        <Route path="/finance/receipts" element={<Receipts />} />
         <Route path="/finance/invoices" element={<Invoices />} />
         <Route path="/finance/reports" element={<FinancialReports />} />
         
