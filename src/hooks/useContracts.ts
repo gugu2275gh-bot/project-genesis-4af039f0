@@ -49,6 +49,66 @@ export function useContracts() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  const ensureContractPayments = async (contract: Contract) => {
+    const filters = [`contract_id.eq.${contract.id}`];
+    if (contract.opportunity_id) {
+      filters.push(`opportunity_id.eq.${contract.opportunity_id}`);
+    }
+
+    const { data: existingPayments, error: existingPaymentsError } = await supabase
+      .from('payments')
+      .select('id, contract_id')
+      .or(filters.join(','));
+
+    if (existingPaymentsError) throw existingPaymentsError;
+
+    const unlinkedPaymentIds = (existingPayments || [])
+      .filter((payment) => !payment.contract_id)
+      .map((payment) => payment.id);
+
+    if (unlinkedPaymentIds.length > 0) {
+      const { error: linkError } = await supabase
+        .from('payments')
+        .update({ contract_id: contract.id })
+        .in('id', unlinkedPaymentIds);
+
+      if (linkError) throw linkError;
+    }
+
+    if ((existingPayments?.length || 0) > 0) {
+      return existingPayments?.length || 0;
+    }
+
+    if (!contract.installment_count || contract.installment_count <= 0 || !contract.first_due_date) {
+      return 0;
+    }
+
+    const installmentAmount = contract.installment_amount || (contract.total_fee ? contract.total_fee / contract.installment_count : 0);
+    if (!installmentAmount || installmentAmount <= 0) {
+      return 0;
+    }
+
+    const firstDueDate = new Date(contract.first_due_date);
+    const payments = [];
+    for (let i = 0; i < contract.installment_count; i++) {
+      const dueDate = addMonths(firstDueDate, i);
+      payments.push({
+        contract_id: contract.id,
+        opportunity_id: contract.opportunity_id,
+        amount: installmentAmount,
+        installment_number: i + 1,
+        due_date: dueDate.toISOString().split('T')[0],
+        status: 'PENDENTE' as const,
+        currency: contract.currency || 'EUR',
+      });
+    }
+
+    const { error: paymentsError } = await supabase.from('payments').insert(payments);
+    if (paymentsError) throw paymentsError;
+
+    return payments.length;
+  };
+
   const contractsQuery = useQuery({
     queryKey: ['contracts'],
     queryFn: async () => {
@@ -225,33 +285,8 @@ export function useContracts() {
         .update({ status: 'CONTRATO_ASSINADO' })
         .eq('id', contract.opportunity_id);
 
-      // 3. Generate installment payments if configured
-      if (contract.installment_count && contract.installment_count > 0 && contract.first_due_date) {
-        const installmentAmount = contract.installment_amount || (contract.total_fee ? contract.total_fee / contract.installment_count : 0);
-        const firstDueDate = new Date(contract.first_due_date);
-
-        const payments = [];
-        for (let i = 0; i < contract.installment_count; i++) {
-          const dueDate = addMonths(firstDueDate, i);
-          payments.push({
-            contract_id: contract.id,
-            opportunity_id: contract.opportunity_id,
-            amount: installmentAmount,
-            installment_number: i + 1,
-            due_date: dueDate.toISOString().split('T')[0],
-            status: 'PENDENTE' as const,
-            currency: contract.currency || 'EUR',
-          });
-        }
-
-        const { error: paymentsError } = await supabase
-          .from('payments')
-          .insert(payments);
-
-        if (paymentsError) {
-          console.error('Error creating installment payments:', paymentsError);
-        }
-      }
+      // 3. Link or generate installment payments if configured
+      await ensureContractPayments(contract);
 
       return contract;
     },
@@ -441,33 +476,7 @@ export function useContracts() {
       
       if (error) throw error;
 
-      // Generate installment payments if not already generated
-      if (contract.installment_count && contract.installment_count > 0 && contract.first_due_date) {
-        const { count: existingCount } = await supabase
-          .from('payments')
-          .select('id', { count: 'exact', head: true })
-          .eq('contract_id', contract.id);
-
-        if (!existingCount) {
-          const installmentAmount = contract.installment_amount || (contract.total_fee ? contract.total_fee / contract.installment_count : 0);
-          const firstDueDate = new Date(contract.first_due_date);
-          const payments = [];
-          for (let i = 0; i < contract.installment_count; i++) {
-            const dueDate = addMonths(firstDueDate, i);
-            payments.push({
-              contract_id: contract.id,
-              opportunity_id: contract.opportunity_id,
-              amount: installmentAmount,
-              installment_number: i + 1,
-              due_date: dueDate.toISOString().split('T')[0],
-              status: 'PENDENTE' as const,
-              currency: contract.currency || 'EUR',
-            });
-          }
-          const { error: paymentsError } = await supabase.from('payments').insert(payments);
-          if (paymentsError) console.error('Error creating installment payments on approve:', paymentsError);
-        }
-      }
+      await ensureContractPayments(contract);
 
       return contract;
     },
