@@ -121,6 +121,7 @@ function AppRoutes() {
         <Route path="/finance" element={<PaymentsList />} />
         <Route path="/finance/commissions" element={<Commissions />} />
         <Route path="/finance/cashflow" element={<CashFlow />} />
+        <Route path="/finance/receipts" element={<Receipts />} />
         <Route path="/finance/invoices" element={<Invoices />} />
         <Route path="/finance/reports" element={<FinancialReports />} />
         
