@@ -445,7 +445,7 @@ export default function Invoices() {
               <Button 
                 onClick={handleSubmit} 
                 className="w-full" 
-                disabled={createInvoice.isPending || !selectedClientId || !selectedContractId || !selectedServiceId || !formData.service_description}
+                disabled={createInvoice.isPending || !selectedClientId || !formData.service_description || !formData.amount_without_vat}
               >
                 {createInvoice.isPending ? 'Emitindo...' : 'Emitir Fatura'}
               </Button>
