@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { useAuth } from '@/contexts/AuthContext';
  import { useSuperuser } from '@/hooks/useSuperuser';
 import { Navigate } from 'react-router-dom';
-import { Users, Clock, Settings as SettingsIcon, FileText, Bell, Layers, Briefcase, UserCog, Table2, ChevronDown, Database, Download, Wallet, MessageSquare, Truck } from 'lucide-react';
+import { Users, Clock, Settings as SettingsIcon, FileText, Bell, Layers, Briefcase, UserCog, Table2, ChevronDown, Database, Download, Wallet, MessageSquare, Truck, Receipt } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,8 +24,9 @@ import DatabaseERD from './DatabaseERD';
 import PaymentSettings from './PaymentSettings';
 import WhatsAppTemplatesSettings from './WhatsAppTemplatesSettings';
 import SuppliersManagement from './SuppliersManagement';
+import ExpenseCategoriesManagement from './ExpenseCategoriesManagement';
 
-const TABLE_TABS = ['profiles', 'sectors', 'service-types', 'payment-settings', 'suppliers'] as const;
+const TABLE_TABS = ['profiles', 'sectors', 'service-types', 'payment-settings', 'suppliers', 'expense-categories'] as const;
 
 export default function Settings() {
   const { hasRole } = useAuth();
@@ -107,6 +108,13 @@ export default function Settings() {
                 <Truck className="h-4 w-4 mr-2" />
                 Fornecedores
               </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => handleTableTabSelect('expense-categories')}
+                className={activeTab === 'expense-categories' ? 'bg-accent' : ''}
+              >
+                <Receipt className="h-4 w-4 mr-2" />
+                Despesas
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -178,6 +186,10 @@ export default function Settings() {
 
         <TabsContent value="suppliers">
           <SuppliersManagement />
+        </TabsContent>
+
+        <TabsContent value="expense-categories">
+          <ExpenseCategoriesManagement />
         </TabsContent>
 
         <TabsContent value="whatsapp-templates">
