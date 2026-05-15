@@ -14,6 +14,7 @@ interface AccountForm {
   account_name: string;
   bank_name: string;
   account_details: string;
+  issues_invoice: boolean;
 }
 
 interface AccountRow extends AccountForm {
@@ -21,7 +22,7 @@ interface AccountRow extends AccountForm {
   country: string;
 }
 
-const emptyForm: AccountForm = { account_name: '', bank_name: '', account_details: '' };
+const emptyForm: AccountForm = { account_name: '', bank_name: '', account_details: '', issues_invoice: false };
 
 export default function PaymentSettings() {
   const { user } = useAuth();
