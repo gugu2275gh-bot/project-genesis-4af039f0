@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { DataTable, Column } from '@/components/ui/data-table';
 import {
   Dialog,
   DialogContent,
@@ -19,10 +22,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Receipt as ReceiptIcon, Euro } from 'lucide-react';
+import { Plus, Receipt as ReceiptIcon, Euro, Download, CheckCircle2 } from 'lucide-react';
 import { useContracts } from '@/hooks/useContracts';
 import { downloadReceipt, generateReceiptNumber } from '@/lib/generate-receipt';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useReceipts } from '@/hooks/useReceipts';
+import { format } from 'date-fns';
 
 const PAYMENT_METHODS = [
   { value: 'TRANSFERENCIA', label: 'Transferência Bancária' },
