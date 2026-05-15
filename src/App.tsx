@@ -32,6 +32,7 @@ import LegalDashboard from "./pages/legal/LegalDashboard";
 import PaymentsList from "./pages/finance/PaymentsList";
 import Commissions from "./pages/finance/Commissions";
 import CashFlow from "./pages/finance/CashFlow";
+import Receipts from "./pages/finance/Receipts";
 import Invoices from "./pages/finance/Invoices";
 import FinancialReports from "./pages/finance/FinancialReports";
 
