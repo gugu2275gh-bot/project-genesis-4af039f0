@@ -374,6 +374,9 @@ import {
   syncFunnelFromCapturedData,
 } from './lib/funnel-state.ts'
 
+import { classifyOffTopic, getOffTopicAckPhrase } from './lib/offtopic.ts'
+import { normalizeQueue, pushPending, getReplayPreamble, type PendingItem } from './lib/parking.ts'
+
 export {
   FULL_NAME_DENYLIST_PATTERNS,
   isLikelyFullNameAnswer,
