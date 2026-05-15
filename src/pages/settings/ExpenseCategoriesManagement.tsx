@@ -48,13 +48,13 @@ export default function ExpenseCategoriesManagement() {
       if (editing) {
         const { error } = await supabase
           .from('expense_categories')
-          .update({ name: form.name.trim(), type: form.type, description: form.description || null, is_active: form.is_active })
+          .update({ name: form.name.trim(), type: form.type, flow: form.flow, description: form.description || null, is_active: form.is_active })
           .eq('id', editing.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('expense_categories')
-          .insert({ name: form.name.trim(), type: form.type, description: form.description || null, is_active: form.is_active });
+          .insert({ name: form.name.trim(), type: form.type, flow: form.flow, description: form.description || null, is_active: form.is_active });
         if (error) throw error;
       }
     },
