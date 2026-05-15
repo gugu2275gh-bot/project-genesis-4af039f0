@@ -98,10 +98,10 @@ export function useCommissions() {
       
       if (error) throw error;
 
-      // Mostrar apenas comissões cujo contrato já tem ao menos um pagamento confirmado (PAGO).
+      // Mostrar apenas comissões cujo contrato já tem ao menos um pagamento confirmado.
       const filtered = (data || []).filter((c: any) => {
         const payments = c.contracts?.payments || [];
-        return payments.some((p: any) => p.status === 'PAGO');
+        return payments.some((p: any) => p.status === 'CONFIRMADO');
       });
 
       // Fetch approver names separately
