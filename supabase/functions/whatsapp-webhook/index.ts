@@ -367,6 +367,7 @@ import {
   stripPreambleBeforePreHandoff,
   stripRepeatedPreHandoff,
   isLocked,
+  lock,
 } from './lib/overrides.ts'
 
 import {

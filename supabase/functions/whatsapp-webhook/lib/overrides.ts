@@ -49,7 +49,7 @@ import { isValidSpanishCity, extractCityFromAnswer, normalizeCity } from './span
 export const LOCKED_SENTINEL = '\u200B[LOCKED]\u200B'
 export const isLocked = (s: string): boolean => typeof s === 'string' && s.includes(LOCKED_SENTINEL)
 export const stripLockedSentinel = (s: string): string => (s || '').replaceAll(LOCKED_SENTINEL, '').trim()
-const lock = (s: string): string => `${LOCKED_SENTINEL}${s}`
+export const lock = (s: string): string => `${LOCKED_SENTINEL}${s}`
 
 /**
  * Calcula um patch determinístico do funil baseado em (previousQuestion, currentMessage).
