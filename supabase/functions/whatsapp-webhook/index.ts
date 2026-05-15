@@ -2191,6 +2191,11 @@ Regras:
             let aiResponseClean = stripLockedSentinel(aiResponse)
             // BPMN-v2 defesa: remove qualquer preâmbulo inventado pelo LLM antes do H1.
             aiResponseClean = stripPreambleBeforePreHandoff(aiResponseClean)
+            // BPMN-v2: após pre_handoff_sent=true, descarta reemissões de H1/H2/H3.
+            aiResponseClean = stripRepeatedPreHandoff(aiResponseClean, detectedChatLanguage, {
+              preHandoffSent: !!funnelStateLive.pre_handoff_sent,
+            })
+            aiResponseClean = stripLockedSentinel(aiResponseClean)
 
             // BPMN-3 MODO PÓS-HANDOFF: se H1-H4 já foram enviados, anexa o sufixo
             // localizado de "aguarde um especialista" ao final da resposta (uma única bolha).
