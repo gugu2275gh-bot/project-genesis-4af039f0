@@ -17,6 +17,7 @@ interface ExpenseCategory {
   id: string;
   name: string;
   type: 'FIXA' | 'VARIAVEL';
+  flow: 'ENTRADA' | 'SAIDA';
   description: string | null;
   is_active: boolean;
 }
