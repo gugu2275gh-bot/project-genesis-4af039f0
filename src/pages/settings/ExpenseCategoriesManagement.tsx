@@ -88,7 +88,7 @@ export default function ExpenseCategoriesManagement() {
 
   const openEdit = (c: ExpenseCategory) => {
     setEditing(c);
-    setForm({ name: c.name, type: c.type, description: c.description || '', is_active: c.is_active });
+    setForm({ name: c.name, type: c.type, flow: c.flow, description: c.description || '', is_active: c.is_active });
     setIsOpen(true);
   };
 
