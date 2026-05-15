@@ -26,6 +26,8 @@ import {
   getInvalidSpanishCityReprompt,
   getLocationQuestion,
   getFullNameReaskQuestion,
+  getFullNameRequiredReaskQuestion,
+  getEmailRequiredReaskQuestion,
   countAlphaWords,
   parseEntryDateFromText,
   getOutsideSpainNextQuestion,
@@ -35,6 +37,7 @@ import {
   preHandoffSummarySent,
   getPostHandoffWaitSuffix,
 } from './questions.ts'
+import { isLikelyFullNameAnswer, isNameRefusal, isEmailRefusal } from './name-extraction.ts'
 import { isValidSpanishCity, extractCityFromAnswer, normalizeCity } from './spanish-cities.ts'
 
 // Sentinel invisível usado para "travar" a resposta após uma validação determinística
