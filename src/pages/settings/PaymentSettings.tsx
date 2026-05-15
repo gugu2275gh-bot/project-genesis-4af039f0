@@ -249,6 +249,16 @@ export default function PaymentSettings() {
           placeholder="IBAN, agência, número da conta, etc."
         />
       </div>
+      <div className="flex items-center justify-between rounded-md border p-3">
+        <div>
+          <Label className="text-sm">Emitir fatura</Label>
+          <p className="text-xs text-muted-foreground">Pagamentos nesta conta geram fatura</p>
+        </div>
+        <Switch
+          checked={form.issues_invoice}
+          onCheckedChange={(checked) => setForm({ ...form, issues_invoice: checked })}
+        />
+      </div>
     </div>
   );
 
