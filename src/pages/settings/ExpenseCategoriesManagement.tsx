@@ -27,7 +27,7 @@ export default function ExpenseCategoriesManagement() {
   const qc = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseCategory | null>(null);
-  const [form, setForm] = useState({ name: '', type: 'FIXA' as 'FIXA' | 'VARIAVEL', description: '', is_active: true });
+  const [form, setForm] = useState({ name: '', type: 'FIXA' as 'FIXA' | 'VARIAVEL', flow: 'SAIDA' as 'ENTRADA' | 'SAIDA', description: '', is_active: true });
 
   const { data: categories = [], isLoading } = useQuery({
     queryKey: ['expense-categories-all'],
