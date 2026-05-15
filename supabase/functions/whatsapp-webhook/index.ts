@@ -361,6 +361,7 @@ import {
   stripRepeatedOpener,
   stripLockedSentinel,
   stripPreambleBeforePreHandoff,
+  stripRepeatedPreHandoff,
   isLocked,
 } from './lib/overrides.ts'
 
