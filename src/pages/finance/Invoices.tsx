@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { useInvoices, Invoice, InvoiceInsert } from '@/hooks/useInvoices';
 import { useContracts } from '@/hooks/useContracts';
+import { useContacts } from '@/hooks/useContacts';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -55,6 +56,7 @@ export default function Invoices() {
     totalSent,
   } = useInvoices();
   const { contracts } = useContracts();
+  const { contacts } = useContacts();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
@@ -67,12 +69,11 @@ export default function Invoices() {
     vat_rate: 0.21,
   });
 
-  // Build unique clients list from contracts
-  const clientsMap = new Map<string, { id: string; name: string }>();
-  contracts.forEach((c) => {
-    const contact = c.opportunities?.leads?.contacts;
-    if (contact?.id && !clientsMap.has(contact.id)) {
-      clientsMap.set(contact.id, { id: contact.id, name: contact.full_name });
+  // Source clients from contacts table (so all registered clients appear, even without contracts)
+  const clientsMap = new Map<string, { id: string; name: string; document?: string | null; address?: string | null }>();
+  (contacts || []).forEach((c) => {
+    if (!clientsMap.has(c.id)) {
+      clientsMap.set(c.id, { id: c.id, name: c.full_name, document: c.document_number, address: c.address });
     }
   });
   const clients = Array.from(clientsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
@@ -112,6 +113,8 @@ export default function Invoices() {
     setFormData((f) => ({
       ...f,
       client_name: client?.name || '',
+      client_document: client?.document || '',
+      client_address: client?.address || '',
       contract_id: undefined,
       amount_without_vat: 0,
       service_description: '',
@@ -310,14 +313,20 @@ export default function Invoices() {
               </div>
 
               <div className="space-y-2">
-                <Label>Contrato *</Label>
+                <Label>Contrato</Label>
                 <Select
                   value={selectedContractId}
                   onValueChange={handleContractSelect}
-                  disabled={!selectedClientId}
+                  disabled={!selectedClientId || clientContracts.length === 0}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={selectedClientId ? 'Selecione um contrato' : 'Selecione um cliente primeiro'} />
+                    <SelectValue placeholder={
+                      !selectedClientId
+                        ? 'Selecione um cliente primeiro'
+                        : clientContracts.length === 0
+                          ? 'Nenhum contrato — preencha valor manualmente'
+                          : 'Selecione um contrato (opcional)'
+                    } />
                   </SelectTrigger>
                   <SelectContent>
                     {clientContracts.map((contract) => (
@@ -329,23 +338,25 @@ export default function Invoices() {
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label>Serviço *</Label>
-                <Select
-                  value={selectedServiceId}
-                  onValueChange={handleServiceSelect}
-                  disabled={!selectedContractId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={selectedContractId ? 'Selecione um serviço' : 'Selecione um contrato primeiro'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {contractServices.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {contractServices.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Serviço</Label>
+                  <Select
+                    value={selectedServiceId}
+                    onValueChange={handleServiceSelect}
+                    disabled={!selectedContractId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um serviço (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {contractServices.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -434,7 +445,7 @@ export default function Invoices() {
               <Button 
                 onClick={handleSubmit} 
                 className="w-full" 
-                disabled={createInvoice.isPending || !selectedClientId || !selectedContractId || !selectedServiceId || !formData.service_description}
+                disabled={createInvoice.isPending || !selectedClientId || !formData.service_description || !formData.amount_without_vat}
               >
                 {createInvoice.isPending ? 'Emitindo...' : 'Emitir Fatura'}
               </Button>
