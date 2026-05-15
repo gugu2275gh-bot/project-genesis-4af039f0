@@ -56,6 +56,7 @@ export default function Invoices() {
     totalSent,
   } = useInvoices();
   const { contracts } = useContracts();
+  const { contacts } = useContacts();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
@@ -68,12 +69,11 @@ export default function Invoices() {
     vat_rate: 0.21,
   });
 
-  // Build unique clients list from contracts
-  const clientsMap = new Map<string, { id: string; name: string }>();
-  contracts.forEach((c) => {
-    const contact = c.opportunities?.leads?.contacts;
-    if (contact?.id && !clientsMap.has(contact.id)) {
-      clientsMap.set(contact.id, { id: contact.id, name: contact.full_name });
+  // Source clients from contacts table (so all registered clients appear, even without contracts)
+  const clientsMap = new Map<string, { id: string; name: string; document?: string | null; address?: string | null }>();
+  (contacts || []).forEach((c) => {
+    if (!clientsMap.has(c.id)) {
+      clientsMap.set(c.id, { id: c.id, name: c.full_name, document: c.document_number, address: c.address });
     }
   });
   const clients = Array.from(clientsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
