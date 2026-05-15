@@ -75,7 +75,33 @@ export function usePayments() {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data as PaymentWithOpportunity[];
+      const payments = (data || []) as PaymentWithOpportunity[];
+      const orphanOpportunityIds = Array.from(new Set(
+        payments
+          .filter((payment) => !payment.contracts && payment.opportunity_id)
+          .map((payment) => payment.opportunity_id)
+      ));
+
+      if (orphanOpportunityIds.length === 0) {
+        return payments;
+      }
+
+      const { data: contracts, error: contractsError } = await supabase
+        .from('contracts')
+        .select('*')
+        .in('opportunity_id', orphanOpportunityIds)
+        .in('status', ['APROVADO', 'ASSINADO']);
+
+      if (contractsError) throw contractsError;
+
+      const contractByOpportunityId = new Map(
+        (contracts || []).map((contract) => [contract.opportunity_id, contract])
+      );
+
+      return payments.map((payment) => ({
+        ...payment,
+        contracts: payment.contracts || contractByOpportunityId.get(payment.opportunity_id) || null,
+      }));
     },
   });
 
