@@ -371,31 +371,9 @@ export default function Commissions() {
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label>Período de Referência</Label>
-                <Input
-                  value={formData.reference_period || ''}
-                  onChange={(e) => setFormData({ ...formData, reference_period: e.target.value })}
-                  placeholder="Ex: Janeiro 2026, Q1 2026"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="has_invoice"
-                  checked={formData.has_invoice}
-                  onChange={(e) => setFormData({ ...formData, has_invoice: e.target.checked })}
-                  className="rounded border-gray-300"
-                />
-                <Label htmlFor="has_invoice">
-                  Emite Nota Fiscal (10% ao invés de 8%)
-                </Label>
-              </div>
-
               <div className="bg-muted p-3 rounded-md">
                 <p className="text-sm text-muted-foreground">
-                  Comissão calculada: <strong>€{(formData.base_amount * (formData.has_invoice ? 0.10 : 0.08)).toFixed(2)}</strong>
+                  Comissão calculada: <strong>€{(formData.base_amount * 0.10).toFixed(2)}</strong>
                 </p>
               </div>
 
