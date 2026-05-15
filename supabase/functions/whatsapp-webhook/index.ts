@@ -1839,35 +1839,44 @@ Regras:
         const flowComplete = !nextStep // todas as 7 primeiras etapas concluídas → KB liberada
         const collectionGateActive = !flowComplete
 
-        // Wave 7: detectar pergunta factual do cliente.
-        const isFactualQuestion = !!rawCustomerMessage && (
-          /\?/.test(rawCustomerMessage)
-          || /\b(como|quanto|qual|quais|quanto custa|preciso|posso|onde|quando|cu[áa]nto|c[óo]mo|d[óo]nde|how|what|where|when|how much)\b/i.test(rawCustomerMessage)
-        )
-
-        // Wave 7: durante o cadastro, MEMORIZAR a pergunta factual para responder
-        // assim que o cadastro terminar. Após o cadastro, RECUPERAR a pergunta pendente
-        // e usá-la como query da KB no lugar (ou em adição) à mensagem atual.
-        let pendingQuestionToAnswer: string | null = null
+        // ---------- Wave 9: fila de off-topics (parking) ----------
+        // Durante o pré-handoff, qualquer mensagem que não seja resposta válida à
+        // pergunta corrente é parqueada (perguntas E pedidos). Após o pré-handoff,
+        // a fila é drenada automaticamente.
+        let pendingQueue: PendingItem[] = normalizeQueue((funnelStateLive as any).pending_questions || [])
+        let parkedThisTurn: PendingItem | null = null
         try {
-          if (collectionGateActive && isFactualQuestion && !funnelStateLive.pending_question) {
-            await supabase
-              .from('lead_funnel_state')
-              .update({ pending_question: rawCustomerMessage, updated_at: new Date().toISOString() })
-              .eq('lead_id', lead.id)
-            funnelStateLive = { ...funnelStateLive, pending_question: rawCustomerMessage }
-            console.log(`[PENDING_Q] saved during cadastro: "${rawCustomerMessage}"`)
-          } else if (!collectionGateActive && funnelStateLive.pending_question) {
-            pendingQuestionToAnswer = funnelStateLive.pending_question
+          if (collectionGateActive && rawCustomerMessage) {
+            const off = classifyOffTopic(rawCustomerMessage, lastAssistantQuestion, { collectionGateActive: true })
+            if (off) {
+              const before = pendingQueue.length
+              pendingQueue = pushPending(pendingQueue, { text: rawCustomerMessage, kind: off.kind })
+              if (pendingQueue.length !== before || (pendingQueue[pendingQueue.length - 1]?.text === rawCustomerMessage)) {
+                parkedThisTurn = pendingQueue[pendingQueue.length - 1]
+                await supabase
+                  .from('lead_funnel_state')
+                  .update({ pending_questions: pendingQueue, updated_at: new Date().toISOString() })
+                  .eq('lead_id', lead.id)
+                ;(funnelStateLive as any).pending_questions = pendingQueue
+                console.log(`[PARK] enfileirado (${off.kind}) durante cadastro: "${rawCustomerMessage.slice(0, 80)}" | total=${pendingQueue.length}`)
+              }
+            }
+          }
+        } catch (parkErr) {
+          console.warn('[PARK] non-blocking error:', parkErr instanceof Error ? parkErr.message : parkErr)
+        }
+
+        // Compat com lógica legada de pending_question (para KB query pós-handoff)
+        let pendingQuestionToAnswer: string | null = null
+        if (!collectionGateActive && (funnelStateLive as any).pending_question && pendingQueue.length === 0) {
+          pendingQuestionToAnswer = (funnelStateLive as any).pending_question
+          try {
             await supabase
               .from('lead_funnel_state')
               .update({ pending_question: null, updated_at: new Date().toISOString() })
               .eq('lead_id', lead.id)
-            funnelStateLive = { ...funnelStateLive, pending_question: null }
-            console.log(`[PENDING_Q] consumed after cadastro: "${pendingQuestionToAnswer}"`)
-          }
-        } catch (pqErr) {
-          console.warn('[PENDING_Q] non-blocking error:', pqErr instanceof Error ? pqErr.message : pqErr)
+            ;(funnelStateLive as any).pending_question = null
+          } catch (_) { /* best-effort */ }
         }
 
         const kbQueryParts: string[] = []
