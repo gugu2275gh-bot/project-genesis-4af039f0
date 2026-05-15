@@ -429,7 +429,7 @@ export function useContracts() {
 
   const approveContract = useMutation({
     mutationFn: async (id: string) => {
-      const { data, error } = await supabase
+      const { data: contract, error } = await supabase
         .from('contracts')
         .update({
           status: 'APROVADO' as any,
@@ -440,11 +440,41 @@ export function useContracts() {
         .single();
       
       if (error) throw error;
-      return data;
+
+      // Generate installment payments if not already generated
+      if (contract.installment_count && contract.installment_count > 0 && contract.first_due_date) {
+        const { count: existingCount } = await supabase
+          .from('payments')
+          .select('id', { count: 'exact', head: true })
+          .eq('contract_id', contract.id);
+
+        if (!existingCount) {
+          const installmentAmount = contract.installment_amount || (contract.total_fee ? contract.total_fee / contract.installment_count : 0);
+          const firstDueDate = new Date(contract.first_due_date);
+          const payments = [];
+          for (let i = 0; i < contract.installment_count; i++) {
+            const dueDate = addMonths(firstDueDate, i);
+            payments.push({
+              contract_id: contract.id,
+              opportunity_id: contract.opportunity_id,
+              amount: installmentAmount,
+              installment_number: i + 1,
+              due_date: dueDate.toISOString().split('T')[0],
+              status: 'PENDENTE' as const,
+              currency: contract.currency || 'EUR',
+            });
+          }
+          const { error: paymentsError } = await supabase.from('payments').insert(payments);
+          if (paymentsError) console.error('Error creating installment payments on approve:', paymentsError);
+        }
+      }
+
+      return contract;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contracts'] });
-      toast({ title: 'Contrato aprovado com sucesso' });
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
+      toast({ title: 'Contrato aprovado e pagamentos gerados' });
     },
     onError: (error) => {
       toast({ title: 'Erro ao aprovar contrato', description: error.message, variant: 'destructive' });
