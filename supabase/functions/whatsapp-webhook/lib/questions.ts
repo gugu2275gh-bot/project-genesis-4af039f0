@@ -1,6 +1,6 @@
 // @ts-nocheck
 // Wave 3b step 4: question detectors + localized model phrases
-import { type ChatLanguage, normalizeForLanguageChecks } from './language.ts'
+import { type ChatLanguage, normalizeForLanguageChecks, getPromptTemplates } from './language.ts'
 
 export function isStructuredQuestionAnswer(text: string): boolean {
   const sample = normalizeForLanguageChecks(text)
