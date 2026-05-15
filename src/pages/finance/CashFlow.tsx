@@ -53,10 +53,6 @@ const ENTRY_CATEGORIES = [
 const EXIT_CATEGORIES = [
   { value: 'DESPESA_FIXA', label: 'Despesa Fixa' },
   { value: 'DESPESA_VARIAVEL', label: 'Despesa Variável' },
-  { value: 'COMISSAO_PAGA', label: 'Comissão Paga' },
-  { value: 'TAXA_OFICIAL', label: 'Taxa Oficial' },
-  { value: 'TRANSFERENCIA_INTERNA', label: 'Transferência Interna' },
-  { value: 'PRO_LABORE', label: 'Pró-Labore / Retirada' },
   { value: 'OUTROS', label: 'Outros' },
 ];
 
