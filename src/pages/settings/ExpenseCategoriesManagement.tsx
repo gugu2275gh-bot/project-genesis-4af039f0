@@ -103,7 +103,7 @@ export default function ExpenseCategoriesManagement() {
         </div>
         <Dialog open={isOpen} onOpenChange={(o) => (o ? setIsOpen(true) : reset())}>
           <DialogTrigger asChild>
-            <Button onClick={() => { setEditing(null); setForm({ name: '', type: 'FIXA', description: '', is_active: true }); }}>
+            <Button onClick={() => { setEditing(null); setForm({ name: '', type: 'FIXA', flow: 'SAIDA', description: '', is_active: true }); }}>
               <Plus className="h-4 w-4 mr-2" /> Nova Despesa
             </Button>
           </DialogTrigger>
