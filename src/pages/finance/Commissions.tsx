@@ -74,7 +74,7 @@ export default function Commissions() {
     collaborator_name: '',
     collaborator_type: 'CAPTADOR',
     base_amount: 0,
-    has_invoice: false,
+    has_invoice: true,
     reference_period: '',
     paid_at: null,
   });
@@ -101,7 +101,7 @@ export default function Commissions() {
           collaborator_name: '',
           collaborator_type: 'CAPTADOR',
           base_amount: 0,
-          has_invoice: false,
+          has_invoice: true,
           reference_period: '',
           paid_at: null,
         });
