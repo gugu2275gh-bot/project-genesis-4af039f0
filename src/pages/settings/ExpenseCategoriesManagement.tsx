@@ -164,7 +164,10 @@ export default function ExpenseCategoriesManagement() {
             {categories.map((c) => (
               <div key={c.id} className="flex items-center justify-between border rounded-lg p-3">
                 <div className="flex items-center gap-3">
-                  <Badge variant={c.type === 'FIXA' ? 'default' : 'secondary'}>
+                  <Badge variant={c.flow === 'ENTRADA' ? 'default' : 'destructive'}>
+                    {c.flow === 'ENTRADA' ? 'Entrada' : 'Saída'}
+                  </Badge>
+                  <Badge variant={c.type === 'FIXA' ? 'secondary' : 'outline'}>
                     {c.type === 'FIXA' ? 'Fixa' : 'Variável'}
                   </Badge>
                   <div>
