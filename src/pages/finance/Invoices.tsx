@@ -504,14 +504,66 @@ export default function Invoices() {
       </div>
 
       {/* Tabela de faturas */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Faturas Emitidas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DataTable columns={columns} data={invoices} emptyMessage="Nenhuma fatura emitida" />
-        </CardContent>
-      </Card>
+      <InvoicesTable invoices={invoices} columns={columns} />
     </div>
+  );
+}
+
+function InvoicesTable({ invoices, columns }: { invoices: Invoice[]; columns: Column<Invoice>[] }) {
+  const [filterClient, setFilterClient] = useState('');
+  const [filterNumber, setFilterNumber] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [filterFrom, setFilterFrom] = useState('');
+  const [filterTo, setFilterTo] = useState('');
+
+  const filtered = invoices.filter((i) => {
+    if (filterClient && !i.client_name.toLowerCase().includes(filterClient.toLowerCase())) return false;
+    if (filterNumber && !i.invoice_number.toLowerCase().includes(filterNumber.toLowerCase())) return false;
+    if (filterStatus !== 'ALL' && i.status !== filterStatus) return false;
+    const d = new Date(i.issued_at);
+    if (filterFrom && d < new Date(filterFrom)) return false;
+    if (filterTo && d > new Date(filterTo + 'T23:59:59')) return false;
+    return true;
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Faturas Emitidas</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Cliente</Label>
+            <Input placeholder="Buscar cliente" value={filterClient} onChange={(e) => setFilterClient(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Nº Fatura</Label>
+            <Input placeholder="Nº" value={filterNumber} onChange={(e) => setFilterNumber(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Status</Label>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todos</SelectItem>
+                <SelectItem value="EMITIDA">Emitida</SelectItem>
+                <SelectItem value="ENVIADA">Enviada</SelectItem>
+                <SelectItem value="CANCELADA">Cancelada</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">De</Label>
+            <Input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Até</Label>
+            <Input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} />
+          </div>
+        </div>
+        <DataTable columns={columns} data={filtered} emptyMessage="Nenhuma fatura encontrada" />
+      </CardContent>
+    </Card>
   );
 }
