@@ -495,6 +495,43 @@ export function getFullNameRequiredReaskQuestion(language: ChatLanguage): string
   return 'Para conseguir atender seu caso, *preciso do seu nome completo* (nome e sobrenome). Sem essa informação não consigo continuar. Pode me informar, por favor?'
 }
 
+export function getLocationSpainRequiredReaskQuestion(language: ChatLanguage): string {
+  if (language === 'es') return 'Necesito saber si estás en España (Sí o No).'
+  if (language === 'en') return 'I need to know whether you are in Spain (Yes or No).'
+  if (language === 'fr') return "J'ai besoin de savoir si vous êtes en Espagne (Oui ou Non)."
+  return 'Preciso saber se você está na Espanha (Sim ou Não).'
+}
+
+export type YesNoClassification = 'yes' | 'no' | 'ambiguous'
+
+/**
+ * Classifica a resposta do cliente à pergunta "Está na Espanha?" em yes/no/ambíguo.
+ * Estrito: qualquer coisa que não seja claramente um sim ou não vira 'ambiguous'.
+ */
+export function classifyYesNo(text: string): YesNoClassification {
+  const ans = String(text || '').toLowerCase().trim()
+  if (!ans) return 'ambiguous'
+
+  // Recusas e respostas evasivas → ambíguo (precisa re-perguntar firme)
+  const refusalRe = /(n[ãa]o quero (responder|dizer|falar|informar)|prefiro n[ãa]o|prefer not|don'?t want to (answer|say)|no quiero (responder|decir)|prefiero no|je (ne )?(veux|pr[ée]f[èe]re) pas)/i
+  if (refusalRe.test(ans)) return 'ambiguous'
+
+  // Negativa pura tem prioridade
+  const isNegative = /^\s*(n[ãa]o|no|nope|nah|non)\b/i.test(ans)
+    || /\b(ainda n[ãa]o|todav[ií]a no|not yet|pas encore)\b/i.test(ans)
+    || /\b(n[ãa]o (estou|moro|vivo)|no (estoy|vivo)|i'?m not|not in spain|je ne suis pas)\b/i.test(ans)
+    || /\b(brasil|brazil|portugal|argentina|m[ée]xico|mexico|colombia|chile|uruguai|uruguay|venezuela|paraguai|paraguay|estados unidos|eua|usa|fora|outro pa[ií]s|en otro pa[ií]s|em outro pa[ií]s|other country)\b/i.test(ans)
+  if (isNegative) return 'no'
+
+  const isAffirmative = /^\s*(sim|si|s[ií]|yes|yep|yeah|claro|exato|exactamente|exactly|oui|ouais)\b/i.test(ans)
+    || /\b(j[áa] estou|ya estoy|estou (na |em )?espanha|estoy en espa[ñn]a|i'?m in spain|aqui na espanha|aqu[ií] en espa[ñn]a|je suis en espagne)\b/i.test(ans)
+    || /\b(estou|estoy|moro|vivo|living|live here)\b/i.test(ans)
+    || /\b(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|valencia|sevilla|m[áa]laga|bilbao|alicante|zaragoza|murcia|palma|granada)\b/i.test(ans)
+  if (isAffirmative) return 'yes'
+
+  return 'ambiguous'
+}
+
 export function getEmailRequiredReaskQuestion(language: ChatLanguage): string {
   if (language === 'es') return 'Necesito *un correo electrónico válido* para enviarte las orientaciones y dar seguimiento a tu caso. Sin eso no puedo continuar. ¿Cuál es tu mejor email? (ej.: nombre@gmail.com)'
   if (language === 'en') return 'I *need a valid email address* to send you the next steps and follow up on your case. I can’t continue without it. What is your best email? (e.g. name@gmail.com)'
