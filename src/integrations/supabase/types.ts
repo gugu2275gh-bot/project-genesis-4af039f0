@@ -1862,6 +1862,7 @@ export type Database = {
           created_by_user_id: string | null
           id: string
           is_active: boolean | null
+          issues_invoice: boolean
           updated_at: string | null
         }
         Insert: {
@@ -1873,6 +1874,7 @@ export type Database = {
           created_by_user_id?: string | null
           id?: string
           is_active?: boolean | null
+          issues_invoice?: boolean
           updated_at?: string | null
         }
         Update: {
@@ -1884,6 +1886,7 @@ export type Database = {
           created_by_user_id?: string | null
           id?: string
           is_active?: boolean | null
+          issues_invoice?: boolean
           updated_at?: string | null
         }
         Relationships: [

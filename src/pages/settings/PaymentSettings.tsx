@@ -8,12 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Save, Percent, Plus, Trash2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 
 interface AccountForm {
   account_name: string;
   bank_name: string;
   account_details: string;
+  issues_invoice: boolean;
 }
 
 interface AccountRow extends AccountForm {
@@ -21,7 +23,7 @@ interface AccountRow extends AccountForm {
   country: string;
 }
 
-const emptyForm: AccountForm = { account_name: '', bank_name: '', account_details: '' };
+const emptyForm: AccountForm = { account_name: '', bank_name: '', account_details: '', issues_invoice: false };
 
 export default function PaymentSettings() {
   const { user } = useAuth();
@@ -133,6 +135,7 @@ export default function PaymentSettings() {
           account_name: a.account_name || '',
           bank_name: a.bank_name || '',
           account_details: a.account_details || '',
+          issues_invoice: !!a.issues_invoice,
         };
       });
       return next;
@@ -147,6 +150,7 @@ export default function PaymentSettings() {
           account_name: form.account_name,
           bank_name: form.bank_name || null,
           account_details: form.account_details || null,
+          issues_invoice: form.issues_invoice,
         })
         .eq('id', id);
       if (error) throw error;
@@ -167,6 +171,7 @@ export default function PaymentSettings() {
           account_name: form.account_name,
           bank_name: form.bank_name || null,
           account_details: form.account_details || null,
+          issues_invoice: form.issues_invoice,
           created_by_user_id: user?.id,
         });
       if (error) throw error;
@@ -242,6 +247,16 @@ export default function PaymentSettings() {
           onChange={(e) => setForm({ ...form, account_details: e.target.value })}
           rows={3}
           placeholder="IBAN, agência, número da conta, etc."
+        />
+      </div>
+      <div className="flex items-center justify-between rounded-md border p-3">
+        <div>
+          <Label className="text-sm">Emitir fatura</Label>
+          <p className="text-xs text-muted-foreground">Pagamentos nesta conta geram fatura</p>
+        </div>
+        <Switch
+          checked={form.issues_invoice}
+          onCheckedChange={(checked) => setForm({ ...form, issues_invoice: checked })}
         />
       </div>
     </div>

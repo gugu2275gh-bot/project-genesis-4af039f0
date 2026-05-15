@@ -1,0 +1,1 @@
+ALTER TABLE public.payment_accounts ADD COLUMN IF NOT EXISTS issues_invoice boolean NOT NULL DEFAULT false;
