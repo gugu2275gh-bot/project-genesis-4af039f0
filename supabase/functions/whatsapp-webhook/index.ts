@@ -2050,6 +2050,38 @@ Regras:
           assistantTranscript: allAssistant,
         })
 
+        // ===== HARD-LOCK FINAL: pré-handoff determinístico =====
+        // Durante o gate, substitui o texto da IA pela próxima pergunta canônica
+        // do roteiro (zero invenção). Preserva reasks já travados (nome/email/Spain).
+        if (collectionGateActive && nextStep && !isLocked(aiResponse)) {
+          const scripted = getNextScriptedQuestion(nextStep.key as any, detectedChatLanguage, {
+            userInSpain,
+            userOutsideSpain,
+            assistantTranscript: allAssistant,
+            entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+            locationKnown: funnelStateLive.location_known,
+            empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+            empadronadoCity: funnelStateLive.empadronado_city,
+            empadronadoSinceConfirmed: (funnelStateLive as any).empadronamiento_since,
+            preHandoffSent: !!funnelStateLive.pre_handoff_sent,
+            handoffSent: !!funnelStateLive.handoff_sent,
+            outsideProgress: outsideProgressLive,
+            catalogSent,
+          })
+          if (scripted && scripted.trim().length > 0) {
+            const ack = parkedThisTurn
+              ? getOffTopicAckPhrase(detectedChatLanguage)
+              : getShortAck(detectedChatLanguage, lastAssistantQuestion, rawCustomerMessage)
+            // Para etapas com múltiplas bolhas (abertura, interesse Msg5+Msg6,
+            // pré-handoff H1|||H2|||H3), o ack vira a 1ª bolha; senão prefixa a única bolha.
+            const composed = ack
+              ? (scripted.includes('|||') ? `${ack}|||${scripted}` : `${ack}\n\n${scripted}`)
+              : scripted
+            console.log(`[GATE-HARD-LOCK] step=${nextStep.key} replacing AI output with canonical script (len=${composed.length})`)
+            aiResponse = lock(composed)
+          }
+        }
+
         // F1-HARD: se o nome já é confiável e a IA mesmo assim perguntou nome (guard zerou ou
         // sobrou só o preâmbulo), forçar uma nova geração com instrução anti-nome explícita.
         if (!nameMissing && (!aiResponse || aiResponse.trim().length < 10)) {
