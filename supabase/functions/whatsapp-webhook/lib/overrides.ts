@@ -317,7 +317,30 @@ export function forceReaskEmailIfMissing(
   if (isEmailRefusal(currentMessage)) {
     const firm = getEmailRequiredReaskQuestion(language)
     return lock(preamble ? `${preamble}\n${firm}` : firm)
+}
+
+/**
+ * Se o bot acabou de perguntar "Você está na Espanha?" e a resposta do cliente
+ * NÃO é claramente sim/não, força um reask determinístico no formato
+ * "Preciso saber se está na Espanha (Sim ou Não)". Não avança o fluxo até
+ * receber resposta válida.
+ */
+export function forceReaskLocationSpainIfAmbiguous(
+  previousAssistantMessage: string,
+  currentMessage: string,
+  aiResponse: string,
+  language: ChatLanguage,
+): string {
+  const previousQuestion = extractLastQuestion(previousAssistantMessage)
+  if (!isQuestionAboutLocationSpain(previousQuestion)) return aiResponse
+  const raw = String(currentMessage || '').trim()
+  if (!raw) return aiResponse
+  const verdict = classifyYesNo(raw)
+  if (verdict === 'ambiguous') {
+    return lock(getLocationSpainRequiredReaskQuestion(language))
   }
+  return aiResponse
+}
   const reask = getEmailReaskQuestion(language)
   return preamble ? `${preamble}\n${reask}` : reask
 }
