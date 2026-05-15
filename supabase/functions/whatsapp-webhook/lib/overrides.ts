@@ -28,6 +28,8 @@ import {
   getFullNameReaskQuestion,
   getFullNameRequiredReaskQuestion,
   getEmailRequiredReaskQuestion,
+  getLocationSpainRequiredReaskQuestion,
+  classifyYesNo,
   countAlphaWords,
   parseEntryDateFromText,
   getOutsideSpainNextQuestion,
