@@ -83,7 +83,7 @@ export default function ExpenseCategoriesManagement() {
   const reset = () => {
     setIsOpen(false);
     setEditing(null);
-    setForm({ name: '', type: 'FIXA', description: '', is_active: true });
+    setForm({ name: '', type: 'FIXA', flow: 'SAIDA', description: '', is_active: true });
   };
 
   const openEdit = (c: ExpenseCategory) => {
