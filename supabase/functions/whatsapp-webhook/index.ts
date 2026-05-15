@@ -332,6 +332,7 @@ import {
   getPostHandoffWaitSuffix,
   preHandoffSummarySent,
   handoffTransferSent,
+  classifyYesNo,
 } from './lib/questions.ts'
 
 import {
@@ -347,6 +348,7 @@ import {
   forceAdvanceFromInterestQuestion,
   forceAdvanceFromEmpadronadoQuestion,
   forceReaskFullNameIfSingleWord,
+  forceReaskLocationSpainIfAmbiguous,
   isLikelyQuestionLoop,
   lockConfirmedFieldsInResponse,
   sanitizeLocationQuestion,
@@ -1662,21 +1664,9 @@ Regras:
           }
         }
         const ans = locationAnswer.toLowerCase().trim()
-        // Negativa pura tem prioridade: "não", "no", "ainda não", "todavía no" → fora da Espanha.
-        const isNegative = !!ans && (
-          /^\s*(n[ãa]o|no|nope|nah|non)\b/i.test(ans)
-          || /\b(ainda n[ãa]o|todav[ií]a no|not yet|pas encore)\b/i.test(ans)
-          || /\b(n[ãa]o (estou|moro|vivo)|no (estoy|vivo)|i'?m not|not in spain)\b/i.test(ans)
-          || /\b(brasil|portugal|argentina|m[ée]xico|mexico|colombia|chile|uruguai|uruguay|venezuela|estados unidos|eua|usa|fora|outro pa[ií]s|en otro|em outro|other country)\b/i.test(ans)
-        )
-        const isAffirmative = !!ans && !isNegative && (
-          /^\s*(sim|si|s[ií]|yes|yep|yeah|claro|exato|exactamente|oui)\b/i.test(ans)
-          || /\b(j[áa] estou|ya estoy|estou (na |em )?espanha|estoy en espa[ñn]a|i'?m in spain|aqui na espanha|aqu[ií] en espa[ñn]a)\b/i.test(ans)
-          || /\b(estou|estoy|moro|vivo)\b/i.test(ans)
-          || /\b(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|valencia|sevilla|m[áa]laga|bilbao|alicante)\b/i.test(ans)
-        )
-        const userOutsideSpain = isNegative
-        const userInSpain = isAffirmative
+        const yesNoVerdict = classifyYesNo(ans)
+        const userOutsideSpain = yesNoVerdict === 'no'
+        const userInSpain = yesNoVerdict === 'yes'
 
 
         // Definição das 8 etapas do roteiro (na ordem)
@@ -2029,6 +2019,7 @@ Regras:
         aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
         aiResponse = forceReaskFullNameIfSingleWord(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !nameMissing)
         aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
+        aiResponse = forceReaskLocationSpainIfAmbiguous(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
         aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, allAssistant)
         aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
         aiResponse = forceAdvanceFromEmpadronadoQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
@@ -2094,6 +2085,7 @@ Regras:
             aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
             aiResponse = forceReaskFullNameIfSingleWord(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !nameMissing)
             aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
+            aiResponse = forceReaskLocationSpainIfAmbiguous(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
             aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, allAssistant)
             aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
             aiResponse = forceAdvanceFromEmpadronadoQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
