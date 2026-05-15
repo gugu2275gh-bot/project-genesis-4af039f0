@@ -1446,6 +1446,7 @@ export type Database = {
           name_confirmed: boolean
           outside_spain_progress: Json
           pending_question: string | null
+          pending_questions: Json
           pre_handoff_sent: boolean
           step: string
           updated_at: string
@@ -1463,6 +1464,7 @@ export type Database = {
           name_confirmed?: boolean
           outside_spain_progress?: Json
           pending_question?: string | null
+          pending_questions?: Json
           pre_handoff_sent?: boolean
           step?: string
           updated_at?: string
@@ -1480,6 +1482,7 @@ export type Database = {
           name_confirmed?: boolean
           outside_spain_progress?: Json
           pending_question?: string | null
+          pending_questions?: Json
           pre_handoff_sent?: boolean
           step?: string
           updated_at?: string
