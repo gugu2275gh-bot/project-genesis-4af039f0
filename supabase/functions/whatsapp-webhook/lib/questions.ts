@@ -1,6 +1,6 @@
 // @ts-nocheck
 // Wave 3b step 4: question detectors + localized model phrases
-import { type ChatLanguage, normalizeForLanguageChecks } from './language.ts'
+import { type ChatLanguage, normalizeForLanguageChecks, getPromptTemplates } from './language.ts'
 
 export function isStructuredQuestionAnswer(text: string): boolean {
   const sample = normalizeForLanguageChecks(text)
@@ -548,4 +548,181 @@ export function countAlphaWords(text: string): number {
   if (!text) return 0
   const words = String(text).trim().split(/\s+/).filter(Boolean)
   return words.filter((w) => /[A-Za-zÀ-ÖØ-öø-ÿ]{2,}/.test(w)).length
+}
+
+// ============================================================================
+// Pré-handoff determinístico — dispatcher único de perguntas literais (BPMN v2)
+// ============================================================================
+
+function getInsideSpainEntryDateQuestion(language: ChatLanguage): string {
+  if (language === 'es') return '¿Cuál fue la fecha exacta de tu entrada en España?'
+  if (language === 'en') return 'What was the exact date you entered Spain?'
+  if (language === 'fr') return "Quelle a été la date exacte de votre entrée en Espagne ?"
+  return 'Qual foi a data exata da sua entrada na Espanha?'
+}
+
+/**
+ * Retorna a próxima pergunta literal do BLOCO B (cliente NA Espanha), em ordem:
+ * B1 (intro) → B2 (data entrada) → B3 (empadronado?) → B4 (desde quando) → B5 (cidade)
+ * → pré-handoff (H1|||H2|||H3) quando bloco completo.
+ *
+ * Importante: B1 intro só é incluído quando ainda não foi enviado (b1IntroSent=false).
+ * Garante que a frase "Agora preciso entender como está sua situação aqui."
+ * NUNCA vaze para o bloco fora-da-Espanha (bug do screenshot).
+ */
+export function getInsideSpainNextQuestion(
+  language: ChatLanguage,
+  assistantTranscript: string,
+  options?: {
+    entryDateConfirmed?: string | null
+    empadronadoConfirmed?: boolean | null
+    empadronadoCity?: string | null
+    empadronadoSinceConfirmed?: string | null
+    preHandoffSent?: boolean
+    handoffSent?: boolean
+  },
+): string {
+  const t = getPromptTemplates(language)
+  const transcript = assistantTranscript || ''
+  const opts = options || {}
+
+  const b1IntroSent = /\bagora preciso entender como est[áa] sua situa[çc][ãa]o aqui|ahora necesito entender|now i need to understand|maintenant je dois comprendre\b/i.test(transcript)
+  const askedEntryDate = !!opts.entryDateConfirmed
+    || /\b(data (exata )?da sua entrada|fecha (exacta )?de tu entrada|date (exacte )?(de votre|of your) entr|date you entered|when did you (enter|arrive))\b/i.test(transcript)
+  const askedEmpadronado = opts.empadronadoConfirmed !== null && opts.empadronadoConfirmed !== undefined
+    || /voc[êe] est[áa] empadronad|est[áa]s empadronad|are you (registered|empadronad)|[êe]tes-vous empadronad/i.test(transcript)
+  const askedDesdeQuando = !!opts.empadronadoSinceConfirmed
+    || /\b(desde quando|desde cu[áa]ndo|since when|depuis quand)\b/i.test(transcript)
+  const askedCidade = !!opts.empadronadoCity
+    || /\b(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)\b/i.test(transcript)
+
+  // B2 — data de entrada (com B1 intro só na 1ª vez)
+  if (!askedEntryDate) {
+    const entryQ = getInsideSpainEntryDateQuestion(language)
+    return b1IntroSent ? entryQ : `${t.insideIntro}\n\n${entryQ}`
+  }
+  // B3 — empadronado?
+  if (!askedEmpadronado) return getEmpadronadoQuestion(language)
+  // B4 — desde quando (só se empadronado=true; se false, pula direto para pré-handoff)
+  if (opts.empadronadoConfirmed === true && !askedDesdeQuando) return getEmpadronamientoSinceQuestion(language)
+  // B5 — cidade (só se empadronado=true)
+  if (opts.empadronadoConfirmed === true && !askedCidade) return getEmpadronamientoCityQuestion(language)
+
+  // Bloco completo → pré-handoff
+  return buildPreHandoffPayload(language, {
+    preHandoffSent: !!opts.preHandoffSent,
+    handoffSent: !!opts.handoffSent,
+    transcript,
+  })
+}
+
+export type ScriptedStepKey = 'abertura' | 'nome' | 'email' | 'interesse' | 'localizacao' | 'aprofundamento' | 'preHandoff'
+
+export interface ScriptedDispatchContext {
+  userInSpain: boolean
+  userOutsideSpain: boolean
+  assistantTranscript: string
+  entryDateConfirmed?: string | null
+  locationKnown?: string | null
+  empadronadoConfirmed?: boolean | null
+  empadronadoCity?: string | null
+  empadronadoSinceConfirmed?: string | null
+  preHandoffSent?: boolean
+  handoffSent?: boolean
+  outsideProgress?: any
+  catalogSent?: boolean
+}
+
+/**
+ * Dispatcher único: dado o stepKey atual do gate, retorna a pergunta literal
+ * do roteiro (sem qualquer invenção do LLM). String vazia significa "sem pergunta
+ * canônica para este turno" (deixa o LLM agir).
+ */
+export function getNextScriptedQuestion(
+  stepKey: ScriptedStepKey,
+  language: ChatLanguage,
+  ctx: ScriptedDispatchContext,
+): string {
+  const t = getPromptTemplates(language)
+  switch (stepKey) {
+    case 'abertura':
+      return `${t.openingLine1}|||${t.openingLine2}`
+    case 'nome':
+      return t.askName
+    case 'email':
+      return t.thanksThenAskEmail
+    case 'interesse': {
+      // Msg5 + Msg6 sempre como duas bolhas, salvo se Msg6 já foi enviada.
+      if (ctx.catalogSent) return t.interestQuestion
+      return `${t.interestQuestion}|||${getServicesOfferedMessage(language)}`
+    }
+    case 'localizacao':
+      return t.askLocationSpain
+    case 'aprofundamento': {
+      if (ctx.userInSpain) {
+        return getInsideSpainNextQuestion(language, ctx.assistantTranscript, {
+          entryDateConfirmed: ctx.entryDateConfirmed,
+          empadronadoConfirmed: ctx.empadronadoConfirmed,
+          empadronadoCity: ctx.empadronadoCity,
+          empadronadoSinceConfirmed: ctx.empadronadoSinceConfirmed,
+          preHandoffSent: ctx.preHandoffSent,
+          handoffSent: ctx.handoffSent,
+        })
+      }
+      if (ctx.userOutsideSpain) {
+        return getOutsideSpainNextQuestion(language, ctx.assistantTranscript, {
+          entryDateConfirmed: ctx.entryDateConfirmed,
+          locationKnown: ctx.locationKnown,
+          outsideProgress: ctx.outsideProgress,
+        })
+      }
+      // Sem localização confirmada — não emitir nada (LLM já tem instrução de aguardar)
+      return ''
+    }
+    case 'preHandoff':
+      return buildPreHandoffPayload(language, {
+        preHandoffSent: !!ctx.preHandoffSent,
+        handoffSent: !!ctx.handoffSent,
+        transcript: ctx.assistantTranscript,
+      })
+    default:
+      return ''
+  }
+}
+
+/**
+ * Acknowledgment curto e localizado para anteceder a próxima pergunta canônica.
+ * "Certo." / "Perfecto." para sim/não; "Obrigado." quando o cliente acabou
+ * de responder nome/e-mail/texto livre. Vazio quando a etapa anterior é abertura
+ * ou quando não há contexto.
+ */
+export function getShortAck(
+  language: ChatLanguage,
+  prevAssistantQuestion: string,
+  customerMessage: string,
+): string {
+  if (!prevAssistantQuestion) return ''
+  const ans = String(customerMessage || '').trim().toLowerCase()
+  if (!ans) return ''
+
+  const isYesNoLike = /^(sim|s[ií]|yes|yep|yeah|claro|exato|oui|ouais|n[ãa]o|no|nope|nah|non)\b/.test(ans)
+    || /^\d{1,4}$/.test(ans) // idade
+  const ackYesNo: Record<string, string> = {
+    'pt-BR': 'Certo.',
+    'es': 'Perfecto.',
+    'en': 'Got it.',
+    'fr': "D'accord.",
+  }
+  const ackText: Record<string, string> = {
+    'pt-BR': 'Obrigado.',
+    'es': 'Gracias.',
+    'en': 'Thank you.',
+    'fr': 'Merci.',
+  }
+  if (isYesNoLike) return ackYesNo[language] || ackYesNo['pt-BR']
+  // Após nome/e-mail/texto livre → agradece
+  if (isQuestionAboutFullName(prevAssistantQuestion) || isQuestionAboutEmail(prevAssistantQuestion)) {
+    return ackText[language] || ackText['pt-BR']
+  }
+  return ackYesNo[language] || ackYesNo['pt-BR']
 }
