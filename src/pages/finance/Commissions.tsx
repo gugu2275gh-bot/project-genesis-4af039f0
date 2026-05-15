@@ -35,6 +35,8 @@ import {
 } from 'lucide-react';
 import { useCommissions, CommissionWithContract, CommissionInsert, COMMISSION_STATUS_LABELS, CommissionStatus } from '@/hooks/useCommissions';
 import { useContracts } from '@/hooks/useContracts';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -62,6 +64,20 @@ export default function Commissions() {
     totalPendingToReceive,
   } = useCommissions();
   const { contracts } = useContracts();
+
+  const { data: configuredRate } = useQuery({
+    queryKey: ['system-config', 'default_commission_rate'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('system_config')
+        .select('value')
+        .eq('key', 'default_commission_rate')
+        .maybeSingle();
+      const n = parseFloat(data?.value ?? '');
+      return Number.isFinite(n) ? n : 10;
+    },
+  });
+  const commissionRate = (configuredRate ?? 10) / 100;
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [payDialogOpen, setPayDialogOpen] = useState(false);
@@ -373,7 +389,7 @@ export default function Commissions() {
 
               <div className="bg-muted p-3 rounded-md">
                 <p className="text-sm text-muted-foreground">
-                  Comissão calculada: <strong>€{(formData.base_amount * 0.10).toFixed(2)}</strong>
+                  Comissão calculada ({((configuredRate ?? 10)).toString()}%): <strong>€{(formData.base_amount * commissionRate).toFixed(2)}</strong>
                 </p>
               </div>
 
