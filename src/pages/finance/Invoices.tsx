@@ -113,6 +113,8 @@ export default function Invoices() {
     setFormData((f) => ({
       ...f,
       client_name: client?.name || '',
+      client_document: client?.document || '',
+      client_address: client?.address || '',
       contract_id: undefined,
       amount_without_vat: 0,
       service_description: '',
