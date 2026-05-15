@@ -354,18 +354,142 @@ export default function Receipts() {
         </Dialog>
       </PageHeader>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ReceiptIcon className="h-5 w-5" /> Recibos
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Em breve: listagem e histórico de recibos emitidos.
-          </p>
-        </CardContent>
-      </Card>
+      <ReceiptsList />
     </div>
+  );
+}
+
+type ReceiptRow = {
+  id: string;
+  receipt_number: string | null;
+  receipt_url: string | null;
+  receipt_generated_at: string | null;
+  receipt_approved_at: string | null;
+  amount: number;
+  currency: string | null;
+  client_name: string;
+};
+
+function ReceiptsList() {
+  const { downloadReceipt: dlReceipt } = useReceipts();
+  const [filterClient, setFilterClient] = useState('');
+  const [filterNumber, setFilterNumber] = useState('');
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterFrom, setFilterFrom] = useState('');
+  const [filterTo, setFilterTo] = useState('');
+
+  const { data: receipts = [], isLoading } = useQuery({
+    queryKey: ['receipts-list'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select(`
+          id, receipt_number, receipt_url, receipt_generated_at, receipt_approved_at,
+          amount, currency,
+          opportunities:opportunity_id ( leads:lead_id ( contacts:contact_id ( full_name ) ) )
+        `)
+        .not('receipt_number', 'is', null)
+        .order('receipt_generated_at', { ascending: false });
+      if (error) throw error;
+      return (data || []).map((p: Record<string, unknown>) => {
+        const opp = p.opportunities as { leads?: { contacts?: { full_name?: string } } } | null;
+        return {
+          id: p.id as string,
+          receipt_number: p.receipt_number as string | null,
+          receipt_url: p.receipt_url as string | null,
+          receipt_generated_at: p.receipt_generated_at as string | null,
+          receipt_approved_at: p.receipt_approved_at as string | null,
+          amount: Number(p.amount),
+          currency: (p.currency as string | null) ?? 'EUR',
+          client_name: opp?.leads?.contacts?.full_name || 'Cliente',
+        } as ReceiptRow;
+      });
+    },
+  });
+
+  const filtered = receipts.filter((r) => {
+    if (filterClient && !r.client_name.toLowerCase().includes(filterClient.toLowerCase())) return false;
+    if (filterNumber && !(r.receipt_number || '').toLowerCase().includes(filterNumber.toLowerCase())) return false;
+    const status = r.receipt_approved_at ? 'APROVADO' : 'PENDENTE';
+    if (filterStatus !== 'ALL' && status !== filterStatus) return false;
+    if (r.receipt_generated_at) {
+      const d = new Date(r.receipt_generated_at);
+      if (filterFrom && d < new Date(filterFrom)) return false;
+      if (filterTo && d > new Date(filterTo + 'T23:59:59')) return false;
+    }
+    return true;
+  });
+
+  const columns: Column<ReceiptRow>[] = [
+    { key: 'receipt_number', header: 'Nº Recibo', cell: (r) => <span className="font-mono">{r.receipt_number}</span> },
+    {
+      key: 'receipt_generated_at',
+      header: 'Emissão',
+      cell: (r) => r.receipt_generated_at ? format(new Date(r.receipt_generated_at), 'dd/MM/yyyy') : '—',
+    },
+    { key: 'client_name', header: 'Cliente', cell: (r) => r.client_name },
+    { key: 'amount', header: 'Valor', cell: (r) => `${r.amount.toFixed(2)} ${r.currency}` },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (r) => r.receipt_approved_at
+        ? <Badge variant="default" className="gap-1"><CheckCircle2 className="h-3 w-3" />Aprovado</Badge>
+        : <Badge variant="outline">Pendente</Badge>,
+    },
+    {
+      key: 'actions',
+      header: '',
+      cell: (r) => r.receipt_url && r.receipt_number ? (
+        <Button size="sm" variant="ghost" onClick={() => dlReceipt(r.receipt_url!, r.receipt_number!)}>
+          <Download className="h-4 w-4" />
+        </Button>
+      ) : null,
+    },
+  ];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ReceiptIcon className="h-5 w-5" /> Recibos Emitidos
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">Cliente</Label>
+            <Input placeholder="Buscar cliente" value={filterClient} onChange={(e) => setFilterClient(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Nº Recibo</Label>
+            <Input placeholder="Nº" value={filterNumber} onChange={(e) => setFilterNumber(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Status</Label>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todos</SelectItem>
+                <SelectItem value="PENDENTE">Pendente</SelectItem>
+                <SelectItem value="APROVADO">Aprovado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">De</Label>
+            <Input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Até</Label>
+            <Input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} />
+          </div>
+        </div>
+        <DataTable
+          columns={columns}
+          data={filtered}
+          emptyMessage={isLoading ? 'Carregando...' : 'Nenhum recibo encontrado'}
+        />
+      </CardContent>
+    </Card>
   );
 }
