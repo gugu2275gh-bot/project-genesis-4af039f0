@@ -347,6 +347,7 @@ import {
   forceAdvanceFromInterestQuestion,
   forceAdvanceFromEmpadronadoQuestion,
   forceReaskFullNameIfSingleWord,
+  forceReaskLocationSpainIfAmbiguous,
   isLikelyQuestionLoop,
   lockConfirmedFieldsInResponse,
   sanitizeLocationQuestion,
