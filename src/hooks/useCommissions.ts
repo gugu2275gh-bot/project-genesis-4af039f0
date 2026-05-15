@@ -98,8 +98,11 @@ export function useCommissions() {
       
       if (error) throw error;
 
-      // Show all commissions; auto-creation trigger guarantees referral is present.
-      const filtered = (data || []);
+      // Mostrar apenas comissões cujo contrato já tem ao menos um pagamento confirmado (PAGO).
+      const filtered = (data || []).filter((c: any) => {
+        const payments = c.contracts?.payments || [];
+        return payments.some((p: any) => p.status === 'PAGO');
+      });
 
       // Fetch approver names separately
       const approverIds = [...new Set(filtered.filter((c: any) => c.approved_by_user_id).map((c: any) => c.approved_by_user_id) || [])];
