@@ -389,7 +389,7 @@ export default function Commissions() {
 
               <div className="bg-muted p-3 rounded-md">
                 <p className="text-sm text-muted-foreground">
-                  Comissão calculada: <strong>€{(formData.base_amount * 0.10).toFixed(2)}</strong>
+                  Comissão calculada ({((configuredRate ?? 10)).toString()}%): <strong>€{(formData.base_amount * commissionRate).toFixed(2)}</strong>
                 </p>
               </div>
 
