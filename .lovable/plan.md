@@ -1,34 +1,74 @@
 ## Problema
 
-Após o pré-handoff/handoff ter sido emitido (flag `pre_handoff_sent=true` em `lead_funnel_state`), o LLM ainda gera novamente as frases de fechamento — "Perfecto. Ya tengo una visión inicial de tu caso…", "En CB analizamos cada caso de forma individual…" e "Voy a remitir tu información…" — duplicando a despedida no meio da conversa pós-handoff (visível no print enviado).
+No print, o cliente respondeu "Não tenho nome" → o bot **aceitou** como nome e avançou para email. Depois "Não tenho email" → guard de email re-perguntou (ok). Faltam 3 garantias:
 
-Hoje há defesas para a abertura (`stripRepeatedOpener`) e para perguntas canônicas (`preventRepeatedCanonicalQuestion`), mas **nenhum guard que descarte a repetição de H1/H2/H3** quando o pré-handoff já está concluído. O sufixo "aguarde um especialista" é anexado, mas o bloco de fechamento continua sendo enviado.
+1. Validar nome (rejeitar frases/recusas, não só 1-palavra).
+2. Garantir que email obrigatório nunca seja pulado.
+3. **Cada pergunta do pré-handoff é feita exatamente 1 vez por resposta válida** — não repetir perguntas já respondidas, e não avançar enquanto a resposta atual não passar na validação.
+
+## Causas
+
+- `isLikelyFullNameAnswer` (lib/name-extraction.ts) só checa denylist + ≥2 palavras. "Não tenho nome" passa.
+- `forceReaskFullNameIfSingleWord` (lib/overrides.ts) só dispara para 1 palavra alfabética.
+- Não existe um **gate determinístico de avanço de etapa**: a IA decide sozinha quando passar para a próxima pergunta, podendo (a) repetir pergunta já respondida, (b) avançar com resposta inválida.
 
 ## Solução
 
-Adicionar um stripper determinístico `stripRepeatedPreHandoff` em `supabase/functions/whatsapp-webhook/lib/overrides.ts`, executado na pipeline de overrides logo antes do envio (ou logo antes de `stripPreambleBeforePreHandoff`).
+### 1. `lib/name-extraction.ts` — endurecer detecção de nome
+- `NAME_REFUSAL_PATTERNS` (pt/es/en/fr): "não tenho [nome]", "no tengo [nombre]", "I don't have [a name]", "je n'ai pas [de nom]", "sem nome", "sin nombre", "without a name", "prefiro não dizer", "no quiero decir", etc.
+- Heurística verbal: presença de verbos 1ª pessoa (`tenho|tengo|have|ai|quero|quiero|want|sou|soy|am|prefiro|prefer`) marca como frase, não nome.
+- `isLikelyFullNameAnswer` retorna `false` se qualquer padrão acima casar.
 
-Comportamento:
+### 2. `lib/overrides.ts` — re-pergunta firme em qualquer recusa/frase
+- `forceReaskFullNameIfSingleWord`: além de 1-palavra, dispara também quando `!isLikelyFullNameAnswer(raw)` E a pergunta anterior era de nome.
+- Nova `getFullNameRequiredReaskQuestion(language)` em `questions.ts`: copy mais firme ("Preciso do seu *nome completo* para continuar atendendo seu caso. Pode me informar?").
+- `forceReaskEmailIfMissing`: já funciona; reforçar com `getEmailRequiredReaskQuestion` (copy firme após 2ª recusa).
 
-1. **Gate de ativação:** roda apenas quando `funnelStateLive.pre_handoff_sent === true` (passado como flag `preHandoffSent`).
-2. **Detecção:** regex multilíngue para cada uma das 3 frases-âncora (reutiliza `PREHANDOFF_H1_RE` já existente + duas novas para H2 "cada caso de forma individual / each case individually / cada cas individuellement" e H3 "encaminhar suas informações / remitir tu información / forward your information / transmettre vos informations").
-3. **Ação por bolha:** divide a resposta por `|||` e por parágrafos; remove qualquer parte que case com H1/H2/H3.
-4. **Resultado vazio:** se sobrar nada significativo, substitui pelo sufixo localizado pós-handoff (`getPostHandoffWaitSuffix`) e marca como `lock()` — assim o usuário recebe uma única linha "Em breve um de nossos especialistas…" em vez do fechamento duplicado.
-5. **Resultado parcial:** se sobrar conteúdo útil (ex.: resposta a uma dúvida nova do cliente), devolve apenas essa parte limpa.
+### 3. **Gate determinístico de etapa do pré-handoff** (novo)
 
-## Arquivos afetados
+Criar `lib/prehandoff-gate.ts` exportando `enforcePreHandoffStepLock`:
 
-- `supabase/functions/whatsapp-webhook/lib/overrides.ts` — nova função `stripRepeatedPreHandoff` + 2 regex (H2, H3 — H1 já existe).
-- `supabase/functions/whatsapp-webhook/index.ts` — chamar `stripRepeatedPreHandoff(aiResponseClean, detectedChatLanguage, { preHandoffSent: !!funnelStateLive.pre_handoff_sent })` logo após `stripPreambleBeforePreHandoff` (linha ~2192) e antes do split por `|||`.
-- Novo arquivo `supabase/functions/whatsapp-webhook/prehandoff_idempotency_test.ts` — testes Deno cobrindo: (a) bloco completo H1+H2+H3 com `preHandoffSent=true` → vira sufixo pós-handoff, (b) só H1 isolado → removido, (c) resposta híbrida (KB + H1 colado) → sobra só o KB, (d) `preHandoffSent=false` → passa intacto, (e) cobertura nas 4 línguas (pt/es/en/fr).
+**Entradas:** `funnelStateLive`, `contact`, `lastAssistantMessage`, `currentUserMessage`, `aiResponseClean`, `language`.
+
+**Lógica (ordem de prioridade — primeira pergunta não-respondida vence):**
+
+```text
+step 1: nome completo válido?
+  -> contact.full_name não auto-gerado E isLikelyFullNameAnswer-compatível
+step 2: email válido?
+  -> hasValidEmail(contact.email)
+step 3: demais perguntas do pré-handoff (idade, país, data entrada, etc., conforme funil)
+```
+
+Para a primeira etapa **não satisfeita**:
+- Se `lastAssistantMessage` JÁ era essa pergunta e `currentUserMessage` é resposta inválida → substituir `aiResponseClean` pela re-pergunta firme dessa etapa (ignorar o que a IA gerou).
+- Se `lastAssistantMessage` era OUTRA pergunta e `aiResponseClean` está pulando → substituir pela pergunta correta dessa etapa.
+- Se `aiResponseClean` está repetindo pergunta de etapa **já satisfeita** → substituir pela próxima pergunta pendente.
+
+**Idempotência:** retorna `aiResponseClean` inalterado quando a IA já está fazendo exatamente a pergunta da etapa pendente atual.
+
+Wire em `index.ts` logo após `stripRepeatedPreHandoff` e antes do split por `|||`.
+
+### 4. Persistência defensiva (`index.ts`)
+Quando a resposta do usuário falha em `isLikelyFullNameAnswer` ou `hasValidEmail`, **NÃO** persistir `contact.full_name`/`contact.email` nem marcar `name_source='client_provided'`. Garante que o gate da próxima volta veja o estado correto.
+
+### 5. Testes (`prehandoff_gate_test.ts` + ampliar `name_email_refusal_test.ts`)
+
+- Recusas pt/es/en/fr para nome e email → re-pergunta firme.
+- Bot tenta pular nome → gate força pergunta de nome.
+- Bot tenta repetir email já fornecido → gate força próxima pergunta.
+- Nome válido ("Gustavo Braga") + email válido → gate é no-op.
+- Falsos-positivos: "João Tenório", "Maria Tenente" → não bloqueados pela heurística verbal.
+- Sequência completa simulada: nome inválido → re-pergunta → nome válido → email inválido → re-pergunta → email válido → próxima etapa.
 
 ## Critérios de aceite
+- Cada pergunta do pré-handoff é emitida exatamente 1 vez por resposta válida.
+- Nunca avança com nome=frase/recusa nem email ausente/inválido.
+- Nunca repete pergunta cuja resposta já é válida.
+- Copy de re-pergunta fica progressivamente mais firme.
+- Suíte existente (132+) verde; ~12 novos testes verdes.
 
-- Após `pre_handoff_sent=true`, o cliente nunca mais recebe "visión inicial / visão inicial / initial view / première vision".
-- O fluxo pós-handoff continua respondendo a perguntas livres (KB) com o sufixo "aguarde um especialista" — sem o bloco de despedida grudado.
-- Testes existentes (`bpmn3_handoff_test.ts`, `wave7_test.ts`, `opener_idempotency_test.ts`, etc.) continuam verdes.
-- Sem migração SQL — usa flag `pre_handoff_sent` que já existe em `lead_funnel_state`.
-
-## Validação
-
-Rodar `supabase--test_edge_functions` apenas em `whatsapp-webhook`. Esperado: testes existentes verdes + ~5 novos verdes.
+## Notas técnicas
+- Sem migração SQL.
+- Mudanças puramente determinísticas pós-LLM, sem alterar o prompt do agente.
+- Idiomas: pt, es, en, fr.
