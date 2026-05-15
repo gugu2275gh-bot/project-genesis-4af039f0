@@ -117,12 +117,22 @@ export default function ExpenseCategoriesManagement() {
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex.: Aluguel, Internet, Material..." />
               </div>
               <div>
+                <Label>Movimento *</Label>
+                <Select value={form.flow} onValueChange={(v: 'ENTRADA' | 'SAIDA') => setForm({ ...form, flow: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ENTRADA">Entrada</SelectItem>
+                    <SelectItem value="SAIDA">Saída</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label>Tipo *</Label>
                 <Select value={form.type} onValueChange={(v: 'FIXA' | 'VARIAVEL') => setForm({ ...form, type: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="FIXA">Despesa Fixa</SelectItem>
-                    <SelectItem value="VARIAVEL">Despesa Variável</SelectItem>
+                    <SelectItem value="FIXA">Fixa</SelectItem>
+                    <SelectItem value="VARIAVEL">Variável</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
