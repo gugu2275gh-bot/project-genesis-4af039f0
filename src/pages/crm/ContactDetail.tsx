@@ -1264,7 +1264,7 @@ export default function ContactDetail() {
           <Calendar className="h-5 w-5 text-muted-foreground" />
           <div>
             <p className="text-sm text-muted-foreground">Empadronado desde</p>
-            <p className="font-medium">{format(new Date(c.empadronamiento_since), "dd/MM/yyyy")}</p>
+            <p className="font-medium">{(() => { const m = String(c.empadronamiento_since).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : c.empadronamiento_since; })()}</p>
           </div>
         </div>
       )}
