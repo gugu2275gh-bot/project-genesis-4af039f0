@@ -405,6 +405,7 @@ export type Database = {
           id: string
           is_beneficiary: boolean
           is_empadronado: boolean | null
+          is_in_spain: boolean | null
           legal_guardian_address: string | null
           legal_guardian_birth_date: string | null
           legal_guardian_email: string | null
@@ -461,6 +462,7 @@ export type Database = {
           id?: string
           is_beneficiary?: boolean
           is_empadronado?: boolean | null
+          is_in_spain?: boolean | null
           legal_guardian_address?: string | null
           legal_guardian_birth_date?: string | null
           legal_guardian_email?: string | null
@@ -517,6 +519,7 @@ export type Database = {
           id?: string
           is_beneficiary?: boolean
           is_empadronado?: boolean | null
+          is_in_spain?: boolean | null
           legal_guardian_address?: string | null
           legal_guardian_birth_date?: string | null
           legal_guardian_email?: string | null
