@@ -727,6 +727,27 @@ export default function ContactDetail() {
           />
         </div>
         <div>
+          <Label>Está na Espanha?</Label>
+          <Select
+            value={
+              (editedContact as any).is_in_spain === true ? 'yes'
+              : (editedContact as any).is_in_spain === false ? 'no'
+              : 'unknown'
+            }
+            onValueChange={(v) => setEditedContact({
+              ...editedContact,
+              is_in_spain: v === 'yes' ? true : v === 'no' ? false : null,
+            } as any)}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unknown">Não informado</SelectItem>
+              <SelectItem value="yes">Sim</SelectItem>
+              <SelectItem value="no">Não</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
           <Label>Data de Entrada na Espanha (ou previsão)</Label>
           <Input
             type="date"
