@@ -393,6 +393,7 @@ export default function ContactDetail() {
         mother_name: contact.mother_name,
         father_name: contact.father_name,
         spain_arrival_date: contact.spain_arrival_date,
+        is_in_spain: (contact as any).is_in_spain,
         birth_date: (contact as any).birth_date,
         birth_city: (contact as any).birth_city,
         birth_state: (contact as any).birth_state,
@@ -724,6 +725,27 @@ export default function ContactDetail() {
             onChange={(e) => setEditedContact({ ...editedContact, cpf: e.target.value })}
             placeholder="000.000.000-00"
           />
+        </div>
+        <div>
+          <Label>Está na Espanha?</Label>
+          <Select
+            value={
+              (editedContact as any).is_in_spain === true ? 'yes'
+              : (editedContact as any).is_in_spain === false ? 'no'
+              : 'unknown'
+            }
+            onValueChange={(v) => setEditedContact({
+              ...editedContact,
+              is_in_spain: v === 'yes' ? true : v === 'no' ? false : null,
+            } as any)}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="unknown">Não informado</SelectItem>
+              <SelectItem value="yes">Sim</SelectItem>
+              <SelectItem value="no">Não</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label>Data de Entrada na Espanha (ou previsão)</Label>
@@ -1127,6 +1149,18 @@ export default function ContactDetail() {
         <div>
           <p className="text-sm text-muted-foreground">CPF</p>
           <p className="font-medium">{contact.cpf || '-'}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Globe className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Está na Espanha?</p>
+          <p className="font-medium">
+            {(contact as any).is_in_spain === true ? 'Sim'
+              : (contact as any).is_in_spain === false ? 'Não'
+              : '-'}
+          </p>
         </div>
       </div>
 
