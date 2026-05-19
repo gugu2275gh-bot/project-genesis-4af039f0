@@ -1610,9 +1610,24 @@ export default function ContactDetail() {
                 </div>
               </div>
               
-              <div className="text-center">
+              <div className="text-center space-y-2">
                 <h3 className="font-semibold text-lg">{contact.full_name}</h3>
                 <p className="text-sm text-muted-foreground">{contact.email || 'Sem e-mail'}</p>
+                <div className="flex justify-center">
+                  {(contact as any).is_in_spain === true ? (
+                    <Badge className="bg-green-600 hover:bg-green-700 text-white gap-1">
+                      <Globe className="h-3 w-3" /> Na Espanha
+                    </Badge>
+                  ) : (contact as any).is_in_spain === false ? (
+                    <Badge variant="secondary" className="gap-1">
+                      <Globe className="h-3 w-3" /> Fora da Espanha
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="gap-1">
+                      <Globe className="h-3 w-3" /> Localização não informada
+                    </Badge>
+                  )}
+                </div>
               </div>
               
               <Separator />
