@@ -1169,7 +1169,10 @@ export default function ContactDetail() {
         <div>
           <p className="text-sm text-muted-foreground">Entrada na Espanha</p>
           <p className="font-medium">
-            {contact.spain_arrival_date ? format(new Date(contact.spain_arrival_date), "dd/MM/yyyy") : '-'}
+            {contact.spain_arrival_date ? (() => {
+              const m = String(contact.spain_arrival_date).match(/^(\d{4})-(\d{2})-(\d{2})/);
+              return m ? `${m[3]}/${m[2]}/${m[1]}` : String(contact.spain_arrival_date);
+            })() : '-'}
           </p>
         </div>
       </div>
