@@ -393,6 +393,7 @@ export default function ContactDetail() {
         mother_name: contact.mother_name,
         father_name: contact.father_name,
         spain_arrival_date: contact.spain_arrival_date,
+        is_in_spain: (contact as any).is_in_spain,
         birth_date: (contact as any).birth_date,
         birth_city: (contact as any).birth_city,
         birth_state: (contact as any).birth_state,
