@@ -1153,6 +1153,18 @@ export default function ContactDetail() {
       </div>
 
       <div className="flex items-center gap-3">
+        <Globe className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <p className="text-sm text-muted-foreground">Está na Espanha?</p>
+          <p className="font-medium">
+            {(contact as any).is_in_spain === true ? 'Sim'
+              : (contact as any).is_in_spain === false ? 'Não'
+              : '-'}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
         <Calendar className="h-5 w-5 text-muted-foreground" />
         <div>
           <p className="text-sm text-muted-foreground">Entrada na Espanha</p>
