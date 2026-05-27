@@ -2246,13 +2246,19 @@ Regras:
             const wasHandoffSentBefore = !!funnelStateLive.handoff_sent
             if (wasHandoffSentBefore) {
               const suffix = getPostHandoffWaitSuffix(detectedChatLanguage)
-              // não duplica se a IA por engano colocou parte do sufixo
+              // não duplica se a IA por engano colocou parte do sufixo OU se o
+              // corpo já contém a frase curta de "aguarde um especialista" (H4 ou
+              // template equivalente em qualquer um dos 4 idiomas suportados).
               const lower = aiResponseClean.toLowerCase()
               const sigPT = 'em breve um de nossos especialistas'
               const sigES = 'en breve uno de nuestros especialistas'
               const sigEN = 'one of our specialists'
               const sigFR = 'un de nos spécialistes'
-              if (!lower.includes(sigPT) && !lower.includes(sigES) && !lower.includes(sigEN) && !lower.includes(sigFR)) {
+              const waitShortRe = /(aguarde um especialista|aguarda un especialista|espera a un especialista|wait for a specialist|please wait for a specialist|attendez un sp[ée]cialiste|patientez.{0,20}sp[ée]cialiste)/i
+              const alreadyHasSuffix =
+                lower.includes(sigPT) || lower.includes(sigES) || lower.includes(sigEN) || lower.includes(sigFR) ||
+                waitShortRe.test(aiResponseClean)
+              if (!alreadyHasSuffix) {
                 aiResponseClean = `${aiResponseClean.trim()}\n\n${suffix}`
               }
             }
