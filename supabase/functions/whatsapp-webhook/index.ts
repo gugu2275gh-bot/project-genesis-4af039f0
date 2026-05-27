@@ -2246,13 +2246,19 @@ Regras:
             const wasHandoffSentBefore = !!funnelStateLive.handoff_sent
             if (wasHandoffSentBefore) {
               const suffix = getPostHandoffWaitSuffix(detectedChatLanguage)
-              // não duplica se a IA por engano colocou parte do sufixo
+              // não duplica se a IA por engano colocou parte do sufixo OU se o
+              // corpo já contém a frase curta de "aguarde um especialista" (H4 ou
+              // template equivalente em qualquer um dos 4 idiomas suportados).
               const lower = aiResponseClean.toLowerCase()
               const sigPT = 'em breve um de nossos especialistas'
               const sigES = 'en breve uno de nuestros especialistas'
               const sigEN = 'one of our specialists'
               const sigFR = 'un de nos spécialistes'
-              if (!lower.includes(sigPT) && !lower.includes(sigES) && !lower.includes(sigEN) && !lower.includes(sigFR)) {
+              const waitShortRe = /(aguarde um especialista|aguarda un especialista|espera a un especialista|wait for a specialist|please wait for a specialist|attendez un sp[ée]cialiste|patientez.{0,20}sp[ée]cialiste)/i
+              const alreadyHasSuffix =
+                lower.includes(sigPT) || lower.includes(sigES) || lower.includes(sigEN) || lower.includes(sigFR) ||
+                waitShortRe.test(aiResponseClean)
+              if (!alreadyHasSuffix) {
                 aiResponseClean = `${aiResponseClean.trim()}\n\n${suffix}`
               }
             }
@@ -2319,7 +2325,8 @@ Regras:
                   const item = replayQueue[idx]
                   const isLast = idx === replayQueue.length - 1
                   const itemKb = await getKnowledgeBaseContext(supabase, item.text, undefined).catch(() => '')
-                  const replaySystem = `${resolvedSystemPrompt}\n\nVocê está RESPONDENDO uma dúvida que o cliente havia feito durante o cadastro inicial. Responda de forma BREVE (≤3 frases), no idioma travado. NÃO faça perguntas. NÃO repita H1/H2/H3. Comece literalmente com "${replayPreamble}: ".`
+                  const replayStateDirective = buildStateDirective(funnelStateLive, detectedChatLanguage)
+                  const replaySystem = `${resolvedSystemPrompt}${replayStateDirective}\n\nVocê está RESPONDENDO uma dúvida que o cliente havia feito durante o cadastro inicial. Responda de forma BREVE (≤3 frases), no idioma travado. NÃO faça perguntas. NÃO peça nome, e-mail, idade ou qualquer dado de cadastro — TUDO já foi coletado. NÃO repita H1/H2/H3 nem cumprimentos ("tudo bem", "olá"). Comece literalmente com "${replayPreamble}: " seguido APENAS do conteúdo factual da resposta.`
                   let answer = ''
                   try {
                     answer = await generateAIResponse(
