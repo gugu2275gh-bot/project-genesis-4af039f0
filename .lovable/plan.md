@@ -1,45 +1,65 @@
-## Diagnóstico
 
-**1. O arquivo "OK - Estancia por estudos.pdf" FOI indexado, mas seu conteúdo de imagens NÃO foi.**
+## Diagnóstico do caso do Pedro (`75a0418f… / ebf47b3d…`)
 
-Verifiquei a `knowledge_base`:
-- O arquivo está ativo, com 3 chunks (~4.240 caracteres extraídos).
-- Os 3 chunks contêm apenas o **texto puro** do PDF: introdução, perfil, requisitos, etapas, prazos e um FAQ curto. Nenhum dos chunks menciona "90 días", "fuera de España", "ausencia" ou "tiempo de residencia desde la fecha de la concesión".
-- A informação que o usuário menciona ("imagem 2 do arquivo") provavelmente está dentro de um **screenshot / imagem embutida no PDF** (ex.: tabela ou recorte de FAQ), não no texto digital.
+Cronologia confirmada em `mensagens_cliente`:
 
-**2. Por que a imagem não foi lida:**
-A função `process-knowledge-pdf` (linha 229-340) funciona em duas etapas:
-1. Extração básica do text-layer do PDF (regex sobre streams).
-2. **Fallback** para OpenAI (`gpt-4.1-mini` / `gpt-4o-mini`) **somente** se a extração básica falhar (`< MIN_EXTRACTED_TEXT_LENGTH` ou padrão "unable to extract").
+| Hora UTC | Origem | Texto |
+|---|---|---|
+| 11:46:36 | IA | "¿Estás en España?" |
+| 11:46:57 | WHATSAPP | "Sí" ← chegou ao DB |
+| 11:50:33 | WHATSAPP | "Hola?" ← chegou ao DB |
 
-Como o PDF do Estancia por Estudios tem texto digital suficiente (>4 mil chars), a etapa 1 deu certo e o fallback de OpenAI (que faria OCR/visão dentro das imagens) **nunca rodou**. Resultado: tudo que está dentro de imagens/screenshots dentro do PDF ficou de fora do índice.
+Estado em `lead_funnel_state`: `step=localizacao`, `pre_handoff_sent=false`, `handoff_sent=false`. Ou seja, o bot recebeu as duas mensagens mas **não emitiu nenhuma resposta** e nem avançou o funil.
 
-**3. Por que a IA respondeu sobre "Larga Duración":**
-A pergunta semântica do Pedro ("permanecer fuera de España por mas de 90 días consecutivos") tem alta similaridade com o chunk de **OK - LARGA DURACION.pdf**, que literalmente contém a regra de "6 meses consecutivos / 10 meses no total em 5 anos". Como o KB do Estancia por Estudios não tem nenhuma menção a esse tema, o `match_knowledge_base` retornou o conteúdo correto disponível — mas não o que o usuário esperava (que estava só na imagem).
+Os logs do edge function só ficam disponíveis por ~5 min, então a janela de 11:46-11:50 já expirou e não consigo provar qual ramo do `index.ts` causou o "skip". As hipóteses compatíveis com o estado observado:
 
-## Plano para corrigir
+1. **Cascade AI falhou silenciosamente** — entre 11:46 e 11:48 houve várias respostas `429 RESOURCE_EXHAUSTED` do Gemini (vistas nos logs de outros leads). Se `gemini-3-flash → gemini-2.5-flash-lite → gpt-4o-mini` falhou todos os retries, o webhook responde `200` e segue sem mandar nada.
+2. **Buffer detectou "newer message"** — possível em caso de webhook duplicado do Twilio.
+3. **`recentOutbound` anti-duplicate** — match falso se outra escrita aconteceu na mesma janela.
+4. **Reactivation devolveu `SEND_MESSAGE` mas a inserção falhou** — improvável, pois não há registro com `origem='REACTIVATION'`.
 
-### Passo 1 — Reprocessar o PDF com OCR forçado
-Adicionar parâmetro `force_ocr` no `process-knowledge-pdf` que ignora a extração básica e vai direto para o OpenAI Vision (`gpt-4.1-mini` com `input_file` PDF). Reprocessar "OK - Estancia por estudos.pdf" com essa flag — o gpt-4.1-mini lê PDFs com imagens nativamente e devolve o texto das figuras.
+Em todos os casos o sintoma é o mesmo: a conversa fica "parada" sem nenhum sinal pro cliente nem pro operador.
 
-### Passo 2 — Detecção automática de "PDF com imagens relevantes"
-Após a extração básica, se o PDF tiver mais de N páginas com objetos `/Image` em relação ao tamanho do texto extraído (heurística: razão `bytes_imagens / chars_texto` acima de um limiar), rodar **adicionalmente** o OpenAI Vision e concatenar o resultado ao texto básico antes de chunkar. Isso evita perder conteúdo em imagens em qualquer PDF futuro, sem precisar de ação manual.
+## Plano: watchdog anti-stall + observabilidade
 
-### Passo 3 — Botão "Reprocessar com OCR" na UI da KB
-Na tela de gerenciamento da Base de Conhecimento (Configurações → Base de Conhecimento), adicionar ação por linha "Reprocessar com OCR" que chama o endpoint com `force_ocr=true`. Útil para qualquer PDF que o ADMIN suspeite estar perdendo conteúdo visual.
+### 1. Persistir trilha de cada turno (`whatsapp_turn_log`)
+Nova tabela append-only com 1 linha por webhook processado:
+```
+id, lead_id, contact_id, message_id, inbound_text,
+exit_reason (enum: REPLIED, BUFFERED_NEWER, ANTI_DUP, AI_FAILED,
+             REACTIVATION_SENT, BOT_DISABLED, PAUSED_BY_HUMAN, KB_STRICT_FALLBACK, OTHER),
+ai_provider_used, ai_error, response_chars,
+funnel_step_before, funnel_step_after, created_at
+```
+Cada ponto de `return` no `index.ts` grava aqui antes de responder. Isso garante diagnóstico mesmo após os logs do edge function expirarem.
 
-### Passo 4 — Reprocessar lote inicial
-Rodar `force_ocr=true` para todos os PDFs `OK - *.pdf` da KB (são ~50 arquivos) para garantir que nenhum conteúdo de imagem fique de fora. Custo estimado: ~50 chamadas OpenAI Vision (~US$ 0,02 cada).
+### 2. Cron `whatsapp-stall-watchdog` (a cada 1 min)
+Identifica leads onde:
+- Última `mensagens_cliente` é `origem='WHATSAPP'` (inbound), **e**
+- Faz mais de 90 s desde a chegada, **e**
+- `lead_funnel_state.handoff_sent = false` (bot ainda no controle), **e**
+- Bot habilitado e não pausado por humano.
 
-## Detalhes técnicos
+Para cada um:
+1. Loga em `whatsapp_turn_log` com `exit_reason='STALL_RECOVERED'`.
+2. Re-invoca o pipeline AI (mesma função do webhook, refatorada em helper `processAITurn(leadId)`).
+3. Se falhar de novo, marca `stall_attempts++`. Em 2 tentativas, envia para o operador uma notificação ("conversa parada – intervir") e congela.
 
-- Arquivos a editar:
-  - `supabase/functions/process-knowledge-pdf/index.ts` — adicionar `force_ocr` no body e heurística de detecção de imagens.
-  - `src/pages/settings/KnowledgeBase.tsx` (ou equivalente) — botão "Reprocessar com OCR".
-- Modelo: manter `gpt-4.1-mini` como primário no Vision (já configurado), com fallback `gpt-4o-mini`.
-- Logs: adicionar `[KB-PROCESS] force_ocr=true → vision retornou X chars adicionais` para rastreabilidade.
-- Sem mudanças de schema na `knowledge_base`.
+### 3. Retry mais robusto no `aiCascade`
+- Em `429 RESOURCE_EXHAUSTED`, respeita o `retryDelay` informado pelo Gemini (atualmente o cascade só faz 2 retries de 2 s).
+- Se TODOS os providers falharem, em vez de retornar silencioso, gravar `exit_reason='AI_FAILED'` e disparar o watchdog antes mesmo do cron rodar (enfileira reprocessamento imediato + alerta).
 
-## Resposta direta à sua pergunta
+### 4. Painel rápido em Configurações → WhatsApp
+Lista os últimos 50 registros de `whatsapp_turn_log` com filtro por `exit_reason`. Útil para o admin diagnosticar bot "engasgado" sem precisar pedir logs.
 
-Sim, o "OK - Estancia por estudos.pdf" foi consultado (está indexado e ativo), mas a **imagem 2 do arquivo nunca chegou ao índice** porque o extrator só faz OCR quando o text-layer falha. Como o PDF tem texto digital, o conteúdo visual foi ignorado — por isso a IA respondeu com base no que sabia (Larga Duración), e não com o que está na imagem.
+### Detalhes técnicos
+- Migração: cria `whatsapp_turn_log` + grants + RLS (ADMIN/MANAGER read).
+- `supabase/functions/whatsapp-webhook/index.ts`: extrair os blocos pré-AI e AI em `lib/turn-pipeline.ts` para reuso pelo watchdog.
+- `supabase/functions/whatsapp-stall-watchdog/index.ts`: novo cron (1 min) registrado em `supabase/config.toml`.
+- Front-end: nova aba `WhatsAppTurnLogs.tsx` em `pages/settings/`.
+
+### Fora do escopo
+- Mudar a lógica do funil ou prompts.
+- Mexer no formato dos templates / Twilio.
+
+Após aplicar, o caso do Pedro teria recuperado automaticamente em ≤ 90 s e ficaria registrado o motivo exato do skip.

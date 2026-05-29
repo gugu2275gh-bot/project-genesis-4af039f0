@@ -3194,6 +3194,63 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_turn_log: {
+        Row: {
+          ai_error: string | null
+          ai_provider: string | null
+          contact_id: string | null
+          created_at: string
+          details: Json | null
+          exit_reason: string
+          funnel_step_after: string | null
+          funnel_step_before: string | null
+          id: number
+          inbound_text: string | null
+          lead_id: string | null
+          message_id: string | null
+          phone: string | null
+          recovered_from_message_id: string | null
+          response_chars: number | null
+          stall_attempts: number
+        }
+        Insert: {
+          ai_error?: string | null
+          ai_provider?: string | null
+          contact_id?: string | null
+          created_at?: string
+          details?: Json | null
+          exit_reason: string
+          funnel_step_after?: string | null
+          funnel_step_before?: string | null
+          id?: number
+          inbound_text?: string | null
+          lead_id?: string | null
+          message_id?: string | null
+          phone?: string | null
+          recovered_from_message_id?: string | null
+          response_chars?: number | null
+          stall_attempts?: number
+        }
+        Update: {
+          ai_error?: string | null
+          ai_provider?: string | null
+          contact_id?: string | null
+          created_at?: string
+          details?: Json | null
+          exit_reason?: string
+          funnel_step_after?: string | null
+          funnel_step_before?: string | null
+          id?: number
+          inbound_text?: string | null
+          lead_id?: string | null
+          message_id?: string | null
+          phone?: string | null
+          recovered_from_message_id?: string | null
+          response_chars?: number | null
+          stall_attempts?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

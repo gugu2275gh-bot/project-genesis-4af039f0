@@ -385,6 +385,7 @@ import {
 
 import { classifyOffTopic, getOffTopicAckPhrase } from './lib/offtopic.ts'
 import { normalizeQueue, pushPending, getReplayPreamble, type PendingItem } from './lib/parking.ts'
+import { logTurn } from './lib/turn-log.ts'
 
 export {
   FULL_NAME_DENYLIST_PATTERNS,
@@ -488,6 +489,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
 
       if (dedupError || !dedupInsert) {
         console.log('Duplicate messageId detected (atomic), skipping:', message.messageId)
+        await logTurn({ supabase, exit_reason: 'DUPLICATE_MSG_ID', message_id: message.messageId, phone: message.from, inbound_text: message.body })
         return new Response(
           JSON.stringify({ success: true, message: 'Duplicate message, skipped' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -1101,6 +1103,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           await supabase.from('webhook_logs').update({ processed: true }).eq('id', webhookLog.id)
         }
 
+        await logTurn({ supabase, exit_reason: 'BUFFERED_NEWER', lead_id: lead.id, contact_id: contact?.id, phone: phoneNumber, message_id: message.messageId, inbound_text: message.body })
         return new Response(
           JSON.stringify({ success: true, message: 'Buffered: newer message will handle AI response' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -1126,6 +1129,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           if (webhookLog?.id) {
             await supabase.from('webhook_logs').update({ processed: true }).eq('id', webhookLog.id)
           }
+          await logTurn({ supabase, exit_reason: 'ANTI_DUP', lead_id: lead.id, contact_id: contact?.id, phone: phoneNumber, message_id: message.messageId, inbound_text: message.body, details: { recentOutbound: recentOutbound[0] } })
           return new Response(
             JSON.stringify({ success: true, message: 'Skipped: outbound response already sent (anti-duplicate)' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -2329,6 +2333,20 @@ Regras:
 
             console.log('AI response sent and stored successfully (parts:', parts.length, ')')
 
+            await logTurn({
+              supabase,
+              exit_reason: 'REPLIED',
+              lead_id: lead.id,
+              contact_id: contact.id,
+              phone: phoneNumber,
+              message_id: message.messageId,
+              inbound_text: message.body,
+              response_chars: parts.reduce((a: number, p: string) => a + (p?.length || 0), 0),
+              funnel_step_before: funnelStateLive?.step ?? null,
+              funnel_step_after: funnelStateLive?.step ?? null,
+              details: { parts: parts.length },
+            })
+
             // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3-H4
             // nas partes enviadas neste turno. Idempotente — só faz UPDATE se mudou algo.
             try {
@@ -2458,13 +2476,17 @@ Regras:
           }
         } else {
           console.error('Both Gemini and OpenAI failed to generate a response for lead:', lead.id)
+          await logTurn({ supabase, exit_reason: 'AI_FAILED', lead_id: lead.id, contact_id: contact.id, phone: phoneNumber, message_id: message.messageId, inbound_text: message.body, ai_error: 'All providers in cascade returned empty / errored', funnel_step_before: funnelStateLive?.step ?? null })
         }
       } catch (aiError) {
         console.error('AI agent error (non-blocking):', aiError instanceof Error ? aiError.message : aiError)
+        await logTurn({ supabase, exit_reason: 'AI_FAILED', lead_id: lead.id, contact_id: contact.id, phone: phoneNumber, message_id: message.messageId, inbound_text: message.body, ai_error: aiError instanceof Error ? aiError.message : String(aiError), funnel_step_before: funnelStateLive?.step ?? null })
         // AI errors don't block the webhook processing
       }
     } else {
       console.log(`AI agent skipped: botEnabled=${botEnabled}, hasGeminiKey=${!!geminiApiKey}, pausedByHuman=${aiPausedByHuman}, skipReactivation=${skipAIAgent}`)
+      const reason: 'BOT_DISABLED' | 'PAUSED_BY_HUMAN' | 'AI_SKIPPED' = !botEnabled || !geminiApiKey ? 'BOT_DISABLED' : aiPausedByHuman ? 'PAUSED_BY_HUMAN' : 'AI_SKIPPED'
+      await logTurn({ supabase, exit_reason: reason, lead_id: lead.id, contact_id: contact.id, phone: phoneNumber, message_id: message.messageId, inbound_text: message.body, details: { botEnabled, hasGeminiKey: !!geminiApiKey, pausedByHuman: aiPausedByHuman, skipReactivation: skipAIAgent } })
     }
 
     // Update webhook log as processed (using ID from insert, not JSONB comparison)
