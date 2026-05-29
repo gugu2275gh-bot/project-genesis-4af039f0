@@ -2243,6 +2243,26 @@ Regras:
             })
             aiResponseClean = stripLockedSentinel(aiResponseClean)
 
+            // Hard dedup: descarta blocos canônicos (catálogo, pergunta de
+            // interesse) e parágrafos quase-literais já enviados antes.
+            try {
+              const recentAssistant = history.filter((m) => m.role === 'assistant').slice(-3).map((m) => String(m.content || ''))
+              aiResponseClean = stripAlreadySentCanonicalBlocks(
+                aiResponseClean,
+                allAssistant,
+                detectedChatLanguage,
+                {
+                  nameKnown: !nameMissing,
+                  emailKnown: !emailMissing,
+                  interestKnown: !serviceMissing,
+                  locationKnown: !!funnelStateLive.location_known,
+                },
+                recentAssistant,
+              )
+            } catch (dedupErr) {
+              console.warn('[DEDUP] non-blocking error:', dedupErr instanceof Error ? dedupErr.message : dedupErr)
+            }
+
             // BPMN-3 MODO PÓS-HANDOFF: se H1-H4 já foram enviados, anexa o sufixo
             // localizado de "aguarde um especialista" ao final da resposta (uma única bolha).
             const wasHandoffSentBefore = !!funnelStateLive.handoff_sent
