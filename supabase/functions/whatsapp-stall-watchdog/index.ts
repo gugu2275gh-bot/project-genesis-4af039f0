@@ -171,15 +171,24 @@ serve(async (req) => {
         body: JSON.stringify(recoveryPayload),
       })
       const text = await resp.text()
+      // Inspect body: webhook may return 200 but with aiResponseSent=false (empty parts).
+      // Treat that as failure so the watchdog escalates instead of marking false recovery.
+      let aiSent = true
+      try {
+        const parsed = JSON.parse(text)
+        if (parsed && parsed.aiResponseSent === false) aiSent = false
+      } catch { /* not JSON, ignore */ }
+      const truly_recovered = resp.ok && aiSent
       await supabase.from('whatsapp_turn_log').insert({
         lead_id: row.id_lead,
-        exit_reason: 'STALL_RECOVERED',
+        exit_reason: truly_recovered ? 'STALL_RECOVERED' : 'STALL_FAILED',
         inbound_text: row.mensagem_cliente,
         recovered_from_message_id: String(row.id),
         stall_attempts: attempts,
-        details: { httpStatus: resp.status, response: text.slice(0, 500) },
+        ai_error: truly_recovered ? null : `webhook_replied_without_message httpStatus=${resp.status}`,
+        details: { httpStatus: resp.status, response: text.slice(0, 500), aiSent },
       })
-      recovered.push({ lead_id: row.id_lead, status: `replayed:${resp.status}` })
+      recovered.push({ lead_id: row.id_lead, status: truly_recovered ? `replayed:${resp.status}` : `noop:${resp.status}` })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       await supabase.from('whatsapp_turn_log').insert({
