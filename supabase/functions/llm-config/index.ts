@@ -136,6 +136,14 @@ Deno.serve(async (req) => {
         })
       }
 
+      if (action === 'list_models') {
+        const provider = String(body?.provider || '')
+        const force = !!body?.force
+        if (provider === 'gemini') return json(await listGeminiModels(force))
+        if (provider === 'openai') return json(await listOpenAIModels(force))
+        return json({ error: 'provider inválido' }, 400)
+      }
+
       const provider = String(body?.provider || '')
       const model = String(body?.model || '')
       if (!provider || !model) return json({ error: 'provider e model são obrigatórios' }, 400)
