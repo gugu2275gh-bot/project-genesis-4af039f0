@@ -1,42 +1,44 @@
-## De onde saiu o `gemini-3.5-flash`
+# Ajuste: catálogo de serviços sem duplicidade de pergunta
 
-Não veio do banco. A configuração real em `llm_settings` é exatamente o que aparece na sua tela:
+## Problema
+A mensagem do catálogo termina com "¿Tu caso encaja en alguno de estos?" (e equivalentes PT/EN/FR), o que gera uma segunda pergunta redundante além da pergunta principal "¿qué buscas hoy?". Além disso, o gate atual considera a etapa de interesse concluída apenas porque a pergunta e o catálogo foram enviados — mesmo sem termos capturado de fato o `interest_confirmed`. Isso causa repetição de perguntas mais adiante.
 
-1. `gemini-3-flash-preview` (Gemini)
-2. `gemini-2.5-flash-lite` (Gemini)
-3. `gpt-4o-mini` (OpenAI)
+## Mudanças
 
-O `gemini-3.5-flash` está hardcoded como **fallback de emergência** em `supabase/functions/whatsapp-webhook/lib/ai.ts` (linhas 306-308):
+### 1. `supabase/functions/whatsapp-webhook/lib/questions.ts` — `getServicesOfferedMessage`
+Remover a última linha (e o `\n\n` que a antecede) em todos os 4 idiomas, mantendo apenas a frase do catálogo. Resultados finais:
 
+- ES: `En CB trabajamos con: residencia (NIE/TIE), nacionalidad española, arraigo (social, laboral, familiar, formación), reagrupación familiar, homologación de títulos y autorización de regreso.`
+- PT: `Na CB trabalhamos com: residência (NIE/TIE), nacionalidade espanhola, arraigo (social, laboral, familiar, formação), reagrupamento familiar, homologação de diploma e autorização de regresso.`
+- EN: equivalente sem `Does your case fit any of these?`
+- FR: equivalente sem `Votre cas correspond-il à l'un d'eux ?`
+
+`isServicesOfferedMessage` continua válido (âncoras `arraigo` + `reagrupa` + `homologa`).
+
+### 2. `supabase/functions/whatsapp-webhook/index.ts` (linha 1737) — Gate de interesse
+Trocar:
 ```ts
-const DEFAULT_CASCADE: CascadeItem[] = [
-  { provider: 'gemini', model: 'gemini-3.5-flash' },   // ❌ não existe
-  { provider: 'gemini', model: 'gemini-2.5-pro' },
-]
+const interesseDone = !serviceMissing || (interesseAsked && catalogSent)
+```
+por:
+```ts
+const interesseDone = !serviceMissing
 ```
 
-Esse fallback é usado quando:
-- a tabela `llm_settings` está vazia,
-- ou a query falha,
-- ou todos os itens da cascata estão desativados.
+Assim, a etapa "INTERESSE / SERVIÇO" só é marcada como concluída quando temos de fato um `interest_confirmed` válido no lead (gravado por `extractInterestFromMessage` / `computeDeterministicFunnelPatch`). Enquanto não houver interesse capturado, o fluxo continua na etapa de interesse e não avança para localização — eliminando a repetição posterior.
 
-Na minha resposta anterior, descrevi esse fallback como se fosse a configuração ativa — foi erro meu. A configuração realmente em uso é a da tela.
+### 3. Dedup em `lib/overrides.ts` (linha 391)
+A regex `(se encaixa em algum|encaja en alguno|...)` continua útil caso a IA reintroduza a frase removida. Manter como está (defensivo).
 
-## Correção proposta
+### 4. Testes
+Atualizar `supabase/functions/whatsapp-webhook/compound_message_test.ts`:
+- A constante `CATALOG_Q_ES` precisa refletir o novo texto (sem `¿Tu caso encaja...?`). O teste `'compound: extrai RESIDENCIA do compound ES...'` continua válido porque `computeDeterministicFunnelPatch` detecta a keyword `RESIDENCIA` independente da pergunta canônica.
 
-Atualizar `DEFAULT_CASCADE` em `supabase/functions/whatsapp-webhook/lib/ai.ts` para refletir modelos válidos e alinhados com a configuração atual da UI:
+Rodar `supabase--test_edge_functions` nos arquivos `whatsapp-webhook` após as edições.
 
-```ts
-const DEFAULT_CASCADE: CascadeItem[] = [
-  { provider: 'gemini', model: 'gemini-3-flash-preview' },
-  { provider: 'gemini', model: 'gemini-2.5-flash-lite' },
-  { provider: 'openai', model: 'gpt-4o-mini' },
-]
-```
+### 5. Deploy
+Redeploy de `whatsapp-webhook`.
 
-Redeploy da edge function `whatsapp-webhook` após a edição.
-
-## Resultado
-
-- Configuração ativa permanece a da tela (vinda do banco).
-- Em caso de falha de leitura do banco, o fallback agora usa modelos válidos e idênticos à cascata configurada — sem mais referências a `gemini-3.5-flash` inexistente.
+## Resultado esperado
+- O cliente recebe apenas a pergunta principal (Msg5) + o catálogo informativo (Msg6), sem segunda pergunta redundante.
+- O bot só avança da etapa de interesse depois que um `service_interest` válido for capturado no lead, garantindo 100% de determinismo e eliminando as repetições subsequentes.
