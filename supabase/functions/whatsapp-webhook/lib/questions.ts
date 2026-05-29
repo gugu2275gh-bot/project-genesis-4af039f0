@@ -280,15 +280,15 @@ export function getOutsideSpainAgeQuestion(language: ChatLanguage, includePreamb
 // pela CB e validar antes de pedir a localização.
 export function getServicesOfferedMessage(language: ChatLanguage): string {
   if (language === 'es') {
-    return 'En CB trabajamos con: residencia (NIE/TIE), nacionalidad española, arraigo (social, laboral, familiar, formación), reagrupación familiar, homologación de títulos y autorización de regreso.\n\n¿Tu caso encaja en alguno de estos?'
+    return 'En CB trabajamos con: residencia (NIE/TIE), nacionalidad española, arraigo (social, laboral, familiar, formación), reagrupación familiar, homologación de títulos y autorización de regreso.'
   }
   if (language === 'en') {
-    return 'At CB we handle: residence (NIE/TIE), Spanish nationality, arraigo (social, labor, family, training), family reunification, diploma homologation and return authorization.\n\nDoes your case fit any of these?'
+    return 'At CB we handle: residence (NIE/TIE), Spanish nationality, arraigo (social, labor, family, training), family reunification, diploma homologation and return authorization.'
   }
   if (language === 'fr') {
-    return 'Chez CB, nous traitons : résidence (NIE/TIE), nationalité espagnole, arraigo (social, professionnel, familial, formation), regroupement familial, homologation de diplômes et autorisation de retour.\n\nVotre cas correspond-il à l’un d’eux ?'
+    return 'Chez CB, nous traitons : résidence (NIE/TIE), nationalité espagnole, arraigo (social, professionnel, familial, formation), regroupement familial, homologation de diplômes et autorisation de retour.'
   }
-  return 'Na CB trabalhamos com: residência (NIE/TIE), nacionalidade espanhola, arraigo (social, laboral, familiar, formação), reagrupamento familiar, homologação de diploma e autorização de regresso.\n\nO seu caso se encaixa em algum desses?'
+  return 'Na CB trabalhamos com: residência (NIE/TIE), nacionalidade espanhola, arraigo (social, laboral, familiar, formação), reagrupamento familiar, homologação de diploma e autorização de regresso.'
 }
 
 export function isServicesOfferedMessage(text: string): boolean {
