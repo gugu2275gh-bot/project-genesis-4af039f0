@@ -583,7 +583,18 @@ export function forceServicesMessageAfterInterest(
   if (!flags.interestKnown) return aiResponse
   if (flags.locationKnown) return aiResponse // já passou da etapa
   const transcript = flags.assistantTranscript || ''
-  if (isServicesOfferedMessage(transcript)) return aiResponse
+  const alreadySent = isServicesOfferedMessage(transcript)
+  if (alreadySent) {
+    // Catálogo já foi enviado. Se a IA tentou reenviar, removemos e
+    // forçamos avanço para a pergunta de localização.
+    if (isServicesOfferedMessage(aiResponse)) {
+      const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
+      const replacement = getLocationQuestion(language)
+      console.log('[D1_SERVICES] catalog already sent — replacing repeat with location question')
+      return preamble ? `${preamble}\n${replacement}` : replacement
+    }
+    return aiResponse
+  }
   // Se a IA já gerou justamente a Msg 6, mantém.
   if (isServicesOfferedMessage(aiResponse)) return aiResponse
   // Substitui pela Msg 6 (mantém preâmbulo curto da IA, se houver).
