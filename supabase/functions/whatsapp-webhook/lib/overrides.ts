@@ -1283,3 +1283,43 @@ export function dedupOpenerAcrossBubbles(aiResponse: string): string {
   }
   return changed ? parts.join('|||') : aiResponse
 }
+
+/**
+ * Rede de segurança de idioma: se o modelo escrever o preâmbulo de retomada
+ * em português ("Como prometi/prometido, sobre sua dúvida anterior") mas o
+ * idioma travado for outro (es/en/fr), substitui pela versão localizada.
+ * Também corrige variantes cruzadas (ex.: "Como prometi" usado em ES).
+ */
+export function enforceReplayPreambleLanguage(aiResponse: string, language: string): string {
+  if (!aiResponse) return aiResponse
+  const lang = (language || 'pt-BR').toLowerCase()
+  const target =
+    lang.startsWith('es') ? 'Como prometí, sobre tu duda anterior' :
+    lang.startsWith('en') ? 'As promised, about your earlier question' :
+    lang.startsWith('fr') ? 'Comme promis, à propos de votre question précédente' :
+    'Como prometido, sobre sua dúvida anterior'
+
+  // Pula se já estiver no idioma correto
+  // Padrões a substituir (PT, ES, EN, FR) — apenas quando NÃO baterem com o alvo
+  const patterns: RegExp[] = [
+    /Como prometido,?\s*sobre\s+sua\s+d[úu]vida\s+anterior/gi,
+    /Como prometi,?\s*sobre\s+sua\s+d[úu]vida\s+anterior/gi,
+    /Como promet[íi],?\s*sobre\s+tu\s+duda\s+anterior/gi,
+    /As promised,?\s*about\s+your\s+earlier\s+question/gi,
+    /Comme promis,?\s*à\s+propos\s+de\s+votre\s+question\s+pr[ée]c[ée]dente/gi,
+    // Variante curta vista em produção: "Como prometi, sobre tu duda anterior"
+    /Como prometi,?\s*sobre\s+tu\s+duda\s+anterior/gi,
+    /Como prometido,?\s*sobre\s+tu\s+duda\s+anterior/gi,
+  ]
+  let out = aiResponse
+  let replaced = false
+  for (const re of patterns) {
+    out = out.replace(re, (match) => {
+      if (match.toLowerCase() === target.toLowerCase()) return match
+      replaced = true
+      return target
+    })
+  }
+  if (replaced) console.log(`[REPLAY_PREAMBLE_LANG] normalizado para ${lang}: "${target}"`)
+  return out
+}
