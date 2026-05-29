@@ -30,9 +30,18 @@ import LLMSettings from './LLMSettings';
 const TABLE_TABS = ['profiles', 'sectors', 'service-types', 'payment-settings', 'suppliers', 'expense-categories'] as const;
 
 export default function Settings() {
-  const { hasRole } = useAuth();
+  const { hasRole, loading } = useAuth();
    const { isSuperuser } = useSuperuser();
   const [activeTab, setActiveTab] = useState('users');
+
+  // Wait for auth/roles to finish loading before evaluating access
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   // Only admins and managers can access settings
   if (!hasRole('ADMIN') && !hasRole('MANAGER')) {
