@@ -1375,9 +1375,11 @@ NUNCA copie frases literalmente em português quando o cliente estiver em outro 
 \n${customPrompt}`
         }
 
-        // First interaction: reinforce welcome behavior
-        if (isFirstInteraction) {
-          console.log('First interaction detected, using welcome flow')
+        // First interaction (cliente NOVO): reinforce welcome behavior.
+        // Cliente já cadastrado (isReturningClient) NÃO entra no fluxo de abertura —
+        // recebe uma saudação de retorno pelo nome e vai direto para a dúvida.
+        if (isFirstInteraction && !isReturningClient) {
+          console.log('First interaction detected (novo cliente), using welcome flow')
           systemPrompt += `\n\n--- INSTRUÇÃO ESPECIAL: PRIMEIRA INTERAÇÃO ---
 Esta é a PRIMEIRA mensagem deste cliente. Você DEVE responder com EXATAMENTE estas duas mensagens, nesta ordem, separadas pelo delimitador "|||" (sem nenhum outro texto antes, depois ou entre elas):
 
@@ -1388,7 +1390,17 @@ Regras:
 - Se o idioma detectado do cliente for diferente de português, traduza fielmente as duas mensagens para o idioma do cliente, mantendo o mesmo tom, o emoji 👋 e o delimitador "|||" entre elas. Use "CB Asesoría" como nome da empresa em qualquer idioma.
 - NÃO adicione nenhuma pergunta extra, assinatura, nem mais texto.
 --- FIM DA INSTRUÇÃO ESPECIAL ---`
+        } else if (isReturningClient) {
+          console.log('[RETURNING_CLIENT] usando saudação de retorno (sem pré-handoff)')
+          const firstName = (contact.full_name || '').split(/\s+/)[0] || ''
+          systemPrompt += `\n\n--- INSTRUÇÃO ESPECIAL: CLIENTE JÁ CADASTRADO ---
+Este cliente JÁ ESTÁ cadastrado (nome e e-mail conhecidos, histórico anterior com a CB).
+NÃO refaça o cadastro, NÃO peça nome, NÃO peça e-mail, NÃO envie a abertura padrão de "perguntas rápidas".
+Cumprimente pelo primeiro nome ("${firstName}") de forma calorosa e curta, diga que é bom falar novamente, e em UMA frase pergunte como pode ajudar hoje — JÁ no idioma travado da conversa.
+Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento quando aplicável.
+--- FIM DA INSTRUÇÃO ESPECIAL ---`
         }
+
 
         // Try to extract name/email from the current message and update contact
         const extracted = extractNameAndEmail(String(effectiveBody || ''))
