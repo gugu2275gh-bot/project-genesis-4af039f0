@@ -304,8 +304,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 type CascadeItem = { provider: 'gemini' | 'openai'; model: string }
 let _cascadeCache: { value: CascadeItem[]; expires: number } | null = null
 const DEFAULT_CASCADE: CascadeItem[] = [
-  { provider: 'gemini', model: 'gemini-3.5-flash' },
-  { provider: 'gemini', model: 'gemini-2.5-pro' },
+  { provider: 'gemini', model: 'gemini-3-flash-preview' },
   { provider: 'gemini', model: 'gemini-2.5-flash-lite' },
   { provider: 'openai', model: 'gpt-4o-mini' },
 ]
