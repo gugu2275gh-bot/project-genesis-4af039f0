@@ -489,6 +489,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
 
       if (dedupError || !dedupInsert) {
         console.log('Duplicate messageId detected (atomic), skipping:', message.messageId)
+        await logTurn({ supabase, exit_reason: 'DUPLICATE_MSG_ID', message_id: message.messageId, phone: message.from, inbound_text: message.body })
         return new Response(
           JSON.stringify({ success: true, message: 'Duplicate message, skipped' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
