@@ -92,8 +92,8 @@ export default function LLMSettings() {
     const key = `${item.provider}/${item.model}`;
     setTesting(t => ({ ...t, [key]: true }));
     try {
-      const { data, error } = await supabase.functions.invoke('llm-config?action=test', {
-        body: { provider: item.provider, model: item.model },
+      const { data, error } = await supabase.functions.invoke('llm-config', {
+        body: { action: 'test', provider: item.provider, model: item.model },
       });
       if (error) throw error;
       setTestResults(r => ({ ...r, [key]: data as any }));
