@@ -1629,7 +1629,9 @@ Regras:
           if (Object.keys(detPatch).length > 0) {
             const safe: Record<string, unknown> = {}
             if (detPatch.location_known && !funnelStateLive.location_known) safe.location_known = detPatch.location_known
-            if (detPatch.interest_confirmed && !funnelStateLive.interest_confirmed) safe.interest_confirmed = detPatch.interest_confirmed
+            const currentInterestEmpty = !funnelStateLive.interest_confirmed
+              || ['SEM_SERVICO', 'OUTRO', ''].includes(String(funnelStateLive.interest_confirmed).toUpperCase())
+            if (detPatch.interest_confirmed && currentInterestEmpty) safe.interest_confirmed = detPatch.interest_confirmed
             if (detPatch.entry_date_confirmed && !funnelStateLive.entry_date_confirmed) safe.entry_date_confirmed = detPatch.entry_date_confirmed
             if (detPatch.empadronado_confirmed !== undefined && (funnelStateLive.empadronado_confirmed === null || funnelStateLive.empadronado_confirmed === undefined)) safe.empadronado_confirmed = detPatch.empadronado_confirmed
             if (detPatch.empadronado_city && !funnelStateLive.empadronado_city) safe.empadronado_city = detPatch.empadronado_city
