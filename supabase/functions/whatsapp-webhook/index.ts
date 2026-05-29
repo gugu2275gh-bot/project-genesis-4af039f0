@@ -367,6 +367,7 @@ import {
   stripLockedSentinel,
   stripAlreadySentCanonicalBlocks,
   dedupOpenerAcrossBubbles,
+  enforceReplayPreambleLanguage,
   stripPreambleBeforePreHandoff,
   stripRepeatedPreHandoff,
   isLocked,
