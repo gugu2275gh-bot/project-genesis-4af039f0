@@ -114,6 +114,99 @@ function extractTextFromPDF(pdfBytes: Uint8Array): string {
     .trim()
 }
 
+/** Heuristic: count image XObjects in PDF to detect image-heavy files */
+function countImageXObjects(pdfBytes: Uint8Array): number {
+  const raw = new TextDecoder('latin1').decode(pdfBytes)
+  const matches = raw.match(/\/Subtype\s*\/Image\b/g)
+  return matches ? matches.length : 0
+}
+
+/** Run OpenAI Vision over the PDF to capture text inside embedded images. */
+async function extractTextWithOpenAI(
+  pdfBytes: Uint8Array,
+  fileName: string,
+  apiKey: string,
+): Promise<string> {
+  try {
+    const formData = new FormData()
+    const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' })
+    formData.append('file', pdfBlob, fileName)
+    formData.append('purpose', 'assistants')
+
+    const uploadResponse = await fetch('https://api.openai.com/v1/files', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      body: formData,
+    })
+    if (!uploadResponse.ok) {
+      console.error('[OCR] OpenAI file upload failed:', uploadResponse.status, await uploadResponse.text())
+      return ''
+    }
+    const uploadData = await uploadResponse.json()
+    const fileId = uploadData.id
+    console.log(`[OCR] PDF uploaded to OpenAI, file_id: ${fileId}`)
+
+    let extracted = ''
+    const modelsToTry = ['gpt-4.1-mini', 'gpt-4o-mini']
+    for (const model of modelsToTry) {
+      const aiResponse = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          input: [
+            {
+              role: 'system',
+              content: 'You must extract ALL text from the provided PDF file, including text inside images, figures, tables, screenshots, and FAQs embedded as pictures. Use OCR/vision capabilities. Return only the extracted text. Do not summarize, explain limitations, or apologize. Preserve paragraph breaks. Include text from every page.',
+            },
+            {
+              role: 'user',
+              content: [
+                { type: 'input_file', file_id: fileId },
+                { type: 'input_text', text: `Extract ALL text from "${fileName}", including any text rendered inside images or figures (use OCR). Return only the extracted text.` },
+              ],
+            },
+          ],
+          max_output_tokens: 12000,
+        }),
+      })
+      if (!aiResponse.ok) {
+        console.error(`[OCR] OpenAI extraction failed for ${model}:`, aiResponse.status, await aiResponse.text())
+        continue
+      }
+      const aiData = await aiResponse.json()
+      const aiText = (
+        (typeof aiData.output_text === 'string' ? aiData.output_text : '') ||
+        aiData.output?.filter((o: any) => o.type === 'message')
+          ?.flatMap((o: any) => o.content)
+          ?.filter((c: any) => c.type === 'output_text')
+          ?.map((c: any) => c.text)
+          ?.join('\n') || ''
+      ).trim()
+      if (aiText.length >= MIN_EXTRACTED_TEXT_LENGTH && !isInvalidExtractionText(aiText)) {
+        extracted = aiText
+        console.log(`[OCR] succeeded with ${model}: ${aiText.length} chars`)
+        break
+      }
+      console.log(`[OCR] returned insufficient text with ${model}: ${aiText.length} chars`)
+    }
+
+    try {
+      await fetch(`https://api.openai.com/v1/files/${fileId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+      })
+    } catch { /* ignore */ }
+
+    return extracted
+  } catch (e) {
+    console.error('[OCR] OpenAI extraction error:', e instanceof Error ? e.message : e)
+    return ''
+  }
+
 /** Split text into chunks */
 function chunkText(text: string, maxChars = 2000): string[] {
   if (text.length <= maxChars) return [text]
