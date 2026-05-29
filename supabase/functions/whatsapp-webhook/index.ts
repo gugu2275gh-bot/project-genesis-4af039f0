@@ -1779,14 +1779,26 @@ Regras:
         const steps: Step[] = []
 
         // Etapa 1 — Abertura (Msg1 + Msg2)
-        const aberturaDone = sentAny(/\b(obrigad[oa] por (falar|escrever|entrar)|gracias por (hablar|escribir)|thanks? for (reaching|contacting))\b/i)
+        // Resiliente: se qualquer etapa posterior já está gravada no funil
+        // (name/email/interest/location), consideramos a abertura concluída
+        // mesmo que o regex de consent (Msg2) não tenha casado no transcript.
+        // Isso evita reabrir a abertura depois que o cliente já avançou (bug Gustavo).
+        const aberturaSignals = sentAny(/\b(obrigad[oa] por (falar|escrever|entrar)|gracias por (hablar|escribir)|thanks? for (reaching|contacting))\b/i)
           && sentAny(/\b(perguntas? r[áa]pidas?|preguntas r[áa]pidas|quick questions?|entender (seu|tu|your) caso|direcionar|derivar|direct you)\b/i)
+        const aberturaAutoDone =
+          isReturningClient
+          || !!funnelStateLive.name_confirmed
+          || !!funnelStateLive.email_confirmed
+          || !!funnelStateLive.interest_confirmed
+          || !!funnelStateLive.location_known
+        const aberturaDone = aberturaSignals || aberturaAutoDone
         steps.push({
           key: 'abertura', label: 'ABERTURA',
           done: aberturaDone,
           instruction:
             'Envie a ABERTURA exatamente em duas frases curtas: (1) "Olá 😊 Tudo bem? Obrigado por falar com a CB Asesoría. Vou te ajudar a entender seus caminhos legais aqui na Espanha." (2) "Vou te fazer algumas perguntas rápidas só para entender seu caso e te direcionar para o especialista certo, pode ser?". NÃO faça nenhuma outra pergunta agora.',
         })
+
 
         // Etapa 2 — Nome (Msg3)
         steps.push({
