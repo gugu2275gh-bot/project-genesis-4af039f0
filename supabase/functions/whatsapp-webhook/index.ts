@@ -2176,7 +2176,10 @@ Regras:
             else if (userOutsideSpain) patch.location_known = 'outside'
           }
           if (!funnelState.interest_confirmed && !serviceMissing) {
-            patch.interest_confirmed = String(leadInterest?.service_interest || 'detected')
+            const candidate = String(leadInterest?.service_interest || '').trim()
+            if (candidate && !['SEM_SERVICO', 'OUTRO'].includes(candidate.toUpperCase())) {
+              patch.interest_confirmed = candidate
+            }
           }
           if (Object.keys(patch).length > 0) {
             await applyTurnUpdates(supabase, funnelState, patch)
