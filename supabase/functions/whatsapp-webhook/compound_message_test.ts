@@ -2,7 +2,7 @@
 import { assertEquals } from 'https://deno.land/std@0.177.0/testing/asserts.ts'
 import { computeDeterministicFunnelPatch } from './lib/overrides.ts'
 
-const CATALOG_Q_ES = 'En CB trabajamos con: residencia (NIE/TIE), nacionalidad española, arraigo, reagrupación familiar, homologación de títulos y autorización de regreso.\n\n¿Tu caso encaja en alguno de estos?'
+const CATALOG_Q_ES = 'En CB trabajamos con: residencia (NIE/TIE), nacionalidad española, arraigo, reagrupación familiar, homologación de títulos y autorización de regreso.'
 const LOCATION_Q_ES = '¿Estás en España?'
 const LOCATION_Q_PT = 'Você está na Espanha?'
 const COMPOUND_ES = 'Sí, ya tengo 2 años en España y quiero solicitar mi residencia'
