@@ -2325,6 +2325,12 @@ Regras:
 
             let parts = aiResponseClean.split('|||').map(p => p.trim()).filter(Boolean)
 
+            // Continuidade do pré-handoff: completa H1/H2/H3 se algum estiver faltando.
+            parts = ensurePreHandoffContinuity(parts, detectedChatLanguage, {
+              preHandoffSent: !!funnelStateLive.pre_handoff_sent,
+              handoffSent: !!funnelStateLive.handoff_sent,
+            })
+
             // ===== REDE DE SEGURANÇA: parts vazio =====
             // Se todos os chunks foram descartados (dedup, suppress, fallback empty),
             // NÃO encerramos silenciosamente. Geramos a próxima pergunta canônica do roteiro
