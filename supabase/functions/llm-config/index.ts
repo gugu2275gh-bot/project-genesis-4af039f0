@@ -118,15 +118,25 @@ Deno.serve(async (req) => {
   if ('error' in authCheck) return json({ error: authCheck.error }, authCheck.status)
 
   try {
-    if (action === 'status' && req.method === 'GET') {
+    // Roteamento simples: GET = status; POST com body { provider, model } = test
+    if (req.method === 'GET') {
       return json({
         gemini_key_present: !!Deno.env.get('CBAsesoria_Key'),
         openai_key_present: !!Deno.env.get('OPENAI_API_KEY'),
       })
     }
 
-    if (action === 'test' && req.method === 'POST') {
+    if (req.method === 'POST') {
       const body = await req.json().catch(() => ({}))
+      const action = body?.action || 'test'
+
+      if (action === 'status') {
+        return json({
+          gemini_key_present: !!Deno.env.get('CBAsesoria_Key'),
+          openai_key_present: !!Deno.env.get('OPENAI_API_KEY'),
+        })
+      }
+
       const provider = String(body?.provider || '')
       const model = String(body?.model || '')
       if (!provider || !model) return json({ error: 'provider e model são obrigatórios' }, 400)
@@ -136,7 +146,7 @@ Deno.serve(async (req) => {
       return json({ error: 'provider inválido' }, 400)
     }
 
-    return json({ error: 'ação não suportada' }, 400)
+    return json({ error: 'método não suportado' }, 405)
   } catch (e: any) {
     console.error('llm-config error', e)
     return json({ error: e?.message || 'erro interno' }, 500)
