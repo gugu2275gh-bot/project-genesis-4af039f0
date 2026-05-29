@@ -391,6 +391,21 @@ export default function KnowledgeBaseManager() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        title="Reprocessar com OCR (extrai texto de imagens dentro do PDF)"
+                        onClick={() => reprocessSingle(entry.file_path, entry.file_name, true)}
+                        disabled={processing === entry.file_name}
+                      >
+                        {processing === entry.file_name ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ScanText className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
+                    {isAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => deleteMutation.mutate(entry.file_path)}
                         disabled={deleteMutation.isPending}
                       >
