@@ -247,7 +247,130 @@ export function lockConfirmedFieldsInResponse(
   if (flags.interestKnown && isQuestionAboutInterest(q)) {
     return replaceWithNext()
   }
+
+  // Reforço: varrer TODAS as frases-pergunta (não apenas a última).
+  // Se qualquer uma re-pergunta um campo já confirmado, removê-la (e o
+  // que vier depois) e anexar a próxima pergunta pendente.
+  try {
+    const sentences = aiResponse.split(/(?<=[.?!])\s+/)
+    for (let i = 0; i < sentences.length; i++) {
+      const s = sentences[i]
+      if (!/\?\s*$/.test(s)) continue
+      const hitsConfirmed =
+        (flags.nameKnown && isQuestionAboutFullName(s)) ||
+        (flags.emailKnown && isQuestionAboutEmail(s)) ||
+        (flags.interestKnown && isQuestionAboutInterest(s))
+      if (!hitsConfirmed) continue
+      const keep = sentences.slice(0, i).join(' ').trim()
+      const next = nextPending()
+      if (!next) return keep || aiResponse
+      return keep ? `${keep}\n${next}` : next
+    }
+  } catch (_) { /* defensive */ }
+
   return aiResponse
+}
+
+/**
+ * Hard dedup pós-overrides: descarta parágrafos da resposta que já foram
+ * enviados (literal ou quase-literal) nas últimas N mensagens do assistente,
+ * ou que repetem o catálogo de serviços (Msg6) / a pergunta de interesse
+ * quando essas etapas já foram cumpridas. Se sobrar só um ack curto
+ * ("Certo.", "Ok.", "Vale."), anexa a próxima pergunta pendente do funil.
+ */
+export function stripAlreadySentCanonicalBlocks(
+  aiResponse: string,
+  assistantTranscript: string,
+  language: ChatLanguage,
+  flags: {
+    nameKnown: boolean
+    emailKnown: boolean
+    interestKnown: boolean
+    locationKnown: boolean
+  },
+  recentAssistantMessages: string[] = [],
+): string {
+  if (!aiResponse) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
+
+  const norm = (s: string) =>
+    String(s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9 ]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+  const jaccard = (a: string, b: string): number => {
+    const aw = new Set(a.split(' ').filter((w) => w.length > 3))
+    const bw = new Set(b.split(' ').filter((w) => w.length > 3))
+    if (!aw.size || !bw.size) return 0
+    let inter = 0
+    for (const w of aw) if (bw.has(w)) inter++
+    const union = aw.size + bw.size - inter
+    return union > 0 ? inter / union : 0
+  }
+
+  const transcript = assistantTranscript || ''
+  const servicesAlreadySent = isServicesOfferedMessage(transcript)
+  const recentNorm = (recentAssistantMessages || []).slice(-3).map(norm)
+
+  // Quebra por linhas em branco E pelo delimitador "|||" preservando ordem.
+  const chunks = aiResponse
+    .split('|||')
+    .flatMap((seg) => seg.split(/\n\s*\n/))
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+
+  const kept: string[] = []
+  for (const p of chunks) {
+    const pNorm = norm(p)
+    if (!pNorm) continue
+
+    if (servicesAlreadySent && isServicesOfferedMessage(p)) {
+      console.log('[DEDUP] dropping repeated services catalog block')
+      continue
+    }
+    // Follow-up colado ao catálogo (ex.: "O seu caso se encaixa em algum desses?")
+    if (servicesAlreadySent && /(se encaixa em algum|encaja en alguno|fits any of these|correspond[^?]{0,40}l['’]un de ces)/i.test(p)) {
+      console.log('[DEDUP] dropping catalog follow-up question')
+      continue
+    }
+    if (flags.interestKnown && isQuestionAboutInterest(p)) {
+      console.log('[DEDUP] dropping interest question (already confirmed)')
+      continue
+    }
+    let isEcho = false
+    for (const prev of recentNorm) {
+      if (!prev) continue
+      if (jaccard(pNorm, prev) >= 0.8) { isEcho = true; break }
+    }
+    if (isEcho) {
+      console.log('[DEDUP] dropping near-literal echo paragraph')
+      continue
+    }
+    kept.push(p)
+  }
+
+  if (kept.length === 0) return aiResponse
+
+  let result = kept.join('\n\n')
+
+  const ackOnly = /^\s*(certo|ok|okay|vale|claro|perfeito|entendido|entendi|d ?accord|d ?acuerdo|got it|sure|right)[\s.!,;:-]*$/i
+  if (kept.every((k) => ackOnly.test(k))) {
+    let next = ''
+    if (!flags.nameKnown) next = ''
+    else if (!flags.emailKnown) next = getEmailQuestion(language)
+    else if (!flags.interestKnown) next = ''
+    else if (!flags.locationKnown) next = getLocationQuestion(language)
+    if (next) {
+      result = `${result}\n\n${next}`
+      console.log('[DEDUP] appended next pending question after ack-only remainder')
+    }
+  }
+
+  return result
 }
 
 /**
@@ -465,7 +588,18 @@ export function forceServicesMessageAfterInterest(
   if (!flags.interestKnown) return aiResponse
   if (flags.locationKnown) return aiResponse // já passou da etapa
   const transcript = flags.assistantTranscript || ''
-  if (isServicesOfferedMessage(transcript)) return aiResponse
+  const alreadySent = isServicesOfferedMessage(transcript)
+  if (alreadySent) {
+    // Catálogo já foi enviado. Se a IA tentou reenviar, removemos e
+    // forçamos avanço para a pergunta de localização.
+    if (isServicesOfferedMessage(aiResponse)) {
+      const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
+      const replacement = getLocationQuestion(language)
+      console.log('[D1_SERVICES] catalog already sent — replacing repeat with location question')
+      return preamble ? `${preamble}\n${replacement}` : replacement
+    }
+    return aiResponse
+  }
   // Se a IA já gerou justamente a Msg 6, mantém.
   if (isServicesOfferedMessage(aiResponse)) return aiResponse
   // Substitui pela Msg 6 (mantém preâmbulo curto da IA, se houver).
