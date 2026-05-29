@@ -365,6 +365,7 @@ import {
   preventRepeatedCanonicalQuestion,
   stripRepeatedOpener,
   stripLockedSentinel,
+  stripAlreadySentCanonicalBlocks,
   stripPreambleBeforePreHandoff,
   stripRepeatedPreHandoff,
   isLocked,
