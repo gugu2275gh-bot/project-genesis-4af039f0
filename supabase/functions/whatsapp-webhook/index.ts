@@ -2112,17 +2112,27 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             `Não invente, não complete lacunas, não combine com conhecimento externo.`
         }
 
-        try {
-          aiResponse = await generateAIResponse(
-            history,
-            messageForAI,
-            resolvedSystemPrompt,
-            geminiApiKey,
-            knowledgeContext,
-            detectedChatLanguage
-          )
-        } catch (geminiError) {
-          console.error('Gemini failed, trying OpenAI fallback:', geminiError instanceof Error ? geminiError.message : geminiError)
+        // SHORT-CIRCUIT determinístico da ABERTURA (Msg1+Msg2):
+        // Na 1ª interação de cliente novo, NÃO confiamos no LLM para traduzir/dividir.
+        // Usamos as frases canônicas já traduzidas em lib/language.ts e enviamos
+        // as duas bolhas separadas por "|||". Garante o mesmo fluxo em PT/ES/EN/FR.
+        if (isFirstInteraction && !isReturningClient) {
+          const tt = getPromptTemplates(detectedChatLanguage)
+          aiResponse = `${tt.openingLine1}|||${tt.openingLine2}`
+          console.log('[OPENER_SHORTCIRCUIT] abertura canônica enviada em', detectedChatLanguage)
+        } else {
+          try {
+            aiResponse = await generateAIResponse(
+              history,
+              messageForAI,
+              resolvedSystemPrompt,
+              geminiApiKey,
+              knowledgeContext,
+              detectedChatLanguage
+            )
+          } catch (geminiError) {
+            console.error('Gemini failed, trying OpenAI fallback:', geminiError instanceof Error ? geminiError.message : geminiError)
+          }
         }
 
         // Fallback to OpenAI if Gemini returned empty or failed
