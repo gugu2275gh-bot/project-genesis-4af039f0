@@ -1864,8 +1864,17 @@ Regras:
             'Envie EXATAMENTE 4 frases curtas, NESTA ORDEM, separadas pelo delimitador "|||" (4 bolhas em UMA resposta): (1) "Perfeito. Já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." (3) "Vou encaminhar suas informações para um especialista analisar com mais profundidade." (4) "Estou à disposição para ajudar se precisa! Vou te encaminhar para um atendente." NÃO faça novas perguntas. NÃO insira "modo tira-dúvidas" ANTES dessas 4 mensagens.',
         })
 
+        // GUARD anti-handoff prematuro: só consideramos cadastro concluído se os dados
+        // mínimos foram realmente capturados. Sem isso, mesmo que o LLM vaze as frases
+        // âncoras de pré-handoff/handoff, NÃO marcamos as etapas como done.
+        const hasMinimumDataForHandoff =
+          !!funnelStateLive.name_confirmed &&
+          !!funnelStateLive.email_confirmed &&
+          !!funnelStateLive.interest_confirmed &&
+          funnelStateLive.location_known !== null && funnelStateLive.location_known !== undefined
+
         // Concluiu cadastro: KB liberada e funil = 'livre'.
-        if (preHandoffDone && handoffDone) {
+        if (preHandoffDone && handoffDone && hasMinimumDataForHandoff) {
           for (const s of steps) s.done = true
           if (funnelStateLive.step !== 'livre') {
             try {
@@ -1878,6 +1887,15 @@ Regras:
               console.warn('[FUNNEL] livre update failed:', e instanceof Error ? e.message : e)
             }
           }
+        } else if ((preHandoffDone || handoffDone) && !hasMinimumDataForHandoff) {
+          console.warn('[FUNNEL] handoff_anchor_without_data — ignorando âncoras, mantendo gate ativo', JSON.stringify({
+            leadId: lead.id,
+            name_confirmed: !!funnelStateLive.name_confirmed,
+            email_confirmed: !!funnelStateLive.email_confirmed,
+            interest_confirmed: !!funnelStateLive.interest_confirmed,
+            location_known: funnelStateLive.location_known,
+            preHandoffDone, handoffDone,
+          }))
         }
 
         // Próxima etapa pendente
