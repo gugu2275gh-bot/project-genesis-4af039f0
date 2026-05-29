@@ -1447,7 +1447,7 @@ Regras:
         }
         const currentMessageAsName = isQuestionAboutFullName(lastAssistantQuestion) && isLikelyFullNameAnswer(messageForAI)
         if (currentMessageAsName && !isContactNameTrustworthy(contact)) {
-          const explicitCurrentName = String(messageForAI).trim()
+          const explicitCurrentName = stripNameIntroPrefix(String(messageForAI).trim())
           const { error: currentNameUpdateError } = await supabase
             .from('contacts')
             .update({ full_name: explicitCurrentName, name_source: 'USER_CONFIRMED' })
