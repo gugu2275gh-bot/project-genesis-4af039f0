@@ -2259,6 +2259,12 @@ Regras:
             aiResponseClean = stripRepeatedPreHandoff(aiResponseClean, detectedChatLanguage, {
               preHandoffSent: !!funnelStateLive.pre_handoff_sent,
             })
+            // Padroniza texto do pré-handoff: substitui paráfrases do LLM pelo literal
+            // canônico (H1/H2/H3) em PT/ES/EN/FR — sempre que aplicável.
+            aiResponseClean = enforceCanonicalPreHandoff(aiResponseClean, detectedChatLanguage, {
+              preHandoffSent: !!funnelStateLive.pre_handoff_sent,
+              handoffSent: !!funnelStateLive.handoff_sent,
+            })
             aiResponseClean = stripLockedSentinel(aiResponseClean)
 
             // Hard dedup: descarta blocos canônicos (catálogo, pergunta de
