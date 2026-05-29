@@ -1,62 +1,45 @@
-## Problema (caso Pedro – screenshot)
+## Diagnóstico
 
-Bot envia em ES:
-1. 1:23 — "¿Cuál fue la fecha exacta de tu entrada en España?" + recordatório + sufixo pós-handoff.
-2. Cliente: "15/03/2024".
-3. 1:24 — Bot **repete** "¿Cuál fue la fecha exacta de tu entrada en España?".
-4. Cliente: "15/03/2024" novamente.
-5. Bot envia duas bolhas, ambas começando com "Perfecto.": "Perfecto. Ya tengo una visión inicial de tu caso." e "Perfecto. ¿Estás empadronado?".
+**1. O arquivo "OK - Estancia por estudos.pdf" FOI indexado, mas seu conteúdo de imagens NÃO foi.**
 
-## Por que o dedup atual não pegou
+Verifiquei a `knowledge_base`:
+- O arquivo está ativo, com 3 chunks (~4.240 caracteres extraídos).
+- Os 3 chunks contêm apenas o **texto puro** do PDF: introdução, perfil, requisitos, etapas, prazos e um FAQ curto. Nenhum dos chunks menciona "90 días", "fuera de España", "ausencia" ou "tiempo de residencia desde la fecha de la concesión".
+- A informação que o usuário menciona ("imagem 2 do arquivo") provavelmente está dentro de um **screenshot / imagem embutida no PDF** (ex.: tabela ou recorte de FAQ), não no texto digital.
 
-O `stripAlreadySentCanonicalBlocks` (criado na rodada anterior) compara cada parágrafo da nova resposta com **a mensagem anterior inteira** via Jaccard ≥ 0.8. No screenshot a mensagem anterior tinha 30+ palavras (pergunta + recordatório longo + sufixo pós-handoff). A repetição é só a pergunta curta (~9 palavras). Jaccard = inter/union ≈ 8/35 ≈ 0.23 → não dispara.
+**2. Por que a imagem não foi lida:**
+A função `process-knowledge-pdf` (linha 229-340) funciona em duas etapas:
+1. Extração básica do text-layer do PDF (regex sobre streams).
+2. **Fallback** para OpenAI (`gpt-4.1-mini` / `gpt-4o-mini`) **somente** se a extração básica falhar (`< MIN_EXTRACTED_TEXT_LENGTH` ou padrão "unable to extract").
 
-Além disso não há check de "pergunta canônica já feita" para a etapa B1 (entry date) — só existe para `interest`, `name`, `email`. E não há nenhuma defesa contra duas bolhas consecutivas com o mesmo opener ("Perfecto.").
+Como o PDF do Estancia por Estudios tem texto digital suficiente (>4 mil chars), a etapa 1 deu certo e o fallback de OpenAI (que faria OCR/visão dentro das imagens) **nunca rodou**. Resultado: tudo que está dentro de imagens/screenshots dentro do PDF ficou de fora do índice.
 
-## Solução (backend, edge function `whatsapp-webhook`)
+**3. Por que a IA respondeu sobre "Larga Duración":**
+A pergunta semântica do Pedro ("permanecer fuera de España por mas de 90 días consecutivos") tem alta similaridade com o chunk de **OK - LARGA DURACION.pdf**, que literalmente contém a regra de "6 meses consecutivos / 10 meses no total em 5 anos". Como o KB do Estancia por Estudios não tem nenhuma menção a esse tema, o `match_knowledge_base` retornou o conteúdo correto disponível — mas não o que o usuário esperava (que estava só na imagem).
 
-### 1. Chunkar também o histórico no dedup
-Em `lib/overrides.ts` → `stripAlreadySentCanonicalBlocks`:
+## Plano para corrigir
 
-- Para cada mensagem em `recentAssistantMessages`, dividir por `\n\n` e `|||` exatamente como fazemos com a nova resposta, e normalizar cada chunk.
-- Construir `prevChunksNorm: string[]` plano com todos os chunks anteriores.
-- Subir a comparação para esse conjunto: se `jaccard(pNorm, prevChunk) >= 0.8` para **qualquer** chunk anterior → echo, descarta.
-- Adicionalmente: se `pNorm === prevChunk` (igualdade após normalização) → echo (cobre frases curtas com Jaccard baixo por falta de palavras > 3 chars).
+### Passo 1 — Reprocessar o PDF com OCR forçado
+Adicionar parâmetro `force_ocr` no `process-knowledge-pdf` que ignora a extração básica e vai direto para o OpenAI Vision (`gpt-4.1-mini` com `input_file` PDF). Reprocessar "OK - Estancia por estudos.pdf" com essa flag — o gpt-4.1-mini lê PDFs com imagens nativamente e devolve o texto das figuras.
 
-### 2. Dedup por pergunta já feita
-Mesma função:
+### Passo 2 — Detecção automática de "PDF com imagens relevantes"
+Após a extração básica, se o PDF tiver mais de N páginas com objetos `/Image` em relação ao tamanho do texto extraído (heurística: razão `bytes_imagens / chars_texto` acima de um limiar), rodar **adicionalmente** o OpenAI Vision e concatenar o resultado ao texto básico antes de chunkar. Isso evita perder conteúdo em imagens em qualquer PDF futuro, sem precisar de ação manual.
 
-- Extrair todas as substrings que terminam em `?` (ou `¿…?` em ES) da nova resposta e das mensagens anteriores recentes (últimas 3).
-- Normalizar (`normalizeForLanguageChecks`).
-- Se qualquer pergunta da resposta já apareceu (normalizada-igual ou via `areQuestionsEquivalent`) em uma das mensagens anteriores recentes → remover essa pergunta da resposta (split por sentenças, drop sentence).
-- Se sobrar só "Perfecto."/"Certo." etc., usar o `nextPending` que já existe para anexar a próxima pergunta canônica do funil (incluindo B1 entry-date e B2 empadronado quando aplicável).
+### Passo 3 — Botão "Reprocessar com OCR" na UI da KB
+Na tela de gerenciamento da Base de Conhecimento (Configurações → Base de Conhecimento), adicionar ação por linha "Reprocessar com OCR" que chama o endpoint com `force_ocr=true`. Útil para qualquer PDF que o ADMIN suspeite estar perdendo conteúdo visual.
 
-### 3. Próximo passo do funil para entry-date / empadronado
-Estender o helper `nextPending` em `lockConfirmedFieldsInResponse` **e** o usado em `stripAlreadySentCanonicalBlocks` (pode virar export reutilizável `getNextPendingQuestion(language, funnelFlags)`):
+### Passo 4 — Reprocessar lote inicial
+Rodar `force_ocr=true` para todos os PDFs `OK - *.pdf` da KB (são ~50 arquivos) para garantir que nenhum conteúdo de imagem fique de fora. Custo estimado: ~50 chamadas OpenAI Vision (~US$ 0,02 cada).
 
-- name → email → interest → location → **entry_date (B1)** → **empadronado yes/no (B2)** → etc.
-- Receber flags extras: `entryDateKnown`, `empadronadoKnown` (vindos de `funnelStateLive`).
-- Em `index.ts` passar essas flags na chamada de `stripAlreadySentCanonicalBlocks`.
+## Detalhes técnicos
 
-### 4. Dedup de opener entre bolhas
-Em `lib/overrides.ts`, adicionar `dedupOpenerAcrossBubbles(aiResponse, language)`:
+- Arquivos a editar:
+  - `supabase/functions/process-knowledge-pdf/index.ts` — adicionar `force_ocr` no body e heurística de detecção de imagens.
+  - `src/pages/settings/KnowledgeBase.tsx` (ou equivalente) — botão "Reprocessar com OCR".
+- Modelo: manter `gpt-4.1-mini` como primário no Vision (já configurado), com fallback `gpt-4o-mini`.
+- Logs: adicionar `[KB-PROCESS] force_ocr=true → vision retornou X chars adicionais` para rastreabilidade.
+- Sem mudanças de schema na `knowledge_base`.
 
-- Splita em `|||`.
-- Para cada parte ≥ 2, se a primeira palavra (case-insensitive, sem pontuação) for igual à primeira palavra da parte 1 (set de openers: `perfecto, perfeito, certo, ok, claro, vale, entendido, entendi, perfect, sure, parfait, d'accord, bien`), remove o opener da parte ≥ 2 mantendo o resto.
-- Aplicar em `index.ts` entre `stripAlreadySentCanonicalBlocks` e o split final.
+## Resposta direta à sua pergunta
 
-### 5. Testes (Deno)
-Adicionar a `duplicate_block_strip_test.ts`:
-
-- **Caso Pedro**: histórico com `["¿Cuál fue la fecha exacta de tu entrada en España?\n\nComo prometí... entrada en España, incluyendo día, mes y año, para poder continuar.\n\nEn breve uno de nuestros especialistas..."]`. Resposta nova = `"¿Cuál fue la fecha exacta de tu entrada en España?"`. Após dedup com `entryDateKnown=true`: resultado vazio ou trocado pela próxima pergunta pendente (B2 empadronado).
-- **Caso opener**: aiResponse = `"Perfecto. Ya tengo una visión inicial de tu caso.|||Perfecto. ¿Estás empadronado?"` → segundo "Perfecto." removido.
-- **Pergunta-equivalente**: histórico com pergunta de entry-date em PT; nova resposta com a mesma em ES (parafraseada) usando `areQuestionsEquivalent` → drop.
-
-### 6. Deploy
-Auto via Supabase.
-
-## Fora de escopo
-
-- Não vou refatorar o pipeline de overrides.
-- Não vou mexer no extractor de `entry_date` (já funciona — `15/03/2024` é parseado).
-- Sem mudanças de schema.
+Sim, o "OK - Estancia por estudos.pdf" foi consultado (está indexado e ativo), mas a **imagem 2 do arquivo nunca chegou ao índice** porque o extrator só faz OCR quando o text-layer falha. Como o PDF tem texto digital, o conteúdo visual foi ignorado — por isso a IA respondeu com base no que sabia (Larga Duración), e não com o que está na imagem.
