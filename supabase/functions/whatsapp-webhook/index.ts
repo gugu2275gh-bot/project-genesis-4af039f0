@@ -1129,6 +1129,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           if (webhookLog?.id) {
             await supabase.from('webhook_logs').update({ processed: true }).eq('id', webhookLog.id)
           }
+          await logTurn({ supabase, exit_reason: 'ANTI_DUP', lead_id: lead.id, contact_id: contact?.id, phone: phoneNumber, message_id: message.messageId, inbound_text: message.body, details: { recentOutbound: recentOutbound[0] } })
           return new Response(
             JSON.stringify({ success: true, message: 'Skipped: outbound response already sent (anti-duplicate)' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
