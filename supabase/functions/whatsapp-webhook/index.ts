@@ -2301,6 +2301,32 @@ Regras:
               console.warn('[REPLAY_PREAMBLE_LANG] non-blocking error:', langErr instanceof Error ? langErr.message : langErr)
             }
 
+            // HARD-LOCK localização: se já sabemos onde o cliente está, nunca re-perguntar.
+            try {
+              aiResponseClean = blockLocationReaskIfKnown(aiResponseClean, detectedChatLanguage, {
+                locationKnown: funnelStateLive.location_known,
+                entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+                empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+                empadronadoCity: funnelStateLive.empadronado_city,
+                empadronadoSinceConfirmed: (funnelStateLive as any).empadronamiento_since,
+                assistantTranscript: allAssistant,
+                outsideProgress: outsideProgressLive,
+                preHandoffSent: !!funnelStateLive.pre_handoff_sent,
+                handoffSent: !!funnelStateLive.handoff_sent,
+              })
+              aiResponseClean = stripLockedSentinel(aiResponseClean)
+            } catch (locErr) {
+              console.warn('[LOCATION_LOCK] non-blocking error:', locErr instanceof Error ? locErr.message : locErr)
+            }
+
+            // Enforçador final de idioma das perguntas canônicas (corrige PT→ES leak)
+            try {
+              aiResponseClean = enforceCanonicalLanguage(aiResponseClean, detectedChatLanguage)
+            } catch (langErr) {
+              console.warn('[CANONICAL_LANG] non-blocking error:', langErr instanceof Error ? langErr.message : langErr)
+            }
+
+
             // BPMN-3 MODO PÓS-HANDOFF: se H1-H4 já foram enviados, anexa o sufixo
             // localizado de "aguarde um especialista" ao final da resposta (uma única bolha).
             const wasHandoffSentBefore = !!funnelStateLive.handoff_sent
