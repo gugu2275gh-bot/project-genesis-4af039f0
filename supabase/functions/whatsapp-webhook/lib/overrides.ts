@@ -87,11 +87,9 @@ export function computeDeterministicFunnelPatch(
     if (YES.test(msg)) patch.location_known = 'spain'
     else if (NO.test(msg)) patch.location_known = 'outside'
   }
-  // Reafirmação clara: cliente diz explicitamente que NÃO está na Espanha em qualquer turno
-  // (ex.: "Eu não estou na Espanha", "no estoy en España", "I'm not in Spain")
-  if (/\b(n[ãa]o (estou|moro|vivo) na espanha|no estoy en espa[ñn]a|i'?m not in spain|je ne suis pas en espagne)\b/i.test(msg)) {
-    patch.location_known = 'outside'
-  }
+  // NOTA: NÃO consolidamos location_known fora do contexto da pergunta de
+  // localização. Mesmo declarações como "no estoy en España" só são gravadas
+  // quando a pergunta canônica acabou de ser feita (caso tratado acima).
   // NOTA: NÃO inferimos location_known a partir de pistas embutidas em respostas
   // de interesse/serviço. Mesmo que o cliente diga "ya tengo 2 años en España"
   // junto com o serviço desejado, a etapa "¿Estás en España?" deve ser feita
