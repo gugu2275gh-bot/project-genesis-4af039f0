@@ -139,6 +139,10 @@ export default function Settings() {
             <SettingsIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Sistema</span>
           </TabsTrigger>
+          <TabsTrigger value="llm" className="gap-2">
+            <Brain className="h-4 w-4" />
+            <span className="hidden sm:inline">LLM</span>
+          </TabsTrigger>
            {isSuperuser && (
              <>
                <TabsTrigger value="erd" className="gap-2">
