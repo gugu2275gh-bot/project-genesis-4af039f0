@@ -867,15 +867,15 @@ export function forceCorrectBlockForLocation(
     let next: string
     if (!flags.entryDateConfirmed) {
       if (b1Sent) {
-        if (language === 'es') next = '¿Cuál fue la fecha exacta de tu entrada en España?'
-        else if (language === 'en') next = 'What was the exact date you entered Spain?'
-        else if (language === 'fr') next = 'Quelle est la date exacte de votre entrée en Espagne ?'
-        else next = 'Qual foi a data exata da sua entrada na Espanha?'
+        if (language === 'es') next = '¿Cuál fue la fecha exacta de tu entrada en España? Por favor, envíala en el formato DD/MM/AAAA (ejemplo: 22/05/2025).'
+        else if (language === 'en') next = 'What was the exact date you entered Spain? Please send it in the format DD/MM/YYYY (example: 22/05/2025).'
+        else if (language === 'fr') next = 'Quelle est la date exacte de votre entrée en Espagne ? Merci de l’envoyer au format JJ/MM/AAAA (exemple : 22/05/2025).'
+        else next = 'Qual foi a data exata da sua entrada na Espanha? Por favor, envie no formato DD/MM/AAAA (exemplo: 22/05/2025).'
       } else {
-        if (language === 'es') next = 'Perfecto. Ahora necesito entender tu situación aquí.\n\n¿Cuál fue la fecha exacta de tu entrada en España?'
-        else if (language === 'en') next = 'Got it. Now I need to understand your situation here.\n\nWhat was the exact date you entered Spain?'
-        else if (language === 'fr') next = 'D’accord. Maintenant j’ai besoin de comprendre votre situation ici.\n\nQuelle est la date exacte de votre entrée en Espagne ?'
-        else next = 'Perfeito. Agora preciso entender sua situação aqui.\n\nQual foi a data exata da sua entrada na Espanha?'
+        if (language === 'es') next = 'Perfecto. Ahora necesito entender tu situación aquí.\n\n¿Cuál fue la fecha exacta de tu entrada en España? Por favor, envíala en el formato DD/MM/AAAA (ejemplo: 22/05/2025).'
+        else if (language === 'en') next = 'Got it. Now I need to understand your situation here.\n\nWhat was the exact date you entered Spain? Please send it in the format DD/MM/YYYY (example: 22/05/2025).'
+        else if (language === 'fr') next = 'D’accord. Maintenant j’ai besoin de comprendre votre situation ici.\n\nQuelle est la date exacte de votre entrée en Espagne ? Merci de l’envoyer au format JJ/MM/AAAA (exemple : 22/05/2025).'
+        else next = 'Perfeito. Agora preciso entender sua situação aqui.\n\nQual foi a data exata da sua entrada na Espanha? Por favor, envie no formato DD/MM/AAAA (exemplo: 22/05/2025).'
       }
     } else if (flags.empadronadoConfirmed === null || flags.empadronadoConfirmed === undefined) {
       next = getEmpadronadoQuestion(language)
