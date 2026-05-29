@@ -370,6 +370,8 @@ import {
   enforceReplayPreambleLanguage,
   stripPreambleBeforePreHandoff,
   stripRepeatedPreHandoff,
+  enforceCanonicalPreHandoff,
+  ensurePreHandoffContinuity,
   isLocked,
   lock,
 } from './lib/overrides.ts'
@@ -2257,6 +2259,12 @@ Regras:
             aiResponseClean = stripRepeatedPreHandoff(aiResponseClean, detectedChatLanguage, {
               preHandoffSent: !!funnelStateLive.pre_handoff_sent,
             })
+            // Padroniza texto do pré-handoff: substitui paráfrases do LLM pelo literal
+            // canônico (H1/H2/H3) em PT/ES/EN/FR — sempre que aplicável.
+            aiResponseClean = enforceCanonicalPreHandoff(aiResponseClean, detectedChatLanguage, {
+              preHandoffSent: !!funnelStateLive.pre_handoff_sent,
+              handoffSent: !!funnelStateLive.handoff_sent,
+            })
             aiResponseClean = stripLockedSentinel(aiResponseClean)
 
             // Hard dedup: descarta blocos canônicos (catálogo, pergunta de
@@ -2316,6 +2324,12 @@ Regras:
             }
 
             let parts = aiResponseClean.split('|||').map(p => p.trim()).filter(Boolean)
+
+            // Continuidade do pré-handoff: completa H1/H2/H3 se algum estiver faltando.
+            parts = ensurePreHandoffContinuity(parts, detectedChatLanguage, {
+              preHandoffSent: !!funnelStateLive.pre_handoff_sent,
+              handoffSent: !!funnelStateLive.handoff_sent,
+            })
 
             // ===== REDE DE SEGURANÇA: parts vazio =====
             // Se todos os chunks foram descartados (dedup, suppress, fallback empty),
