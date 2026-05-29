@@ -1667,7 +1667,9 @@ Regras:
 
         // Detecção de localização: buscar a RESPOSTA imediatamente após a pergunta de localização.
         // Suporta a nova pergunta yes/no ("já está na Espanha?") e a antiga disjuntiva (compatibilidade).
-        const locQuestionRe = /(j[áa] est[áa]|j[áa] mora|ya est[áa]s|ya vives|already (in|live)|are you already in spain|hoje voc[êe] j[áa] est[áa] na espanha|hoy ya est[áa]s en espa[ñn]a|d[ée]j[àa] en espagne).{0,60}(espanha|espa[ñn]a|spain|espagne)/i
+        // Reconhece TANTO a forma longa ("Hoje você já está na Espanha?") quanto a forma curta
+        // ("¿Estás en España?", "Está na Espanha?", "Are you in Spain?", "Êtes-vous en Espagne?").
+        const locQuestionRe = /((j[áa] est[áa]|j[áa] mora|ya est[áa]s|ya vives|already (in|live)|are you (already )?in spain|hoje voc[êe] j[áa] est[áa] na espanha|hoy ya est[áa]s en espa[ñn]a|d[ée]j[àa] en espagne).{0,60}(espanha|espa[ñn]a|spain|espagne)|(\b(est[áa]s?|are you|[êe]tes[- ]vous)\b[^?]{0,40}\b(espanha|espa[ñn]a|spain|espagne)\b[^?]{0,10}\?))/i
         let locationAnswer = ''
         for (let i = 0; i < history.length - 1; i++) {
           const m = history[i]
