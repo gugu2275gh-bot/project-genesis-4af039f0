@@ -385,6 +385,7 @@ import {
 
 import { classifyOffTopic, getOffTopicAckPhrase } from './lib/offtopic.ts'
 import { normalizeQueue, pushPending, getReplayPreamble, type PendingItem } from './lib/parking.ts'
+import { logTurn } from './lib/turn-log.ts'
 
 export {
   FULL_NAME_DENYLIST_PATTERNS,
