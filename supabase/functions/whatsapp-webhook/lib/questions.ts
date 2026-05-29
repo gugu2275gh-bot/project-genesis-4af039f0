@@ -136,10 +136,10 @@ export function looksLikeIncompleteEntryDateWithoutYear(text: string): boolean {
 }
 
 export function getEntryDateNeedsYearQuestion(language: ChatLanguage): string {
-  if (language === 'es') return 'Necesito la fecha completa, incluyendo el año. ¿Cuál fue la fecha exacta de tu entrada en España?'
-  if (language === 'en') return 'I need the full date, including the year. What was the exact date you entered Spain?'
-  if (language === 'fr') return 'J’ai besoin de la date complète, avec l’année. Quelle était la date exacte de votre entrée en Espagne ?'
-  return 'Preciso da data completa, incluindo o ano. Qual foi a data exata da sua entrada na Espanha?'
+  if (language === 'es') return 'Necesito la fecha completa, con día, mes y año. Por favor, envíala en el formato DD/MM/AAAA (ejemplo: 22/05/2025). ¿Cuál fue la fecha exacta de tu entrada en España?'
+  if (language === 'en') return 'I need the full date, including day, month and year. Please send it in the format DD/MM/YYYY (example: 22/05/2025). What was the exact date you entered Spain?'
+  if (language === 'fr') return 'J’ai besoin de la date complète, avec le jour, le mois et l’année. Merci de l’envoyer au format JJ/MM/AAAA (exemple : 22/05/2025). Quelle était la date exacte de votre entrée en Espagne ?'
+  return 'Preciso da data completa, com dia, mês e ano. Por favor, envie no formato DD/MM/AAAA (exemplo: 22/05/2025). Qual foi a data exata da sua entrada na Espanha?'
 }
 
 export function isQuestionAboutInterest(question: string): boolean {
