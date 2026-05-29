@@ -143,14 +143,14 @@ export default function KnowledgeBaseManager() {
     },
   });
 
-  const handleReprocessAll = async () => {
+  const handleReprocessAll = async (forceOcr = false) => {
     setReprocessing(true);
     let success = 0;
     let failed = 0;
-    
+
     // Get files from storage if entries list is empty (e.g. after cleanup)
     let filesToProcess: Array<{ file_name: string; file_path: string }> = [];
-    
+
     if (entries?.length) {
       filesToProcess = entries.map(e => ({ file_name: e.file_name, file_path: e.file_path }));
     } else {
@@ -171,12 +171,12 @@ export default function KnowledgeBaseManager() {
       toast({ title: 'Nenhum PDF encontrado para reprocessar', variant: 'destructive' });
       return;
     }
-    
+
     for (const file of filesToProcess) {
       try {
         setProcessing(file.file_name);
         const { data, error } = await supabase.functions.invoke('process-knowledge-pdf', {
-          body: { filePath: file.file_path, fileName: file.file_name },
+          body: { filePath: file.file_path, fileName: file.file_name, forceOcr },
         });
         if (error || data?.error) {
           failed++;
@@ -189,14 +189,33 @@ export default function KnowledgeBaseManager() {
         console.error('Reprocess error for', file.file_name, err);
       }
     }
-    
+
     setProcessing(null);
     setReprocessing(false);
     queryClient.invalidateQueries({ queryKey: ['knowledge-base'] });
     toast({
-      title: `Reprocessamento concluído`,
+      title: `Reprocessamento ${forceOcr ? '(com OCR) ' : ''}concluído`,
       description: `${success} PDFs reprocessados com sucesso${failed > 0 ? `, ${failed} falharam` : ''}`,
     });
+  };
+
+  const reprocessSingle = async (filePath: string, fileName: string, forceOcr: boolean) => {
+    setProcessing(fileName);
+    try {
+      const { data, error } = await supabase.functions.invoke('process-knowledge-pdf', {
+        body: { filePath, fileName, forceOcr },
+      });
+      if (error || data?.error) {
+        toast({ title: `Erro ao reprocessar ${fileName}`, description: (error?.message || data?.error) as string, variant: 'destructive' });
+      } else {
+        toast({ title: `${fileName} reprocessado${forceOcr ? ' com OCR' : ''}`, description: `${data?.chunks ?? 0} blocos, ${data?.totalChars ?? 0} caracteres` });
+        queryClient.invalidateQueries({ queryKey: ['knowledge-base'] });
+      }
+    } catch (err: any) {
+      toast({ title: `Erro ao reprocessar ${fileName}`, description: err.message, variant: 'destructive' });
+    } finally {
+      setProcessing(null);
+    }
   };
 
   if (isLoading) {
