@@ -206,6 +206,9 @@ async function extractTextWithOpenAI(
     console.error('[OCR] OpenAI extraction error:', e instanceof Error ? e.message : e)
     return ''
   }
+}
+
+
 
 /** Split text into chunks */
 function chunkText(text: string, maxChars = 2000): string[] {
