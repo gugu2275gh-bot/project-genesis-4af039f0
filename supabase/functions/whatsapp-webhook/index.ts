@@ -1927,7 +1927,7 @@ Regras:
             `4. NÃO peça novamente nenhum dado já coletado (nome, e-mail, interesse, localização, idade, data de entrada, empadronamento).\n` +
             `5. NÃO escreva você mesmo a frase "Em breve um de nossos especialistas..." — a infraestrutura adiciona automaticamente como sufixo. Responda apenas o conteúdo da dúvida.\n` +
             (pendingQuestionToAnswer
-              ? `6. PRIORIDADE MÁXIMA: o cliente havia feito esta pergunta DURANTE o cadastro e ficou aguardando: "${pendingQuestionToAnswer}". Responda-a AGORA com base na KB. Comece com algo como "Como prometi, sobre sua dúvida...".\n`
+              ? `6. PRIORIDADE MÁXIMA: o cliente havia feito esta pergunta DURANTE o cadastro e ficou aguardando: "${pendingQuestionToAnswer}". Responda-a AGORA com base na KB. Comece com a frase de retomada NO IDIOMA TRAVADO (${langName}): "${getReplayPreamble(detectedChatLanguage)}". JAMAIS use "Como prometi" em português se ${langName} não for português — use exatamente a frase traduzida acima.\n`
               : '') +
             `[FIM DO MODO PÓS-HANDOFF]`
         }
