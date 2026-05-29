@@ -87,7 +87,13 @@ export function computeDeterministicFunnelPatch(
   if (/\b(n[ãa]o (estou|moro|vivo) na espanha|no estoy en espa[ñn]a|i'?m not in spain|je ne suis pas en espagne)\b/i.test(msg)) {
     patch.location_known = 'outside'
   }
-  if (/\b(estou na espanha|j[áa] estou na espanha|estoy en espa[ñn]a|i'?m in spain|je suis en espagne)\b/i.test(msg)) {
+  // Sinais positivos de "está na Espanha", inclusive em respostas COMPOSTAS
+  // (ex.: "Sí, ya tengo 2 años en España y quiero solicitar mi residencia").
+  if (
+    /\b(estou na espanha|j[áa] estou na espanha|estoy en espa[ñn]a|ya estoy en espa[ñn]a|i'?m in spain|je suis en espagne|moro na espanha|vivo en espa[ñn]a|vivo na espanha|aqui na espanha|aqu[ií] en espa[ñn]a)\b/i.test(msg)
+    || /\b\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*espa[ñn]ha?\b/i.test(msg)
+    || /\b(tenho|tengo|i have)\s+\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*espa[ñn]ha?\b/i.test(msg)
+  ) {
     patch.location_known = 'spain'
   }
 
