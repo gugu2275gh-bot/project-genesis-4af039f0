@@ -663,7 +663,7 @@ export function forceServicesMessageAfterInterest(
       const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
       const replacement = getLocationQuestion(language)
       console.log('[D1_SERVICES] catalog already sent — replacing repeat with location question')
-      return preamble ? `${preamble}\n${replacement}` : replacement
+      return preamble ? `${preamble}|||${replacement}` : replacement
     }
     return aiResponse
   }
