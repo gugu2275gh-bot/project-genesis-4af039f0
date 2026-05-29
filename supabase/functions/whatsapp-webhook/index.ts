@@ -372,6 +372,8 @@ import {
   stripRepeatedPreHandoff,
   enforceCanonicalPreHandoff,
   ensurePreHandoffContinuity,
+  blockLocationReaskIfKnown,
+  enforceCanonicalLanguage,
   isLocked,
   lock,
 } from './lib/overrides.ts'
