@@ -673,7 +673,7 @@ export function forceServicesMessageAfterInterest(
   const preamble = extractTextBeforeLastQuestion(aiResponse).trim()
   const replacement = getServicesOfferedMessage(language)
   console.log('[D1_SERVICES] injecting Msg 6 (services offered) before location')
-  return preamble ? `${preamble}\n${replacement}` : replacement
+  return preamble ? `${preamble}|||${replacement}` : replacement
 }
 
 /**
