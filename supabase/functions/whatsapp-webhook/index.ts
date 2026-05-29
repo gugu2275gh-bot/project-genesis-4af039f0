@@ -2346,6 +2346,46 @@ Regras:
               }
             }
 
+            // ===== REDE DE SEGURANÇA 2: resposta sem ação durante o gate =====
+            // Se o gate de coleta está ativo e o conteúdo é só uma transição
+            // vazia (sem '?' e sem âncoras de pré-handoff/handoff), substitui
+            // pela próxima pergunta canônica do roteiro. Evita o caso do print
+            // em que o bot mandou "Ótimo! Vamos seguir com as perguntas rápidas..."
+            // e a conversa travou esperando uma ação do usuário.
+            if (parts.length > 0 && collectionGateActive && nextStep) {
+              const joined = parts.join(' ')
+              const hasQuestion = /\?/.test(joined)
+              const hasHandoffAnchor = preHandoffSummarySent(joined) || handoffTransferSent(joined)
+              if (!hasQuestion && !hasHandoffAnchor) {
+                try {
+                  const fallbackScripted = getNextScriptedQuestion(nextStep.key as any, detectedChatLanguage, {
+                    userInSpain,
+                    userOutsideSpain,
+                    assistantTranscript: allAssistant,
+                    entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+                    locationKnown: funnelStateLive.location_known,
+                    empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+                    empadronadoCity: funnelStateLive.empadronado_city,
+                    empadronadoSinceConfirmed: (funnelStateLive as any).empadronamiento_since,
+                    preHandoffSent: !!funnelStateLive.pre_handoff_sent,
+                    handoffSent: !!funnelStateLive.handoff_sent,
+                    outsideProgress: outsideProgressLive,
+                    catalogSent,
+                  })
+                  if (fallbackScripted && fallbackScripted.trim().length > 0) {
+                    const fallbackParts = fallbackScripted.split('|||').map(p => p.trim()).filter(Boolean)
+                    // Preserva o ack curto da IA como primeira bolha (se for curto e sem pergunta)
+                    const firstPart = parts[0] || ''
+                    const isShortAck = firstPart.length < 80 && !/\?/.test(firstPart)
+                    parts = isShortAck ? [firstPart, ...fallbackParts] : fallbackParts
+                    console.warn('[SAFETY_NET_2] resposta sem ação durante gate — anexando próxima pergunta canônica:', nextStep.key, '| parts agora=', parts.length)
+                  }
+                } catch (sErr) {
+                  console.warn('[SAFETY_NET_2] non-blocking error:', sErr instanceof Error ? sErr.message : sErr)
+                }
+              }
+            }
+
             // Se ainda assim sobrou vazio, registra como AI_FAILED para o watchdog tentar recuperar.
             if (parts.length === 0) {
               console.warn('[SAFETY_NET] parts ainda vazio após fallback — registrando AI_FAILED')
