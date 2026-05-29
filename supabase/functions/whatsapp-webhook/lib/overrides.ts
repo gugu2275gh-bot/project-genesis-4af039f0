@@ -87,7 +87,13 @@ export function computeDeterministicFunnelPatch(
   if (/\b(n[ãa]o (estou|moro|vivo) na espanha|no estoy en espa[ñn]a|i'?m not in spain|je ne suis pas en espagne)\b/i.test(msg)) {
     patch.location_known = 'outside'
   }
-  if (/\b(estou na espanha|j[áa] estou na espanha|estoy en espa[ñn]a|i'?m in spain|je suis en espagne)\b/i.test(msg)) {
+  // Sinais positivos de "está na Espanha", inclusive em respostas COMPOSTAS
+  // (ex.: "Sí, ya tengo 2 años en España y quiero solicitar mi residencia").
+  if (
+    /\b(estou na espanha|j[áa] estou na espanha|estoy en espa[ñn]a|ya estoy en espa[ñn]a|i'?m in spain|je suis en espagne|moro na espanha|vivo en espa[ñn]a|vivo na espanha|aqui na espanha|aqu[ií] en espa[ñn]a)\b/i.test(msg)
+    || /\b\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*espa[ñn]ha?\b/i.test(msg)
+    || /\b(tenho|tengo|i have)\s+\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*espa[ñn]ha?\b/i.test(msg)
+  ) {
     patch.location_known = 'spain'
   }
 
@@ -1488,4 +1494,190 @@ export function ensurePreHandoffContinuity(
   }
 
   return changed ? next : parts
+}
+
+// ============================================================================
+// HARD-LOCK: bloqueia qualquer re-emissão da pergunta de localização quando
+// `location_known` já foi confirmado (Spain ou Outside). Substitui pela próxima
+// pergunta pendente do bloco correspondente.
+// ============================================================================
+export function blockLocationReaskIfKnown(
+  aiResponse: string,
+  language: ChatLanguage,
+  flags: {
+    locationKnown: 'spain' | 'outside' | null | undefined
+    entryDateConfirmed?: string | null
+    empadronadoConfirmed?: boolean | null
+    empadronadoCity?: string | null
+    empadronadoSinceConfirmed?: string | null
+    assistantTranscript?: string
+    outsideProgress?: any
+    preHandoffSent?: boolean
+    handoffSent?: boolean
+  },
+): string {
+  if (!aiResponse) return aiResponse
+  if (!flags.locationKnown) return aiResponse
+  // Detecta a pergunta de localização em qualquer bolha (literal curta ou paráfrase)
+  const askedLocationRe = /(est[áa]s en espa[ñn]a|est[áa] na espanha|are you (already |currently )?in spain|[êe]tes[- ]vous (d[ée]j[àa] )?en espagne|hoje voc[êe] j[áa] est[áa] na espanha|hoy ya est[áa]s en espa[ñn]a)\s*\??/i
+  if (!askedLocationRe.test(aiResponse)) return aiResponse
+
+  console.warn('[LOCATION_LOCK] location_known=' + flags.locationKnown + ' — IA tentou re-perguntar localização; substituindo')
+
+  // Importação tardia evita ciclos: usa diretamente os getters já importados acima.
+  // (getInsideSpainNextQuestion / getOutsideSpainNextQuestion estão em questions.ts).
+  // Para evitar import duplicado, replicamos a lógica mínima aqui via importações já existentes.
+  // Reescreve removendo qualquer bolha que CONTÉM apenas a pergunta de localização e
+  // anexa a próxima pergunta canônica do bloco apropriado.
+  const bubbles = aiResponse.split('|||').map((b) => b.trim()).filter(Boolean)
+  const cleaned = bubbles.filter((b) => !askedLocationRe.test(b) || b.replace(askedLocationRe, '').trim().length > 0)
+  const preserved = cleaned.map((b) => b.replace(askedLocationRe, '').trim()).filter(Boolean)
+
+  // Próxima pergunta canônica do bloco
+  const transcript = flags.assistantTranscript || ''
+  let nextQ = ''
+  if (flags.locationKnown === 'spain') {
+    if (!flags.entryDateConfirmed) {
+      nextQ = language === 'es' ? 'Perfecto. Ahora necesito entender cómo está tu situación aquí.\n\n¿Cuál fue la fecha exacta de tu entrada en España? Por favor, envíala en el formato DD/MM/AAAA (ejemplo: 22/05/2025).'
+        : language === 'en' ? 'Got it. Now I need to understand your situation here.\n\nWhat was the exact date you entered Spain? Please send it in the format DD/MM/YYYY (example: 22/05/2025).'
+        : language === 'fr' ? 'D’accord. Maintenant je dois comprendre votre situation ici.\n\nQuelle est la date exacte de votre entrée en Espagne ? Merci de l’envoyer au format JJ/MM/AAAA (exemple : 22/05/2025).'
+        : 'Perfeito. Agora preciso entender como está sua situação aqui.\n\nQual foi a data exata da sua entrada na Espanha? Por favor, envie no formato DD/MM/AAAA (exemplo: 22/05/2025).'
+    } else if (flags.empadronadoConfirmed === null || flags.empadronadoConfirmed === undefined) {
+      nextQ = getEmpadronadoQuestion(language)
+    } else if (flags.empadronadoConfirmed && !flags.empadronadoSinceConfirmed) {
+      nextQ = getEmpadronamientoSinceQuestion(language)
+    } else if (flags.empadronadoConfirmed && !flags.empadronadoCity) {
+      nextQ = getEmpadronamientoCityQuestion(language)
+    } else {
+      nextQ = buildPreHandoffPayload(language, {
+        preHandoffSent: !!flags.preHandoffSent,
+        handoffSent: !!flags.handoffSent,
+        transcript,
+      })
+    }
+  } else if (flags.locationKnown === 'outside') {
+    nextQ = getOutsideSpainNextQuestion(language, transcript, {
+      entryDateConfirmed: flags.entryDateConfirmed || null,
+      locationKnown: flags.locationKnown,
+      outsideProgress: flags.outsideProgress || null,
+    })
+  }
+
+  if (!nextQ) {
+    // Sem próxima — só remove a pergunta de localização
+    const out = preserved.join('|||')
+    return lock(out || aiResponse)
+  }
+
+  const final = preserved.length > 0 ? `${preserved.join('|||')}|||${nextQ}` : nextQ
+  return lock(final)
+}
+
+// ============================================================================
+// ENFORÇADOR FINAL DE IDIOMA das perguntas canônicas (PT/ES/EN/FR).
+// Substitui versões em idioma errado das perguntas-âncora pela versão localizada.
+// Roda como última camada antes do envio para o cliente.
+// ============================================================================
+type CanonicalQuestionKey =
+  | 'askLocationSpain'
+  | 'insideIntroPlusEntryDate'
+  | 'empadronado'
+  | 'empadronadoSince'
+  | 'empadronadoCity'
+  | 'askName'
+  | 'askEmail'
+
+const CANONICAL_BY_LANG: Record<CanonicalQuestionKey, Record<ChatLanguage, string>> = {
+  askLocationSpain: {
+    'pt-BR': 'Você está na Espanha?',
+    'es': '¿Estás en España?',
+    'en': 'Are you in Spain?',
+    'fr': 'Êtes-vous en Espagne ?',
+  },
+  insideIntroPlusEntryDate: {
+    'pt-BR': 'Perfeito. Agora preciso entender como está sua situação aqui.\n\nQual foi a data exata da sua entrada na Espanha? Por favor, envie no formato DD/MM/AAAA (exemplo: 22/05/2025).',
+    'es': 'Perfecto. Ahora necesito entender cómo está tu situación aquí.\n\n¿Cuál fue la fecha exacta de tu entrada en España? Por favor, envíala en el formato DD/MM/AAAA (ejemplo: 22/05/2025).',
+    'en': 'Got it. Now I need to understand your situation here.\n\nWhat was the exact date you entered Spain? Please send it in the format DD/MM/YYYY (example: 22/05/2025).',
+    'fr': 'D’accord. Maintenant je dois comprendre votre situation ici.\n\nQuelle est la date exacte de votre entrée en Espagne ? Merci de l’envoyer au format JJ/MM/AAAA (exemple : 22/05/2025).',
+  },
+  empadronado: {
+    'pt-BR': 'Você está empadronado?',
+    'es': '¿Estás empadronado?',
+    'en': 'Are you registered (empadronado)?',
+    'fr': 'Êtes-vous empadronado ?',
+  },
+  empadronadoSince: {
+    'pt-BR': 'Desde quando você está empadronado?',
+    'es': '¿Desde cuándo estás empadronado?',
+    'en': 'Since when have you been registered (empadronado)?',
+    'fr': 'Depuis quand êtes-vous empadronado ?',
+  },
+  empadronadoCity: {
+    'pt-BR': 'Em qual cidade você está empadronado?',
+    'es': '¿En qué ciudad estás empadronado?',
+    'en': 'In which city are you registered (empadronado)?',
+    'fr': 'Dans quelle ville êtes-vous empadronado ?',
+  },
+  askName: {
+    'pt-BR': 'Antes de tudo, como é seu nome completo?',
+    'es': 'Antes de nada, ¿cuál es tu nombre completo?',
+    'en': 'First of all, what is your full name?',
+    'fr': 'Tout d’abord, quel est votre nom complet ?',
+  },
+  askEmail: {
+    'pt-BR': 'Obrigado. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?',
+    'es': 'Gracias. ¿Cuál es el mejor e-mail para enviarte orientaciones y acompañar tu caso?',
+    'en': 'Thank you. What is the best email to send you guidance and follow up on your case?',
+    'fr': 'Merci. Quel est le meilleur e-mail pour vous envoyer des orientations et suivre votre dossier ?',
+  },
+}
+
+// Detectores das versões em IDIOMA ERRADO de cada pergunta canônica.
+// Cada entry mapeia: padrão → chave da pergunta canônica.
+const CANON_DETECTORS: Array<{ key: CanonicalQuestionKey; re: RegExp; matchLang?: ChatLanguage[] }> = [
+  // intro+data (caso clássico do leak Pedro)
+  { key: 'insideIntroPlusEntryDate', re: /agora preciso entender (como )?est[áa] sua situa[çc][ãa]o aqui[\s\S]{0,200}qual foi a data exata da sua entrada na espanha/i },
+  { key: 'insideIntroPlusEntryDate', re: /ahora necesito entender (c[óo]mo )?est[áa] tu situaci[óo]n aqu[ií][\s\S]{0,200}cu[áa]l fue la fecha exacta de tu entrada en espa[ñn]a/i },
+  { key: 'insideIntroPlusEntryDate', re: /now i need to understand your situation here[\s\S]{0,200}what was the exact date you entered spain/i },
+  // localização
+  { key: 'askLocationSpain', re: /\bvoc[êe] est[áa] na espanha\s*\??/i },
+  { key: 'askLocationSpain', re: /\best[áa]s en espa[ñn]a\s*\??/i },
+  { key: 'askLocationSpain', re: /\bare you in spain\s*\??/i },
+  { key: 'askLocationSpain', re: /\b[êe]tes[- ]vous en espagne\s*\??/i },
+  // empadronado
+  { key: 'empadronado', re: /voc[êe] est[áa] empadronad[oa]\??/i },
+  { key: 'empadronado', re: /est[áa]s empadronad[oa]\??/i },
+  { key: 'empadronadoSince', re: /desde quando (voc[êe] )?est[áa] empadronad/i },
+  { key: 'empadronadoSince', re: /desde cu[áa]ndo est[áa]s empadronad/i },
+  { key: 'empadronadoCity', re: /em qual cidade (voc[êe] )?est[áa] empadronad/i },
+  { key: 'empadronadoCity', re: /en qu[eé] ciudad est[áa]s empadronad/i },
+  // nome
+  { key: 'askName', re: /(antes de tudo|antes de mais nada),? como [eé] seu nome completo\??/i },
+  { key: 'askName', re: /(antes de nada|para empezar),? ?¿cu[áa]l es tu nombre completo\??/i },
+  // email
+  { key: 'askEmail', re: /qual [eé] o (melhor )?e-?mail para (te )?enviarmos/i },
+  { key: 'askEmail', re: /cu[áa]l es el mejor e-?mail para enviarte/i },
+]
+
+/**
+ * Substitui versões em idioma errado das perguntas canônicas pela versão localizada.
+ * Última camada antes do envio — corrige o vazamento PT→ES vivido pelo Pedro.
+ */
+export function enforceCanonicalLanguage(aiResponse: string, language: ChatLanguage): string {
+  if (!aiResponse) return aiResponse
+  let out = aiResponse
+  let replaced = false
+  for (const det of CANON_DETECTORS) {
+    if (!det.re.test(out)) continue
+    const canonical = CANONICAL_BY_LANG[det.key]?.[language]
+    if (!canonical) continue
+    // Se a versão já está no idioma correto (mesma frase canônica), pula
+    if (out.includes(canonical)) continue
+    out = out.replace(det.re, canonical)
+    replaced = true
+  }
+  if (replaced) {
+    console.log(`[CANONICAL_LANG] normalizado para ${language}`)
+  }
+  return out
 }

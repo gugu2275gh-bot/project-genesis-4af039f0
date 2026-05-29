@@ -1,66 +1,85 @@
-## Objetivo
+## O que aconteceu no atendimento do Pedro
 
-Garantir que as 3 bolhas do pré-handoff (H1 "visão inicial", H2 "analisamos cada caso", H3 "vou encaminhar a um especialista") sejam **sempre** enviadas com o texto canônico literal de `getPreHandoffSummaryMessage` / `getHandoffTransferMessage` (PT/ES/EN/FR), sem o LLM reescrever, e que o fluxo nunca pare no meio da sequência.
+Conferi o histórico do lead `7903e56e-36b2-40d9-9355-e9f49983b9c9`:
 
-## Diagnóstico
-
-Hoje o texto canônico já existe em `supabase/functions/whatsapp-webhook/lib/questions.ts` (linhas 308–333). Mas quando o LLM gera a resposta livre, ele frequentemente parafraseia ("Posso já ter uma noção do seu caso", "Vou repassar para um especialista", etc.). Como as âncoras de detecção (`PRE_HANDOFF_SUMMARY_RE` e `HANDOFF_TRANSFER_RE`) só casam o texto literal, isso causa:
-
-- Flags `pre_handoff_sent` / `handoff_sent` não persistem.
-- `stripRepeatedPreHandoff` não consegue limpar reemissões.
-- A continuidade quebra: a conversa pode parar entre H2 e H3, ou repetir H1 vezes seguintes.
-
-## Plano
-
-### 1. Novo módulo: `enforceCanonicalPreHandoff` em `lib/overrides.ts`
-
-Função pura que recebe `(aiResponseClean, language, { preHandoffSent, handoffSent })` e devolve o texto normalizado.
-
-Regras:
-- Detectores paráfrase mais largos por idioma (uma regex por idioma para H1/H2 combinados e outra para H3). Exemplos de tokens: `vis[ãa]o|noç[ãa]o|panorama|ideia inicial|caso`, `analis(amos|ar)|cada caso|individual|seguro|lei`, `encaminhar|repassar|enviar|transmitir|remitir|forward|transmettre.*(especialista|specialist|spécialiste)`.
-- Se o LLM emitiu H1/H2 parafraseado **e** `pre_handoff_sent=false` → substitui as bolhas correspondentes pelo literal de `getPreHandoffSummaryMessage(language)` (já vem com `|||`).
-- Se emitiu H3 parafraseado **e** `handoff_sent=false` → substitui pelo literal de `getHandoffTransferMessage(language)`.
-- Se já enviou H1/H2 antes (`pre_handoff_sent=true`) e o LLM tentou repetir → remove (mantém o comportamento atual de `stripRepeatedPreHandoff`, mas agora também pega paráfrases).
-
-### 2. Garantia de continuidade
-
-Logo após `enforceCanonicalPreHandoff`, novo passo `ensurePreHandoffContinuity`:
-
-- Se `pre_handoff_sent=true` e `handoff_sent=false` e as `parts` finais **não** contêm a âncora literal de H3 → anexa `getHandoffTransferMessage(language)` como última bolha.
-- Se as `parts` contêm a âncora de H1 mas não de H2 (split mal-feito) → reescreve usando o payload completo `buildPreHandoffPayload(language, { preHandoffSent:false, handoffSent:false })`.
-- Se contém só H3 sem que H1/H2 tenham sido enviados antes → prepend do payload H1|||H2.
-
-### 3. Wiring no `index.ts`
-
-Em `supabase/functions/whatsapp-webhook/index.ts` por volta da linha 2260 (logo após `stripRepeatedPreHandoff` e antes do dedup canônico):
-
-```
-aiResponseClean = enforceCanonicalPreHandoff(aiResponseClean, detectedChatLanguage, {
-  preHandoffSent: !!funnelStateLive.pre_handoff_sent,
-  handoffSent: !!funnelStateLive.handoff_sent,
-})
+```text
+12:39:14 Bot: Cuéntame... ¿qué buscas hoy? ... ¿Tu caso encaja en alguno de estos?
+12:39:43 Pedro: Sí, ya tengo 2 años en España y quiero solicitar mi residencia
+12:39:57 Bot: Anotado — trataré ese punto... ¿Estás en España?
+12:40:06 Pedro: Sí
+12:40:21 Bot: ¿Estás en España?
+12:40:31 Pedro: Sí
+12:40:37 Bot: ¿Estás en España?
+12:40:58 Pedro: Sí, estoy en España
+12:41:06 Bot: Perfeito. Agora preciso entender... Qual foi a data exata...
 ```
 
-E imediatamente após o `split('|||')` (linha 2318), aplicar `ensurePreHandoffContinuity(parts, ...)`. O bloco de persistência das flags em 2448–2464 continua funcionando porque o texto agora é sempre o literal canônico.
+Estado atual no banco:
+- `preferred_language = es`
+- `service_interest = RESIDENCIA_PARENTE_COMUNITARIO`
+- `location_known = spain`
+- `pending_questions` ficou poluído com mensagens válidas do Pedro que não deveriam ter sido parqueadas.
 
-### 4. Testes (Deno)
+## Causa raiz
 
-Adicionar `supabase/functions/whatsapp-webhook/canonical_pre_handoff_test.ts` cobrindo:
+1. **Resposta composta foi tratada como “fora do roteiro”**  
+   A frase “Sí, ya tengo 2 años en España y quiero solicitar mi residencia” respondia duas coisas ao mesmo tempo: interesse em residência e localização na Espanha. O sistema capturou o serviço no banco, mas o classificador de off-topic tratou a mensagem como pedido pendente e respondeu “trataré ese punto...”, dando a impressão de que não entendeu.
 
-- LLM parafraseou H1 em ES → vira o literal `'Perfecto. Ya puedo tener una visión inicial...'`.
-- LLM parafraseou H3 em EN com `pre_handoff_sent=true, handoff_sent=false` → continuidade injeta o literal de H3.
-- LLM repetiu H1 em PT com `pre_handoff_sent=true` → bolha some.
-- LLM gerou só H2 em FR sem H1 nem H3 → resultado tem H1|||H2|||H3 canônicos.
+2. **Localização não virou trava de avanço cedo o suficiente**  
+   Mesmo depois do “Sí”, a etapa de localização ainda foi considerada pendente em turnos seguintes, então o hard-lock do roteiro substituiu a resposta pela mesma pergunta de localização.
 
-### 5. Não-mexer
+3. **Faltou bloqueio final contra pergunta repetida**  
+   A deduplicação atual olha mensagens recentes e algumas âncoras, mas não tem uma regra forte: “se uma pergunta de campo já confirmado apareceu, nunca envie; avance para a próxima pergunta canônica”.
 
-Sem alterar UI, sem novas tabelas, sem novas flags no funil. Mantém os 4 idiomas suportados (PT/ES/EN/FR). Sem mudanças no watchdog.
+4. **Vazamento de idioma no próximo passo**  
+   A conversa estava em espanhol, mas uma camada posterior gerou/substituiu a pergunta de data com texto português. Falta um último validador antes do envio para garantir que perguntas canônicas saiam sempre no idioma travado.
 
-## Detalhes técnicos
+## Plano de correção
 
-Arquivos editados:
-- `supabase/functions/whatsapp-webhook/lib/overrides.ts` — adiciona `enforceCanonicalPreHandoff` e `ensurePreHandoffContinuity` + regex paráfrase por idioma.
-- `supabase/functions/whatsapp-webhook/index.ts` — chama as duas funções no pipeline de envio.
-- `supabase/functions/whatsapp-webhook/canonical_pre_handoff_test.ts` — novo.
+### 1. Corrigir interpretação da resposta composta
 
-Deploy de `whatsapp-webhook` ao final.
+No classificador/off-topic e no patch determinístico:
+- Se a mensagem contém serviço válido (`residencia`, `arraigo`, `nacionalidad`, etc.), não parqueá-la como off-topic quando a etapa esperada é interesse/catálogo.
+- Se a mesma mensagem também contém sinal claro de localização (“estoy en España”, “2 años en España”, “vivo en España”), gravar `location_known = spain` no mesmo turno.
+- Se contém “quiero solicitar mi residencia”, manter como interesse confirmado, não como dúvida pendente.
+
+### 2. Tornar localização uma trava global
+
+Adicionar um guard determinístico antes do hard-lock:
+- Se `location_known` já está preenchido, é proibido emitir qualquer variação de “¿Estás en España?”.
+- Se o cliente respondeu sim/não à última pergunta de localização, gravar e avançar no mesmo turno, sem depender do LLM.
+- Se a pergunta de localização já foi feita no histórico e existe resposta afirmativa/negativa logo depois, reconstruir o estado e avançar.
+
+### 3. Corrigir o dispatcher da próxima pergunta
+
+Ajustar `getNextScriptedQuestion`/hard-lock para:
+- Usar sempre o estado já atualizado (`funnelStateLive`) antes de escolher `nextStep`.
+- Para Pedro, após `location_known = spain`, a próxima pergunta deve ser a data de entrada, em espanhol:
+  `Perfecto. Ahora necesito entender tu situación aquí.
+
+¿Cuál fue la fecha exacta de tu entrada en España? Por favor, envíala en el formato DD/MM/AAAA (ejemplo: 22/05/2025).`
+
+### 4. Bloqueio final de idioma
+
+Antes de enviar pelo Twilio:
+- Validar que a resposta não contém perguntas canônicas em outro idioma.
+- Se `preferred_language = es`, substituir qualquer pergunta PT/EN/FR do roteiro pela versão espanhola correspondente.
+- Aplicar isso a todas as perguntas do fluxo: abertura, nome, email, interesse, localização, data, empadronamento, cidade e pré-handoff.
+
+### 5. Limpar o estado do Pedro
+
+Sem alterar estrutura de tabelas:
+- Manter `preferred_language = es`.
+- Manter/corrigir `service_interest = RESIDENCIA_PARENTE_COMUNITARIO`.
+- Manter/corrigir `lead_funnel_state.location_known = spain`.
+- Remover de `pending_questions` as mensagens que eram respostas válidas: “Hola, buenos dias” e “Sí, ya tengo 2 años en España y quiero solicitar mi residencia”.
+- Não enviar mensagem automática ao Pedro sem comando explícito; apenas deixar o próximo atendimento continuar corretamente em espanhol.
+
+### 6. Testes obrigatórios
+
+Adicionar testes Deno cobrindo:
+- Resposta “Sí, ya tengo 2 años en España y quiero solicitar mi residencia” confirma interesse e localização, sem park/off-topic.
+- Depois de “¿Estás en España?” + “Sí”, a próxima pergunta é data de entrada, não localização de novo.
+- Nenhuma variação de localização é enviada se `location_known = spain`.
+- Com idioma travado em espanhol, nenhuma pergunta canônica pode sair em português.
+- Caso Pedro completo reproduzido ponta-a-ponta com a sequência real.
