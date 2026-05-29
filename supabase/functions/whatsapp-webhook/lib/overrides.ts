@@ -604,7 +604,7 @@ export function forceAdvanceFromInterestQuestion(
     const replacement = servicesAlreadySent
       ? getLocationQuestion(language)
       : getServicesOfferedMessage(language)
-    return preamble ? `${preamble}\n${replacement}` : replacement
+    return preamble ? `${preamble}|||${replacement}` : replacement
   }
 
   return aiResponse
