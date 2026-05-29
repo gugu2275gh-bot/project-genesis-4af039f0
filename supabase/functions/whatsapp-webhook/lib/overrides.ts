@@ -332,6 +332,11 @@ export function stripAlreadySentCanonicalBlocks(
       console.log('[DEDUP] dropping repeated services catalog block')
       continue
     }
+    // Follow-up colado ao catálogo (ex.: "O seu caso se encaixa em algum desses?")
+    if (servicesAlreadySent && /(se encaixa em algum|encaja en alguno|fits any of these|correspond[^?]{0,40}l['’]un de ces)/i.test(p)) {
+      console.log('[DEDUP] dropping catalog follow-up question')
+      continue
+    }
     if (flags.interestKnown && isQuestionAboutInterest(p)) {
       console.log('[DEDUP] dropping interest question (already confirmed)')
       continue
