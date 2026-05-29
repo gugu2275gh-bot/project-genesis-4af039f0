@@ -205,6 +205,10 @@ export default function Settings() {
           <SystemSettings />
         </TabsContent>
 
+        <TabsContent value="llm">
+          <LLMSettings />
+        </TabsContent>
+
          {isSuperuser && (
            <>
              <TabsContent value="export">
