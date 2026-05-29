@@ -111,8 +111,7 @@ async function testOpenAI(model: string): Promise<{ ok: boolean; latency_ms: num
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  const url = new URL(req.url)
-  const action = url.searchParams.get('action') || 'status'
+
 
   const authCheck = await requireAdmin(req)
   if ('error' in authCheck) return json({ error: authCheck.error }, authCheck.status)
