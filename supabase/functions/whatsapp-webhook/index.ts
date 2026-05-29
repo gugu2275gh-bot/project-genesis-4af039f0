@@ -341,6 +341,7 @@ import {
   FULL_NAME_DENYLIST_PATTERNS,
   isLikelyFullNameAnswer,
   findExplicitFullNameAnswer,
+  stripNameIntroPrefix,
 } from './lib/name-extraction.ts'
 
 import {
