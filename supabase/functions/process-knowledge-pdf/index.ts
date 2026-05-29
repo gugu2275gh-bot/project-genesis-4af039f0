@@ -282,7 +282,8 @@ serve(async (req) => {
       })
     }
 
-    const { filePath, fileName } = await req.json()
+    const body = await req.json().catch(() => ({}))
+    const { filePath, fileName, forceOcr } = body as { filePath?: string; fileName?: string; forceOcr?: boolean }
 
     if (!filePath || !fileName) {
       return new Response(JSON.stringify({ error: 'filePath and fileName required' }), {
@@ -291,7 +292,7 @@ serve(async (req) => {
       })
     }
 
-    console.log('Processing PDF:', fileName, 'at', filePath)
+    console.log(`Processing PDF: ${fileName} at ${filePath} (forceOcr=${!!forceOcr})`)
 
     // Resolve OpenAI API key once (used for fallback extraction AND embeddings)
     let openaiApiKey = Deno.env.get('OPENAI_API_KEY')
@@ -318,112 +319,46 @@ serve(async (req) => {
     }
 
     const pdfBytes = new Uint8Array(await fileData.arrayBuffer())
+    const imageCount = countImageXObjects(pdfBytes)
+    console.log(`[KB-PROCESS] PDF size=${pdfBytes.length} bytes, /Subtype /Image count=${imageCount}`)
 
-    let extractedText = ''
-    try {
-      extractedText = extractTextFromPDF(pdfBytes)
-      console.log(`Basic extraction result: ${extractedText.length} chars`)
-    } catch (e) {
-      console.error('Basic extraction error:', e)
+    let basicText = ''
+    if (!forceOcr) {
+      try {
+        basicText = extractTextFromPDF(pdfBytes)
+        console.log(`[KB-PROCESS] Basic extraction: ${basicText.length} chars`)
+      } catch (e) {
+        console.error('Basic extraction error:', e)
+      }
+    } else {
+      console.log('[KB-PROCESS] forceOcr=true → skipping basic extraction')
     }
 
-    // Fallback to OpenAI only if low/invalid text extracted
-    if (!extractedText || extractedText.length < MIN_EXTRACTED_TEXT_LENGTH || isInvalidExtractionText(extractedText)) {
-      console.log('Basic extraction insufficient, using OpenAI to extract text...')
+    let extractedText = basicText
+    const basicInsufficient = !basicText || basicText.length < MIN_EXTRACTED_TEXT_LENGTH || isInvalidExtractionText(basicText)
+    // Auto-OCR when basic extraction is OK but the PDF has embedded images
+    // (likely screenshots / FAQ tables that the text layer doesn't cover).
+    const shouldAugmentOcr = !forceOcr && !basicInsufficient && imageCount > 0
+    const shouldRunOcr = forceOcr || basicInsufficient || shouldAugmentOcr
 
-      const apiKey = openaiApiKey
-
-      if (apiKey) {
-        try {
-          const formData = new FormData()
-          const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' })
-          formData.append('file', pdfBlob, fileName)
-          formData.append('purpose', 'assistants')
-
-          console.log('Uploading PDF to OpenAI Files API...')
-          const uploadResponse = await fetch('https://api.openai.com/v1/files', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${apiKey}` },
-            body: formData,
-          })
-
-          if (!uploadResponse.ok) {
-            const uploadErr = await uploadResponse.text()
-            console.error('OpenAI file upload failed:', uploadResponse.status, uploadErr)
-            throw new Error(`OpenAI upload failed (${uploadResponse.status})`)
-          }
-
-          const uploadData = await uploadResponse.json()
-          const fileId = uploadData.id
-          console.log(`PDF uploaded to OpenAI, file_id: ${fileId}`)
-
-          const modelsToTry = ['gpt-4.1-mini', 'gpt-4o-mini']
-
-          for (const model of modelsToTry) {
-            const aiResponse = await fetch('https://api.openai.com/v1/responses', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-              },
-              body: JSON.stringify({
-                model,
-                input: [
-                  {
-                    role: 'system',
-                    content: 'You must extract text from the provided PDF file. Return only extracted document text. Do not explain limitations or apologize. Preserve paragraphs when possible.',
-                  },
-                  {
-                    role: 'user',
-                    content: [
-                      { type: 'input_file', file_id: fileId },
-                      { type: 'input_text', text: `Extract all text from "${fileName}". Return only the extracted text.` },
-                    ],
-                  },
-                ],
-                max_output_tokens: 12000,
-              }),
-            })
-
-            if (!aiResponse.ok) {
-              const errText = await aiResponse.text()
-              console.error(`OpenAI extraction failed for ${model}:`, aiResponse.status, errText)
-              continue
-            }
-
-            const aiData = await aiResponse.json()
-            const aiText = (
-              (typeof aiData.output_text === 'string' ? aiData.output_text : '') ||
-              aiData.output?.filter((o: any) => o.type === 'message')
-                ?.flatMap((o: any) => o.content)
-                ?.filter((c: any) => c.type === 'output_text')
-                ?.map((c: any) => c.text)
-                ?.join('\n') || ''
-            ).trim()
-
-            if (aiText.length >= MIN_EXTRACTED_TEXT_LENGTH && !isInvalidExtractionText(aiText)) {
-              extractedText = aiText
-              console.log(`OpenAI extraction succeeded with ${model}: ${extractedText.length} chars`)
-              break
-            }
-
-            console.log(`OpenAI returned invalid/insufficient text with ${model}: ${aiText.length} chars`)
-          }
-
-          // Cleanup uploaded file
-          try {
-            await fetch(`https://api.openai.com/v1/files/${fileId}`, {
-              method: 'DELETE',
-              headers: { 'Authorization': `Bearer ${apiKey}` },
-            })
-          } catch {
-            // Ignore cleanup failures
-          }
-        } catch (aiErr) {
-          console.error('OpenAI extraction error:', aiErr instanceof Error ? aiErr.message : aiErr)
-        }
+    if (shouldRunOcr) {
+      if (!openaiApiKey) {
+        console.error('[KB-PROCESS] OCR needed but no OpenAI API key configured')
       } else {
-        console.error('No OpenAI API key found')
+        const reason = forceOcr ? 'forceOcr' : basicInsufficient ? 'basic-insufficient' : `augment-${imageCount}-images`
+        console.log(`[KB-PROCESS] running OpenAI OCR (reason=${reason})`)
+        const ocrText = await extractTextWithOpenAI(pdfBytes, fileName, openaiApiKey)
+        if (ocrText) {
+          if (basicInsufficient || forceOcr) {
+            extractedText = ocrText
+          } else {
+            // Augment: append OCR content so image text is searchable too.
+            extractedText = `${basicText}\n\n[CONTEÚDO EXTRAÍDO DE IMAGENS NO PDF]\n${ocrText}`
+            console.log(`[KB-PROCESS] augmented with ${ocrText.length} OCR chars → total ${extractedText.length}`)
+          }
+        } else if (basicInsufficient) {
+          console.error('[KB-PROCESS] OCR returned no text and basic extraction was insufficient')
+        }
       }
 
       if (!extractedText || extractedText.length < MIN_EXTRACTED_TEXT_LENGTH || isInvalidExtractionText(extractedText)) {
@@ -435,6 +370,7 @@ serve(async (req) => {
         })
       }
     }
+
 
     console.log(`Final extracted ${extractedText.length} chars from PDF`)
 
