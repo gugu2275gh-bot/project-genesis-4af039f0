@@ -1,126 +1,98 @@
-# Corrigir fluxo do funil sendo pulado em PT-BR (caso Gustavo)
+## Resumo do que precisa mudar
 
-## O que aconteceu (diagnóstico)
+1. **Garantir o fluxo de pré-handoff (abertura → nome → e-mail → interesse → localização → aprofundamento → handoff) em qualquer idioma**, sem que o bot volte para etapas anteriores depois de já ter avançado (o bug PT do Gustavo: depois do e-mail o bot reabriu a abertura).
+2. **Rodar o pré-handoff somente para clientes novos.** Cliente já cadastrado (com nome/e-mail conhecidos no `contacts` ou histórico anterior de leads concluídos) entra direto no modo "livre" — bot cumprimenta com o nome e parte para atender a dúvida, sem refazer cadastro.
+3. **Imagem 3 (ES):** Msg5 (pergunta de interesse) e Msg6 (catálogo de serviços) devem aparecer em bolhas separadas, não coladas.
 
-Lead `8cff3b45-f198-4677-a832-6a7809375ffb` (Gustavo Braga / 553186200110). Contato e lead foram criados ~1 segundo antes do primeiro inbound `"oi"`. Mesmo assim, o bot pulou TODO o funil e devolveu, **no primeiro turno**, a sequência de pré-handoff + handoff + opener tudo junto:
+## Diagnóstico
 
+### Bug 1 — abertura re-aberta depois do e-mail (PT)
+`index.ts` linhas 1737-1745:
+```ts
+const aberturaDone =
+  sentAny(/obrigad[oa] por (falar|escrever|entrar)|.../i)
+  && sentAny(/perguntas? r[áa]pidas?|.../i)
 ```
-19:03:40  → "Perfeito. Já consigo ter uma visão inicial do seu caso."          (H1 pré-handoff)
-19:03:40  → "Na CB analisamos cada caso de forma individual..."                (H2 pré-handoff)
-19:03:42  → "Olá 😊 Tudo bem?... Vou encaminhar suas informações..."           (abertura + H3 misturados)
+Quando a 1ª resposta do bot saiu sem a Msg2 (consent), `aberturaDone` fica `false` para sempre. Mesmo com nome e e-mail capturados, `nextStep` volta para `abertura` e a instrução manda reenviar Msg1+Msg2 — exatamente o que aconteceu com o Gustavo às 19:24:01.
+
+### Bug 2 — não há detecção de "cliente já existente"
+Hoje todo lead novo cai no fluxo de cadastro mesmo quando o contato já tem `full_name` confiável + `email` + histórico de leads anteriores. Não existe um gate "pular pré-handoff se cliente já é conhecido".
+
+### Bug 3 — Msg5+Msg6 coladas (ES)
+`lib/overrides.ts` linhas ~607 e ~666/676 juntam com `\n` único:
+```ts
+return preamble ? `${preamble}\n${replacement}` : replacement
 ```
+No WhatsApp vira uma bolha única sem quebra visível. O padrão correto já usado em `ensureServicesAttachedToInterest` é `|||` (gera duas bolhas).
 
-Depois disso o bot ficou em modo "tira-dúvidas livre" e só perguntou o nome quando o cliente reclamou ("mas eu nem me apresentei").
+## Correções
 
-Logs de telemetria `[TURN]` em todos os turnos posteriores mostram:
-```
-stepsDone: ["abertura","nome","email","interesse","localizacao","aprofundamento","preHandoff"]
-dataKnown: { name:false, email:false, service:false }
-gateActive: false
-```
+### A) `index.ts` — `aberturaDone` resiliente (não volta atrás)
 
-Estado salvo em `lead_funnel_state`:
-```
-step:               interesse
-pre_handoff_sent:   true
-handoff_sent:       true
-name_confirmed:     true (somente depois que cliente reclamou)
-email_confirmed:    true
-interest_confirmed: null
-location_known:     null
-```
-
-### Causa raiz
-
-1. **`index.ts:1853-1869` marca TODAS as etapas como `done` quando detecta as frases de pré-handoff/handoff no histórico — sem checar se nome/email/interesse foram realmente capturados.**
-   ```ts
-   const preHandoffDoneByRegex = sentAny(/vis[ãa]o inicial.../i) && sentAny(/cada caso de forma individual.../i)
-   const handoffDoneByRegex    = sentAny(/encaminhar suas informa[çc][õo]es.../i) && sentAny(/encaminhar para um atendente.../i)
-   if (preHandoffDone && handoffDone) {
-     for (const s of steps) s.done = true   // ← marca abertura/nome/email/interesse/localização todos como done
-     ... step = 'livre' ...
-   }
-   ```
-   Como Gemini, no primeiro turno, produziu essas frases (gate falhou em forçar `abertura`), o sistema concluiu o funil inteiro e travou em modo livre.
-
-2. **Gate não bloqueou a saída do LLM quando ele produziu pré-handoff sem dados.** Não existe um "lock anti-handoff" enquanto `name_confirmed`/`email_confirmed`/`interest_confirmed` estiverem nulos. A instrução está só no prompt, mas Gemini pode ignorar.
-
-3. **Idempotência do opener falha:** o opener canônico contém só duas frases; mas Gemini retornou as frases de H1/H2/H3 misturadas com o opener — e nenhum sanitizer detectou que esse output estava fora de ordem em um lead novo.
-
-## Mudanças
-
-### 1. `supabase/functions/whatsapp-webhook/index.ts` — bloquear conclusão do funil sem dados
-
-Substituir o bloco "se preHandoff+handoff feitos → marca tudo done" por uma checagem que exija os dados confirmados:
+Marcar abertura como concluída sempre que qualquer etapa posterior já estiver gravada no funil. Mesmo princípio para `nome` e `email` (se já temos no `contacts`, o passo está done — independente do que o regex casa no transcript).
 
 ```ts
-const hasMinimumData =
-  !!funnelStateLive.name_confirmed &&
-  !!funnelStateLive.email_confirmed &&
-  !!funnelStateLive.interest_confirmed &&
-  funnelStateLive.location_known !== null
-if (preHandoffDone && handoffDone && hasMinimumData) {
-  for (const s of steps) s.done = true
-  // ... step = 'livre' ...
-} else if ((preHandoffDone || handoffDone) && !hasMinimumData) {
-  // ALERTA: handoff disparado sem dados — não marca etapas como done,
-  // mantém gate ativo, loga incidente para auditoria.
-  console.warn('[FUNNEL] handoff_anchor_without_data', { leadId: lead.id, dataKnown: { ... } })
-}
+const aberturaAutoDone =
+  !!funnelStateLive.name_confirmed
+  || !!funnelStateLive.email_confirmed
+  || !!funnelStateLive.interest_confirmed
+  || !!funnelStateLive.location_known
+const aberturaDone = (aberturaSignals) || aberturaAutoDone
 ```
 
-### 2. `supabase/functions/whatsapp-webhook/lib/overrides.ts` — sanitizer anti-handoff prematuro
+Isso vale para **qualquer idioma** porque depende do estado persistido, não do texto.
 
-Antes do envio (na pipeline que já tem `removeRepeatedQuestionIntro`, `stripLockedSentinel`, dedup), adicionar um filtro:
+### B) `index.ts` — gate "cliente novo vs. cliente conhecido"
 
-- Se `!hasMinimumData` (mesma definição), **remover** das frases de saída qualquer ocorrência de:
-  - "visão inicial do seu caso" / "visión inicial de tu caso" / "initial view of your case"
-  - "Na CB analisamos cada caso..." / equivalentes ES/EN/FR
-  - "encaminhar suas informações" / "remitir tu información" / equivalentes
-  - "encaminhar para um atendente" / "derivar a un agente" / equivalentes
-- Se após o strip a resposta ficar vazia, substituir pela próxima pergunta canônica do funil (`abertura` ou `nome` etc., calculada pelo dispatch).
+No topo do bloco do agente (antes de montar `steps`), calcular `isReturningClient`:
 
-### 3. `supabase/functions/whatsapp-webhook/index.ts` — forçar `abertura` em primeira interação
-
-Quando `funnelStateLive.step` for null/inicial **e** não houver histórico assistant (ou histórico só com opener_sent=false), o gate deve setar `nextStep = 'abertura'` e usar o output canônico da abertura, ignorando completamente o que o LLM gerou nesse turno. Esse caminho deve ser determinístico (mesmo padrão do `getScriptedNextStep` já usado em outras etapas).
-
-### 4. `supabase/functions/whatsapp-webhook/lib/funnel-state.ts` — corrigir flags `pre_handoff_sent`/`handoff_sent`
-
-Hoje essas flags são setadas via regex `preHandoffSummarySent(sentJoined)` em qualquer turno (index.ts:2528). Adicionar a mesma guarda `hasMinimumData` antes de persistir essas flags — assim, mesmo se Gemini produzir as frases prematuramente, o estado não fica contaminado.
-
-### 5. Testes Deno
-Criar `supabase/functions/whatsapp-webhook/handoff_guard_test.ts` cobrindo:
-- Primeira interação ("oi" em pt-BR) num lead novo → resposta canônica de abertura, sem qualquer frase de handoff.
-- LLM "vaza" frase de pré-handoff antes do nome ser capturado → sanitizer remove e devolve pergunta do nome.
-- `pre_handoff_sent` NÃO é setado quando `name/email/interest/location` ainda estão nulos.
-- Quando todos os dados estão capturados, pré-handoff e handoff funcionam normalmente (regressão).
-
-### 6. Backfill — reset do lead do Gustavo
-Resetar `lead_funnel_state` do lead `8cff3b45-f198-4677-a832-6a7809375ffb`:
-
-```sql
-UPDATE public.lead_funnel_state
-SET step='abertura',
-    pre_handoff_sent=false,
-    handoff_sent=false,
-    interest_confirmed=null,
-    location_known=null,
-    outside_spain_progress='{}'::jsonb,
-    updated_at=now()
-WHERE lead_id='8cff3b45-f198-4677-a832-6a7809375ffb';
+```ts
+const hasTrustedName = isContactNameTrustworthy(contact)
+  && !isAutoGeneratedContactName(contact.full_name, message.name, phoneNumber)
+const hasEmail = !!contact.email
+const hasPriorClosedLead = await supabase
+  .from('leads').select('id', { count: 'exact', head: true })
+  .eq('contact_id', contact.id)
+  .neq('id', lead.id)
+  .in('status', ['FECHADA_GANHA','FECHADA_PERDIDA','ARQUIVADO_SEM_RETORNO','CONTRATO_ASSINADO'])
+const isReturningClient = hasTrustedName && hasEmail
+  || (hasPriorClosedLead.count ?? 0) > 0
 ```
 
-Para que, quando o Gustavo responder de novo, o funil retome corretamente a partir da pergunta de interesse/localização (nome e email já foram coletados de verdade).
+Se `isReturningClient === true`:
+- pré-popular `lead_funnel_state` deste lead novo com `name_confirmed=true`, `email_confirmed=true`, `pre_handoff_sent=true`, `handoff_sent=true`, `step='livre'`.
+- `collectionGateActive = false` → libera KB imediatamente.
+- O system prompt ganha uma instrução de boas-vindas de retorno: "Cumprimente {nome} pelo nome, diga que é bom falar de novo e pergunte como pode ajudar hoje. NÃO peça nome, e-mail nem refaça o cadastro."
 
-### 7. Deploy
-Redeploy `whatsapp-webhook` após testes verdes.
+Resultado: cliente conhecido entra direto no modo livre em qualquer idioma; cliente novo passa pelos 7 passos normalmente.
 
-## Fora de escopo
-- Não mexer no prompt da IA (já instruído corretamente). A correção é defensiva no código.
-- Não alterar tradução nem catálogo de serviços.
-- Não tocar no fluxo do Roberto / data de entrada (corrigido no turno anterior).
+### C) `lib/overrides.ts` — Msg5/Msg6 em bolhas separadas
 
-## Validação
-- Rodar `handoff_guard_test.ts` no Deno test runner.
-- Simular um novo lead pt-BR enviando `"oi"` e conferir nos logs que `stepsDone=["abertura"]` (não a sequência inteira) e que apenas a abertura é enviada.
-- Conferir no DB que `pre_handoff_sent` permanece `false` até que `name/email/interest/location` estejam preenchidos.
+Trocar `\n` por `|||` nos dois pontos:
+- `forceAdvanceFromInterestQuestion` (linha ~607)
+- `forceServicesMessageAfterInterest` (linhas ~666 e ~676)
+
+Mesmo padrão já usado por `ensureServicesAttachedToInterest`. Resolve a queixa da imagem 3 em ES, PT, EN e FR.
+
+### D) Backfill do lead de teste do Gustavo
+
+Resetar `lead_funnel_state` do lead `f87539f5-ee47-4aa7-8e5e-cfcf3a76d145` para `step='interesse'`, `pre_handoff_sent=false`, `handoff_sent=false`, preservando `name_confirmed`/`email_confirmed` — assim na próxima mensagem dele o bot continua de onde parou (interesse) em vez de reabrir a abertura.
+
+### E) Testes Deno
+
+Novo arquivo `returning_client_flow_test.ts`:
+- `aberturaDone` = `true` quando `name_confirmed` é `true`, mesmo sem regex de consent.
+- `forceAdvanceFromInterestQuestion` retorna string com `|||`.
+- `forceServicesMessageAfterInterest` retorna string com `|||`.
+- Stub que simula "contato com nome confiável + e-mail + lead anterior fechado" produz `isReturningClient=true` e pula direto para `step='livre'`.
+
+### F) Deploy
+
+Redeploy de `whatsapp-webhook`.
+
+## Arquivos tocados
+
+- `supabase/functions/whatsapp-webhook/index.ts`
+- `supabase/functions/whatsapp-webhook/lib/overrides.ts`
+- `supabase/functions/whatsapp-webhook/returning_client_flow_test.ts` (novo)
+- Migration de backfill do lead Gustavo
