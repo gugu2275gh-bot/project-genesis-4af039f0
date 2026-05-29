@@ -370,6 +370,8 @@ import {
   enforceReplayPreambleLanguage,
   stripPreambleBeforePreHandoff,
   stripRepeatedPreHandoff,
+  enforceCanonicalPreHandoff,
+  ensurePreHandoffContinuity,
   isLocked,
   lock,
 } from './lib/overrides.ts'
