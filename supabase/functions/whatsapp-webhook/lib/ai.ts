@@ -246,9 +246,16 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
         if (!response.ok) {
           const errorText = await response.text()
           console.error(`[AI cascade] ${provider}/${model} error:`, response.status, errorText)
-          lastError = new Error(`${provider}/${model} error: ${response.status}`)
+          lastError = new Error(`${provider}/${model} error: ${response.status} ${errorText.slice(0, 200)}`)
 
-          if ((response.status === 503 || response.status === 429) && attempt < MAX_RETRIES - 1) {
+          // 429 RESOURCE_EXHAUSTED: provider tells us to wait 7-60s. Local 2s retry is useless;
+          // skip straight to the next provider in the cascade.
+          if (response.status === 429) {
+            console.log(`[AI cascade] ${provider}/${model} rate-limited (429), skipping retries and trying next provider`)
+            break
+          }
+
+          if (response.status === 503 && attempt < MAX_RETRIES - 1) {
             const delay = RETRY_DELAYS[attempt]
             console.log(`[AI cascade] Retrying ${provider}/${model} in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`)
             await new Promise(resolve => setTimeout(resolve, delay))
