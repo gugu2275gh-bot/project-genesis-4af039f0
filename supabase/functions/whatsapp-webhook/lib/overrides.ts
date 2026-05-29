@@ -955,10 +955,10 @@ export function enforceBlockCompletion(
 
   if (flags.locationKnown === 'spain') {
     if (!flags.entryDateConfirmed) {
-      const q = language === 'es' ? '¿Cuál fue la fecha exacta de tu entrada en España?'
-        : language === 'en' ? 'What was the exact date you entered Spain?'
-        : language === 'fr' ? 'Quelle est la date exacte de votre entrée en Espagne ?'
-        : 'Qual foi a data exata da sua entrada na Espanha?'
+      const q = language === 'es' ? '¿Cuál fue la fecha exacta de tu entrada en España? Por favor, envíala en el formato DD/MM/AAAA (ejemplo: 22/05/2025).'
+        : language === 'en' ? 'What was the exact date you entered Spain? Please send it in the format DD/MM/YYYY (example: 22/05/2025).'
+        : language === 'fr' ? 'Quelle est la date exacte de votre entrée en Espagne ? Merci de l’envoyer au format JJ/MM/AAAA (exemple : 22/05/2025).'
+        : 'Qual foi a data exata da sua entrada na Espanha? Por favor, envie no formato DD/MM/AAAA (exemplo: 22/05/2025).'
       console.warn('[BLOCK_GATE] H1 prematuro — falta data entrada. Forçando B1.')
       return lock(q)
     }
