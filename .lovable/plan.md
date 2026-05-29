@@ -1,51 +1,62 @@
-## Problema
+## Problema (caso Pedro – screenshot)
 
-Na captura, o cliente respondeu "Nomade digital" (→ `VISTO_TRABALHO`). O bot deveria confirmar e avançar para a próxima etapa (localização). Em vez disso, respondeu "Certo." e re-enviou **exatamente** as duas mensagens que já tinham sido enviadas 1 minuto antes:
+Bot envia em ES:
+1. 1:23 — "¿Cuál fue la fecha exacta de tu entrada en España?" + recordatório + sufixo pós-handoff.
+2. Cliente: "15/03/2024".
+3. 1:24 — Bot **repete** "¿Cuál fue la fecha exacta de tu entrada en España?".
+4. Cliente: "15/03/2024" novamente.
+5. Bot envia duas bolhas, ambas começando com "Perfecto.": "Perfecto. Ya tengo una visión inicial de tu caso." e "Perfecto. ¿Estás empadronado?".
 
-1. "Me conta com calma: o que você busca hoje? …"
-2. "Na CB trabalhamos com: residência (NIE/TIE), nacionalidade espanhola, arraigo … O seu caso se encaixa em algum desses?"
+## Por que o dedup atual não pegou
 
-## Por que não foi barrado
+O `stripAlreadySentCanonicalBlocks` (criado na rodada anterior) compara cada parágrafo da nova resposta com **a mensagem anterior inteira** via Jaccard ≥ 0.8. No screenshot a mensagem anterior tinha 30+ palavras (pergunta + recordatório longo + sufixo pós-handoff). A repetição é só a pergunta curta (~9 palavras). Jaccard = inter/union ≈ 8/35 ≈ 0.23 → não dispara.
 
-Já existem guards (`lockConfirmedFieldsInResponse`, `forceServicesMessageAfterInterest`, F4 catalog dedup em `index.ts` linhas ~2173–2212), mas nenhum cobriu este caso específico:
+Além disso não há check de "pergunta canônica já feita" para a etapa B1 (entry date) — só existe para `interest`, `name`, `email`. E não há nenhuma defesa contra duas bolhas consecutivas com o mesmo opener ("Perfecto.").
 
-- `lockConfirmedFieldsInResponse` só inspeciona a **última** pergunta (`extractLastQuestion`). A última pergunta do bot foi "O seu caso se encaixa em algum desses?", que não casa com `isQuestionAboutInterest` (regex cobre "o que voce busca", não "se encaixa em").
-- `forceServicesMessageAfterInterest` é skip se `isServicesOfferedMessage(aiResponse)` retorna true (linha 470) — preserva o catálogo gerado pela IA mesmo já tendo sido enviado antes.
-- F4 (dedup por similaridade) usa threshold `>= 0.7`. Como a resposta nova é a anterior **+** preâmbulo "Certo." + repetição, o denominador (`max(prev.size, current.length)`) infla e a razão fica abaixo de 0.7 → não dispara.
+## Solução (backend, edge function `whatsapp-webhook`)
 
-## Solução (somente backend, edge function `whatsapp-webhook`)
+### 1. Chunkar também o histórico no dedup
+Em `lib/overrides.ts` → `stripAlreadySentCanonicalBlocks`:
 
-### 1. Strip de blocos canônicos já enviados (hard dedup pós-overrides)
-Em `supabase/functions/whatsapp-webhook/index.ts`, antes do envio (perto da linha ~2236, depois de `stripLockedSentinel`), adicionar `stripAlreadySentCanonicalBlocks(aiResponseClean, allAssistant, detectedChatLanguage)` que:
+- Para cada mensagem em `recentAssistantMessages`, dividir por `\n\n` e `|||` exatamente como fazemos com a nova resposta, e normalizar cada chunk.
+- Construir `prevChunksNorm: string[]` plano com todos os chunks anteriores.
+- Subir a comparação para esse conjunto: se `jaccard(pNorm, prevChunk) >= 0.8` para **qualquer** chunk anterior → echo, descarta.
+- Adicionalmente: se `pNorm === prevChunk` (igualdade após normalização) → echo (cobre frases curtas com Jaccard baixo por falta de palavras > 3 chars).
 
-- Divide a resposta em parágrafos (split por `\n\n` e por `|||`).
-- Para cada parágrafo, normaliza (lowercase, sem acentos, sem pontuação) e descarta se:
-  - For `isServicesOfferedMessage(p)` **e** o transcript já contém Msg6, **ou**
-  - For uma pergunta de interesse (`isQuestionAboutInterest(p)`) **e** `interest_confirmed`, **ou**
-  - Tiver similaridade Jaccard ≥ 0.8 com qualquer uma das últimas 3 mensagens do assistente (cobre cópias quase-literais).
-- Junta o restante. Se sobrar só "Certo./Ok./Vale.", anexa a próxima pergunta pendente do funil (`getLocationQuestion`, `getEmailQuestion` etc. via mesma lógica de `nextPending` que já existe em `lockConfirmedFieldsInResponse`).
+### 2. Dedup por pergunta já feita
+Mesma função:
 
-### 2. Reforçar `lockConfirmedFieldsInResponse`
-Em `supabase/functions/whatsapp-webhook/lib/overrides.ts`:
+- Extrair todas as substrings que terminam em `?` (ou `¿…?` em ES) da nova resposta e das mensagens anteriores recentes (últimas 3).
+- Normalizar (`normalizeForLanguageChecks`).
+- Se qualquer pergunta da resposta já apareceu (normalizada-igual ou via `areQuestionsEquivalent`) em uma das mensagens anteriores recentes → remover essa pergunta da resposta (split por sentenças, drop sentence).
+- Se sobrar só "Perfecto."/"Certo." etc., usar o `nextPending` que já existe para anexar a próxima pergunta canônica do funil (incluindo B1 entry-date e B2 empadronado quando aplicável).
 
-- Em vez de só checar `extractLastQuestion`, iterar sobre todas as frases que terminam em `?` em `aiResponse`. Se qualquer uma casar com `isQuestionAboutInterest`/`isQuestionAboutEmail`/`isQuestionAboutFullName` para um campo com `flag === true`, remover essa frase e tudo que vier depois dela.
-- Mantém comportamento atual quando nenhuma frase casa.
+### 3. Próximo passo do funil para entry-date / empadronado
+Estender o helper `nextPending` em `lockConfirmedFieldsInResponse` **e** o usado em `stripAlreadySentCanonicalBlocks` (pode virar export reutilizável `getNextPendingQuestion(language, funnelFlags)`):
 
-### 3. Reforçar `forceServicesMessageAfterInterest`
-Mesmo arquivo: remover a guarda da linha 470 (`if (isServicesOfferedMessage(aiResponse)) return aiResponse`) **quando** o transcript já contém Msg6. Nesse caso, descartar a Msg6 da resposta (mantendo preâmbulo curto) e avançar para `getLocationQuestion`.
+- name → email → interest → location → **entry_date (B1)** → **empadronado yes/no (B2)** → etc.
+- Receber flags extras: `entryDateKnown`, `empadronadoKnown` (vindos de `funnelStateLive`).
+- Em `index.ts` passar essas flags na chamada de `stripAlreadySentCanonicalBlocks`.
 
-### 4. Testes (Deno)
-Novo arquivo `supabase/functions/whatsapp-webhook/duplicate_block_strip_test.ts`:
+### 4. Dedup de opener entre bolhas
+Em `lib/overrides.ts`, adicionar `dedupOpenerAcrossBubbles(aiResponse, language)`:
 
-- Cenário Gustavo: histórico contém uma Msg5+Msg6. Nova resposta = "Certo.\n\nMe conta com calma…\n\nNa CB trabalhamos com…\n\nO seu caso se encaixa em algum desses?". Após `stripAlreadySentCanonicalBlocks` + `lockConfirmedFieldsInResponse` com `interestKnown=true, locationKnown=false`: resultado contém só "Certo." + `getLocationQuestion('pt-BR')`, sem catálogo.
-- Cenário sem repetição: aiResponse com Msg6 nova (sem histórico prévio) → preservada.
-- `lockConfirmedFieldsInResponse` quando `interestKnown=true` e a resposta tem 2 perguntas (uma de interesse + uma final genérica): remove a de interesse.
+- Splita em `|||`.
+- Para cada parte ≥ 2, se a primeira palavra (case-insensitive, sem pontuação) for igual à primeira palavra da parte 1 (set de openers: `perfecto, perfeito, certo, ok, claro, vale, entendido, entendi, perfect, sure, parfait, d'accord, bien`), remove o opener da parte ≥ 2 mantendo o resto.
+- Aplicar em `index.ts` entre `stripAlreadySentCanonicalBlocks` e o split final.
 
-### 5. Deploy
-A função `whatsapp-webhook` redeploya automaticamente.
+### 5. Testes (Deno)
+Adicionar a `duplicate_block_strip_test.ts`:
+
+- **Caso Pedro**: histórico com `["¿Cuál fue la fecha exacta de tu entrada en España?\n\nComo prometí... entrada en España, incluyendo día, mes y año, para poder continuar.\n\nEn breve uno de nuestros especialistas..."]`. Resposta nova = `"¿Cuál fue la fecha exacta de tu entrada en España?"`. Após dedup com `entryDateKnown=true`: resultado vazio ou trocado pela próxima pergunta pendente (B2 empadronado).
+- **Caso opener**: aiResponse = `"Perfecto. Ya tengo una visión inicial de tu caso.|||Perfecto. ¿Estás empadronado?"` → segundo "Perfecto." removido.
+- **Pergunta-equivalente**: histórico com pergunta de entry-date em PT; nova resposta com a mesma em ES (parafraseada) usando `areQuestionsEquivalent` → drop.
+
+### 6. Deploy
+Auto via Supabase.
 
 ## Fora de escopo
 
-- Não vou refatorar o orquestrador inteiro nem o prompt da IA.
-- Não vou mexer na captura de interesse (já funciona — `extractInterestFromMessage("Nomade digital") = VISTO_TRABALHO`).
+- Não vou refatorar o pipeline de overrides.
+- Não vou mexer no extractor de `entry_date` (já funciona — `15/03/2024` é parseado).
 - Sem mudanças de schema.
