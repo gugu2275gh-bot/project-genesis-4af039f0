@@ -307,8 +307,6 @@ const DEFAULT_CASCADE: CascadeItem[] = [
   { provider: 'gemini', model: 'gemini-3-flash-preview' },
   { provider: 'gemini', model: 'gemini-2.5-flash-lite' },
   { provider: 'openai', model: 'gpt-4o-mini' },
-  { provider: 'gemini', model: 'gemini-2.5-flash-lite' },
-  { provider: 'openai', model: 'gpt-4o-mini' },
 ]
 
 async function loadLLMCascade(): Promise<CascadeItem[]> {
