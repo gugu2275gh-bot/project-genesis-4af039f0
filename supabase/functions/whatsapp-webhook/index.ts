@@ -2333,6 +2333,20 @@ Regras:
 
             console.log('AI response sent and stored successfully (parts:', parts.length, ')')
 
+            await logTurn({
+              supabase,
+              exit_reason: 'REPLIED',
+              lead_id: lead.id,
+              contact_id: contact.id,
+              phone: phoneNumber,
+              message_id: message.messageId,
+              inbound_text: message.body,
+              response_chars: parts.reduce((a: number, p: string) => a + (p?.length || 0), 0),
+              funnel_step_before: funnelStateLive?.step ?? null,
+              funnel_step_after: funnelStateLive?.step ?? null,
+              details: { parts: parts.length },
+            })
+
             // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3-H4
             // nas partes enviadas neste turno. Idempotente — só faz UPDATE se mudou algo.
             try {
