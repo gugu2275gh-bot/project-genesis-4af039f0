@@ -75,8 +75,10 @@ export function computeDeterministicFunnelPatch(
   const patch: Record<string, unknown> = {}
   if (!msg) return patch as any
 
-  const YES = /^\s*(sim|si|s[ií]|yes|yeah|yep|claro|estou|to[uy]|aham|aha|positivo|afirmativo|oui|of course|sure|ok|okay)\b/i
-  const NO = /^\s*(n[ãa]o|no|nope|nay|negativo|nunca|jamais|non)\b/i
+  // Boundary "[^a-z]|$" (em vez de \b) para aceitar acentos como em "Sí,"
+  // (í não é \w em JS, então \b falharia entre "í" e ",").
+  const YES = /^\s*(sim|si|s[ií]|yes|yeah|yep|claro|estou|to[uy]|aham|aha|positivo|afirmativo|oui|of course|sure|ok|okay)(?=[^a-z]|$)/i
+  const NO = /^\s*(n[ãa]o|no|nope|nay|negativo|nunca|jamais|non)(?=[^a-z]|$)/i
 
   // Localização — detecta pela última pergunta OU por qualquer pergunta de localização
   // presente em qualquer trecho recente da última mensagem do bot (cobre casos em que o
