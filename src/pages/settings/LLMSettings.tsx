@@ -59,8 +59,8 @@ export default function LLMSettings() {
   const { data: keyStatus, refetch: refetchStatus } = useQuery({
     queryKey: ['llm_key_status'],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('llm-config?action=status', {
-        method: 'GET' as any,
+      const { data, error } = await supabase.functions.invoke('llm-config', {
+        body: { action: 'status' },
       });
       if (error) throw error;
       return data as { gemini_key_present: boolean; openai_key_present: boolean };
