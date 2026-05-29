@@ -1380,14 +1380,15 @@ NUNCA copie frases literalmente em português quando o cliente estiver em outro 
         // recebe uma saudação de retorno pelo nome e vai direto para a dúvida.
         if (isFirstInteraction && !isReturningClient) {
           console.log('First interaction detected (novo cliente), using welcome flow')
+          const _tpl = getPromptTemplates(detectedChatLanguage)
           systemPrompt += `\n\n--- INSTRUÇÃO ESPECIAL: PRIMEIRA INTERAÇÃO ---
-Esta é a PRIMEIRA mensagem deste cliente. Você DEVE responder com EXATAMENTE estas duas mensagens, nesta ordem, separadas pelo delimitador "|||" (sem nenhum outro texto antes, depois ou entre elas):
+Esta é a PRIMEIRA mensagem deste cliente. Você DEVE responder com EXATAMENTE estas duas mensagens, nesta ordem, separadas pelo delimitador "|||" (sem nenhum outro texto antes, depois ou entre elas). NÃO traduza, NÃO altere, NÃO resuma — use literalmente:
 
-Olá 👋 Tudo bem? Obrigado por falar com a CB Asesoría. Vou te ajudar a entender seus caminhos legais aqui na Espanha.|||Vou te fazer algumas perguntas rápidas só para entender seu caso e te direcionar para o especialista certo, pode ser?
+${_tpl.openingLine1}|||${_tpl.openingLine2}
 
 Regras:
 - NÃO responda à pergunta do cliente ainda. Apenas envie essas duas mensagens de abertura.
-- Se o idioma detectado do cliente for diferente de português, traduza fielmente as duas mensagens para o idioma do cliente, mantendo o mesmo tom, o emoji 👋 e o delimitador "|||" entre elas. Use "CB Asesoría" como nome da empresa em qualquer idioma.
+- NÃO omita a segunda mensagem. NÃO remova o delimitador "|||".
 - NÃO adicione nenhuma pergunta extra, assinatura, nem mais texto.
 --- FIM DA INSTRUÇÃO ESPECIAL ---`
         } else if (isReturningClient) {
