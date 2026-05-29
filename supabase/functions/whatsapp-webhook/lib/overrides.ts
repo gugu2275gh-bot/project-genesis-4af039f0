@@ -398,7 +398,10 @@ export function stripAlreadySentCanonicalBlocks(
   }
 
 
-  if (kept.length === 0) return aiResponse
+  if (kept.length === 0) {
+    console.warn('[DEDUP] all chunks were duplicates of previous turns — suppressing message entirely')
+    return ''
+  }
 
   let result = kept.join('\n\n')
 
