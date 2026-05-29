@@ -172,91 +172,185 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 
   geminiContents.push({ role: 'user', parts: [{ text: currentMessage }] })
 
-  console.log('Calling Gemini API with', geminiContents.length, 'messages, system prompt length:', fullSystemPrompt.length, 'forced language:', forcedLanguage)
+  console.log('Calling AI cascade with', geminiContents.length, 'messages, system prompt length:', fullSystemPrompt.length, 'forced language:', forcedLanguage)
 
-  // Cascata de modelos Gemini (ordem definida pelo produto):
-  // 1) gemini-3.5-flash (primário)
-  // 2) gemini-2.5-pro (fallback de qualidade)
-  // 3) gemini-2.5-flash-lite (fallback leve)
-  // Se todos falharem, lançamos erro e o index.ts cai no OpenAI gpt-4o-mini.
-  const MODEL_CASCADE = ['gemini-3.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite']
+  // Carrega cascata dinâmica de llm_settings (com defaults caso a tabela não exista / vazia)
+  const cascade = await loadLLMCascade()
+  console.log('[AI cascade] Effective cascade:', cascade.map(c => `${c.provider}/${c.model}`).join(' → '))
+
   const MAX_RETRIES = 2
   const RETRY_DELAYS = [2000, 4000]
 
   let lastError: unknown = null
 
-  for (const model of MODEL_CASCADE) {
-    console.log(`[AI cascade] Trying model: ${model}`)
+  for (const item of cascade) {
+    const { provider, model } = item
+    console.log(`[AI cascade] Trying ${provider}/${model}`)
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 45000)
 
       try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
+        let response: Response
+        if (provider === 'gemini') {
+          response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: fullSystemPrompt }] },
+                contents: geminiContents,
+                generationConfig: {
+                  maxOutputTokens: 2048,
+                  thinkingConfig: { thinkingBudget: 0 },
+                },
+              }),
+              signal: controller.signal,
+            },
+          )
+        } else if (provider === 'openai') {
+          const openaiKey = Deno.env.get('OPENAI_API_KEY')
+          if (!openaiKey) {
+            clearTimeout(timeoutId)
+            console.warn(`[AI cascade] Skipping ${provider}/${model}: OPENAI_API_KEY not configured`)
+            lastError = new Error('OPENAI_API_KEY not configured')
+            break
+          }
+          const oaMessages = [
+            { role: 'system', content: fullSystemPrompt },
+            ...effectiveHistory.map(m => ({
+              role: m.role === 'assistant' ? 'assistant' as const : 'user' as const,
+              content: m.content,
+            })),
+            { role: 'user' as const, content: currentMessage },
+          ]
+          response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: fullSystemPrompt }] },
-              contents: geminiContents,
-              generationConfig: {
-                maxOutputTokens: 2048,
-                thinkingConfig: { thinkingBudget: 0 },
-              },
-            }),
+            headers: {
+              Authorization: `Bearer ${openaiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ model, messages: oaMessages, max_tokens: 1000 }),
             signal: controller.signal,
-          },
-        )
+          })
+        } else {
+          clearTimeout(timeoutId)
+          console.warn(`[AI cascade] Unknown provider ${provider}, skipping`)
+          break
+        }
 
         clearTimeout(timeoutId)
 
         if (!response.ok) {
           const errorText = await response.text()
-          console.error(`[AI cascade] ${model} error:`, response.status, errorText)
-          lastError = new Error(`${model} error: ${response.status}`)
+          console.error(`[AI cascade] ${provider}/${model} error:`, response.status, errorText)
+          lastError = new Error(`${provider}/${model} error: ${response.status}`)
 
           if ((response.status === 503 || response.status === 429) && attempt < MAX_RETRIES - 1) {
             const delay = RETRY_DELAYS[attempt]
-            console.log(`[AI cascade] Retrying ${model} in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`)
+            console.log(`[AI cascade] Retrying ${provider}/${model} in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`)
             await new Promise(resolve => setTimeout(resolve, delay))
             continue
           }
-          // Erro não-transitório ou retries esgotados: tenta próximo modelo
           break
         }
 
         const data = await response.json()
-        const result = extractGeminiText(data)
+        let result = ''
+        if (provider === 'gemini') {
+          result = extractGeminiText(data)
+        } else {
+          result = data?.choices?.[0]?.message?.content?.trim() || ''
+        }
 
         if (!result) {
-          const finishReason = data?.candidates?.[0]?.finishReason || 'unknown'
-          console.warn(`[AI cascade] ${model} returned empty content`, { finishReason })
-          lastError = new Error(`${model} returned empty content (${finishReason})`)
+          console.warn(`[AI cascade] ${provider}/${model} returned empty content`)
+          lastError = new Error(`${provider}/${model} returned empty content`)
           break
         }
 
-        console.log(`[AI cascade] ${model} response received, length:`, result.length)
+        console.log(`[AI cascade] ${provider}/${model} response received, length:`, result.length)
         return await enforceResponseLanguage(result, forcedLanguage, apiKey)
       } catch (err) {
         clearTimeout(timeoutId)
         lastError = err
         if (err instanceof DOMException && err.name === 'AbortError') {
-          console.error(`[AI cascade] ${model} call timed out after 45s`)
+          console.error(`[AI cascade] ${provider}/${model} call timed out after 45s`)
           if (attempt < MAX_RETRIES - 1) {
             await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]))
             continue
           }
           break
         }
-        console.error(`[AI cascade] ${model} exception:`, err instanceof Error ? err.message : err)
+        console.error(`[AI cascade] ${provider}/${model} exception:`, err instanceof Error ? err.message : err)
         break
       }
     }
   }
 
-  throw new Error(`All Gemini models in cascade failed: ${lastError instanceof Error ? lastError.message : 'unknown error'}`)
+  throw new Error(`All models in cascade failed: ${lastError instanceof Error ? lastError.message : 'unknown error'}`)
+}
+
+// Cache em memória da cascata (TTL curto p/ refletir mudanças do admin sem polling pesado)
+type CascadeItem = { provider: 'gemini' | 'openai'; model: string }
+let _cascadeCache: { value: CascadeItem[]; expires: number } | null = null
+const DEFAULT_CASCADE: CascadeItem[] = [
+  { provider: 'gemini', model: 'gemini-3.5-flash' },
+  { provider: 'gemini', model: 'gemini-2.5-pro' },
+  { provider: 'gemini', model: 'gemini-2.5-flash-lite' },
+  { provider: 'openai', model: 'gpt-4o-mini' },
+]
+
+async function loadLLMCascade(): Promise<CascadeItem[]> {
+  const now = Date.now()
+  if (_cascadeCache && _cascadeCache.expires > now) return _cascadeCache.value
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (!supabaseUrl || !serviceKey) {
+      _cascadeCache = { value: DEFAULT_CASCADE, expires: now + 60_000 }
+      return DEFAULT_CASCADE
+    }
+    const resp = await fetch(
+      `${supabaseUrl}/rest/v1/llm_settings?select=gemini_enabled,openai_enabled,cascade&limit=1`,
+      {
+        headers: {
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+        },
+      },
+    )
+    if (!resp.ok) {
+      console.warn('[AI cascade] Failed to load llm_settings, using defaults')
+      _cascadeCache = { value: DEFAULT_CASCADE, expires: now + 30_000 }
+      return DEFAULT_CASCADE
+    }
+    const rows = await resp.json()
+    const row = Array.isArray(rows) && rows[0] ? rows[0] : null
+    if (!row || !Array.isArray(row.cascade) || row.cascade.length === 0) {
+      _cascadeCache = { value: DEFAULT_CASCADE, expires: now + 30_000 }
+      return DEFAULT_CASCADE
+    }
+    const filtered: CascadeItem[] = (row.cascade as any[])
+      .filter(c => c && c.enabled !== false && typeof c.model === 'string')
+      .filter(c => {
+        if (c.provider === 'gemini') return row.gemini_enabled !== false
+        if (c.provider === 'openai') return row.openai_enabled !== false
+        return false
+      })
+      .map(c => ({ provider: c.provider, model: c.model }))
+
+    const effective = filtered.length > 0 ? filtered : DEFAULT_CASCADE
+    _cascadeCache = { value: effective, expires: now + 30_000 }
+    return effective
+  } catch (e) {
+    console.error('[AI cascade] loadLLMCascade error, using defaults:', e instanceof Error ? e.message : e)
+    _cascadeCache = { value: DEFAULT_CASCADE, expires: now + 30_000 }
+    return DEFAULT_CASCADE
+  }
 }
 
 export async function generateAIResponseOpenAI(

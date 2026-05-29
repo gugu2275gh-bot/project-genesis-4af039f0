@@ -1644,6 +1644,39 @@ export type Database = {
           },
         ]
       }
+      llm_settings: {
+        Row: {
+          cascade: Json
+          created_at: string
+          gemini_enabled: boolean
+          id: string
+          openai_enabled: boolean
+          singleton: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          cascade?: Json
+          created_at?: string
+          gemini_enabled?: boolean
+          id?: string
+          openai_enabled?: boolean
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          cascade?: Json
+          created_at?: string
+          gemini_enabled?: boolean
+          id?: string
+          openai_enabled?: boolean
+          singleton?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       log_webhooks_falhados: {
         Row: {
           created_at: string | null
