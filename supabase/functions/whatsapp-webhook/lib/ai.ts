@@ -174,74 +174,89 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 
   console.log('Calling Gemini API with', geminiContents.length, 'messages, system prompt length:', fullSystemPrompt.length, 'forced language:', forcedLanguage)
 
-  const MAX_RETRIES = 3
-  const RETRY_DELAYS = [2000, 4000, 8000]
+  // Cascata de modelos Gemini (ordem definida pelo produto):
+  // 1) gemini-3.5-flash (primário)
+  // 2) gemini-2.5-pro (fallback de qualidade)
+  // 3) gemini-2.5-flash-lite (fallback leve)
+  // Se todos falharem, lançamos erro e o index.ts cai no OpenAI gpt-4o-mini.
+  const MODEL_CASCADE = ['gemini-3.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite']
+  const MAX_RETRIES = 2
+  const RETRY_DELAYS = [2000, 4000]
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 45000)
+  let lastError: unknown = null
 
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: fullSystemPrompt }] },
-            contents: geminiContents,
-            generationConfig: {
-              maxOutputTokens: 2048,
-              thinkingConfig: { thinkingBudget: 0 },
-            },
-          }),
-          signal: controller.signal,
-        },
-      )
+  for (const model of MODEL_CASCADE) {
+    console.log(`[AI cascade] Trying model: ${model}`)
 
-      clearTimeout(timeoutId)
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 45000)
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('Gemini API error:', response.status, errorText)
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: fullSystemPrompt }] },
+              contents: geminiContents,
+              generationConfig: {
+                maxOutputTokens: 2048,
+                thinkingConfig: { thinkingBudget: 0 },
+              },
+            }),
+            signal: controller.signal,
+          },
+        )
 
-        if ((response.status === 503 || response.status === 429) && attempt < MAX_RETRIES - 1) {
-          const delay = RETRY_DELAYS[attempt]
-          console.log(`Retrying Gemini API in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`)
-          await new Promise(resolve => setTimeout(resolve, delay))
-          continue
+        clearTimeout(timeoutId)
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error(`[AI cascade] ${model} error:`, response.status, errorText)
+          lastError = new Error(`${model} error: ${response.status}`)
+
+          if ((response.status === 503 || response.status === 429) && attempt < MAX_RETRIES - 1) {
+            const delay = RETRY_DELAYS[attempt]
+            console.log(`[AI cascade] Retrying ${model} in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`)
+            await new Promise(resolve => setTimeout(resolve, delay))
+            continue
+          }
+          // Erro não-transitório ou retries esgotados: tenta próximo modelo
+          break
         }
 
-        throw new Error(`Gemini API error: ${response.status}`)
-      }
+        const data = await response.json()
+        const result = extractGeminiText(data)
 
-      const data = await response.json()
-      const result = extractGeminiText(data)
-
-      if (!result) {
-        const finishReason = data?.candidates?.[0]?.finishReason || 'unknown'
-        console.warn('Gemini returned empty content', { finishReason })
-        return getTransientErrorReply(forcedLanguage)
-      }
-
-      console.log('Gemini response received, length:', result.length)
-      return await enforceResponseLanguage(result, forcedLanguage, apiKey)
-    } catch (err) {
-      clearTimeout(timeoutId)
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        console.error('Gemini API call timed out after 45s')
-        if (attempt < MAX_RETRIES - 1) {
-          console.log(`Retrying after timeout (attempt ${attempt + 1}/${MAX_RETRIES})...`)
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]))
-          continue
+        if (!result) {
+          const finishReason = data?.candidates?.[0]?.finishReason || 'unknown'
+          console.warn(`[AI cascade] ${model} returned empty content`, { finishReason })
+          lastError = new Error(`${model} returned empty content (${finishReason})`)
+          break
         }
-        throw new Error('Gemini API timeout')
+
+        console.log(`[AI cascade] ${model} response received, length:`, result.length)
+        return await enforceResponseLanguage(result, forcedLanguage, apiKey)
+      } catch (err) {
+        clearTimeout(timeoutId)
+        lastError = err
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          console.error(`[AI cascade] ${model} call timed out after 45s`)
+          if (attempt < MAX_RETRIES - 1) {
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]))
+            continue
+          }
+          break
+        }
+        console.error(`[AI cascade] ${model} exception:`, err instanceof Error ? err.message : err)
+        break
       }
-      throw err
     }
   }
 
-  throw new Error('Gemini API failed after all retries')
+  throw new Error(`All Gemini models in cascade failed: ${lastError instanceof Error ? lastError.message : 'unknown error'}`)
 }
 
 export async function generateAIResponseOpenAI(
