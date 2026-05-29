@@ -26,18 +26,44 @@ export const NAME_REFUSAL_PATTERNS: RegExp[] = [
 // Verbos em 1ª pessoa indicam frase, não nome próprio.
 const FIRST_PERSON_VERB_RE = /\b(tenho|tenha|quero|queria|preciso|sou|estou|vou|posso|gosto|acho|prefiro|tengo|tenga|quiero|necesito|soy|estoy|voy|puedo|prefiero|have|want|need|am|going|can|prefer|like|ai|veux|voudrais|suis|vais|peux|aime|pr[ée]f[èe]re)\b/i
 
+// Prefixos de introdução de nome em PT/ES/EN/FR. Usado para remover
+// "Me llamo", "Meu nome é", "My name is", "Je m'appelle" etc. antes de
+// persistir o nome em contacts.full_name.
+const NAME_INTRO_PREFIX_RE = /^\s*(?:ol[áa]|hola|hello|hi|hey|bonjour|salut)?[\s,!.\-:]*(?:eu\s+)?(?:me\s+chamo|meu\s+nome\s+(?:completo\s+)?(?:é|e)|sou\s+(?:o|a)\s+|aqui\s+(?:é|e)\s+(?:o|a)\s+|me\s+llamo|mi\s+nombre\s+(?:completo\s+)?es|soy\s+|mi\s+nombre[:]\s*|my\s+(?:full\s+)?name\s+is|i\s*['’]?\s*am\s+|i\s*['’]?m\s+|this\s+is\s+|name[:]\s*|nome[:]\s*|nombre[:]\s*|je\s+m['’]appelle|mon\s+nom\s+(?:complet\s+)?est|je\s+suis\s+)[\s,:\-]*/i
+
+/**
+ * Remove introduções como "Me llamo", "Meu nome é", "My name is",
+ * "Je m'appelle" antes de salvar o nome. Preserva o texto original se
+ * o resultado ficar muito curto (fallback seguro).
+ */
+export function stripNameIntroPrefix(text: string): string {
+  const raw = String(text || '').trim()
+  if (!raw) return raw
+  const stripped = raw.replace(NAME_INTRO_PREFIX_RE, '').trim()
+  const cleaned = stripped.replace(/[.,!?;:"'\s]+$/g, '').trim()
+  return cleaned.length >= 2 ? cleaned : raw
+}
+
 export function isLikelyFullNameAnswer(text: string): boolean {
-  const raw = text.trim()
-  const normalized = normalizeForLanguageChecks(raw)
-  if (!raw || raw.length > 90 || normalized.includes('?')) return false
-  if (hasValidEmail(raw) || isPotentialEntryDateAnswer(raw)) return false
-  if (/^(ok|okay|vale|valeu|sim|si|sí|s|yes|no|não|nao|claro|certo|perfeito|obrigad[oa]|gracias)$/i.test(normalized)) return false
-  if (NAME_REFUSAL_PATTERNS.some((re) => re.test(raw) || re.test(normalized))) return false
-  if (FIRST_PERSON_VERB_RE.test(raw) || FIRST_PERSON_VERB_RE.test(normalized)) return false
-  if (FULL_NAME_DENYLIST_PATTERNS.some((re) => re.test(raw) || re.test(normalized))) return false
-  const words = raw.split(/\s+/).filter(Boolean)
-  const alphaWords = words.filter((word) => /[A-Za-zÀ-ÖØ-öø-ÿ]{2,}/.test(word))
-  return alphaWords.length >= 2
+  const original = String(text || '').trim()
+  // Avalia também a versão sem prefixo de introdução, p/ aceitar
+  // "Me llamo Pedro Henrique Rodrigues" como nome válido sem cair no
+  // bloqueio de FIRST_PERSON_VERB_RE (que pegaria "soy/sou/am").
+  const stripped = stripNameIntroPrefix(original)
+  const candidates = stripped && stripped !== original ? [stripped, original] : [original]
+  for (const raw of candidates) {
+    const normalized = normalizeForLanguageChecks(raw)
+    if (!raw || raw.length > 90 || normalized.includes('?')) continue
+    if (hasValidEmail(raw) || isPotentialEntryDateAnswer(raw)) continue
+    if (/^(ok|okay|vale|valeu|sim|si|sí|s|yes|no|não|nao|claro|certo|perfeito|obrigad[oa]|gracias)$/i.test(normalized)) continue
+    if (NAME_REFUSAL_PATTERNS.some((re) => re.test(raw) || re.test(normalized))) continue
+    if (FIRST_PERSON_VERB_RE.test(raw) || FIRST_PERSON_VERB_RE.test(normalized)) continue
+    if (FULL_NAME_DENYLIST_PATTERNS.some((re) => re.test(raw) || re.test(normalized))) continue
+    const words = raw.split(/\s+/).filter(Boolean)
+    const alphaWords = words.filter((word) => /[A-Za-zÀ-ÖØ-öø-ÿ]{2,}/.test(word))
+    if (alphaWords.length >= 2) return true
+  }
+  return false
 }
 
 export function isNameRefusal(text: string): boolean {
@@ -66,7 +92,7 @@ export function findExplicitFullNameAnswer(
       const userMessage = conversationHistory[j]
       if (userMessage.role === 'assistant') break
       if (userMessage.role === 'user' && isLikelyFullNameAnswer(userMessage.content)) {
-        return userMessage.content.trim()
+        return stripNameIntroPrefix(userMessage.content.trim())
       }
     }
   }
