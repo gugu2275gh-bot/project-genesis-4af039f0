@@ -1731,10 +1731,10 @@ Regras:
             `Agradeça brevemente o nome e pergunte APENAS o melhor e-mail. Envie EXATAMENTE esta frase, JÁ no idioma travado da conversa, sem traduzir nem alterar: "${t.thanksThenAskEmail}". NÃO faça outras perguntas nem responda dúvidas factuais agora.`,
         })
 
-        // Etapa 4 — Interesse (Msg5 + Msg6) — exige a pergunta explícita E a frase do catálogo
+        // Etapa 4 — Interesse (Msg5 + Msg6) — só conclui quando interest_confirmed for capturado de fato
         const interesseAsked = sentAny(/me conta com calma.*o que voc[êe] busca|cu[eé]ntame con calma.*qu[eé] buscas|tell me.*what are you looking for/i)
         const catalogSent = sentAny(/trabalhamos com cidadania.*n[óo]made digital|trabajamos con (la )?ciudadan[ií]a.*n[óo]mada digital|we work with (spanish )?citizenship.*digital nomad/i)
-        const interesseDone = !serviceMissing || (interesseAsked && catalogSent)
+        const interesseDone = !serviceMissing
         steps.push({
           key: 'interesse', label: 'INTERESSE / SERVIÇO',
           done: interesseDone,
