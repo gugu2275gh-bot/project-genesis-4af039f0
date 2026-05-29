@@ -42,6 +42,14 @@ function isShortNumber(text: string): boolean {
  * classifica como `question` (dúvida factual) ou `request` (pedido/menção
  * de serviço fora do roteiro).
  */
+// Catálogo de serviços ou pergunta "seu caso se encaixa em algum desses?" emitidos
+// pelo bot na rodada anterior — para esses casos, qualquer resposta que cite um
+// serviço válido (residencia, arraigo, nacionalidad, etc.) é resposta legítima.
+const CATALOG_FOLLOWUP_RE = /(se encaixa em algum|encaja en alguno|fits any of these|correspond[^?]{0,40}l['’]un de ces|tu caso encaja|seu caso se encaixa)/i
+
+// Sinais "está na Espanha" embutidos numa resposta composta.
+const LOCATION_IN_SPAIN_HINT_RE = /\b(estou na espanha|estoy en espa[ñn]a|i'?m in spain|je suis en espagne|moro na espanha|vivo en espa[ñn]a|vivo na espanha|aqui na espanha|aqu[ií] en espa[ñn]a|\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*espa[ñn]ha?|\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*spain)\b/i
+
 export function classifyOffTopic(
   currentMessage: string,
   lastAssistantQuestion: string | null | undefined,
@@ -60,6 +68,9 @@ export function classifyOffTopic(
   // Resposta válida explícita à pergunta corrente.
   if (q) {
     if (isQuestionAboutInterest(q) && isPotentialInterestAnswer(raw)) return null
+    // O follow-up do catálogo ("seu caso se encaixa em algum desses?") também é
+    // pergunta de interesse — aceitar resposta com keyword de serviço.
+    if (CATALOG_FOLLOWUP_RE.test(q) && isPotentialInterestAnswer(raw)) return null
     if (isQuestionAboutLocationSpain(q) && (isYesNo(raw) || isNeverBeenToSpainAnswer(raw))) return null
     if (isQuestionAboutSpainEntryDate(q) && (isPotentialEntryDateAnswer(raw) || isNeverBeenToSpainAnswer(raw))) return null
     if (isQuestionAboutEmpadronamientoCity(q) && isValidSpanishCity(raw)) return null
@@ -69,6 +80,11 @@ export function classifyOffTopic(
     if (/(empadronad|europa nos? [úu]ltimos? 6 meses|europa en los? [úu]ltimos? 6 meses|europe in the last 6 months|familiar (europeu|europeo)|family member|trabalh[aoe] remoto|trabajas? remoto|work remotely|forma[çc][ãa]o superior|formaci[óo]n superior|higher education)/i.test(q) && isYesNo(raw)) return null
     if (/(qual sua idade|cu[áa]ntos a[ñn]os|how old)/i.test(q) && /\b\d{1,3}\b/.test(raw)) return null
   }
+
+  // Resposta composta: contém um serviço válido E/OU pista de localização → não parqueia.
+  // Cobre o caso clássico "Sí, ya tengo 2 años en España y quiero solicitar mi residencia",
+  // que responde catálogo+localização ao mesmo tempo.
+  if (isPotentialInterestAnswer(raw) || LOCATION_IN_SPAIN_HINT_RE.test(raw)) return null
 
   // Resposta MUITO curta sem pergunta corrente clara → não classifica como off-topic.
   if (raw.length <= 3 && !/[?]/.test(raw)) return null
