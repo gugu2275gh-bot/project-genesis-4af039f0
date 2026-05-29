@@ -1520,7 +1520,7 @@ Regras:
 
         // Build a contextual KB query: direct questions in the current message have priority;
         // only then use the lead's service of interest for generic follow-ups.
-        const { data: leadInterest } = await supabase
+        let { data: leadInterest } = await supabase
           .from('leads')
           .select('service_interest, service_type_id, notes')
           .eq('id', lead.id)
@@ -1629,7 +1629,9 @@ Regras:
           if (Object.keys(detPatch).length > 0) {
             const safe: Record<string, unknown> = {}
             if (detPatch.location_known && !funnelStateLive.location_known) safe.location_known = detPatch.location_known
-            if (detPatch.interest_confirmed && !funnelStateLive.interest_confirmed) safe.interest_confirmed = detPatch.interest_confirmed
+            const currentInterestEmpty = !funnelStateLive.interest_confirmed
+              || ['SEM_SERVICO', 'OUTRO', ''].includes(String(funnelStateLive.interest_confirmed).toUpperCase())
+            if (detPatch.interest_confirmed && currentInterestEmpty) safe.interest_confirmed = detPatch.interest_confirmed
             if (detPatch.entry_date_confirmed && !funnelStateLive.entry_date_confirmed) safe.entry_date_confirmed = detPatch.entry_date_confirmed
             if (detPatch.empadronado_confirmed !== undefined && (funnelStateLive.empadronado_confirmed === null || funnelStateLive.empadronado_confirmed === undefined)) safe.empadronado_confirmed = detPatch.empadronado_confirmed
             if (detPatch.empadronado_city && !funnelStateLive.empadronado_city) safe.empadronado_city = detPatch.empadronado_city
@@ -2174,7 +2176,10 @@ Regras:
             else if (userOutsideSpain) patch.location_known = 'outside'
           }
           if (!funnelState.interest_confirmed && !serviceMissing) {
-            patch.interest_confirmed = String(leadInterest?.service_interest || 'detected')
+            const candidate = String(leadInterest?.service_interest || '').trim()
+            if (candidate && !['SEM_SERVICO', 'OUTRO'].includes(candidate.toUpperCase())) {
+              patch.interest_confirmed = candidate
+            }
           }
           if (Object.keys(patch).length > 0) {
             await applyTurnUpdates(supabase, funnelState, patch)
