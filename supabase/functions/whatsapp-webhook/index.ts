@@ -1103,6 +1103,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           await supabase.from('webhook_logs').update({ processed: true }).eq('id', webhookLog.id)
         }
 
+        await logTurn({ supabase, exit_reason: 'BUFFERED_NEWER', lead_id: lead.id, contact_id: contact?.id, phone: phoneNumber, message_id: message.messageId, inbound_text: message.body })
         return new Response(
           JSON.stringify({ success: true, message: 'Buffered: newer message will handle AI response' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
