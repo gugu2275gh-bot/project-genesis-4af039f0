@@ -1250,3 +1250,33 @@ export function stripRepeatedPreHandoff(
   console.warn('[ANTI_REPEAT_PREHANDOFF] removidas frases de fechamento; mantido conteúdo útil')
   return lock(cleanedBubbles.join('|||'))
 }
+
+/**
+ * Quando a resposta é dividida em múltiplas bolhas via "|||" e duas ou mais
+ * delas começam com o MESMO opener curto ("Perfecto.", "Certo.", "Ok.", …),
+ * remove o opener das bolhas a partir da segunda. Evita o cliente receber
+ * duas bolhas seguidas iniciando com a mesma palavra (caso Pedro/Gustavo).
+ */
+export function dedupOpenerAcrossBubbles(aiResponse: string): string {
+  if (!aiResponse || !aiResponse.includes('|||')) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
+  const OPENERS = /^(perfecto|perfeito|perfect|certo|ok|okay|claro|vale|entendido|entendi|d['’]?accord|d['’]?acuerdo|sure|right|parfait|bien|got it)\b[\s.,!;:-]*/i
+  const parts = aiResponse.split('|||').map((p) => p.trim())
+  if (parts.length < 2) return aiResponse
+  const firstMatch = parts[0].match(OPENERS)
+  if (!firstMatch) return aiResponse
+  const firstWord = firstMatch[1].toLowerCase()
+  let changed = false
+  for (let i = 1; i < parts.length; i++) {
+    const m = parts[i].match(OPENERS)
+    if (!m) continue
+    if (m[1].toLowerCase() !== firstWord) continue
+    const stripped = parts[i].replace(OPENERS, '').trim()
+    if (stripped.length > 0) {
+      parts[i] = stripped
+      changed = true
+      console.log(`[OPENER_DEDUP] stripped duplicate opener "${m[1]}" from bubble #${i + 1}`)
+    }
+  }
+  return changed ? parts.join('|||') : aiResponse
+}
