@@ -1,67 +1,126 @@
-# Corrigir gravação de `entry_date_confirmed`
+# Corrigir fluxo do funil sendo pulado em PT-BR (caso Gustavo)
 
-## Causa raiz
+## O que aconteceu (diagnóstico)
 
-Caso real do lead `03c8d6d1-dd78-4d07-8be2-5ef9aa91d8c7` (Roberto Barros): cliente respondeu `01/01/2026` à pergunta de data de entrada, o bot avançou pra "¿Estás empadronado?", mas `lead_funnel_state.entry_date_confirmed` ficou `null`.
+Lead `8cff3b45-f198-4677-a832-6a7809375ffb` (Gustavo Braga / 553186200110). Contato e lead foram criados ~1 segundo antes do primeiro inbound `"oi"`. Mesmo assim, o bot pulou TODO o funil e devolveu, **no primeiro turno**, a sequência de pré-handoff + handoff + opener tudo junto:
 
-A pergunta enviada foi:
 ```
-…¿Cuál fue la fecha exacta de tu entrada en España? Por favor, envíala en el formato DD/MM/AAAA (ejemplo: 22/05/2025).?
+19:03:40  → "Perfeito. Já consigo ter uma visão inicial do seu caso."          (H1 pré-handoff)
+19:03:40  → "Na CB analisamos cada caso de forma individual..."                (H2 pré-handoff)
+19:03:42  → "Olá 😊 Tudo bem?... Vou encaminhar suas informações..."           (abertura + H3 misturados)
 ```
 
-Note o `.?` final (um `?` extra foi anexado pelo formatador após o `.` da frase auxiliar).
+Depois disso o bot ficou em modo "tira-dúvidas livre" e só perguntou o nome quando o cliente reclamou ("mas eu nem me apresentei").
 
-`computeDeterministicFunnelPatch` chama `extractLastQuestion(previousAssistantMessage)`, cujo regex `/[^?\n]*\?/g` separa o texto em dois trechos terminados em `?`:
-1. `…¿Cuál fue la fecha exacta de tu entrada en España?`
-2. `Por favor, envíala en el formato DD/MM/AAAA (ejemplo: 22/05/2025).?`
+Logs de telemetria `[TURN]` em todos os turnos posteriores mostram:
+```
+stepsDone: ["abertura","nome","email","interesse","localizacao","aprofundamento","preHandoff"]
+dataKnown: { name:false, email:false, service:false }
+gateActive: false
+```
 
-`.at(-1)` retorna o segundo. Esse segmento NÃO contém "España"/"entrada", então `isQuestionAboutSpainEntryDate(prevQ)` retorna `false` e o branch que grava `entry_date_confirmed` é pulado. O fluxo avança (porque outras camadas detectam a data), mas o valor não é persistido.
+Estado salvo em `lead_funnel_state`:
+```
+step:               interesse
+pre_handoff_sent:   true
+handoff_sent:       true
+name_confirmed:     true (somente depois que cliente reclamou)
+email_confirmed:    true
+interest_confirmed: null
+location_known:     null
+```
 
-O mesmo padrão já foi tratado para localização: o código (overrides.ts:86-87) faz fallback testando a `previousAssistantMessage` inteira além do `prevQ`. Isso não foi replicado para a etapa de data.
+### Causa raiz
+
+1. **`index.ts:1853-1869` marca TODAS as etapas como `done` quando detecta as frases de pré-handoff/handoff no histórico — sem checar se nome/email/interesse foram realmente capturados.**
+   ```ts
+   const preHandoffDoneByRegex = sentAny(/vis[ãa]o inicial.../i) && sentAny(/cada caso de forma individual.../i)
+   const handoffDoneByRegex    = sentAny(/encaminhar suas informa[çc][õo]es.../i) && sentAny(/encaminhar para um atendente.../i)
+   if (preHandoffDone && handoffDone) {
+     for (const s of steps) s.done = true   // ← marca abertura/nome/email/interesse/localização todos como done
+     ... step = 'livre' ...
+   }
+   ```
+   Como Gemini, no primeiro turno, produziu essas frases (gate falhou em forçar `abertura`), o sistema concluiu o funil inteiro e travou em modo livre.
+
+2. **Gate não bloqueou a saída do LLM quando ele produziu pré-handoff sem dados.** Não existe um "lock anti-handoff" enquanto `name_confirmed`/`email_confirmed`/`interest_confirmed` estiverem nulos. A instrução está só no prompt, mas Gemini pode ignorar.
+
+3. **Idempotência do opener falha:** o opener canônico contém só duas frases; mas Gemini retornou as frases de H1/H2/H3 misturadas com o opener — e nenhum sanitizer detectou que esse output estava fora de ordem em um lead novo.
 
 ## Mudanças
 
-### 1. `supabase/functions/whatsapp-webhook/lib/overrides.ts`
-No bloco "Data de entrada" (linha 113-117), substituir o gate por uma verificação que aceite a pergunta tanto via `prevQ` quanto via varredura da mensagem completa do assistente, espelhando o padrão usado para localização:
+### 1. `supabase/functions/whatsapp-webhook/index.ts` — bloquear conclusão do funil sem dados
+
+Substituir o bloco "se preHandoff+handoff feitos → marca tudo done" por uma checagem que exija os dados confirmados:
 
 ```ts
-// Data de entrada
-const prevHasEntryDateQ = isQuestionAboutSpainEntryDate(prevQ)
-  || isQuestionAboutSpainEntryDate(String(previousAssistantMessage || ''))
-if (prevHasEntryDateQ) {
-  const parsed = parseEntryDateFromText(msg)
-  if (parsed && !parsed.isFuture) patch.entry_date_confirmed = parsed.iso
+const hasMinimumData =
+  !!funnelStateLive.name_confirmed &&
+  !!funnelStateLive.email_confirmed &&
+  !!funnelStateLive.interest_confirmed &&
+  funnelStateLive.location_known !== null
+if (preHandoffDone && handoffDone && hasMinimumData) {
+  for (const s of steps) s.done = true
+  // ... step = 'livre' ...
+} else if ((preHandoffDone || handoffDone) && !hasMinimumData) {
+  // ALERTA: handoff disparado sem dados — não marca etapas como done,
+  // mantém gate ativo, loga incidente para auditoria.
+  console.warn('[FUNNEL] handoff_anchor_without_data', { leadId: lead.id, dataKnown: { ... } })
 }
 ```
 
-`isQuestionAboutSpainEntryDate` já normaliza e valida tokens; aplicá-la à mensagem inteira é seguro e elimina a dependência do `extractLastQuestion` retornar o segmento canônico.
+### 2. `supabase/functions/whatsapp-webhook/lib/overrides.ts` — sanitizer anti-handoff prematuro
 
-### 2. `supabase/functions/whatsapp-webhook/lib/text-utils.ts`
-Tornar `extractLastQuestion` mais robusto contra esse caso, preferindo segmentos que contenham `¿`/`?` reais de pergunta sobre fragmentos terminados em `.?`:
+Antes do envio (na pipeline que já tem `removeRepeatedQuestionIntro`, `stripLockedSentinel`, dedup), adicionar um filtro:
 
-- Se houver múltiplos matches, preferir o último que comece com `¿` (Espanhol) OU que termine em ` ?` / `?` sem `.` imediatamente antes do `?`.
-- Caso contrário, manter o comportamento atual (último match).
+- Se `!hasMinimumData` (mesma definição), **remover** das frases de saída qualquer ocorrência de:
+  - "visão inicial do seu caso" / "visión inicial de tu caso" / "initial view of your case"
+  - "Na CB analisamos cada caso..." / equivalentes ES/EN/FR
+  - "encaminhar suas informações" / "remitir tu información" / equivalentes
+  - "encaminhar para um atendente" / "derivar a un agente" / equivalentes
+- Se após o strip a resposta ficar vazia, substituir pela próxima pergunta canônica do funil (`abertura` ou `nome` etc., calculada pelo dispatch).
 
-Isso protege outros call sites que dependem do mesmo helper (`isQuestionAboutInterest`, dedup, etc.).
+### 3. `supabase/functions/whatsapp-webhook/index.ts` — forçar `abertura` em primeira interação
 
-### 3. `supabase/functions/whatsapp-webhook/compound_message_test.ts` (ou novo `entry_date_persistence_test.ts`)
-Adicionar testes Deno cobrindo exatamente o caso real:
+Quando `funnelStateLive.step` for null/inicial **e** não houver histórico assistant (ou histórico só com opener_sent=false), o gate deve setar `nextStep = 'abertura'` e usar o output canônico da abertura, ignorando completamente o que o LLM gerou nesse turno. Esse caminho deve ser determinístico (mesmo padrão do `getScriptedNextStep` já usado em outras etapas).
 
-- `computeDeterministicFunnelPatch('…¿Cuál fue la fecha exacta de tu entrada en España? Por favor, envíala en el formato DD/MM/AAAA (ejemplo: 22/05/2025).?', '01/01/2026')` deve retornar `{ entry_date_confirmed: '2026-01-01' }`.
-- Mesmo teste para PT-BR (mensagem equivalente em português) com `'01/01/2026'`.
-- Garantir que `extractLastQuestion` no caso `'¿Cuál fue la fecha exacta de tu entrada en España? Algo más.?'` retorna o segmento da pergunta de entrada.
+### 4. `supabase/functions/whatsapp-webhook/lib/funnel-state.ts` — corrigir flags `pre_handoff_sent`/`handoff_sent`
 
-### 4. Backfill do lead afetado
-Após o deploy, executar uma migration ou query manual para atualizar `lead_funnel_state.entry_date_confirmed = '2026-01-01'` do lead `03c8d6d1-dd78-4d07-8be2-5ef9aa91d8c7` (Roberto Barros), já que o dado existe no histórico mas não foi persistido. Confirmar com o usuário se deseja esse backfill agora.
+Hoje essas flags são setadas via regex `preHandoffSummarySent(sentJoined)` em qualquer turno (index.ts:2528). Adicionar a mesma guarda `hasMinimumData` antes de persistir essas flags — assim, mesmo se Gemini produzir as frases prematuramente, o estado não fica contaminado.
 
-### 5. Deploy
-Redeploy de `whatsapp-webhook` após os testes passarem.
+### 5. Testes Deno
+Criar `supabase/functions/whatsapp-webhook/handoff_guard_test.ts` cobrindo:
+- Primeira interação ("oi" em pt-BR) num lead novo → resposta canônica de abertura, sem qualquer frase de handoff.
+- LLM "vaza" frase de pré-handoff antes do nome ser capturado → sanitizer remove e devolve pergunta do nome.
+- `pre_handoff_sent` NÃO é setado quando `name/email/interest/location` ainda estão nulos.
+- Quando todos os dados estão capturados, pré-handoff e handoff funcionam normalmente (regressão).
+
+### 6. Backfill — reset do lead do Gustavo
+Resetar `lead_funnel_state` do lead `8cff3b45-f198-4677-a832-6a7809375ffb`:
+
+```sql
+UPDATE public.lead_funnel_state
+SET step='abertura',
+    pre_handoff_sent=false,
+    handoff_sent=false,
+    interest_confirmed=null,
+    location_known=null,
+    outside_spain_progress='{}'::jsonb,
+    updated_at=now()
+WHERE lead_id='8cff3b45-f198-4677-a832-6a7809375ffb';
+```
+
+Para que, quando o Gustavo responder de novo, o funil retome corretamente a partir da pergunta de interesse/localização (nome e email já foram coletados de verdade).
+
+### 7. Deploy
+Redeploy `whatsapp-webhook` após testes verdes.
 
 ## Fora de escopo
-- Não alterar onde o `?` extra é anexado à pergunta (sintoma do formatador). A correção principal torna o pipeline imune a esse problema.
-- Não mexer em outras etapas do funil (interesse, localização, empadronado) — só a etapa de data está com bug.
+- Não mexer no prompt da IA (já instruído corretamente). A correção é defensiva no código.
+- Não alterar tradução nem catálogo de serviços.
+- Não tocar no fluxo do Roberto / data de entrada (corrigido no turno anterior).
 
 ## Validação
-- Rodar `entry_date_persistence_test.ts` no Deno test runner.
-- Simular novo lead respondendo `01/01/2026` e conferir `lead_funnel_state.entry_date_confirmed` populado.
-- Verificar logs `[DET_PATCH]` mostrando `entry_date_confirmed` no patch.
+- Rodar `handoff_guard_test.ts` no Deno test runner.
+- Simular um novo lead pt-BR enviando `"oi"` e conferir nos logs que `stepsDone=["abertura"]` (não a sequência inteira) e que apenas a abertura é enviada.
+- Conferir no DB que `pre_handoff_sent` permanece `false` até que `name/email/interest/location` estejam preenchidos.
