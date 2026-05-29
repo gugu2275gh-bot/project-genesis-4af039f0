@@ -2315,7 +2315,55 @@ Regras:
               }
             }
 
-            const parts = aiResponseClean.split('|||').map(p => p.trim()).filter(Boolean)
+            let parts = aiResponseClean.split('|||').map(p => p.trim()).filter(Boolean)
+
+            // ===== REDE DE SEGURANÇA: parts vazio =====
+            // Se todos os chunks foram descartados (dedup, suppress, fallback empty),
+            // NÃO encerramos silenciosamente. Geramos a próxima pergunta canônica do roteiro
+            // com base no estado do funil para evitar travamento da conversa.
+            if (parts.length === 0) {
+              try {
+                const fallbackScripted = nextStep ? getNextScriptedQuestion(nextStep.key as any, detectedChatLanguage, {
+                  userInSpain,
+                  userOutsideSpain,
+                  assistantTranscript: allAssistant,
+                  entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+                  locationKnown: funnelStateLive.location_known,
+                  empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+                  empadronadoCity: funnelStateLive.empadronado_city,
+                  empadronadoSinceConfirmed: (funnelStateLive as any).empadronamiento_since,
+                  preHandoffSent: !!funnelStateLive.pre_handoff_sent,
+                  handoffSent: !!funnelStateLive.handoff_sent,
+                  outsideProgress: outsideProgressLive,
+                  catalogSent,
+                }) : ''
+                if (fallbackScripted && fallbackScripted.trim().length > 0) {
+                  parts = fallbackScripted.split('|||').map(p => p.trim()).filter(Boolean)
+                  console.warn('[SAFETY_NET] parts=0 após dedup — usando próxima pergunta canônica:', nextStep?.key, '| parts=', parts.length)
+                }
+              } catch (sErr) {
+                console.warn('[SAFETY_NET] non-blocking error:', sErr instanceof Error ? sErr.message : sErr)
+              }
+            }
+
+            // Se ainda assim sobrou vazio, registra como AI_FAILED para o watchdog tentar recuperar.
+            if (parts.length === 0) {
+              console.warn('[SAFETY_NET] parts ainda vazio após fallback — registrando AI_FAILED')
+              await logTurn({
+                supabase,
+                exit_reason: 'AI_FAILED',
+                lead_id: lead.id,
+                contact_id: contact.id,
+                phone: phoneNumber,
+                message_id: message.messageId,
+                inbound_text: message.body,
+                ai_error: 'empty_after_dedup_and_safety_net',
+                funnel_step_before: funnelStateLive?.step ?? null,
+              })
+              return new Response(JSON.stringify({ success: true, aiResponseSent: false, reason: 'empty_after_dedup' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              })
+            }
             for (let i = 0; i < parts.length; i++) {
               const part = parts[i]
               await sendWhatsAppMessage(phoneNumber, part)
