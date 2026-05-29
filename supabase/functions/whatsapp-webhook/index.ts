@@ -2405,11 +2405,34 @@ Regras:
 
             let parts = aiResponseClean.split('|||').map(p => p.trim()).filter(Boolean)
 
+            // GUARD anti-handoff prematuro: se ainda não temos os dados mínimos,
+            // removemos das partes qualquer frase de pré-handoff/handoff que o LLM
+            // tenha vazado. Evita o caso em que Gemini envia "Já consigo ter uma
+            // visão inicial..." na primeira interação e o funil é dado como concluído.
+            if (!hasMinimumDataForHandoff) {
+              const handoffAnchorRe = /(vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case|cada caso de forma individual|each case individually|caminho mais seguro|camino m[áa]s seguro|encaminhar suas informa[çc][õo]es|remitir tu informaci[óo]n|forward your information|transmettre vos informations|encaminhar (você )?para um atendente|derivar a un agente|forward you to an agent|vous transf[ée]rer [àa] un agent|à disposi[çc][ãa]o para ajudar|a disposici[óo]n para ayudar)/i
+              const before = parts.length
+              parts = parts
+                .map(p => p
+                  .split(/(?<=[.!?])\s+/)
+                  .filter(s => !handoffAnchorRe.test(s))
+                  .join(' ')
+                  .trim()
+                )
+                .filter(Boolean)
+              if (parts.length !== before) {
+                console.warn('[GUARD] handoff_anchor_stripped — frases removidas por falta de dados mínimos. parts_before=', before, 'parts_after=', parts.length)
+              }
+            }
+
             // Continuidade do pré-handoff: completa H1/H2/H3 se algum estiver faltando.
-            parts = ensurePreHandoffContinuity(parts, detectedChatLanguage, {
-              preHandoffSent: !!funnelStateLive.pre_handoff_sent,
-              handoffSent: !!funnelStateLive.handoff_sent,
-            })
+            // Só roda se já temos dados mínimos — sem isso, NÃO devemos completar handoff.
+            if (hasMinimumDataForHandoff) {
+              parts = ensurePreHandoffContinuity(parts, detectedChatLanguage, {
+                preHandoffSent: !!funnelStateLive.pre_handoff_sent,
+                handoffSent: !!funnelStateLive.handoff_sent,
+              })
+            }
 
             // ===== REDE DE SEGURANÇA: parts vazio =====
             // Se todos os chunks foram descartados (dedup, suppress, fallback empty),
