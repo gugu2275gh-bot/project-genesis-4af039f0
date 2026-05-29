@@ -1520,7 +1520,7 @@ Regras:
 
         // Build a contextual KB query: direct questions in the current message have priority;
         // only then use the lead's service of interest for generic follow-ups.
-        const { data: leadInterest } = await supabase
+        let { data: leadInterest } = await supabase
           .from('leads')
           .select('service_interest, service_type_id, notes')
           .eq('id', lead.id)
