@@ -1,62 +1,46 @@
-## Tela de Ajuste de LLM em Configurações
 
-Adicionar nova aba **"LLM"** dentro de `Configurações` (visível apenas para ADMIN/Superuser) que permita:
+## Objetivo
 
-1. **Ver status das chaves de API** (Gemini `CBAsesoria_Key` e `OPENAI_API_KEY`) — configurada / não configurada, com link rápido para o painel de Secrets do Supabase para atualizar.
-2. **Habilitar/desabilitar** cada provider (Gemini, OpenAI) globalmente — útil para teste controlado.
-3. **Escolher os modelos** disponíveis em cada provider a partir de uma lista pré-definida.
-4. **Reordenar a cascata** (drag/arrows) — define a sequência de tentativa do agente WhatsApp.
-5. **Testar conexão** botão por modelo: envia um prompt curto e retorna OK + latência ou erro.
+Substituir a lista fixa (hardcoded) de modelos no dropdown "Selecione um modelo..." por uma lista buscada em tempo real das APIs do Google Gemini e da OpenAI, mostrando apenas modelos compatíveis com geração de texto/chat.
 
-### Banco de dados
+## Mudanças
 
-Criar tabela `public.llm_settings` (single-row config; sem armazenar chaves — apenas configuração):
+### 1. Backend — `supabase/functions/llm-config/index.ts`
+Adicionar duas novas ações no POST:
 
-- `id` (uuid, pk)
-- `gemini_enabled` (boolean, default true)
-- `openai_enabled` (boolean, default true)
-- `cascade` (jsonb) — array ordenado de `{ provider: 'gemini'|'openai', model: string, enabled: boolean }`
-- `updated_at`, `updated_by`
+- **`action: 'list_models'` + `provider: 'gemini'`**
+  - Chama `GET https://generativelanguage.googleapis.com/v1beta/models?key=CBAsesoria_Key`
+  - Filtra apenas modelos que tenham `generateContent` em `supportedGenerationMethods`
+  - Remove embeddings, TTS, image-only, e modelos `aqa`
+  - Retorna: `[{ id, displayName, description }]` (id sem o prefixo `models/`)
 
-Seed inicial com a cascata atual: `gemini-3.5-flash` → `gemini-2.5-pro` → `gemini-2.5-flash-lite` → `gpt-4o-mini`.
+- **`action: 'list_models'` + `provider: 'openai'`**
+  - Chama `GET https://api.openai.com/v1/models` com `Authorization: Bearer OPENAI_API_KEY`
+  - Filtra apenas modelos de chat (heurística por prefixo: `gpt-`, `o1`, `o3`, `chatgpt-`), removendo `embedding`, `tts`, `whisper`, `dall-e`, `image`, `audio`, `realtime`, `transcribe`
+  - Retorna: `[{ id, displayName: id, description: '' }]`, ordenados alfabeticamente
 
-RLS: SELECT/UPDATE apenas ADMIN. Grant authenticated SELECT/UPDATE; service_role ALL.
+Cache em memória de 5 minutos para evitar chamadas repetidas.
 
-### Edge function `llm-config`
+### 2. Frontend — `src/pages/settings/LLMSettings.tsx`
+- Ao carregar a página (e ao trocar o provider no dropdown "Gemini/OpenAI" do form de adicionar), chamar `llm-config` com `action: 'list_models'` para o provider escolhido
+- Substituir o array fixo `GEMINI_MODELS`/`OPENAI_MODELS` por estado `availableModels: { gemini: [], openai: [] }`
+- Mostrar um spinner pequeno no select enquanto carrega
+- Se a API falhar (chave ausente, 4xx, 5xx), mostrar toast de aviso e cair em uma lista mínima de fallback (os modelos que já estão hoje no código) — para o usuário nunca ficar travado sem opções
+- Botão "Recarregar lista" ao lado do select para forçar refresh ignorando o cache
+- O dropdown deve mostrar `displayName` + `id` em texto secundário (quando diferente), facilitando identificar `gemini-2.5-flash` vs `gemini-2.5-flash-002` etc.
 
-Endpoints:
-- `GET /status` — retorna `{ gemini_key_present, openai_key_present, settings }` (lê env vars, não expõe valores).
-- `POST /test` — corpo `{ provider, model }`; envia prompt curto ("ping em 1 palavra") ao provider/modelo escolhido e retorna `{ ok, latency_ms, error? }`.
+### 3. Não precisa migração de banco
+A tabela `llm_settings` continua igual — apenas a UI passa a oferecer mais opções de `model` para incluir na cascata.
 
-Validação JWT no código (admin obrigatório).
+## Detalhes técnicos
 
-### Frontend
+- A função `llm-config` já exige role ADMIN — manter
+- Endpoint Gemini retorna campo `name` no formato `models/gemini-2.5-flash`; precisamos fazer `id = name.replace(/^models\//, '')`
+- Endpoint OpenAI retorna `{ data: [{ id, object: 'model', ... }] }` sem indicar capacidade; filtragem é por padrão de nome
+- Modelos preview/experimental ficam na lista, apenas marcados com badge "preview" se o id contiver `preview` ou `exp`
+- "Funcionais" aqui significa "listados pela API e do tipo chat". Para validar de fato basta o botão "Testar" já existente
 
-- `src/pages/settings/LLMSettings.tsx` — nova aba.
-  - Cards: "Chaves de API" (status + botão "Atualizar no Supabase" abrindo URL de secrets), "Providers" (switches), "Cascata de modelos" (lista reordenável com botões ↑↓, switch enabled, badge do provider, botão "Testar").
-  - Lista de modelos disponíveis para adicionar à cascata:
-    - Gemini: `gemini-3.5-flash`, `gemini-2.5-pro`, `gemini-2.5-flash-lite`, `gemini-3-flash-preview`, `gemini-2.5-flash`.
-    - OpenAI: `gpt-4o-mini`, `gpt-4o`.
-  - Botão "Salvar" persiste em `llm_settings`.
-- `src/pages/settings/Settings.tsx` — adicionar `<TabsTrigger value="llm">` com ícone Brain e `<TabsContent>` renderizando `LLMSettings`.
+## Não incluído (fora do escopo)
 
-### Integração com o agente WhatsApp
-
-Refatorar `supabase/functions/whatsapp-webhook/lib/ai.ts`:
-- `generateAIResponse` recebe (ou lê de helper) o array `cascade` de `llm_settings`.
-- Itera nos itens com `enabled: true` cujo provider esteja habilitado.
-- Para `provider === 'gemini'` mantém o fluxo atual (endpoint v1beta).
-- Para `provider === 'openai'` chama OpenAI chat completions com o modelo escolhido.
-- Mantém fallback hardcoded caso a tabela esteja vazia.
-
-`index.ts` deixa de fazer o fallback manual para OpenAI (passa a ser apenas mais um item da cascata controlado por configuração).
-
-### Segurança / observações
-
-- Chaves continuam em Supabase Secrets — nunca expostas na UI nem armazenadas no banco.
-- "Atualizar chave" abre o painel de Secrets do Supabase em nova aba; a página apenas mostra se está presente.
-- Acesso à aba e à edge function exige ADMIN.
-
-### Memória
-
-Atualizar `mem://integrations/whatsapp-ai-agent` para refletir que a cascata agora é dinâmica via `llm_settings` (com defaults preservados).
+- Não testa automaticamente cada modelo retornado (seria caro e lento; o usuário usa "Testar" sob demanda)
+- Não adiciona Anthropic/outros providers — apenas Gemini e OpenAI que já existem no sistema
