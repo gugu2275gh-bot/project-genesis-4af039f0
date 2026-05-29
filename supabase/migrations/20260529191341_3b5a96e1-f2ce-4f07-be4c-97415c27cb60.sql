@@ -1,0 +1,1 @@
+UPDATE public.lead_funnel_state SET entry_date_confirmed = '2026-01-01', updated_at = now() WHERE lead_id = '03c8d6d1-dd78-4d07-8be2-5ef9aa91d8c7' AND entry_date_confirmed IS NULL;
