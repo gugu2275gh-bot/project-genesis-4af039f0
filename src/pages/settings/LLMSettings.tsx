@@ -272,9 +272,38 @@ function KeyRow({ label, present }: { label: string; present: boolean }) {
 }
 
 function AddItemRow({ onAdd }: { onAdd: (provider: Provider, model: string) => void }) {
+  const { toast } = useToast();
   const [provider, setProvider] = useState<Provider>('gemini');
   const [model, setModel] = useState<string>('');
-  const options = provider === 'gemini' ? GEMINI_MODELS : OPENAI_MODELS;
+  const [models, setModels] = useState<Record<Provider, ModelInfo[]>>({ gemini: [], openai: [] });
+  const [loading, setLoading] = useState<Record<Provider, boolean>>({ gemini: false, openai: false });
+
+  const loadModels = async (p: Provider, force = false) => {
+    if (!force && models[p].length > 0) return;
+    setLoading(l => ({ ...l, [p]: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke('llm-config', {
+        body: { action: 'list_models', provider: p, force },
+      });
+      if (error) throw error;
+      const list = (data?.models || []) as ModelInfo[];
+      setModels(m => ({ ...m, [p]: list }));
+      if (data?.error) {
+        toast({ title: 'Aviso ao listar modelos', description: data.error, variant: 'destructive' });
+      } else if (force) {
+        toast({ title: 'Lista atualizada', description: `${list.length} modelos disponíveis para ${p}.` });
+      }
+    } catch (e: any) {
+      toast({ title: 'Erro ao listar modelos', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoading(l => ({ ...l, [p]: false }));
+    }
+  };
+
+  useEffect(() => { loadModels(provider); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [provider]);
+
+  const options = models[provider];
+  const isLoading = loading[provider];
 
   return (
     <div className="flex items-center gap-2 pt-3 border-t">
@@ -285,12 +314,29 @@ function AddItemRow({ onAdd }: { onAdd: (provider: Provider, model: string) => v
           <SelectItem value="openai">OpenAI</SelectItem>
         </SelectContent>
       </Select>
-      <Select value={model} onValueChange={setModel}>
-        <SelectTrigger className="flex-1"><SelectValue placeholder="Selecione um modelo..." /></SelectTrigger>
+      <Select value={model} onValueChange={setModel} disabled={isLoading}>
+        <SelectTrigger className="flex-1">
+          <SelectValue placeholder={isLoading ? 'Carregando modelos...' : `Selecione um modelo... (${options.length})`} />
+        </SelectTrigger>
         <SelectContent>
-          {options.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+          {options.map(m => (
+            <SelectItem key={m.id} value={m.id}>
+              <div className="flex flex-col">
+                <span className="font-mono text-sm">{m.id}</span>
+                {m.displayName && m.displayName !== m.id && (
+                  <span className="text-xs text-muted-foreground">{m.displayName}</span>
+                )}
+              </div>
+            </SelectItem>
+          ))}
+          {options.length === 0 && !isLoading && (
+            <div className="px-2 py-3 text-xs text-muted-foreground">Nenhum modelo disponível</div>
+          )}
         </SelectContent>
       </Select>
+      <Button variant="ghost" size="icon" onClick={() => loadModels(provider, true)} disabled={isLoading} title="Recarregar lista">
+        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+      </Button>
       <Button variant="outline" onClick={() => { if (model) { onAdd(provider, model); setModel(''); } }} disabled={!model}>
         <Plus className="h-4 w-4 mr-1" /> Adicionar
       </Button>
