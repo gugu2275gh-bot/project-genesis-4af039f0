@@ -1,65 +1,47 @@
+# Tratativa de datas — regra global DD/MM/YYYY
 
-## Diagnóstico do caso do Pedro (`75a0418f… / ebf47b3d…`)
+## Problema
+No exemplo (BM - Gustavo), o cliente respondeu "22 de maio" à pergunta "Qual foi a data exata da sua entrada na Espanha?". O bot aceitou sem ano, gerando ambiguidade (poderia ser 2024, 2025, 2026). Não há validação de data centralizada.
 
-Cronologia confirmada em `mensagens_cliente`:
+## Objetivo
+Tratar **data como regra do sistema**: sempre que o bot pedir ou receber uma data do cliente (entrada na Espanha, nascimento, validade de documento, agendamento, etc.), o formato esperado é **DD/MM/YYYY** e o ano é **obrigatório**.
 
-| Hora UTC | Origem | Texto |
-|---|---|---|
-| 11:46:36 | IA | "¿Estás en España?" |
-| 11:46:57 | WHATSAPP | "Sí" ← chegou ao DB |
-| 11:50:33 | WHATSAPP | "Hola?" ← chegou ao DB |
+## Mudanças
 
-Estado em `lead_funnel_state`: `step=localizacao`, `pre_handoff_sent=false`, `handoff_sent=false`. Ou seja, o bot recebeu as duas mensagens mas **não emitiu nenhuma resposta** e nem avançou o funil.
+### 1. Novo módulo `lib/date-utils.ts` (whatsapp-webhook)
+Helper centralizado:
+- `parseUserDate(text, locale)` → retorna `{ valid, date, missingYear, raw }`.
+  - Reconhece: `22/05/2025`, `22-05-2025`, `22/5/25`, `22 de maio de 2025`, `22 de mayo de 2025`, `May 22 2025`, `ontem`, `hoje`, `anteontem`, `há 3 dias`.
+  - Detecta ausência de ano ("22 de maio", "22/05", "ayer sin año") → `missingYear: true`.
+- `formatDate(date)` → sempre `DD/MM/YYYY` na exibição.
+- `dateAskPrompt(locale)` → frase padrão multi-idioma pedindo `DD/MM/YYYY`.
 
-Os logs do edge function só ficam disponíveis por ~5 min, então a janela de 11:46-11:50 já expirou e não consigo provar qual ramo do `index.ts` causou o "skip". As hipóteses compatíveis com o estado observado:
+### 2. Instruções no prompt base do AI Agent
+Em `supabase/functions/whatsapp-webhook/lib/overrides.ts` (ou onde o system prompt é montado), adicionar bloco fixo:
+> "REGRA DE DATAS: Toda data deve ser solicitada e confirmada no formato **DD/MM/YYYY**. Se o cliente responder sem ano (ex.: '22 de maio', '22/05'), NÃO assuma o ano — pergunte novamente: 'Pode confirmar a data completa no formato DD/MM/AAAA, por favor?' (adapte ao idioma do cliente: ES → 'DD/MM/AAAA', EN → 'DD/MM/YYYY'). Ao repetir/confirmar uma data ao cliente, sempre use DD/MM/YYYY."
 
-1. **Cascade AI falhou silenciosamente** — entre 11:46 e 11:48 houve várias respostas `429 RESOURCE_EXHAUSTED` do Gemini (vistas nos logs de outros leads). Se `gemini-3-flash → gemini-2.5-flash-lite → gpt-4o-mini` falhou todos os retries, o webhook responde `200` e segue sem mandar nada.
-2. **Buffer detectou "newer message"** — possível em caso de webhook duplicado do Twilio.
-3. **`recentOutbound` anti-duplicate** — match falso se outra escrita aconteceu na mesma janela.
-4. **Reactivation devolveu `SEND_MESSAGE` mas a inserção falhou** — improvável, pois não há registro com `origem='REACTIVATION'`.
+### 3. Validação pós-resposta do cliente
+No fluxo principal do webhook, quando a última pergunta do bot for classificada como "pergunta de data" (heurística: contém "data", "fecha", "date", "quando", "cuándo", "when" + termo temporal), interceptar a resposta do cliente:
+- Rodar `parseUserDate`.
+- Se `missingYear === true` → forçar bubble de reprompt no idioma do lead com `dateAskPrompt` e **não** avançar de etapa nem registrar a data.
+- Se válida → normalizar para `DD/MM/YYYY` antes de salvar em `lead_metadata` / `interactions` e antes de qualquer eco ao cliente.
 
-Em todos os casos o sintoma é o mesmo: a conversa fica "parada" sem nenhum sinal pro cliente nem pro operador.
+### 4. Templates e textos do sistema
+Auditar templates WhatsApp e textos SLA que pedem datas (ex.: agendamento Huellas, validade de NIE) para padronizar o pedido `DD/MM/AAAA` (PT) / `DD/MM/AAAA` (ES) / `DD/MM/YYYY` (EN).
 
-## Plano: watchdog anti-stall + observabilidade
+### 5. Frontend (CRM)
+Sem mudanças funcionais nesta entrega — apenas garantir que campos de data exibidos ao operador continuem `DD/MM/YYYY` (já é o padrão; verificação rápida em `LeadDetail` e `ContactDetail`).
 
-### 1. Persistir trilha de cada turno (`whatsapp_turn_log`)
-Nova tabela append-only com 1 linha por webhook processado:
-```
-id, lead_id, contact_id, message_id, inbound_text,
-exit_reason (enum: REPLIED, BUFFERED_NEWER, ANTI_DUP, AI_FAILED,
-             REACTIVATION_SENT, BOT_DISABLED, PAUSED_BY_HUMAN, KB_STRICT_FALLBACK, OTHER),
-ai_provider_used, ai_error, response_chars,
-funnel_step_before, funnel_step_after, created_at
-```
-Cada ponto de `return` no `index.ts` grava aqui antes de responder. Isso garante diagnóstico mesmo após os logs do edge function expirarem.
+## Arquivos previstos
+- novo: `supabase/functions/whatsapp-webhook/lib/date-utils.ts`
+- editar: `supabase/functions/whatsapp-webhook/index.ts` (interceptação + normalização)
+- editar: `supabase/functions/whatsapp-webhook/lib/overrides.ts` (bloco de regra no prompt)
+- editar (se necessário): templates em `whatsapp_templates` com placeholder de data
 
-### 2. Cron `whatsapp-stall-watchdog` (a cada 1 min)
-Identifica leads onde:
-- Última `mensagens_cliente` é `origem='WHATSAPP'` (inbound), **e**
-- Faz mais de 90 s desde a chegada, **e**
-- `lead_funnel_state.handoff_sent = false` (bot ainda no controle), **e**
-- Bot habilitado e não pausado por humano.
+## Fora de escopo
+- Migração de datas históricas já salvas em texto livre.
+- Date pickers no portal do cliente.
 
-Para cada um:
-1. Loga em `whatsapp_turn_log` com `exit_reason='STALL_RECOVERED'`.
-2. Re-invoca o pipeline AI (mesma função do webhook, refatorada em helper `processAITurn(leadId)`).
-3. Se falhar de novo, marca `stall_attempts++`. Em 2 tentativas, envia para o operador uma notificação ("conversa parada – intervir") e congela.
-
-### 3. Retry mais robusto no `aiCascade`
-- Em `429 RESOURCE_EXHAUSTED`, respeita o `retryDelay` informado pelo Gemini (atualmente o cascade só faz 2 retries de 2 s).
-- Se TODOS os providers falharem, em vez de retornar silencioso, gravar `exit_reason='AI_FAILED'` e disparar o watchdog antes mesmo do cron rodar (enfileira reprocessamento imediato + alerta).
-
-### 4. Painel rápido em Configurações → WhatsApp
-Lista os últimos 50 registros de `whatsapp_turn_log` com filtro por `exit_reason`. Útil para o admin diagnosticar bot "engasgado" sem precisar pedir logs.
-
-### Detalhes técnicos
-- Migração: cria `whatsapp_turn_log` + grants + RLS (ADMIN/MANAGER read).
-- `supabase/functions/whatsapp-webhook/index.ts`: extrair os blocos pré-AI e AI em `lib/turn-pipeline.ts` para reuso pelo watchdog.
-- `supabase/functions/whatsapp-stall-watchdog/index.ts`: novo cron (1 min) registrado em `supabase/config.toml`.
-- Front-end: nova aba `WhatsAppTurnLogs.tsx` em `pages/settings/`.
-
-### Fora do escopo
-- Mudar a lógica do funil ou prompts.
-- Mexer no formato dos templates / Twilio.
-
-Após aplicar, o caso do Pedro teria recuperado automaticamente em ≤ 90 s e ficaria registrado o motivo exato do skip.
+## Confirmações antes de implementar
+1. Aplicar a regra **somente no agente WhatsApp** (bot) ou também em formulários do portal do cliente?
+2. Quando o cliente disser "ontem" / "hoje" / "há 3 dias", aceitar e converter para `DD/MM/YYYY` automaticamente, ou ainda assim pedir confirmação explícita?
