@@ -335,6 +335,7 @@ import {
   preHandoffSummarySent,
   handoffTransferSent,
   classifyYesNo,
+  isQuestionAboutLocationSpain,
 } from './lib/questions.ts'
 
 import {
@@ -1671,16 +1672,15 @@ Regras:
         }
 
 
-        // Detecção de localização: buscar a RESPOSTA imediatamente após a pergunta de localização.
-        // Suporta a nova pergunta yes/no ("já está na Espanha?") e a antiga disjuntiva (compatibilidade).
-        // Reconhece TANTO a forma longa ("Hoje você já está na Espanha?") quanto a forma curta
-        // ("¿Estás en España?", "Está na Espanha?", "Are you in Spain?", "Êtes-vous en Espagne?").
-        const locQuestionRe = /((j[áa] est[áa]|j[áa] mora|ya est[áa]s|ya vives|already (in|live)|are you (already )?in spain|hoje voc[êe] j[áa] est[áa] na espanha|hoy ya est[áa]s en espa[ñn]a|d[ée]j[àa] en espagne).{0,60}(espanha|espa[ñn]a|spain|espagne)|(\b(est[áa]s?|are you|[êe]tes[- ]vous)\b[^?]{0,40}\b(espanha|espa[ñn]a|spain|espagne)\b[^?]{0,10}\?))/i
+        // Detecção de localização: buscar a RESPOSTA imediatamente após a pergunta
+        // canônica de localização. Usa o detector compartilhado isQuestionAboutLocationSpain,
+        // que reconhece TANTO a forma longa ("Hoje você já está na Espanha?") quanto a
+        // forma curta ("¿Estás en España?", "Está na Espanha?", "Are you in Spain?",
+        // "Êtes-vous en Espagne ?").
         let locationAnswer = ''
         for (let i = 0; i < history.length - 1; i++) {
           const m = history[i]
-          if (m.role === 'assistant' && locQuestionRe.test(m.content)) {
-            // Pega a próxima mensagem do usuário
+          if (m.role === 'assistant' && isQuestionAboutLocationSpain(m.content)) {
             for (let j = i + 1; j < history.length; j++) {
               if (history[j].role === 'user') {
                 locationAnswer = String(history[j].content || '')
@@ -1692,8 +1692,37 @@ Regras:
         }
         const ans = locationAnswer.toLowerCase().trim()
         const yesNoVerdict = classifyYesNo(ans)
-        const userOutsideSpain = yesNoVerdict === 'no'
-        const userInSpain = yesNoVerdict === 'yes'
+        let userOutsideSpain = yesNoVerdict === 'no'
+        let userInSpain = yesNoVerdict === 'yes'
+
+        // Reforço turn-a-turn: se a ÚLTIMA pergunta do bot foi a de localização e o
+        // cliente acabou de responder sim/não, grava location_known imediatamente
+        // para que o gate avance e não repita a pergunta no mesmo turno.
+        try {
+          if (
+            !funnelStateLive.location_known
+            && lastAssistantQuestion
+            && isQuestionAboutLocationSpain(lastAssistantQuestion)
+          ) {
+            const verdictNow = classifyYesNo(String(rawCustomerMessage || ''))
+            if (verdictNow === 'yes' || verdictNow === 'no') {
+              const loc = verdictNow === 'yes' ? 'spain' : 'outside'
+              funnelStateLive = await applyTurnUpdates(
+                supabase,
+                funnelStateLive,
+                { location_known: loc } as any,
+                { override_applied: 'location_yesno_immediate' },
+              )
+              if (loc === 'spain') userInSpain = true
+              else userOutsideSpain = true
+              console.log(`[LOCATION_IMMEDIATE] gravado location_known=${loc} a partir de resposta sim/não`)
+            }
+          }
+        } catch (locErr) {
+          console.warn('[LOCATION_IMMEDIATE] non-blocking error:', locErr instanceof Error ? locErr.message : locErr)
+        }
+
+
 
 
         // Definição das 8 etapas do roteiro (na ordem)

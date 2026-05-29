@@ -75,8 +75,10 @@ export function computeDeterministicFunnelPatch(
   const patch: Record<string, unknown> = {}
   if (!msg) return patch as any
 
-  const YES = /^\s*(sim|si|s[ií]|yes|yeah|yep|claro|estou|to[uy]|aham|aha|positivo|afirmativo|oui|of course|sure|ok|okay)\b/i
-  const NO = /^\s*(n[ãa]o|no|nope|nay|negativo|nunca|jamais|non)\b/i
+  // Boundary "[^a-z]|$" (em vez de \b) para aceitar acentos como em "Sí,"
+  // (í não é \w em JS, então \b falharia entre "í" e ",").
+  const YES = /^\s*(sim|si|s[ií]|yes|yeah|yep|claro|estou|to[uy]|aham|aha|positivo|afirmativo|oui|of course|sure|ok|okay)(?=[^a-z]|$)/i
+  const NO = /^\s*(n[ãa]o|no|nope|nay|negativo|nunca|jamais|non)(?=[^a-z]|$)/i
 
   // Localização — detecta pela última pergunta OU por qualquer pergunta de localização
   // presente em qualquer trecho recente da última mensagem do bot (cobre casos em que o
@@ -87,27 +89,14 @@ export function computeDeterministicFunnelPatch(
     if (YES.test(msg)) patch.location_known = 'spain'
     else if (NO.test(msg)) patch.location_known = 'outside'
   }
-  // Reafirmação clara: cliente diz explicitamente que NÃO está na Espanha em qualquer turno
-  // (ex.: "Eu não estou na Espanha", "no estoy en España", "I'm not in Spain")
-  if (/\b(n[ãa]o (estou|moro|vivo) na espanha|no estoy en espa[ñn]a|i'?m not in spain|je ne suis pas en espagne)\b/i.test(msg)) {
-    patch.location_known = 'outside'
-  }
-  // Sinais positivos de "está na Espanha", inclusive em respostas COMPOSTAS.
-  // IMPORTANTE: só consolidamos location_known='spain' a partir de pista embutida
-  // QUANDO a pergunta canônica de localização já foi feita anteriormente. Isso
-  // preserva a regra de uniformidade do pre-hands-off: askLocationSpain deve ser
-  // emitida UMA vez antes do bloco de aprofundamento, mesmo que o cliente já
-  // tenha dado a pista numa resposta composta (ex.: "Sí, ya tengo 2 años en
-  // España y quiero solicitar mi residencia").
-  if (prevHasLocationQ) {
-    if (
-      /\b(estou na espanha|j[áa] estou na espanha|estoy en espa[ñn]a|ya estoy en espa[ñn]a|i'?m in spain|je suis en espagne|moro na espanha|vivo en espa[ñn]a|vivo na espanha|aqui na espanha|aqu[ií] en espa[ñn]a)\b/i.test(msg)
-      || /\b\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*(espa[ñn]a|espanha|spain|espagne)\b/i.test(msg)
-      || /\b(tenho|tengo|i have|hace|faz)\s+\d+\s*(anos|años|years|ans)?\s*(em|en|in)\s*(espa[ñn]a|espanha|spain|espagne)\b/i.test(msg)
-    ) {
-      patch.location_known = 'spain'
-    }
-  }
+  // NOTA: NÃO consolidamos location_known fora do contexto da pergunta de
+  // localização. Mesmo declarações como "no estoy en España" só são gravadas
+  // quando a pergunta canônica acabou de ser feita (caso tratado acima).
+  // NOTA: NÃO inferimos location_known a partir de pistas embutidas em respostas
+  // de interesse/serviço. Mesmo que o cliente diga "ya tengo 2 años en España"
+  // junto com o serviço desejado, a etapa "¿Estás en España?" deve ser feita
+  // explicitamente. A localização só é gravada como resposta DIRETA (sim/não)
+  // à pergunta canônica de localização (tratada acima via prevHasLocationQ).
 
   // Interesse — mapeia para um CÓDIGO canônico do enum service_interest
   // (RESIDENCIA_PARENTE_COMUNITARIO, NACIONALIDADE_RESIDENCIA, etc.) via

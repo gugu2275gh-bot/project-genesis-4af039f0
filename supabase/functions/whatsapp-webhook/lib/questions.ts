@@ -221,7 +221,12 @@ export function isQuestionAboutLocationSpain(question: string): boolean {
   const n = normalizeForLanguageChecks(question)
   if (!n) return false
   if (!/(espanha|espana|spain|espagne)/.test(n)) return false
+  // Formas longas e curtas, com ou sem prefixo "ya"/"já"/"hoje":
+  // "¿Estás en España?", "Você está na Espanha?", "Are you in Spain?",
+  // "Êtes-vous en Espagne ?", "Hoy ya estás en España", etc.
   return /(voce esta na|voce ja esta na|hoje voce|esta na espanha|estas en espana|ya estas en|hoy ya estas|are you (already|currently)? in|are you in spain|etes vous (deja )?en espagne|deja en espagne)/.test(n)
+    || /^\s*(voce |tu |usted |you )?\s*(esta|estas|are|etes vous|etes-vous)\s+(em |en |in |na )?(espanha|espana|spain|espagne)\s*$/.test(n)
+    || /^\s*(estas|esta)\s+en\s+espa(n|ñ)a\s*$/.test(n)
 }
 
 /**
@@ -523,7 +528,7 @@ export function classifyYesNo(text: string): YesNoClassification {
     || /\b(brasil|brazil|portugal|argentina|m[ée]xico|mexico|colombia|chile|uruguai|uruguay|venezuela|paraguai|paraguay|estados unidos|eua|usa|fora|outro pa[ií]s|en otro pa[ií]s|em outro pa[ií]s|other country)\b/i.test(ans)
   if (isNegative) return 'no'
 
-  const isAffirmative = /^\s*(sim|si|s[ií]|yes|yep|yeah|claro|exato|exactamente|exactly|oui|ouais)\b/i.test(ans)
+  const isAffirmative = /^\s*(sim|si|s[ií]|yes|yep|yeah|claro|exato|exactamente|exactly|oui|ouais)(?=[^a-z]|$)/i.test(ans)
     || /\b(j[áa] estou|ya estoy|estou (na |em )?espanha|estoy en espa[ñn]a|i'?m in spain|aqui na espanha|aqu[ií] en espa[ñn]a|je suis en espagne)\b/i.test(ans)
     || /\b(estou|estoy|moro|vivo|living|live here)\b/i.test(ans)
     || /\b(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|valencia|sevilla|m[áa]laga|bilbao|alicante|zaragoza|murcia|palma|granada)\b/i.test(ans)
