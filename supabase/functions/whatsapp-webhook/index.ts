@@ -1864,8 +1864,17 @@ Regras:
             'Envie EXATAMENTE 4 frases curtas, NESTA ORDEM, separadas pelo delimitador "|||" (4 bolhas em UMA resposta): (1) "Perfeito. Já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." (3) "Vou encaminhar suas informações para um especialista analisar com mais profundidade." (4) "Estou à disposição para ajudar se precisa! Vou te encaminhar para um atendente." NÃO faça novas perguntas. NÃO insira "modo tira-dúvidas" ANTES dessas 4 mensagens.',
         })
 
+        // GUARD anti-handoff prematuro: só consideramos cadastro concluído se os dados
+        // mínimos foram realmente capturados. Sem isso, mesmo que o LLM vaze as frases
+        // âncoras de pré-handoff/handoff, NÃO marcamos as etapas como done.
+        const hasMinimumDataForHandoff =
+          !!funnelStateLive.name_confirmed &&
+          !!funnelStateLive.email_confirmed &&
+          !!funnelStateLive.interest_confirmed &&
+          funnelStateLive.location_known !== null && funnelStateLive.location_known !== undefined
+
         // Concluiu cadastro: KB liberada e funil = 'livre'.
-        if (preHandoffDone && handoffDone) {
+        if (preHandoffDone && handoffDone && hasMinimumDataForHandoff) {
           for (const s of steps) s.done = true
           if (funnelStateLive.step !== 'livre') {
             try {
@@ -1878,6 +1887,15 @@ Regras:
               console.warn('[FUNNEL] livre update failed:', e instanceof Error ? e.message : e)
             }
           }
+        } else if ((preHandoffDone || handoffDone) && !hasMinimumDataForHandoff) {
+          console.warn('[FUNNEL] handoff_anchor_without_data — ignorando âncoras, mantendo gate ativo', JSON.stringify({
+            leadId: lead.id,
+            name_confirmed: !!funnelStateLive.name_confirmed,
+            email_confirmed: !!funnelStateLive.email_confirmed,
+            interest_confirmed: !!funnelStateLive.interest_confirmed,
+            location_known: funnelStateLive.location_known,
+            preHandoffDone, handoffDone,
+          }))
         }
 
         // Próxima etapa pendente
@@ -2387,11 +2405,34 @@ Regras:
 
             let parts = aiResponseClean.split('|||').map(p => p.trim()).filter(Boolean)
 
+            // GUARD anti-handoff prematuro: se ainda não temos os dados mínimos,
+            // removemos das partes qualquer frase de pré-handoff/handoff que o LLM
+            // tenha vazado. Evita o caso em que Gemini envia "Já consigo ter uma
+            // visão inicial..." na primeira interação e o funil é dado como concluído.
+            if (!hasMinimumDataForHandoff) {
+              const handoffAnchorRe = /(vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case|cada caso de forma individual|each case individually|caminho mais seguro|camino m[áa]s seguro|encaminhar suas informa[çc][õo]es|remitir tu informaci[óo]n|forward your information|transmettre vos informations|encaminhar (você )?para um atendente|derivar a un agente|forward you to an agent|vous transf[ée]rer [àa] un agent|à disposi[çc][ãa]o para ajudar|a disposici[óo]n para ayudar)/i
+              const before = parts.length
+              parts = parts
+                .map(p => p
+                  .split(/(?<=[.!?])\s+/)
+                  .filter(s => !handoffAnchorRe.test(s))
+                  .join(' ')
+                  .trim()
+                )
+                .filter(Boolean)
+              if (parts.length !== before) {
+                console.warn('[GUARD] handoff_anchor_stripped — frases removidas por falta de dados mínimos. parts_before=', before, 'parts_after=', parts.length)
+              }
+            }
+
             // Continuidade do pré-handoff: completa H1/H2/H3 se algum estiver faltando.
-            parts = ensurePreHandoffContinuity(parts, detectedChatLanguage, {
-              preHandoffSent: !!funnelStateLive.pre_handoff_sent,
-              handoffSent: !!funnelStateLive.handoff_sent,
-            })
+            // Só roda se já temos dados mínimos — sem isso, NÃO devemos completar handoff.
+            if (hasMinimumDataForHandoff) {
+              parts = ensurePreHandoffContinuity(parts, detectedChatLanguage, {
+                preHandoffSent: !!funnelStateLive.pre_handoff_sent,
+                handoffSent: !!funnelStateLive.handoff_sent,
+              })
+            }
 
             // ===== REDE DE SEGURANÇA: parts vazio =====
             // Se todos os chunks foram descartados (dedup, suppress, fallback empty),
@@ -2525,8 +2566,8 @@ Regras:
             // nas partes enviadas neste turno. Idempotente — só faz UPDATE se mudou algo.
             try {
               const sentJoined = parts.join('\n')
-              const newPreSent = !funnelStateLive.pre_handoff_sent && preHandoffSummarySent(sentJoined)
-              const newHandSent = !funnelStateLive.handoff_sent && handoffTransferSent(sentJoined)
+              const newPreSent = hasMinimumDataForHandoff && !funnelStateLive.pre_handoff_sent && preHandoffSummarySent(sentJoined)
+              const newHandSent = hasMinimumDataForHandoff && !funnelStateLive.handoff_sent && handoffTransferSent(sentJoined)
               if (newPreSent || newHandSent) {
                 const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
                 if (newPreSent) patch.pre_handoff_sent = true
@@ -2534,6 +2575,8 @@ Regras:
                 await supabase.from('lead_funnel_state').update(patch).eq('lead_id', lead.id)
                 funnelStateLive = { ...funnelStateLive, ...patch } as typeof funnelStateLive
                 console.log('[BPMN-3] flags persisted:', JSON.stringify(patch))
+              } else if (!hasMinimumDataForHandoff && (preHandoffSummarySent(sentJoined) || handoffTransferSent(sentJoined))) {
+                console.warn('[BPMN-3] flag persist skipped — anchor sent without minimum data')
               }
             } catch (flagErr) {
               console.warn('[BPMN-3] flag persist non-blocking error:', flagErr instanceof Error ? flagErr.message : flagErr)
