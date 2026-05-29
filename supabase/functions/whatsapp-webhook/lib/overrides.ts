@@ -1326,3 +1326,166 @@ export function enforceReplayPreambleLanguage(aiResponse: string, language: stri
   if (replaced) console.log(`[REPLAY_PREAMBLE_LANG] normalizado para ${lang}: "${target}"`)
   return out
 }
+
+// ============================================================================
+// Canonicalização do PRÉ-HANDOFF (H1/H2/H3): garante texto literal em 4 idiomas
+// ============================================================================
+
+/**
+ * Detector PARÁFRASE de H1 ("visão inicial do caso"). Mais largo que o âncora literal.
+ * Cobre PT/ES/EN/FR.
+ */
+const PARA_H1_RE = new RegExp(
+  [
+    // PT: visão/ideia/noção/panorama (...) caso
+    '(vis[ãa]o|ideia|no[çc][ãa]o|panorama|entendimento)[^.?!\\n]{0,40}(do seu|sobre o seu|do)?\\s*caso',
+    // ES: visión/idea/panorama (...) caso
+    '(visi[óo]n|idea|panorama|entendimiento)[^.?!\\n]{0,40}(de tu|sobre tu|del)?\\s*caso',
+    // EN: view/idea/picture/sense (...) case
+    '(view|idea|picture|sense|understanding)[^.?!\\n]{0,40}(of your|about your|of the)?\\s*case',
+    // FR: vision/idée/aperçu (...) cas
+    '(vision|id[ée]e|aper[çc]u|compr[ée]hension)[^.?!\\n]{0,40}(de votre|sur votre|du)?\\s*cas',
+  ].join('|'),
+  'i',
+)
+
+/**
+ * Detector PARÁFRASE de H2 ("analisamos cada caso ... mais seguro / lei").
+ */
+const PARA_H2_RE = new RegExp(
+  [
+    '(analis(amos|ar|aremos)|avaliamos)[^.?!\\n]{0,60}(cada caso|caso a caso|individual)',
+    '(analiz(amos|ar|aremos)|evalu(amos|ar))[^.?!\\n]{0,60}(cada caso|caso por caso|individual)',
+    '(analyze|analyse|review|evaluate)[^.?!\\n]{0,60}(each case|case by case|individually)',
+    '(analys(ons|er)|[ée]valuons)[^.?!\\n]{0,60}(chaque cas|cas par cas|individuellement)',
+  ].join('|'),
+  'i',
+)
+
+/**
+ * Detector PARÁFRASE de H3 ("vou encaminhar/repassar/transferir a um especialista").
+ */
+const PARA_H3_RE = new RegExp(
+  [
+    '(vou |irei |posso )?(encaminhar|repassar|enviar|transferir|passar|direcionar)[^.?!\\n]{0,60}(especialista|atendente|equipe|equipo|consultor)',
+    '(voy a |ir[ée] a )?(remitir|enviar|pasar|transferir|derivar|reenviar)[^.?!\\n]{0,60}(especialista|asesor|equipo|consultor)',
+    "(i('?ll| will| can)? )?(forward|send|pass|transfer|refer|share)[^.?!\\n]{0,60}(specialist|agent|team|consultant|expert)",
+    '(je vais |je peux )?(transmettre|envoyer|transf[ée]rer|partager|orienter)[^.?!\\n]{0,60}(sp[ée]cialiste|agent|[ée]quipe|consultant|expert)',
+  ].join('|'),
+  'i',
+)
+
+/**
+ * Substitui paráfrases de H1/H2/H3 emitidas pelo LLM pelo texto canônico literal.
+ * Garante uniformidade em PT/ES/EN/FR e mantém as flags de detecção
+ * (`preHandoffSummarySent` / `handoffTransferSent`) funcionando.
+ */
+export function enforceCanonicalPreHandoff(
+  aiResponse: string,
+  language: ChatLanguage,
+  flags: { preHandoffSent?: boolean; handoffSent?: boolean } = {},
+): string {
+  if (!aiResponse || typeof aiResponse !== 'string') return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
+
+  const canonH1H2 = getPreHandoffSummaryMessage(language) // "H1|||H2"
+  const canonH3 = getHandoffTransferMessage(language)
+
+  const bubbles = aiResponse.split('|||').map((b) => b.trim()).filter(Boolean)
+  if (bubbles.length === 0) return aiResponse
+
+  let didReplaceH1H2 = false
+  let didReplaceH3 = false
+  const out: string[] = []
+
+  for (const bubble of bubbles) {
+    const isLiteralH1 = PREHANDOFF_H1_RE.test(bubble)
+    const isLiteralH2 = PREHANDOFF_H2_RE.test(bubble)
+    const isLiteralH3 = PREHANDOFF_H3_RE.test(bubble)
+
+    // H3 paraphrase (não literal) → substitui pelo canônico literal
+    if (!isLiteralH3 && PARA_H3_RE.test(bubble) && !flags.handoffSent) {
+      out.push(canonH3)
+      didReplaceH3 = true
+      continue
+    }
+
+    // H1 ou H2 paraphrase (não literal) → substitui pelo bloco canônico H1|||H2
+    const looksLikeH1 = !isLiteralH1 && PARA_H1_RE.test(bubble)
+    const looksLikeH2 = !isLiteralH2 && PARA_H2_RE.test(bubble)
+    if ((looksLikeH1 || looksLikeH2) && !flags.preHandoffSent && !didReplaceH1H2) {
+      // canonH1H2 já contém "|||" entre H1 e H2; preservamos isso adicionando os dois pedaços
+      const [h1, h2] = canonH1H2.split('|||').map((s) => s.trim())
+      if (h1) out.push(h1)
+      if (h2) out.push(h2)
+      didReplaceH1H2 = true
+      continue
+    }
+    if ((looksLikeH1 || looksLikeH2) && flags.preHandoffSent) {
+      // já foi enviado antes — descarta paráfrase
+      continue
+    }
+
+    out.push(bubble)
+  }
+
+  if (!didReplaceH1H2 && !didReplaceH3 && out.length === bubbles.length) {
+    return aiResponse
+  }
+
+  const result = out.filter(Boolean).join('|||')
+  if (didReplaceH1H2 || didReplaceH3) {
+    console.log(`[CANONICAL_PREHANDOFF] normalizado: H1H2=${didReplaceH1H2} H3=${didReplaceH3} lang=${language}`)
+  }
+  return result
+}
+
+/**
+ * Garante a continuidade do pré-handoff:
+ * - Se H1/H2 já enviados antes e o turno atual não tem H3 → anexa H3 canônico.
+ * - Se o turno atual contém H1 mas não H2 (ou vice-versa) → reescreve com o payload completo.
+ * - Se o turno contém H3 sem que H1/H2 tenham sido enviados antes → prepend H1|||H2.
+ */
+export function ensurePreHandoffContinuity(
+  parts: string[],
+  language: ChatLanguage,
+  flags: { preHandoffSent?: boolean; handoffSent?: boolean } = {},
+): string[] {
+  if (!Array.isArray(parts) || parts.length === 0) return parts
+  const joined = parts.join(' ')
+  const hasH1 = PREHANDOFF_H1_RE.test(joined)
+  const hasH2 = PREHANDOFF_H2_RE.test(joined)
+  const hasH3 = PREHANDOFF_H3_RE.test(joined)
+
+  let next = [...parts]
+  let changed = false
+
+  // 1) H1 sem H2 (ou H2 sem H1) no mesmo turno → reescreve com payload completo
+  if (!flags.preHandoffSent && ((hasH1 && !hasH2) || (hasH2 && !hasH1))) {
+    const canonH1H2 = getPreHandoffSummaryMessage(language)
+    const [h1, h2] = canonH1H2.split('|||').map((s) => s.trim())
+    // remove qualquer parte que seja H1/H2 e injeta o par canônico no início
+    next = next.filter((p) => !PREHANDOFF_H1_RE.test(p) && !PREHANDOFF_H2_RE.test(p))
+    next = [h1, h2, ...next].filter(Boolean)
+    changed = true
+    console.log('[CONTINUITY] H1/H2 quebrado — reescrito com payload canônico')
+  }
+
+  // 2) H3 sem H1/H2 prévio → prepend H1|||H2
+  if (!flags.preHandoffSent && hasH3 && !PREHANDOFF_H1_RE.test(next.join(' '))) {
+    const canonH1H2 = getPreHandoffSummaryMessage(language)
+    const [h1, h2] = canonH1H2.split('|||').map((s) => s.trim())
+    next = [h1, h2, ...next].filter(Boolean)
+    changed = true
+    console.log('[CONTINUITY] H3 sem H1/H2 — prepend canônico')
+  }
+
+  // 3) Pré-handoff já enviado, mas H3 ainda não → anexa H3 canônico
+  if (flags.preHandoffSent && !flags.handoffSent && !PREHANDOFF_H3_RE.test(next.join(' '))) {
+    next = [...next, getHandoffTransferMessage(language)]
+    changed = true
+    console.log('[CONTINUITY] anexando H3 canônico para fechar pré-handoff')
+  }
+
+  return changed ? next : parts
+}
