@@ -25,6 +25,7 @@ import PaymentSettings from './PaymentSettings';
 import WhatsAppTemplatesSettings from './WhatsAppTemplatesSettings';
 import SuppliersManagement from './SuppliersManagement';
 import ExpenseCategoriesManagement from './ExpenseCategoriesManagement';
+import LLMSettings from './LLMSettings';
 
 const TABLE_TABS = ['profiles', 'sectors', 'service-types', 'payment-settings', 'suppliers', 'expense-categories'] as const;
 
