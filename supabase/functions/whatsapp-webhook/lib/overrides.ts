@@ -44,6 +44,7 @@ import {
 } from './questions.ts'
 import { isLikelyFullNameAnswer, isNameRefusal, isEmailRefusal } from './name-extraction.ts'
 import { isValidSpanishCity, extractCityFromAnswer, normalizeCity } from './spanish-cities.ts'
+import { extractInterestFromMessage } from './extract.ts'
 
 // Sentinel invisível usado para "travar" a resposta após uma validação determinística
 // (ex.: reprompt de cidade espanhola). Outras camadas (lock, anti-loop, F4, dedup)
@@ -91,21 +92,32 @@ export function computeDeterministicFunnelPatch(
   if (/\b(n[ãa]o (estou|moro|vivo) na espanha|no estoy en espa[ñn]a|i'?m not in spain|je ne suis pas en espagne)\b/i.test(msg)) {
     patch.location_known = 'outside'
   }
-  // Sinais positivos de "está na Espanha", inclusive em respostas COMPOSTAS
-  // (ex.: "Sí, ya tengo 2 años en España y quiero solicitar mi residencia").
-  if (
-    /\b(estou na espanha|j[áa] estou na espanha|estoy en espa[ñn]a|ya estoy en espa[ñn]a|i'?m in spain|je suis en espagne|moro na espanha|vivo en espa[ñn]a|vivo na espanha|aqui na espanha|aqu[ií] en espa[ñn]a)\b/i.test(msg)
-    || /\b\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*(espa[ñn]a|espanha|spain|espagne)\b/i.test(msg)
-    || /\b(tenho|tengo|i have|hace|faz)\s+\d+\s*(anos|años|years|ans)?\s*(em|en|in)\s*(espa[ñn]a|espanha|spain|espagne)\b/i.test(msg)
-  ) {
-    patch.location_known = 'spain'
+  // Sinais positivos de "está na Espanha", inclusive em respostas COMPOSTAS.
+  // IMPORTANTE: só consolidamos location_known='spain' a partir de pista embutida
+  // QUANDO a pergunta canônica de localização já foi feita anteriormente. Isso
+  // preserva a regra de uniformidade do pre-hands-off: askLocationSpain deve ser
+  // emitida UMA vez antes do bloco de aprofundamento, mesmo que o cliente já
+  // tenha dado a pista numa resposta composta (ex.: "Sí, ya tengo 2 años en
+  // España y quiero solicitar mi residencia").
+  if (prevHasLocationQ) {
+    if (
+      /\b(estou na espanha|j[áa] estou na espanha|estoy en espa[ñn]a|ya estoy en espa[ñn]a|i'?m in spain|je suis en espagne|moro na espanha|vivo en espa[ñn]a|vivo na espanha|aqui na espanha|aqu[ií] en espa[ñn]a)\b/i.test(msg)
+      || /\b\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*(espa[ñn]a|espanha|spain|espagne)\b/i.test(msg)
+      || /\b(tenho|tengo|i have|hace|faz)\s+\d+\s*(anos|años|years|ans)?\s*(em|en|in)\s*(espa[ñn]a|espanha|spain|espagne)\b/i.test(msg)
+    ) {
+      patch.location_known = 'spain'
+    }
   }
 
-  // Interesse — capta resposta válida MESMO se ainda não havia sido perguntado
-  if (isPotentialInterestAnswer(msg)) {
-    patch.interest_confirmed = msg
-  }
-  if (isQuestionAboutInterest(prevQ) && msg.length >= 3) {
+  // Interesse — mapeia para um CÓDIGO canônico do enum service_interest
+  // (RESIDENCIA_PARENTE_COMUNITARIO, NACIONALIDADE_RESIDENCIA, etc.) via
+  // extractInterestFromMessage. Salvar a frase crua causa SEM_SERVICO downstream.
+  const extractedInterest = extractInterestFromMessage(msg)
+  if (extractedInterest) {
+    patch.interest_confirmed = extractedInterest
+  } else if (isQuestionAboutInterest(prevQ) && msg.length >= 3) {
+    // Fallback: cliente respondeu à pergunta de interesse com texto que não casou
+    // com nenhum keyword conhecido → preserva o cru para o normalizer cair em OUTRO.
     patch.interest_confirmed = msg
   }
 

@@ -1,77 +1,102 @@
-# Diagnóstico — atendimento do Pedro (lead `c7c5d054`)
 
-## Linha do tempo real (do banco)
+## Sequência canônica pré-hands-off (estado atual no código)
 
-| Hora | De | Mensagem |
-|------|----|----------|
-| 12:55:06 | Pedro | "Hola, buenos dias" |
-| 12:55:13 | Bot | Abertura |
-| 12:55:21 | Pedro | "Sí, de acuerdo" |
-| 12:55:27 | Bot | Pergunta nome |
-| 12:55:39 | Pedro | "Pedro Henrique" |
-| 12:55:45 | Bot | Pergunta e-mail |
-| 12:55:55 | Pedro | "ph.oliveira@outlook.es" |
-| 12:56:05 | Bot | Pergunta serviço |
-| 12:56:13 | Pedro | **"Sí, ya tengo 2 años en España y quiero solicitar mi residencia"** |
-| 12:56:19 | Bot | **"¿Estás en España?"** ❌ (já era óbvio que sim) |
-| 12:56:26 | Pedro | "Sí" |
-| 12:56:32 | Bot | **"¿Estás en España?"** ❌ (repetição) |
+Definida em `lib/questions.ts` (`getNextScriptedQuestion` + `getInsideSpainNextQuestion` + `getOutsideSpainNextQuestion`). Todas as strings vêm de `getPromptTemplates(language)` — **mesmo texto em PT/ES/EN/FR**, sem reescrita pelo LLM.
 
-Estado atual em `lead_funnel_state`: `location_known = null`, `step = localizacao`, `updated_at = 12:56:19` (não houve update após o "Sí").
+```
+Step              Mensagem canônica                                Origem
+─────────────────────────────────────────────────────────────────────────
+1. abertura       openingLine1 ||| openingLine2                    templates
+2. nome           askName                                           templates
+3. email          thanksThenAskEmail                                templates
+4. interesse      interestQuestion ||| servicesOfferedMessage       templates  ← Msg5+Msg6
+5. localização    askLocationSpain  ("¿Estás en España?" etc.)     templates
+6. aprofundamento  ┌ NA Espanha:                                   getInsideSpainNextQuestion
+                   │   B1 intro + B2 data entrada (DD/MM/AAAA)
+                   │   B3 empadronado?
+                   │   B4 desde quando (se empadronado=true)
+                   │   B5 cidade        (se empadronado=true)
+                   └ FORA da Espanha:                              getOutsideSpainNextQuestion
+                       A2 idade → A3 Europa 6m → A4 familiar UE
+                       → A5 remoto → A6 formação superior
+7. preHandoff     H1 resumo ||| H2 confirmação ||| H3 transfer     buildPreHandoffPayload
+```
 
-## Causa raiz (duas falhas independentes)
+Regra do projeto (mem://): perguntas pré-hands-off são **padronizadas**, idioma travado no primeiro turno, **uma única vez cada**.
 
-### Bug #1 — Regex quebrada em `computeDeterministicFunnelPatch`
+## O que quebrou no atendimento do Pedro/Gustavo (lead `70a9963f`)
 
-`overrides.ts` linhas 94-95:
+Mensagem do cliente: **"Sí, ya tengo 2 años en España y quiero solicitar mi residencia"** após o catálogo.
+
+| # | Bug | Local | Efeito |
+|---|---|---|---|
+| A | `computeDeterministicFunnelPatch` grava `interest_confirmed = msg` cru (frase inteira) quando casa `isPotentialInterestAnswer` | `overrides.ts:104-110` | Normalizer downstream não acha código → salva `SEM_SERVICO` |
+| B | `LOCATION_IN_SPAIN_HINT_RE` seta `location_known='spain'` direto a partir da pista embutida | `overrides.ts:96-102` | Step 5 (`askLocationSpain`) é **pulado**, viola "uma pergunta padronizada por etapa" |
+
+## Correções
+
+### 1) `lib/overrides.ts` — extrair token canônico de serviço
+
+Adicionar helper `extractServiceKeyword(msg, language)` com regex multilíngue:
+
+```
+residencia|residência|residency|résidence       → 'RESIDENCIA'
+nacionalidad|nacionalidade|nationality|nationalité → 'NACIONALIDADE'
+arraigo                                          → 'ARRAIGO'
+reagrupaci[óo]n|reagrupação|family reunification|regroupement → 'REAGRUPACAO_FAMILIAR'
+homologaci[óo]n|homologação|homologation         → 'HOMOLOGACAO'
+autorizaci[óo]n de regreso|autoriza[çc][ãa]o de regresso|return permit → 'AUTORIZACAO_REGRESSO'
+estudios|estudos|studies|études|curso|course     → 'ESTUDOS'
+```
+
+Antes de finalizar o mapping, abrir `src/types/database.ts` (enum `SERVICE_INTEREST_LABELS`) e o normalizer downstream para confirmar os códigos exatos aceitos.
+
+No patch:
+- Se `extractServiceKeyword(msg)` → set `patch.interest_confirmed = <CODIGO>`.
+- Só usar `msg` cru como fallback quando `isQuestionAboutInterest(prevQ)` e nenhum keyword bater (→ vai para `OUTRO`).
+
+### 2) `lib/overrides.ts` — não pular a pergunta canônica de localização
+
+`LOCATION_IN_SPAIN_HINT_RE` em respostas compostas só deve setar `location_known` **depois** que a pergunta canônica `askLocationSpain` foi enviada no transcript. Lógica:
 
 ```ts
-|| /\b\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*espa[ñn]ha?\b/i
-|| /\b(tenho|tengo|i have)\s+\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*espa[ñn]ha?\b/i
+const locationQuestionAsked = /\b(est[áa]s en espa[ñn]a|voc[eê] est[áa] na espanha|are you in spain|[êe]tes-vous (d[ée]j[àa] )?en espagne)\b/i
+  .test(String(previousAssistantMessage || ''))   // ou checar transcript inteiro
+
+if (LOCATION_IN_SPAIN_HINT_RE.test(msg) && locationQuestionAsked) {
+  patch.location_known = 'spain'
+}
 ```
 
-O trecho `espa[ñn]ha?` exige **`h` literal** seguido de `a` opcional. "España"/"Espana" não tem `h`, então **nunca casa**. Confirmado por teste:
+Assinatura passa a aceitar opcionalmente `assistantTranscript` (já disponível no callsite) para checar transcripts além do último turno. Resultado: mesmo com a pista embutida, o dispatcher continua emitindo `askLocationSpain` no próximo turno — uma única vez. Quando o cliente responder sim/não à pergunta canônica, o ramo YES/NO já existente consolida `location_known`.
 
-```
-/tengo\s+\d+\s*años\s*en\s*espa[ñn]ha?/i.test('tengo 2 años en España') → false
-```
+### 3) Testes Deno (`compound_message_test.ts`)
 
-Resultado: a frase composta do Pedro **não** seta `location_known='spain'` — patch só captura `interest_confirmed`. Bot cai no hard-lock de localização e pergunta "¿Estás en España?".
+- ES: compound msg sem pergunta de localização prévia → `interest_confirmed='RESIDENCIA'`, `location_known` undefined.
+- ES: mesma msg **após** `askLocationSpain` no transcript → `interest_confirmed='RESIDENCIA'`, `location_known='spain'`.
+- PT/EN/FR: variantes equivalentes.
+- Catálogo follow-up + "residencia" isolado → `RESIDENCIA`.
+- `isPotentialInterestAnswer('Sí, ya tengo 2 años en España y quiero solicitar mi residencia')` continua true (regressão).
 
-### Bug #2 — Resposta "Sí" pura não está persistindo `location_known`
+### 4) Migration — limpar leads atuais
 
-No turno seguinte, `prevQ = "¿Estás en España?"`, `msg = "Sí"`. A lógica YES deveria setar `location_known='spain'`, mas o estado **não foi atualizado** (timestamp do `lead_funnel_state` ficou em 12:56:19). Suspeitas a investigar/corrigir:
+Para `70a9963f-4c4b-4821-9282-59655275e2ca` e `486eb20c-8ae8-4899-962b-dc01dce7386d`:
+- `interest_confirmed = 'RESIDENCIA'`
+- Manter `entry_date_confirmed`, `location_known='spain'`, `step='levantamento'`.
+- `pending_questions = '[]'`.
 
-- `lastAssistantMessage` no segundo turno não está vindo igual ao texto canônico injetado pelo hard-lock (o hard-lock substitui a saída da IA, mas o que entra no histórico do próximo turno pode ser outra coisa) — `isQuestionAboutLocationSpain(prevQ)` retorna false e o ramo YES/NO não dispara.
-- Ou o caminho do det_patch foi pulado por algum early-return.
+### 5) Deploy
 
-## Plano de correção
+`whatsapp-webhook` redeployado.
 
-### 1. Corrigir o regex de "X anos en España" (Bug #1)
-Em `supabase/functions/whatsapp-webhook/lib/overrides.ts`, trocar `espa[ñn]ha?` por `espa[ñn]h?a?` (ou simplesmente `espa[ñn]a`) nas linhas 93-95, cobrindo "España", "Espana" e variantes. Aplicar o mesmo fix em qualquer outra ocorrência do mesmo padrão no arquivo.
+## Arquivos
 
-### 2. Garantir que "Sí" puro seta `location_known` (Bug #2)
-- Em `index.ts`, garantir que `lastAssistantMessage` usado pelo `computeDeterministicFunnelPatch` reflita a **última saída realmente enviada ao cliente** (incluindo a versão canônica injetada pelo hard-lock), e não o texto bruto da IA. Reconstruir `history` a partir de `interactions` (direction=OUTBOUND, origin_bot=true) ao invés do contexto in-memory quando houver divergência.
-- Adicionar fallback no det_patch: se `msg` ∈ {sim, sí, si, yes, ok, claro} **e** existir QUALQUER mensagem assistente recente (últimas 2) detectada por `isQuestionAboutLocationSpain`, setar `location_known='spain'`.
+- `supabase/functions/whatsapp-webhook/lib/overrides.ts` (edit)
+- `supabase/functions/whatsapp-webhook/compound_message_test.ts` (novo)
+- 1 migration de limpeza para os 2 leads
 
-### 3. Hard-lock só pode disparar se `location_known` ainda é null
-Já existe `blockLocationReaskIfKnown`, mas o hard-lock de `step=localizacao` (linha do log "[GATE-HARD-LOCK]") roda **antes** dele e força a pergunta canônica mesmo quando o det_patch acabou de marcar spain. Reordenar: rodar `applyTurnUpdates` do det_patch **antes** de avaliar `step` para o hard-lock; recomputar `funnelStateLive.step` após o patch.
+## Validação após implementação
 
-### 4. Limpeza do estado do Pedro
-- `lead_funnel_state` (lead `c7c5d054`): setar `location_known='spain'`, `interest_confirmed='RESIDENCIA_PARENTE_COMUNITARIO'`, `step='levantamento'`, `pending_questions=[]`.
-- Próxima mensagem do bot deve ser a pergunta de data de entrada **em espanhol** (idioma já travado em `contacts.preferred_language='es'`).
-
-### 5. Teste Deno cobrindo o cenário do Pedro
-Adicionar teste em `whatsapp-webhook/*_test.ts`:
-- Input composto: "Sí, ya tengo 2 años en España y quiero solicitar mi residencia" + prevQ pergunta de interesse → assert `patch.location_known === 'spain'` **e** `patch.interest_confirmed` setado.
-- Input "Sí" + prevQ "¿Estás en España?" → assert `patch.location_known === 'spain'`.
-- Variantes sem ñ: "Espana", "espana", "2 anos en Espana".
-
-### 6. Deploy
-Redeploy `whatsapp-webhook` após as correções.
-
-## Detalhes técnicos
-
-- Arquivos a editar: `supabase/functions/whatsapp-webhook/lib/overrides.ts`, `supabase/functions/whatsapp-webhook/index.ts`, novo arquivo de teste.
-- Migration somente para limpar o estado do lead do Pedro (UPDATE em `lead_funnel_state`).
-- Sem mudanças no frontend.
+1. `supabase--test_edge_functions` rodando os novos testes.
+2. Inspecionar `lead_funnel_state` dos 2 leads — `interest_confirmed='RESIDENCIA'`.
+3. Simular nova conversa via `curl_edge_functions` enviando a compound msg e verificar que o próximo turno do bot é a pergunta canônica `askLocationSpain` no idioma travado (ES).
