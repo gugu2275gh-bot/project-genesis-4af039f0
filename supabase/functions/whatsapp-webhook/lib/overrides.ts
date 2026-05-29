@@ -77,8 +77,12 @@ export function computeDeterministicFunnelPatch(
   const YES = /^\s*(sim|si|s[ií]|yes|yeah|yep|claro|estou|to[uy]|aham|aha|positivo|afirmativo|oui|of course|sure|ok|okay)\b/i
   const NO = /^\s*(n[ãa]o|no|nope|nay|negativo|nunca|jamais|non)\b/i
 
-  // Localização
-  if (isQuestionAboutLocationSpain(prevQ)) {
+  // Localização — detecta pela última pergunta OU por qualquer pergunta de localização
+  // presente em qualquer trecho recente da última mensagem do bot (cobre casos em que o
+  // texto canônico injetado pelo hard-lock difere do que entrou no histórico).
+  const prevHasLocationQ = isQuestionAboutLocationSpain(prevQ)
+    || /\b(est[áa]s? en espa[ñn]a|voc[eê] est[áa] na espanha|are you in spain|[êe]tes vous (d[ée]j[àa] )?en espagne)\b/i.test(String(previousAssistantMessage || ''))
+  if (prevHasLocationQ) {
     if (YES.test(msg)) patch.location_known = 'spain'
     else if (NO.test(msg)) patch.location_known = 'outside'
   }
