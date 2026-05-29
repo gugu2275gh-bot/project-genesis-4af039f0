@@ -282,7 +282,7 @@ export default function KnowledgeBaseManager() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleReprocessAll}
+                    onClick={() => handleReprocessAll(false)}
                     disabled={reprocessing}
                   >
                     {reprocessing ? (
@@ -291,6 +291,20 @@ export default function KnowledgeBaseManager() {
                       <RefreshCw className="h-4 w-4 mr-2" />
                     )}
                     {reprocessing ? `Reprocessando ${processing || '...'}` : 'Reprocessar todos os PDFs'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleReprocessAll(true)}
+                    disabled={reprocessing}
+                    title="Força OCR via OpenAI Vision em todos os PDFs (captura texto dentro de imagens)"
+                  >
+                    {reprocessing ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <ScanText className="h-4 w-4 mr-2" />
+                    )}
+                    Reprocessar todos com OCR
                   </Button>
                   <Button
                     variant="secondary"
