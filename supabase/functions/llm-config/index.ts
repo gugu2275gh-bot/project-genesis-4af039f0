@@ -108,6 +108,107 @@ async function testOpenAI(model: string): Promise<{ ok: boolean; latency_ms: num
   }
 }
 
+// Cache em memória para listagens de modelos (5 min)
+type ModelInfo = { id: string; displayName: string; description?: string }
+const _modelsCache: Record<string, { value: ModelInfo[]; expires: number }> = {}
+const MODELS_TTL = 5 * 60 * 1000
+
+const GEMINI_FALLBACK: ModelInfo[] = [
+  { id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' },
+  { id: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro' },
+  { id: 'gemini-2.5-flash-lite', displayName: 'Gemini 2.5 Flash Lite' },
+  { id: 'gemini-2.0-flash', displayName: 'Gemini 2.0 Flash' },
+]
+const OPENAI_FALLBACK: ModelInfo[] = [
+  { id: 'gpt-4o-mini', displayName: 'gpt-4o-mini' },
+  { id: 'gpt-4o', displayName: 'gpt-4o' },
+]
+
+async function listGeminiModels(force = false): Promise<{ models: ModelInfo[]; cached: boolean; error?: string }> {
+  const cacheKey = 'gemini'
+  const now = Date.now()
+  if (!force && _modelsCache[cacheKey] && _modelsCache[cacheKey].expires > now) {
+    return { models: _modelsCache[cacheKey].value, cached: true }
+  }
+  const key = Deno.env.get('CBAsesoria_Key')
+  if (!key) return { models: GEMINI_FALLBACK, cached: false, error: 'CBAsesoria_Key não configurada' }
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 15000)
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=200`,
+      { signal: ctrl.signal },
+    )
+    clearTimeout(t)
+    if (!resp.ok) {
+      const txt = await resp.text()
+      return { models: GEMINI_FALLBACK, cached: false, error: `HTTP ${resp.status}: ${txt.slice(0, 200)}` }
+    }
+    const data = await resp.json()
+    const list: ModelInfo[] = (data?.models || [])
+      .filter((m: any) => Array.isArray(m?.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+      .map((m: any) => {
+        const id = String(m.name || '').replace(/^models\//, '')
+        return { id, displayName: m.displayName || id, description: m.description }
+      })
+      .filter((m: ModelInfo) => {
+        const id = m.id.toLowerCase()
+        // remove embeddings, tts, image-only e aqa
+        if (id.includes('embedding')) return false
+        if (id.includes('aqa')) return false
+        if (id.includes('-tts')) return false
+        if (id.includes('image-generation')) return false
+        if (id.includes('imagen')) return false
+        return true
+      })
+      .sort((a: ModelInfo, b: ModelInfo) => a.id.localeCompare(b.id))
+    _modelsCache[cacheKey] = { value: list, expires: now + MODELS_TTL }
+    return { models: list, cached: false }
+  } catch (e: any) {
+    return { models: GEMINI_FALLBACK, cached: false, error: e?.message || String(e) }
+  }
+}
+
+async function listOpenAIModels(force = false): Promise<{ models: ModelInfo[]; cached: boolean; error?: string }> {
+  const cacheKey = 'openai'
+  const now = Date.now()
+  if (!force && _modelsCache[cacheKey] && _modelsCache[cacheKey].expires > now) {
+    return { models: _modelsCache[cacheKey].value, cached: true }
+  }
+  const key = Deno.env.get('OPENAI_API_KEY')
+  if (!key) return { models: OPENAI_FALLBACK, cached: false, error: 'OPENAI_API_KEY não configurada' }
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 15000)
+    const resp = await fetch('https://api.openai.com/v1/models', {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    if (!resp.ok) {
+      const txt = await resp.text()
+      return { models: OPENAI_FALLBACK, cached: false, error: `HTTP ${resp.status}: ${txt.slice(0, 200)}` }
+    }
+    const data = await resp.json()
+    const EXCLUDE = ['embedding', 'tts', 'whisper', 'dall-e', 'image', 'audio', 'realtime', 'transcribe', 'moderation', 'davinci', 'babbage']
+    const INCLUDE_PREFIXES = ['gpt-', 'o1', 'o3', 'o4', 'chatgpt-']
+    const list: ModelInfo[] = (data?.data || [])
+      .map((m: any) => ({ id: String(m.id), displayName: String(m.id) }))
+      .filter((m: ModelInfo) => {
+        const id = m.id.toLowerCase()
+        if (EXCLUDE.some(x => id.includes(x))) return false
+        return INCLUDE_PREFIXES.some(p => id.startsWith(p))
+      })
+      .sort((a: ModelInfo, b: ModelInfo) => a.id.localeCompare(b.id))
+    _modelsCache[cacheKey] = { value: list, expires: now + MODELS_TTL }
+    return { models: list, cached: false }
+  } catch (e: any) {
+    return { models: OPENAI_FALLBACK, cached: false, error: e?.message || String(e) }
+  }
+}
+
+
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
