@@ -2264,6 +2264,13 @@ Regras:
               console.warn('[DEDUP] non-blocking error:', dedupErr instanceof Error ? dedupErr.message : dedupErr)
             }
 
+            // Dedup de opener entre bolhas (evita "Perfecto.|||Perfecto. ...")
+            try {
+              aiResponseClean = dedupOpenerAcrossBubbles(aiResponseClean)
+            } catch (opErr) {
+              console.warn('[OPENER_DEDUP] non-blocking error:', opErr instanceof Error ? opErr.message : opErr)
+            }
+
             // BPMN-3 MODO PÓS-HANDOFF: se H1-H4 já foram enviados, anexa o sufixo
             // localizado de "aguarde um especialista" ao final da resposta (uma única bolha).
             const wasHandoffSentBefore = !!funnelStateLive.handoff_sent
