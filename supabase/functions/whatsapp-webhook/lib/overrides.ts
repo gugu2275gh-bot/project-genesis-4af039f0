@@ -1536,14 +1536,6 @@ export function blockLocationReaskIfKnown(
   // Próxima pergunta canônica do bloco
   const transcript = flags.assistantTranscript || ''
   let nextQ = ''
-  // Lazy require para evitar import circular no topo
-  // (já estão no escopo do módulo via import inicial)
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const q = require('./questions.ts') // ignored at runtime — Deno usa import estático; substituímos abaixo
-  void q
-  // Fallback: usar funções já importadas no topo do arquivo (getInsideSpainNextQuestion etc.)
-  // Reimplementamos uma seleção mínima usando getOutsideSpainNextQuestion (já importado em questions.ts via re-export indireto).
-  // Para manter simples e sem ciclos, geramos texto literal aqui.
   if (flags.locationKnown === 'spain') {
     if (!flags.entryDateConfirmed) {
       nextQ = language === 'es' ? 'Perfecto. Ahora necesito entender cómo está tu situación aquí.\n\n¿Cuál fue la fecha exacta de tu entrada en España? Por favor, envíala en el formato DD/MM/AAAA (ejemplo: 22/05/2025).'
