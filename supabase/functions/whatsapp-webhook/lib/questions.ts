@@ -528,7 +528,7 @@ export function classifyYesNo(text: string): YesNoClassification {
     || /\b(brasil|brazil|portugal|argentina|m[ée]xico|mexico|colombia|chile|uruguai|uruguay|venezuela|paraguai|paraguay|estados unidos|eua|usa|fora|outro pa[ií]s|en otro pa[ií]s|em outro pa[ií]s|other country)\b/i.test(ans)
   if (isNegative) return 'no'
 
-  const isAffirmative = /^\s*(sim|si|s[ií]|yes|yep|yeah|claro|exato|exactamente|exactly|oui|ouais)\b/i.test(ans)
+  const isAffirmative = /^\s*(sim|si|s[ií]|yes|yep|yeah|claro|exato|exactamente|exactly|oui|ouais)(?=[^a-z]|$)/i.test(ans)
     || /\b(j[áa] estou|ya estoy|estou (na |em )?espanha|estoy en espa[ñn]a|i'?m in spain|aqui na espanha|aqu[ií] en espa[ñn]a|je suis en espagne)\b/i.test(ans)
     || /\b(estou|estoy|moro|vivo|living|live here)\b/i.test(ans)
     || /\b(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|valencia|sevilla|m[áa]laga|bilbao|alicante|zaragoza|murcia|palma|granada)\b/i.test(ans)
