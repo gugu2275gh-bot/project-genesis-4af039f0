@@ -314,7 +314,37 @@ export function stripAlreadySentCanonicalBlocks(
 
   const transcript = assistantTranscript || ''
   const servicesAlreadySent = isServicesOfferedMessage(transcript)
-  const recentNorm = (recentAssistantMessages || []).slice(-3).map(norm)
+
+  // Chunk também as mensagens anteriores: divide por |||, \n\n e por sentenças
+  // que terminam em ? (ou ¿…?). Pega frases curtas (perguntas isoladas) que
+  // antes ficavam diluídas dentro de um parágrafo gigante.
+  const splitToChunks = (s: string): string[] => {
+    if (!s) return []
+    const parts = s.split('|||').flatMap((seg) => seg.split(/\n\s*\n/))
+    const out: string[] = []
+    for (const part of parts) {
+      const t = part.trim()
+      if (!t) continue
+      out.push(t)
+      // também adiciona cada sentença que termina em ? como chunk próprio
+      const sentences = t.split(/(?<=[.?!])\s+/).map((x) => x.trim()).filter(Boolean)
+      for (const sent of sentences) {
+        if (/\?\s*$/.test(sent) && sent !== t) out.push(sent)
+      }
+    }
+    return out
+  }
+
+  const prevChunks: string[] = []
+  const prevChunksNorm: string[] = []
+  for (const m of (recentAssistantMessages || []).slice(-3)) {
+    for (const c of splitToChunks(m)) {
+      prevChunks.push(c)
+      prevChunksNorm.push(norm(c))
+    }
+  }
+  // Extrai perguntas (que terminam em ?) das mensagens anteriores recentes
+  const prevQuestions: string[] = prevChunks.filter((c) => /\?\s*$/.test(c))
 
   // Quebra por linhas em branco E pelo delimitador "|||" preservando ordem.
   const chunks = aiResponse
@@ -341,19 +371,37 @@ export function stripAlreadySentCanonicalBlocks(
       console.log('[DEDUP] dropping interest question (already confirmed)')
       continue
     }
+    // Echo: igualdade normalizada (cobre frases curtas) OU jaccard alto
     let isEcho = false
-    for (const prev of recentNorm) {
-      if (!prev) continue
-      if (jaccard(pNorm, prev) >= 0.8) { isEcho = true; break }
+    for (const prevN of prevChunksNorm) {
+      if (!prevN) continue
+      if (pNorm === prevN) { isEcho = true; break }
+      if (pNorm.length > 12 && prevN.length > 12 && (pNorm.includes(prevN) || prevN.includes(pNorm))) { isEcho = true; break }
+      if (jaccard(pNorm, prevN) >= 0.8) { isEcho = true; break }
     }
     if (isEcho) {
       console.log('[DEDUP] dropping near-literal echo paragraph')
       continue
     }
+    // Pergunta já feita: se o chunk inteiro ou alguma sentença dele é
+    // equivalente a uma pergunta já feita nas últimas 3 mensagens, descarta o chunk.
+    const sentencesOfP = p.split(/(?<=[.?!])\s+/).map((s) => s.trim()).filter(Boolean)
+    const hasReaskedQuestion = sentencesOfP.some((s) => {
+      if (!/\?\s*$/.test(s)) return false
+      return prevQuestions.some((q) => areQuestionsEquivalent(s, q) || norm(s) === norm(q))
+    })
+    if (hasReaskedQuestion) {
+      console.log('[DEDUP] dropping chunk re-asking a question already asked recently')
+      continue
+    }
     kept.push(p)
   }
 
-  if (kept.length === 0) return aiResponse
+
+  if (kept.length === 0) {
+    console.warn('[DEDUP] all chunks were duplicates of previous turns — suppressing message entirely')
+    return ''
+  }
 
   let result = kept.join('\n\n')
 
@@ -1204,4 +1252,34 @@ export function stripRepeatedPreHandoff(
 
   console.warn('[ANTI_REPEAT_PREHANDOFF] removidas frases de fechamento; mantido conteúdo útil')
   return lock(cleanedBubbles.join('|||'))
+}
+
+/**
+ * Quando a resposta é dividida em múltiplas bolhas via "|||" e duas ou mais
+ * delas começam com o MESMO opener curto ("Perfecto.", "Certo.", "Ok.", …),
+ * remove o opener das bolhas a partir da segunda. Evita o cliente receber
+ * duas bolhas seguidas iniciando com a mesma palavra (caso Pedro/Gustavo).
+ */
+export function dedupOpenerAcrossBubbles(aiResponse: string): string {
+  if (!aiResponse || !aiResponse.includes('|||')) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
+  const OPENERS = /^(perfecto|perfeito|perfect|certo|ok|okay|claro|vale|entendido|entendi|d['’]?accord|d['’]?acuerdo|sure|right|parfait|bien|got it)\b[\s.,!;:-]*/i
+  const parts = aiResponse.split('|||').map((p) => p.trim())
+  if (parts.length < 2) return aiResponse
+  const firstMatch = parts[0].match(OPENERS)
+  if (!firstMatch) return aiResponse
+  const firstWord = firstMatch[1].toLowerCase()
+  let changed = false
+  for (let i = 1; i < parts.length; i++) {
+    const m = parts[i].match(OPENERS)
+    if (!m) continue
+    if (m[1].toLowerCase() !== firstWord) continue
+    const stripped = parts[i].replace(OPENERS, '').trim()
+    if (stripped.length > 0) {
+      parts[i] = stripped
+      changed = true
+      console.log(`[OPENER_DEDUP] stripped duplicate opener "${m[1]}" from bubble #${i + 1}`)
+    }
+  }
+  return changed ? parts.join('|||') : aiResponse
 }

@@ -47,3 +47,40 @@ Deno.test('lockConfirmedFieldsInResponse: removes mid-response interest question
   })
   assert(!/o que você busca hoje/i.test(out), `interest question should be stripped, got: ${out}`)
 })
+
+import { dedupOpenerAcrossBubbles } from './lib/overrides.ts'
+
+Deno.test('Pedro case: drops re-asked entry-date question in ES even when prev msg was long', () => {
+  const prev = '¿Cuál fue la fecha exacta de tu entrada en España?\n\nComo prometí, sobre tu duda anterior: Entendido. Por favor, proporciona la fecha completa de tu entrada en España, incluyendo día, mes y año, para poder continuar.\n\nEn breve uno de nuestros especialistas podrá ayudarte con eso. Por favor, aguarda.'
+  const aiResponse = '¿Cuál fue la fecha exacta de tu entrada en España?'
+  const out = stripAlreadySentCanonicalBlocks(
+    aiResponse,
+    prev,
+    'es' as const,
+    { nameKnown: true, emailKnown: true, interestKnown: true, locationKnown: true },
+    [prev],
+  )
+  // Deve ter sido removida (fallback retorna original quando kept===0 — então comparamos
+  // a CONTAGEM de ocorrências da frase no resultado vs no input).
+  // Como kept fica vazio, a função retorna aiResponse original. Aceitamos isso só se
+  // o caller decidir descartar. Aqui validamos que o LOG do drop aconteceu via mudança:
+  // a função retorna aiResponse intacto quando todos foram removidos → o caller (index.ts)
+  // ainda envia. Para garantir que NÃO envia, mudamos: kept vazio deve retornar string vazia.
+  assert(out.trim() === '' || out !== aiResponse, `expected to drop or empty, got: ${out}`)
+})
+
+Deno.test('opener dedup: removes second "Perfecto." across bubbles', () => {
+  const input = 'Perfecto. Ya tengo una visión inicial de tu caso.|||Perfecto. ¿Estás empadronado?'
+  const out = dedupOpenerAcrossBubbles(input)
+  const parts = out.split('|||')
+  assertEquals(parts.length, 2)
+  assertStringIncludes(parts[0], 'Perfecto')
+  assert(!/^Perfecto/i.test(parts[1].trim()), `second bubble should not start with Perfecto, got: ${parts[1]}`)
+  assertStringIncludes(parts[1], '¿Estás empadronado?')
+})
+
+Deno.test('opener dedup: no-op when openers differ', () => {
+  const input = 'Perfecto. Algo.|||Vale. Otra cosa.'
+  const out = dedupOpenerAcrossBubbles(input)
+  assertEquals(out, input)
+})
