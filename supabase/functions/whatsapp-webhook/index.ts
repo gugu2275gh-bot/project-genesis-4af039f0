@@ -2476,13 +2476,17 @@ Regras:
           }
         } else {
           console.error('Both Gemini and OpenAI failed to generate a response for lead:', lead.id)
+          await logTurn({ supabase, exit_reason: 'AI_FAILED', lead_id: lead.id, contact_id: contact.id, phone: phoneNumber, message_id: message.messageId, inbound_text: message.body, ai_error: 'All providers in cascade returned empty / errored', funnel_step_before: funnelStateLive?.step ?? null })
         }
       } catch (aiError) {
         console.error('AI agent error (non-blocking):', aiError instanceof Error ? aiError.message : aiError)
+        await logTurn({ supabase, exit_reason: 'AI_FAILED', lead_id: lead.id, contact_id: contact.id, phone: phoneNumber, message_id: message.messageId, inbound_text: message.body, ai_error: aiError instanceof Error ? aiError.message : String(aiError), funnel_step_before: funnelStateLive?.step ?? null })
         // AI errors don't block the webhook processing
       }
     } else {
       console.log(`AI agent skipped: botEnabled=${botEnabled}, hasGeminiKey=${!!geminiApiKey}, pausedByHuman=${aiPausedByHuman}, skipReactivation=${skipAIAgent}`)
+      const reason: 'BOT_DISABLED' | 'PAUSED_BY_HUMAN' | 'AI_SKIPPED' = !botEnabled || !geminiApiKey ? 'BOT_DISABLED' : aiPausedByHuman ? 'PAUSED_BY_HUMAN' : 'AI_SKIPPED'
+      await logTurn({ supabase, exit_reason: reason, lead_id: lead.id, contact_id: contact.id, phone: phoneNumber, message_id: message.messageId, inbound_text: message.body, details: { botEnabled, hasGeminiKey: !!geminiApiKey, pausedByHuman: aiPausedByHuman, skipReactivation: skipAIAgent } })
     }
 
     // Update webhook log as processed (using ID from insert, not JSONB comparison)
