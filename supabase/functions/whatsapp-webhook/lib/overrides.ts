@@ -110,8 +110,13 @@ export function computeDeterministicFunnelPatch(
     patch.interest_confirmed = msg
   }
 
-  // Data de entrada
-  if (isQuestionAboutSpainEntryDate(prevQ)) {
+  // Data de entrada — aceita pergunta canônica detectada via prevQ OU via varredura
+  // da mensagem completa do assistente (mesma estratégia usada para localização),
+  // pois extractLastQuestion pode retornar o segmento errado quando o texto contém
+  // frases auxiliares terminadas em ponto seguidas de "?" extra.
+  const prevHasEntryDateQ = isQuestionAboutSpainEntryDate(prevQ)
+    || isQuestionAboutSpainEntryDate(String(previousAssistantMessage || ''))
+  if (prevHasEntryDateQ) {
     const parsed = parseEntryDateFromText(msg)
     if (parsed && !parsed.isFuture) patch.entry_date_confirmed = parsed.iso
   }
