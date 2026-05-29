@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { useAuth } from '@/contexts/AuthContext';
  import { useSuperuser } from '@/hooks/useSuperuser';
 import { Navigate } from 'react-router-dom';
-import { Users, Clock, Settings as SettingsIcon, FileText, Bell, Layers, Briefcase, UserCog, Table2, ChevronDown, Database, Download, Wallet, MessageSquare, Truck, Receipt } from 'lucide-react';
+import { Users, Clock, Settings as SettingsIcon, FileText, Bell, Layers, Briefcase, UserCog, Table2, ChevronDown, Database, Download, Wallet, MessageSquare, Truck, Receipt, Brain } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
