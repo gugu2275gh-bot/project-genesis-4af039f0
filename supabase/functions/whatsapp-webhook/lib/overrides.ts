@@ -95,8 +95,8 @@ export function computeDeterministicFunnelPatch(
   // (ex.: "Sí, ya tengo 2 años en España y quiero solicitar mi residencia").
   if (
     /\b(estou na espanha|j[áa] estou na espanha|estoy en espa[ñn]a|ya estoy en espa[ñn]a|i'?m in spain|je suis en espagne|moro na espanha|vivo en espa[ñn]a|vivo na espanha|aqui na espanha|aqu[ií] en espa[ñn]a)\b/i.test(msg)
-    || /\b\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*espa[ñn]a\b/i.test(msg)
-    || /\b(tenho|tengo|i have|hace|faz)\s+\d+\s*(anos|años|years|ans)?\s*(em|en|in)\s*espa[ñn]a\b/i.test(msg)
+    || /\b\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*(espa[ñn]a|espanha|spain|espagne)\b/i.test(msg)
+    || /\b(tenho|tengo|i have|hace|faz)\s+\d+\s*(anos|años|years|ans)?\s*(em|en|in)\s*(espa[ñn]a|espanha|spain|espagne)\b/i.test(msg)
   ) {
     patch.location_known = 'spain'
   }
