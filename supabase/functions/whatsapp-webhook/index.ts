@@ -335,6 +335,7 @@ import {
   preHandoffSummarySent,
   handoffTransferSent,
   classifyYesNo,
+  isQuestionAboutLocationSpain,
 } from './lib/questions.ts'
 
 import {
