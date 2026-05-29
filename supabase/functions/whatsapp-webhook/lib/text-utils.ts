@@ -29,7 +29,15 @@ export function compactSearchText(text: string): string {
 
 export function extractLastQuestion(text: string): string {
   const matches = text.match(/[^?\n]*\?/g)
-  return matches?.map((item) => item.trim()).filter(Boolean).at(-1) || ''
+  const segments = matches?.map((item) => item.trim()).filter(Boolean) || []
+  if (segments.length === 0) return ''
+  // Prefer the last segment that looks like a real question:
+  // contains "¿" OR ends with "?" without a "." immediately before (e.g. avoids "(ejemplo: 22/05/2025).?").
+  const looksLikeRealQuestion = (s: string) => /¿/.test(s) || !/\.\s*\?$/.test(s)
+  for (let i = segments.length - 1; i >= 0; i--) {
+    if (looksLikeRealQuestion(segments[i])) return segments[i]
+  }
+  return segments.at(-1) || ''
 }
 
 export function extractTextBeforeLastQuestion(text: string): string {
