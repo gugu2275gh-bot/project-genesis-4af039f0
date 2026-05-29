@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import {
   Brain, Save, KeyRound, ExternalLink, Plus, Trash2, ArrowUp, ArrowDown,
-  CheckCircle2, XCircle, Loader2, Activity,
+  CheckCircle2, XCircle, Loader2, Activity, RefreshCw,
 } from 'lucide-react';
 
 type Provider = 'gemini' | 'openai';
@@ -23,15 +23,7 @@ interface LLMSettingsRow {
   cascade: CascadeItem[];
   updated_at: string;
 }
-
-const GEMINI_MODELS = [
-  'gemini-3.5-flash',
-  'gemini-2.5-pro',
-  'gemini-2.5-flash',
-  'gemini-2.5-flash-lite',
-  'gemini-3-flash-preview',
-];
-const OPENAI_MODELS = ['gpt-4o-mini', 'gpt-4o'];
+interface ModelInfo { id: string; displayName: string; description?: string }
 
 const SUPABASE_PROJECT_REF = 'xdnliyuogkoxckbesktx';
 const SECRETS_URL = `https://supabase.com/dashboard/project/${SUPABASE_PROJECT_REF}/settings/functions`;
