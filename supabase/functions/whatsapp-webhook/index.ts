@@ -2386,6 +2386,8 @@ Regras:
                   if (!answer) {
                     answer = `${replayPreamble}: ${kbStrictFallback}`
                   }
+                  // Normaliza idioma do preâmbulo (segurança contra resposta PT em ES/EN)
+                  answer = enforceReplayPreambleLanguage(answer, detectedChatLanguage)
                   // Garante preâmbulo
                   if (!answer.toLowerCase().startsWith(replayPreamble.toLowerCase())) {
                     answer = `${replayPreamble}: ${answer.trim()}`
