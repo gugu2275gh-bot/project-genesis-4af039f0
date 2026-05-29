@@ -2566,8 +2566,8 @@ Regras:
             // nas partes enviadas neste turno. Idempotente — só faz UPDATE se mudou algo.
             try {
               const sentJoined = parts.join('\n')
-              const newPreSent = !funnelStateLive.pre_handoff_sent && preHandoffSummarySent(sentJoined)
-              const newHandSent = !funnelStateLive.handoff_sent && handoffTransferSent(sentJoined)
+              const newPreSent = hasMinimumDataForHandoff && !funnelStateLive.pre_handoff_sent && preHandoffSummarySent(sentJoined)
+              const newHandSent = hasMinimumDataForHandoff && !funnelStateLive.handoff_sent && handoffTransferSent(sentJoined)
               if (newPreSent || newHandSent) {
                 const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
                 if (newPreSent) patch.pre_handoff_sent = true
@@ -2575,6 +2575,8 @@ Regras:
                 await supabase.from('lead_funnel_state').update(patch).eq('lead_id', lead.id)
                 funnelStateLive = { ...funnelStateLive, ...patch } as typeof funnelStateLive
                 console.log('[BPMN-3] flags persisted:', JSON.stringify(patch))
+              } else if (!hasMinimumDataForHandoff && (preHandoffSummarySent(sentJoined) || handoffTransferSent(sentJoined))) {
+                console.warn('[BPMN-3] flag persist skipped — anchor sent without minimum data')
               }
             } catch (flagErr) {
               console.warn('[BPMN-3] flag persist non-blocking error:', flagErr instanceof Error ? flagErr.message : flagErr)
