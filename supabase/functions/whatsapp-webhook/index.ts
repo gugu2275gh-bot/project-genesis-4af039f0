@@ -2272,6 +2272,13 @@ Regras:
               console.warn('[OPENER_DEDUP] non-blocking error:', opErr instanceof Error ? opErr.message : opErr)
             }
 
+            // Rede de segurança: força o preâmbulo de retomada no idioma travado
+            try {
+              aiResponseClean = enforceReplayPreambleLanguage(aiResponseClean, detectedChatLanguage)
+            } catch (langErr) {
+              console.warn('[REPLAY_PREAMBLE_LANG] non-blocking error:', langErr instanceof Error ? langErr.message : langErr)
+            }
+
             // BPMN-3 MODO PÓS-HANDOFF: se H1-H4 já foram enviados, anexa o sufixo
             // localizado de "aguarde um especialista" ao final da resposta (uma única bolha).
             const wasHandoffSentBefore = !!funnelStateLive.handoff_sent
