@@ -2428,6 +2428,24 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               console.warn('[OPENER_DEDUP] non-blocking error:', opErr instanceof Error ? opErr.message : opErr)
             }
 
+            // GUARD ABERTURA: se a abertura ainda não foi concluída e a resposta
+            // contém apenas a Msg1 (saudação) sem a Msg2 (pergunta de consentimento),
+            // anexa Msg2 canônica no idioma travado. Cobre o caso do LLM que emite
+            // só metade da abertura (bug PT observado).
+            try {
+              if (!aberturaDone) {
+                const tt2 = getPromptTemplates(detectedChatLanguage)
+                const greetingRe = /(obrigad[oa] por (falar|escrever|entrar)|gracias por (hablar|escribir|contact)|thank(s)? you for (reaching|contacting|writing)|merci de (nous|m['’]avoir) contact)/i
+                const consentRe = /(perguntas? r[áa]pidas?|preguntas? r[áa]pidas?|quick questions?|questions rapides)/i
+                if (greetingRe.test(aiResponseClean) && !consentRe.test(aiResponseClean)) {
+                  aiResponseClean = `${aiResponseClean.trim()}|||${tt2.openingLine2}`
+                  console.log('[OPENER_GUARD] Msg2 anexada (faltava pergunta de consentimento)')
+                }
+              }
+            } catch (guardErr) {
+              console.warn('[OPENER_GUARD] non-blocking error:', guardErr instanceof Error ? guardErr.message : guardErr)
+            }
+
             // Rede de segurança: força o preâmbulo de retomada no idioma travado
             try {
               aiResponseClean = enforceReplayPreambleLanguage(aiResponseClean, detectedChatLanguage)
