@@ -1,47 +1,31 @@
-# Tratativa de datas — regra global DD/MM/YYYY
+Diagnóstico do caso Pedro Henrique:
 
-## Problema
-No exemplo (BM - Gustavo), o cliente respondeu "22 de maio" à pergunta "Qual foi a data exata da sua entrada na Espanha?". O bot aceitou sem ano, gerando ambiguidade (poderia ser 2024, 2025, 2026). Não há validação de data centralizada.
+- O webhook está recebendo as mensagens, mas registrando como `REPLIED` com `parts: 0` e `response_chars: 0`.
+- Isso significa que a função considera que respondeu, mas nenhuma bolha foi enviada ao WhatsApp.
+- A causa direta é o deduplicador final: ele remove a pergunta repetida `¿Estás en España?` porque ela já tinha sido enviada recentemente, e como não sobra nenhuma mensagem, o turno termina “com sucesso” sem envio.
+- O watchdog tentou recuperar, mas reexecutou o mesmo fluxo e caiu no mesmo `parts: 0`, então também não resolveu.
+- Há ainda um problema secundário: a resposta curta `Sí` à pergunta `¿Estás en España?` não atualizou `location_known`, porque o detector de pergunta de localização não reconhece a forma curta `¿Estás en España?`.
+- Também há pressão de quota nos modelos Gemini, mas o fallback OpenAI está funcionando; não é a causa principal deste travamento.
 
-## Objetivo
-Tratar **data como regra do sistema**: sempre que o bot pedir ou receber uma data do cliente (entrada na Espanha, nascimento, validade de documento, agendamento, etc.), o formato esperado é **DD/MM/YYYY** e o ano é **obrigatório**.
+Plano de correção:
 
-## Mudanças
+1. Ampliar o detector de pergunta de localização
+   - Reconhecer `¿Estás en España?`, `Está na Espanha?`, `In Spain?`, e variações curtas.
+   - Assim, respostas como `Sí` gravam `location_known = 'spain'` imediatamente.
 
-### 1. Novo módulo `lib/date-utils.ts` (whatsapp-webhook)
-Helper centralizado:
-- `parseUserDate(text, locale)` → retorna `{ valid, date, missingYear, raw }`.
-  - Reconhece: `22/05/2025`, `22-05-2025`, `22/5/25`, `22 de maio de 2025`, `22 de mayo de 2025`, `May 22 2025`, `ontem`, `hoje`, `anteontem`, `há 3 dias`.
-  - Detecta ausência de ano ("22 de maio", "22/05", "ayer sin año") → `missingYear: true`.
-- `formatDate(date)` → sempre `DD/MM/YYYY` na exibição.
-- `dateAskPrompt(locale)` → frase padrão multi-idioma pedindo `DD/MM/YYYY`.
+2. Ajustar o deduplicador final para nunca retornar mensagem vazia durante o gate
+   - Se todos os chunks forem removidos como duplicados, gerar a próxima pergunta canônica pendente em vez de retornar string vazia.
+   - Para o caso atual, isso evitaria `parts: 0` e enviaria a pergunta correta do próximo passo.
 
-### 2. Instruções no prompt base do AI Agent
-Em `supabase/functions/whatsapp-webhook/lib/overrides.ts` (ou onde o system prompt é montado), adicionar bloco fixo:
-> "REGRA DE DATAS: Toda data deve ser solicitada e confirmada no formato **DD/MM/YYYY**. Se o cliente responder sem ano (ex.: '22 de maio', '22/05'), NÃO assuma o ano — pergunte novamente: 'Pode confirmar a data completa no formato DD/MM/AAAA, por favor?' (adapte ao idioma do cliente: ES → 'DD/MM/AAAA', EN → 'DD/MM/YYYY'). Ao repetir/confirmar uma data ao cliente, sempre use DD/MM/YYYY."
+3. Adicionar uma rede de segurança antes do envio
+   - Após limpar/deduplicar a resposta, se `parts.length === 0`, não registrar como `REPLIED`.
+   - Gerar fallback determinístico baseado no estado do funil e enviar esse fallback.
+   - Se mesmo assim não houver texto, registrar como erro recuperável (`AI_FAILED`/`EMPTY_RESPONSE`) para o watchdog conseguir agir de verdade.
 
-### 3. Validação pós-resposta do cliente
-No fluxo principal do webhook, quando a última pergunta do bot for classificada como "pergunta de data" (heurística: contém "data", "fecha", "date", "quando", "cuándo", "when" + termo temporal), interceptar a resposta do cliente:
-- Rodar `parseUserDate`.
-- Se `missingYear === true` → forçar bubble de reprompt no idioma do lead com `dateAskPrompt` e **não** avançar de etapa nem registrar a data.
-- Se válida → normalizar para `DD/MM/YYYY` antes de salvar em `lead_metadata` / `interactions` e antes de qualquer eco ao cliente.
+4. Melhorar o watchdog
+   - Tratar `REPLIED` com `response_chars = 0` ou `details.parts = 0` como falha, não como recuperação.
+   - Assim ele não marcará recuperação falsa quando nada foi enviado.
 
-### 4. Templates e textos do sistema
-Auditar templates WhatsApp e textos SLA que pedem datas (ex.: agendamento Huellas, validade de NIE) para padronizar o pedido `DD/MM/AAAA` (PT) / `DD/MM/AAAA` (ES) / `DD/MM/YYYY` (EN).
-
-### 5. Frontend (CRM)
-Sem mudanças funcionais nesta entrega — apenas garantir que campos de data exibidos ao operador continuem `DD/MM/YYYY` (já é o padrão; verificação rápida em `LeadDetail` e `ContactDetail`).
-
-## Arquivos previstos
-- novo: `supabase/functions/whatsapp-webhook/lib/date-utils.ts`
-- editar: `supabase/functions/whatsapp-webhook/index.ts` (interceptação + normalização)
-- editar: `supabase/functions/whatsapp-webhook/lib/overrides.ts` (bloco de regra no prompt)
-- editar (se necessário): templates em `whatsapp_templates` com placeholder de data
-
-## Fora de escopo
-- Migração de datas históricas já salvas em texto livre.
-- Date pickers no portal do cliente.
-
-## Confirmações antes de implementar
-1. Aplicar a regra **somente no agente WhatsApp** (bot) ou também em formulários do portal do cliente?
-2. Quando o cliente disser "ontem" / "hoje" / "há 3 dias", aceitar e converter para `DD/MM/YYYY` automaticamente, ou ainda assim pedir confirmação explícita?
+5. Validar com um teste específico
+   - Simular o fluxo: bot pergunta `¿Estás en España?`, cliente responde `Sí`, depois `Hola?`.
+   - Confirmar que o estado vira `location_known = spain` e que o bot envia a próxima pergunta em vez de ficar mudo.
