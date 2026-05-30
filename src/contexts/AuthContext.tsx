@@ -63,29 +63,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
 
-        // Defer Supabase calls with setTimeout
         if (session?.user) {
+          // Keep loading true until profile/roles arrive to avoid premature role checks
+          setLoading(true);
           setTimeout(() => {
-            fetchUserData(session.user.id);
+            fetchUserData(session.user.id).finally(() => setLoading(false));
           }, 0);
         } else {
           setProfile(null);
           setRoles([]);
+          setLoading(false);
         }
-        
-        setLoading(false);
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
-        fetchUserData(session.user.id);
+        await fetchUserData(session.user.id);
       }
-      
+
       setLoading(false);
     });
 
