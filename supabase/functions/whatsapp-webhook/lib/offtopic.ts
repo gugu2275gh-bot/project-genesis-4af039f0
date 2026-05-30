@@ -84,7 +84,7 @@ export function classifyOffTopic(
   // Pergunta factual de definição/preço/requisitos tem PRECEDÊNCIA absoluta:
   // mesmo que contenha keyword de serviço (ex.: "O que é TIE?"), NÃO é resposta
   // de interesse — é pergunta off-topic que deve ser parqueada.
-  const DEFINITION_QUESTION_RE = /\b(o que (?:é|e|sao|são)|que es|qu[eé] son|what (?:is|are)|qu['’]?est[- ]ce que|c['’]?est quoi|como funciona|c[óo]mo funciona|how (?:does|do)|comment fonctionne|quanto custa|cu[áa]nto cuesta|how much|combien|quais (?:são|sao) os requisitos|cu[áa]les son los requisitos|what are the requirements)\b/i
+  const DEFINITION_QUESTION_RE = /(\bo que (?:é|e|sao|são)\b|\bque es\b|\bqu[eé] son\b|\bwhat (?:is|are)\b|qu['’]?est[- ]ce que|c['’]?est quoi|\bcomo funciona\b|\bc[óo]mo funciona\b|\bhow (?:does|do)\b|\bcomment fonctionne\b|\bquanto custa\b|\bcu[áa]nto cuesta\b|\bhow much\b|\bcombien\b|quais (?:são|sao) os requisitos|cu[áa]les son los requisitos|what are the requirements)/i
   if (DEFINITION_QUESTION_RE.test(raw)) return { kind: 'question' }
 
   // Resposta composta: contém um serviço válido E/OU pista de localização → não parqueia.
