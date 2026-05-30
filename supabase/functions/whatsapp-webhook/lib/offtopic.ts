@@ -99,17 +99,24 @@ export function classifyOffTopic(
     if (QUESTION_HINT_RE.test(raw)) return { kind: 'question' }
     return null
   }
+
+  // Perguntas/pedidos explícitos têm precedência sobre os guards de cadastro:
+  // "Quanto custa o processo?" pode parecer "3 palavras alfa" e bater com
+  // isLikelyFullNameAnswer, mas é claramente uma pergunta off-topic.
+  if (QUESTION_HINT_RE.test(raw)) return { kind: 'question' }
+  if (REQUEST_HINT_RE.test(raw)) return { kind: 'request' }
+
+  // Guards anti-parking de dados de cadastro (nome, e-mail, data, cidade).
   if (isLikelyFullNameAnswer(raw)) return null
   if (hasValidEmail(raw)) return null
   if (isPotentialEntryDateAnswer(raw)) return null
   if (isValidSpanishCity(raw)) return null
 
-  if (QUESTION_HINT_RE.test(raw)) return { kind: 'question' }
-  if (REQUEST_HINT_RE.test(raw)) return { kind: 'request' }
   // Frase mais longa que não bate com nada esperado → trata como request (off-topic).
   if (raw.length >= 12) return { kind: 'request' }
   return null
 }
+
 
 
 export function getOffTopicAckPhrase(language: string): string {
