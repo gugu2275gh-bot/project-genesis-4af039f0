@@ -1,72 +1,58 @@
-## Diagnóstico
+# Plano: frase off-topic padrão + bloqueio total de re-perguntas
 
-Na conversa do Gustavo (`8ccae119-…`), o e-mail foi pedido **duas vezes**:
+## Objetivo
+1. Quando o usuário faz uma pergunta off-topic durante o pré-handoff (ex.: "O que é TIE?"), a resposta deve ser **exatamente** a frase pedida, traduzida por idioma — sem "Anotado", sem agradecimentos, sem reformulações.
+2. Garantir que **nenhum dado já capturado** no pré-handoff (nome, e-mail, telefone, interesse/serviço, localização Espanha, data de entrada, cidade de empadronamiento, idade, etc.) seja perguntado novamente em nenhuma circunstância.
 
-1. 12:50:32 — bot pediu o e-mail corretamente.
-2. 12:50:43 — usuário respondeu `Gustavohbf16@gmail.com`. Fluxo seguiu normalmente até o pré-handoff (12:54:05).
-3. 12:54:29 — REPLAY drenou 1 item parqueado e enviou: **"Como prometido, sobre sua dúvida anterior: Anotado, Gustavo. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?"**
+## Mudanças
 
-### Causa raiz
+### A) `supabase/functions/whatsapp-webhook/lib/offtopic.ts`
+Substituir o corpo de `getOffTopicAckPhrase(language)` pelas frases exatas:
 
-O **PARKING** (linha 1986 de `index.ts`) chamou `classifyOffTopic(rawCustomerMessage, lastAssistantQuestion)` na **primeira mensagem do contato** (`"Gustavo Braga"` às 12:49:49), quando `lastAssistantQuestion` ainda era vazio. Em `lib/offtopic.ts`, a heurística final `if (raw.length >= 12) return { kind: 'request' }` parqueou a mensagem como off-topic porque não havia pergunta corrente para validar contra.
+- **pt-BR:** `Por favor, vamos terminar o cadastro básico primeiro. Em seguida podemos tratar de outros assuntos.`
+- **es:** `Por favor, terminemos primero el registro básico. A continuación podemos tratar otros temas.`
+- **en:** `Please, let's finish the basic registration first. Afterwards we can address other matters.`
+- **fr:** `S'il vous plaît, terminons d'abord l'enregistrement de base. Ensuite, nous pourrons aborder d'autres sujets.`
 
-No replay, o LLM recebeu `item.text = "Gustavo Braga"` e, sem contexto, gerou um ACK + re-pergunta de e-mail (pegou a frase canônica do system prompt), resultando na segunda solicitação de e-mail.
+A frase é usada por `composeAckPlusScripted` como primeira bolha quando há pergunta scripted a seguir, e isolada quando não há — comportamento atual preservado.
 
-## Correções (3 camadas de defesa)
+### B) `supabase/functions/whatsapp-webhook/index.ts` — anti-re-ask universal de dados capturados
 
-### A) `lib/offtopic.ts` — não parquear quando não há pergunta corrente nem sinal real de off-topic
+Hoje o `reAskRe` cobre apenas nome/e-mail/telefone dentro do loop de REPLAY. Vou:
 
-Em `classifyOffTopic`, antes do fallback `length >= 12 → request`, adicionar guards:
+1. **Extrair** a checagem para uma função `isReAskOfCapturedField(answer, captured)` que recebe o snapshot do que já foi capturado no lead (`full_name`, `email`, `phone`, `interest/service`, `location_spain`, `spain_entry_date`, `empadronamiento_city`, `age`, etc.) e retorna o campo violado, com regex multi-idioma por campo:
+   - nome completo: `qual (é )?(o )?seu nome|cu[áa]l es tu nombre|what'?s your (full )?name|comment (vous |t')?appelez`
+   - e-mail: `(seu |tu |votre )?(melhor )?(e-?mail|correo)|what'?s your email`
+   - telefone/WhatsApp: `tel[eé]fono|phone( number)?|whatsapp`
+   - interesse/serviço: `qual( é)? (o )?(seu )?interesse|servi[çc]o|tu caso encaja|qu[eé] servicio|which service`
+   - localização Espanha: `est[áa]s? (en|na) espa[ñn]a|are you in spain|vous (êtes|etes) en espagne`
+   - data entrada: `quando (você |voce )?(entrou|chegou)|cu[áa]ndo (entraste|llegaste)|when did you (enter|arrive)`
+   - cidade empadronamiento: `em que cidade|en qu[eé] ciudad|in which city|empadronad`
+   - idade: `qual (sua |a sua )?idade|cu[áa]ntos a[ñn]os|how old`
 
-- Se **`lastAssistantQuestion` é vazio/null** (primeiro turno ou bot ainda não perguntou nada) → retornar `null`. Mensagem nunca é off-topic se não houve pergunta.
-- Se a mensagem **parece um nome completo** (`isLikelyFullNameAnswer(raw)`) → retornar `null`.
-- Se a mensagem **contém e-mail válido** (`hasValidEmail(raw)`) → retornar `null`.
-- Se a mensagem é uma **data** (`isPotentialEntryDateAnswer(raw)`) → retornar `null`.
-- Se a mensagem é **cidade espanhola válida** (`isValidSpanishCity(raw)`) → retornar `null`.
+2. **Aplicar** a função em DOIS pontos:
+   - Dentro do loop de REPLAY (substituindo o `reAskRe` atual), com log `[REPLAY] suppressed re-ask of captured field: <campo>`.
+   - Logo após `generateAIResponse`/`generateAIResponseOpenAI` na resposta principal (fluxo normal, não-replay), com log `[GUARD] suppressed re-ask of captured field: <campo>` e descarte da bolha (ou da frase específica via split por linhas) antes do envio.
 
-Isso garante que dados de cadastro nunca entram na fila de off-topics, mesmo se chegarem fora de ordem ou antes da pergunta canônica.
+3. **Snapshot de capturados**: montar a partir do `lead` atual + `pendingExtraction`/dados extraídos no turno (já existem nos helpers). Onde o campo não estiver no lead, considerar não-capturado.
 
-### B) `index.ts` — REPLAY filtra itens que já viraram dado coletado
+### C) `supabase/functions/whatsapp-webhook/offtopic_shortcircuit_test.ts`
+Atualizar asserts para validar:
+- pt: começa com `Por favor` e contém `cadastro básico`
+- es: começa com `Por favor` e contém `registro básico`
+- en: começa com `Please` e contém `basic registration`
+- fr: começa com `S'il vous plaît` e contém `enregistrement de base`
+- Mantém asserts de deduplicação existentes.
 
-Antes do loop de drenagem (linha 2762), filtrar `replayQueue` removendo qualquer item cujo `item.text`:
-- é nome (`isLikelyFullNameAnswer`),
-- contém e-mail (`hasValidEmail`),
-- é data (`isPotentialEntryDateAnswer`),
-- é cidade espanhola (`isValidSpanishCity`),
-- é yes/no curto.
-
-Itens removidos são apagados de `pending_questions` no DB (idempotente). Log: `[REPLAY] purga N item(s) que viraram dados de cadastro`.
-
-### C) `index.ts` — guard anti re-ask no replay
-
-Após `generateAIResponse`/`generateAIResponseOpenAI` retornarem `answer`, checar se a resposta contém padrão de re-pergunta de cadastro:
-
-```
-/qual (é|e) (o|seu) (melhor )?(e-?mail|nome completo|nome|telefone)|what (is|'s) your (best )?(e-?mail|full name|name|phone)|cu[áa]l es tu (mejor )?(correo|e-?mail|nombre completo|nombre|tel[eé]fono)|quel est votre (meilleur )?(e-?mail|nom complet|nom|t[eé]l[eé]phone)/i
-```
-
-Se bater, **descartar o item** (não enviar, remover da fila) e logar `[REPLAY] suppressed re-ask of cadastro field: <campo>`. Continua com o próximo.
-
-### D) Teste Deno — `supabase/functions/whatsapp-webhook/parking_guards_test.ts`
-
-Cobre os novos guards do `classifyOffTopic`:
-- `"Gustavo Braga"` sem `lastAssistantQuestion` → `null` (não parqueia).
-- `"gustavo@gmail.com"` sem pergunta → `null`.
-- `"01/01/2016"` sem pergunta → `null`.
-- `"Madrid"` sem pergunta → `null`.
-- `"Como funciona o NIE?"` sem pergunta → ainda parqueia como `question` (caso legítimo).
+### D) Novo teste `supabase/functions/whatsapp-webhook/reask_guard_test.ts`
+Cobertura unitária da função `isReAskOfCapturedField` para cada campo nos 4 idiomas, garantindo:
+- detecta re-ask quando o campo está no snapshot capturado;
+- NÃO bloqueia quando o campo ainda não foi capturado;
+- não tem falso-positivo em frases neutras (ex.: "obrigado pelo seu email").
 
 ### E) Deploy
+Redeploy de `whatsapp-webhook` após os testes passarem.
 
-Redeploy `whatsapp-webhook`.
-
-## Fora de escopo
-
-- Sem mudanças em UI, DB, RLS, system prompt, outras edge functions ou outros gates.
-- Não altera o texto do ACK de off-topic (entregue anteriormente).
-
-## Arquivos
-
-- editar: `supabase/functions/whatsapp-webhook/lib/offtopic.ts` (guards A)
-- editar: `supabase/functions/whatsapp-webhook/index.ts` (filtros B e C no bloco REPLAY ~linha 2754)
-- criar: `supabase/functions/whatsapp-webhook/parking_guards_test.ts`
+## Fora do escopo
+- Nenhuma mudança em `lib/overrides.ts`, system prompt, gates de Msg3/4/5/6, UI, RLS, DB ou outras edge functions.
+- Lógica de classificação off-topic (`classifyOffTopic`) permanece como está — só a frase muda.

@@ -390,7 +390,7 @@ import {
   syncFunnelFromCapturedData,
 } from './lib/funnel-state.ts'
 
-import { classifyOffTopic, getOffTopicAckPhrase } from './lib/offtopic.ts'
+import { classifyOffTopic, getOffTopicAckPhrase, stripReAskOfCapturedFields, type CapturedSnapshot } from './lib/offtopic.ts'
 import { isValidSpanishCity } from './lib/spanish-cities.ts'
 import { normalizeQueue, pushPending, getReplayPreamble, type PendingItem } from './lib/parking.ts'
 import { logTurn } from './lib/turn-log.ts'
@@ -2569,6 +2569,29 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               console.warn('[STRIP_DUP_OPENERS] non-blocking error:', dupErr instanceof Error ? dupErr.message : dupErr)
             }
 
+            // GUARD anti re-ask universal: remove qualquer bolha que peça novamente
+            // um campo já capturado no pré-handoff (nome, e-mail, interesse, localização,
+            // data de entrada, cidade de empadronamiento, idade).
+            try {
+              const capturedSnap: CapturedSnapshot = {
+                fullName: !nameMissing,
+                email: !emailMissing,
+                phone: true, // WhatsApp sempre tem telefone
+                interest: !serviceMissing,
+                locationSpain: !!funnelStateLive.location_known,
+                entryDate: !!funnelStateLive.entry_date_confirmed,
+                empadronamientoCity: !!funnelStateLive.empadronado_city,
+                age: !!(funnelStateLive as any).age_confirmed,
+              }
+              const stripped = stripReAskOfCapturedFields(aiResponseClean, capturedSnap)
+              if (stripped.removed.length > 0) {
+                console.log(`[GUARD] suppressed re-ask of captured field(s): ${stripped.removed.join(', ')}`)
+                aiResponseClean = stripped.text
+              }
+            } catch (guardErr) {
+              console.warn('[GUARD] reask strip non-blocking error:', guardErr instanceof Error ? guardErr.message : guardErr)
+            }
+
             let parts = aiResponseClean.split('|||').map(p => p.trim()).filter(Boolean)
 
             // GUARD anti-handoff prematuro: se ainda não temos os dados mínimos,
@@ -2818,11 +2841,21 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                   if (!answer.toLowerCase().startsWith(replayPreamble.toLowerCase())) {
                     answer = `${replayPreamble}: ${answer.trim()}`
                   }
-                  // Guard anti re-ask: se a resposta do replay re-perguntar um campo
-                  // de cadastro (e-mail, nome, telefone), descarta o item.
-                  const reAskRe = /qual\s+(?:é|e)\s+(?:o|seu)\s+(?:melhor\s+)?(?:e-?mail|nome\s+completo|nome|telefone)|what\s+(?:is|'s)\s+your\s+(?:best\s+)?(?:e-?mail|full\s+name|name|phone)|cu[áa]l\s+es\s+tu\s+(?:mejor\s+)?(?:correo|e-?mail|nombre\s+completo|nombre|tel[eé]fono)|quel\s+est\s+votre\s+(?:meilleur\s+)?(?:e-?mail|nom\s+complet|nom|t[eé]l[eé]phone)/i
-                  if (reAskRe.test(answer)) {
-                    console.log(`[REPLAY] suppressed re-ask of cadastro field on item ${idx + 1}/${replayQueue.length}`)
+                  // Guard anti re-ask: se a resposta do replay re-perguntar QUALQUER
+                  // campo já capturado, descarta o item.
+                  const replayCaptured: CapturedSnapshot = {
+                    fullName: !nameMissing,
+                    email: !emailMissing,
+                    phone: true,
+                    interest: !serviceMissing,
+                    locationSpain: !!funnelStateLive.location_known,
+                    entryDate: !!funnelStateLive.entry_date_confirmed,
+                    empadronamientoCity: !!funnelStateLive.empadronado_city,
+                    age: !!(funnelStateLive as any).age_confirmed,
+                  }
+                  const replayStripped = stripReAskOfCapturedFields(answer, replayCaptured)
+                  if (replayStripped.removed.length > 0) {
+                    console.log(`[REPLAY] suppressed re-ask of captured field(s) on item ${idx + 1}/${replayQueue.length}: ${replayStripped.removed.join(', ')}`)
                     remaining.shift()
                     await supabase
                       .from('lead_funnel_state')
