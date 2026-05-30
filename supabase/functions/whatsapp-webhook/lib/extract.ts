@@ -12,18 +12,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
  *   RESIDENCIA_PARENTE_COMUNITARIO, SEM_SERVICO
  */
 // Detecta perguntas factuais ("o que é X?", "qué es X?", "what is X?",
-// "qu'est-ce que X?", "como funciona", "quanto custa", etc.). Quando uma
-// pergunta dessa natureza aparece, NÃO devemos tratá-la como resposta de
-// interesse mesmo que contenha keywords de serviço (ex.: "O que é TIE?").
-const FACTUAL_QUESTION_RE = /(\bo que (?:é|e|sao|são)|\bqu[eé] es\b|\bqu[eé] son\b|\bwhat (?:is|are)\b|qu['’]?est[- ]ce que|c['’]?est quoi|\bcomo funciona\b|\bc[oó]mo funciona|\bhow (?:does|do)\b|\bcomment fonctionne\b|\bquanto custa\b|\bcu[aá]nto cuesta\b|\bhow much\b|\bcombien\b|quais (?:são|sao) os requisitos|cu[aá]les son los requisitos|what are the requirements|quels sont les)/i
+// "qu'est-ce que X?", "como funciona", "quanto custa", etc.). Reusa o detector
+// universal de lib/offtopic.ts para garantir paridade entre classificação
+// off-topic e captura de interesse.
+import { isFactualQuestion } from './offtopic.ts'
 
 export function isFactualQuestionMessage(raw: string): boolean {
-  const s = String(raw || '').trim()
-  if (!s) return false
-  if (FACTUAL_QUESTION_RE.test(s)) return true
-  // Pergunta curta terminando com "?" e que não parece resposta direta de interesse
-  // (ex.: "O que é TIE?" cai no regex acima; "Residencia?" não é tratado como factual).
-  return false
+  return isFactualQuestion(raw)
 }
 
 export function extractInterestFromMessage(raw: string): string | null {
