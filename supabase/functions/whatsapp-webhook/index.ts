@@ -2569,6 +2569,29 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               console.warn('[STRIP_DUP_OPENERS] non-blocking error:', dupErr instanceof Error ? dupErr.message : dupErr)
             }
 
+            // GUARD anti re-ask universal: remove qualquer bolha que peça novamente
+            // um campo já capturado no pré-handoff (nome, e-mail, interesse, localização,
+            // data de entrada, cidade de empadronamiento, idade).
+            try {
+              const capturedSnap: CapturedSnapshot = {
+                fullName: !nameMissing,
+                email: !emailMissing,
+                phone: true, // WhatsApp sempre tem telefone
+                interest: !serviceMissing,
+                locationSpain: !!funnelStateLive.location_known,
+                entryDate: !!funnelStateLive.entry_date_confirmed,
+                empadronamientoCity: !!funnelStateLive.empadronado_city,
+                age: !!(funnelStateLive as any).age_confirmed,
+              }
+              const stripped = stripReAskOfCapturedFields(aiResponseClean, capturedSnap)
+              if (stripped.removed.length > 0) {
+                console.log(`[GUARD] suppressed re-ask of captured field(s): ${stripped.removed.join(', ')}`)
+                aiResponseClean = stripped.text
+              }
+            } catch (guardErr) {
+              console.warn('[GUARD] reask strip non-blocking error:', guardErr instanceof Error ? guardErr.message : guardErr)
+            }
+
             let parts = aiResponseClean.split('|||').map(p => p.trim()).filter(Boolean)
 
             // GUARD anti-handoff prematuro: se ainda não temos os dados mínimos,
