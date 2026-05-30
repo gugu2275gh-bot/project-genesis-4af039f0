@@ -2754,13 +2754,38 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             // pós-handoff é anexado APENAS à última bolha do replay.
             try {
               const preNowSent = !!funnelStateLive.pre_handoff_sent
-              const replayQueue = normalizeQueue((funnelStateLive as any).pending_questions || [])
+              let replayQueue = normalizeQueue((funnelStateLive as any).pending_questions || [])
+              if (preNowSent && replayQueue.length > 0) {
+                // Purga itens que na verdade são dados de cadastro já coletados
+                // (nome, e-mail, data, cidade, yes/no) — não devem virar pergunta no replay.
+                const isCadastroData = (t: string): boolean => {
+                  const s = String(t || '').trim()
+                  if (!s) return true
+                  if (isLikelyFullNameAnswer(s)) return true
+                  if (hasValidEmail(s)) return true
+                  if (isPotentialEntryDateAnswer(s)) return true
+                  if (isValidSpanishCity(s)) return true
+                  if (/^\s*(sim|s[íi]|yes|y|ok|vale|claro|n[ãa]o|no|nope|nunca|never)\s*[.!]?\s*$/i.test(s)) return true
+                  return false
+                }
+                const purgedCount = replayQueue.filter(it => isCadastroData(it.text)).length
+                if (purgedCount > 0) {
+                  replayQueue = replayQueue.filter(it => !isCadastroData(it.text))
+                  console.log(`[REPLAY] purga ${purgedCount} item(s) que viraram dados de cadastro`)
+                  await supabase
+                    .from('lead_funnel_state')
+                    .update({ pending_questions: replayQueue, updated_at: new Date().toISOString() })
+                    .eq('lead_id', lead.id)
+                  ;(funnelStateLive as any).pending_questions = replayQueue
+                }
+              }
               if (preNowSent && replayQueue.length > 0) {
                 console.log(`[REPLAY] iniciando drenagem de ${replayQueue.length} item(ns) parqueado(s)`)
                 const replayPreamble = getReplayPreamble(detectedChatLanguage)
                 const replaySuffix = getPostHandoffWaitSuffix(detectedChatLanguage)
                 const remaining = [...replayQueue]
                 for (let idx = 0; idx < replayQueue.length; idx++) {
+
                   const item = replayQueue[idx]
                   const isLast = idx === replayQueue.length - 1
                   const itemKb = await getKnowledgeBaseContext(supabase, item.text, undefined).catch(() => '')
