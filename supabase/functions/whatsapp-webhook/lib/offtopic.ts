@@ -43,9 +43,10 @@ function isShortNumber(text: string): boolean {
 // ============================================================================
 const DEFINITION_QUESTION_RE = new RegExp(
   [
-    // --- PT --- aceita "que" e "quê" (com circunflexo); "é/e/ê"
-    String.raw`\bo\s+qu[eê]\s+(?:é|e|ê|sao|são|seria|significa|significam)\b`,
+    // --- PT --- aceita "que" e "quê" (com circunflexo); "é/e/ê" (sem \b após acento — \b é ASCII em JS)
+    String.raw`\bo\s+qu[eê]\s+(?:é|e|ê|sao|são|seria|significa|significam)(?=\s|$|[?.!,])`,
     String.raw`\bo\s+qu[eê]\s+quer\s+dizer\b`,
+
     String.raw`\bquanto\s+custa\b`,
     String.raw`\bcomo\s+funciona\b`,
     String.raw`\bquais\s+(?:são|sao)\s+os\s+requisitos\b`,
