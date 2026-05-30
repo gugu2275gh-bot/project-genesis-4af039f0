@@ -1691,3 +1691,93 @@ export function enforceCanonicalLanguage(aiResponse: string, language: ChatLangu
   }
   return out
 }
+
+// ============================================================================
+// stripDuplicateShortOpeners
+// Colapsa aberturas curtas repetidas ("Obrigado. Obrigado.", "Perfeito. Perfeito.",
+// "Gracias. Gracias.", "Thank you. Thank you.", "Merci. Merci.", etc.) dentro de
+// cada bolha e entre bolhas consecutivas separadas por "|||".
+// Roda como ÚLTIMA camada antes do envio.
+// ============================================================================
+const SHORT_OPENERS_BY_LANG: Record<string, string[]> = {
+  'pt-BR': ['Obrigado', 'Obrigada', 'Perfeito', 'Certo', 'Ok', 'Vale'],
+  'es': ['Gracias', 'Perfecto', 'Vale', 'Claro', 'Ok'],
+  'en': ['Thank you', 'Thanks', 'Perfect', 'Got it', 'Okay', 'Ok'],
+  'fr': ['Merci', 'Parfait', "D'accord", 'D\u2019accord', 'Ok'],
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+export function stripDuplicateShortOpeners(text: string, language: string): string {
+  if (!text || typeof text !== 'string') return text
+  const openers = SHORT_OPENERS_BY_LANG[language] || SHORT_OPENERS_BY_LANG['pt-BR']
+  // Pattern: word + "." (case-insensitive) repeated immediately
+  const alt = openers.map(escapeRegex).join('|')
+  // Colapsa "X. X." dentro da mesma bolha (com qualquer espaço/quebra entre).
+  const dupSameRe = new RegExp(`\\b(${alt})\\.\\s+\\1\\.`, 'gi')
+  const collapseInside = (s: string): string => {
+    let prev = s
+    for (let i = 0; i < 3; i++) {
+      const next = prev.replace(dupSameRe, (_m, w) => `${w}.`)
+      if (next === prev) break
+      prev = next
+    }
+    return prev
+  }
+
+  const bubbles = text.split('|||').map((b) => b)
+  // Passo 1: colapsa dentro de cada bolha
+  for (let i = 0; i < bubbles.length; i++) {
+    bubbles[i] = collapseInside(bubbles[i])
+  }
+  // Passo 2: se uma bolha é APENAS um opener curto "X." e a próxima começa com "X. ...",
+  // remove a bolha redundante.
+  const onlyOpenerRe = new RegExp(`^\\s*(${alt})\\.\\s*$`, 'i')
+  const startsWithOpenerOf = (s: string, opener: string): boolean =>
+    new RegExp(`^\\s*${escapeRegex(opener)}\\.`, 'i').test(s)
+  const out: string[] = []
+  for (let i = 0; i < bubbles.length; i++) {
+    const cur = bubbles[i]
+    const m = cur.match(onlyOpenerRe)
+    const next = bubbles[i + 1]
+    if (m && next && startsWithOpenerOf(next, m[1])) {
+      // drop the standalone opener bubble
+      continue
+    }
+    out.push(cur)
+  }
+  return out.map((b) => b.trim()).filter(Boolean).join('|||')
+}
+
+// ============================================================================
+// composeAckPlusScripted — concatena ack curto + frase canônica sem duplicar
+// a abertura ("Obrigado. Obrigado.", "Perfecto. Perfecto.", etc.).
+// ============================================================================
+export function composeAckPlusScripted(
+  ack: string,
+  scripted: string,
+  language: string,
+): string {
+  const a = (ack || '').trim()
+  const s = (scripted || '').trim()
+  if (!a) return s
+  if (!s) return a
+  const openers = SHORT_OPENERS_BY_LANG[language] || SHORT_OPENERS_BY_LANG['pt-BR']
+  // Detecta abertura do ack
+  const ackOpener = openers.find((w) =>
+    new RegExp(`^\\s*${escapeRegex(w)}\\.`, 'i').test(a),
+  )
+  // Detecta abertura da 1ª bolha de scripted
+  const firstBubble = s.split('|||')[0] || ''
+  const scriptedOpener = openers.find((w) =>
+    new RegExp(`^\\s*${escapeRegex(w)}\\.`, 'i').test(firstBubble),
+  )
+  // Se as duas começam com o MESMO opener curto, descarta o ack para evitar duplicação.
+  if (ackOpener && scriptedOpener && ackOpener.toLowerCase() === scriptedOpener.toLowerCase()) {
+    return s
+  }
+  return s.includes('|||') ? `${a}|||${s}` : `${a}\n\n${s}`
+}
+

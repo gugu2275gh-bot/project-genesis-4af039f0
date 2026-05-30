@@ -1,83 +1,66 @@
-# Estender o short-circuit canônico para Msg3, Msg4, Msg5 e Msg6
+## Problemas observados (screenshot)
 
-## Objetivo
+1. Usuário pergunta "O que é TIE?" durante o gate de e-mail → bot respondeu "Obrigado." e re-perguntou o e-mail com "Obrigado." de novo. Deveria **apenas** dizer "Anotado — vou tratar desse ponto assim que terminarmos esse cadastro rapidíssimo." e repetir a pergunta canônica de e-mail **sem** novo "Obrigado.".
+2. Resposta após "Roberto Barros" veio "Obrigado. Obrigado. Qual é o melhor e-mail…" — o gate Msg4 canônico não pegou (LLM emitiu e duplicou o "Obrigado.").
+3. Resposta após "Sim" para "Você está na Espanha?" veio "Certo.\n\nPerfeito. Perfeito. Agora preciso entender…" — duplicação do "Perfeito.".
 
-Hoje só a abertura (Msg1+Msg2) é determinística em todos os idiomas. As etapas seguintes ainda passam pelo LLM e dependem de "travas reativas" (`forceReaskEmailIfMissing`, `forceAdvanceFromInterestQuestion`, `ensureServicesAttachedToInterest`, etc.) para corrigir respostas erradas. Vamos eliminar a dependência do LLM nessas 4 mensagens, usando os textos já traduzidos em `lib/language.ts`.
+Todos os três sintomas têm a mesma raiz: o LLM está prefixando agradecimentos/aberturas curtas ("Obrigado.", "Perfeito.", "Certo.") **antes** das frases canônicas (que já começam por "Obrigado." / "Perfeito.") ou substituindo o ACK do off-topic por um "Obrigado." indevido.
 
-## Mapeamento das bolhas
+## Correções
 
-| Bolha | Conteúdo | Fonte canônica em `PromptTemplates` |
-|---|---|---|
-| Msg3 | Pergunta o nome completo | `askName` |
-| Msg4 | Agradece + pede e-mail | `thanksThenAskEmail` |
-| Msg5 | Pergunta o interesse | `interestQuestion` |
-| Msg6 | Catálogo de serviços | `servicesCatalog` |
+### A) `supabase/functions/whatsapp-webhook/index.ts` — novos short-circuits determinísticos
 
-Todas já existem em PT/ES/EN/FR.
+Logo após os gates Msg3/Msg4/Msg5+Msg6 existentes (~linha 2138), adicionar:
 
-## Mudanças
+1. **Off-topic durante pré-handoff** — antes de chamar o LLM, se `parkedThisTurn` existe (já calculado mais acima) e estamos em algum gate de cadastro (nome/email/interesse/localização/data/empadronado), montar a resposta determinística:
+   - bolha 1: `getOffTopicAckPhrase(detectedChatLanguage)` (já existe em `lib/offtopic.ts` — frase "Anotado…", sem "Obrigado.")
+   - bolha 2: a **mesma pergunta canônica corrente** vinda de `lib/language.ts` / `CANONICAL_BY_LANG` em `overrides.ts` (askName, askEmail, interestQuestion, askLocationSpain, insideIntroPlusEntryDate, empadronado…), escolhida com base em qual flag está pendente — **sem prefixar "Obrigado.", "Perfeito." ou "Certo."**.
+   - Log: `[OFFTOPIC_SHORTCIRCUIT] gate=<x> lang=<y>`.
+   - Isso resolve o problema #1 (TIE) e remove a dependência do LLM nesse caminho.
 
-### A) `supabase/functions/whatsapp-webhook/index.ts` — short-circuits determinísticos
+2. **Robustecer gate Msg4 (askEmail)** — hoje `lastWasNameQ` exige "nome completo" no `lastAssistantMessage`. Trocar para também aceitar quando a **última mensagem do usuário** parece um nome (`isLikelyFullNameAnswer`) e `emailMissing && !nameMissing` (independente do exato texto do bot). Isso garante que após "Roberto Barros" o canônico `tt.thanksThenAskEmail` seja sempre emitido pelo gate, não pelo LLM (resolve #2).
 
-Logo após o short-circuit da abertura, adicionar gates baseados no estado da conversa (já calculado: `hasFullName`, `hasEmail`, `interestCaptured`, `servicesAttached`, transcript), antes de cair na chamada ao LLM:
+### B) `supabase/functions/whatsapp-webhook/lib/overrides.ts` — anti-duplicação de aberturas curtas
 
-```ts
-const tt = getPromptTemplates(detectedChatLanguage)
+No pipeline final de pós-processamento (já existe `stripLockedSentinel`, `stripRepeatedPreHandoff`, enforçador canônico), adicionar uma camada `stripDuplicateShortOpeners(text, language)` que:
 
-// Msg3: usuário respondeu "sim/ok" ao consentimento e ainda não temos nome
-if (consentAccepted && !hasFullName) {
-  aiResponse = tt.askName
-}
-// Msg4: acabou de mandar o nome, falta e-mail
-else if (justAnsweredName && !hasEmail) {
-  aiResponse = tt.thanksThenAskEmail
-}
-// Msg5: tem nome+email, ainda não perguntou interesse
-else if (hasFullName && hasEmail && !interestAsked) {
-  aiResponse = tt.interestQuestion
-}
-// Msg6: respondeu interesse, ainda não enviou catálogo
-else if (interestCaptured && !servicesAttached) {
-  aiResponse = `${tt.servicesCatalog}|||${tt.askLocationSpain}`
-}
-```
+- Em cada bolha, colapsa repetições imediatas de aberturas curtas idênticas separadas por espaço/pontuação:
+  - PT: `/^(Obrigado|Perfeito|Certo|Ok|Vale)\.\s+\1\./i` → mantém só uma ocorrência.
+  - ES: `/^(Gracias|Perfecto|Vale|Claro|Ok)\.\s+\1\./i`
+  - EN: `/^(Thank you|Thanks|Perfect|Got it|Ok(?:ay)?)\.\s+\1\./i`
+  - FR: `/^(Merci|Parfait|D[’']accord|Ok)\.\s+\1\./i`
+- Quando duas bolhas consecutivas iniciam pela mesma abertura curta (ex.: bolha A = "Certo.", bolha B = "Perfeito. Perfeito. Agora…"), também colapsa o duplo "Perfeito." dentro da bolha B.
+- Executa **depois** de todos os enforcers canônicos e **antes** do envio.
+- Resolve o sintoma #3 (e funciona como rede de segurança para #2 caso o LLM ainda escape).
 
-Cada gate emite `console.log('[CANONICAL_SHORTCIRCUIT] msgN', detectedChatLanguage)` para auditoria.
+### C) Prompt do sistema (mesmo arquivo `index.ts`)
 
-Reaproveitar os booleanos já existentes (`isFirstInteraction`, `hasFullName`, `hasEmail`) e derivar os novos (`consentAccepted`, `justAnsweredName`, `interestAsked`, `interestCaptured`, `servicesAttached`) a partir das regex já presentes nas funções `force*`/`ensureServicesAttachedToInterest`. Sem inventar lógica nova — só centralizar.
+Reforçar regra no system prompt logo após a diretiva de "Msg4" (~linha 1311 e 1831): adicionar literal:
+> "PROIBIDO prefixar a frase canônica com 'Obrigado.', 'Perfeito.', 'Certo.' ou outra abertura curta — a frase canônica JÁ contém a abertura. NUNCA repita a mesma palavra de abertura duas vezes seguidas."
 
-### B) Guard pós-processamento
+E no bloco de off-topic (linha ~2050): trocar `getOffTopicAckPhrase` para ser a **única** frase de abertura permitida; proibir explicitamente "Obrigado." no ACK.
 
-Manter as funções `force*` atuais como **rede de segurança** (caso algum caminho futuro volte a passar pelo LLM). Não remover nada — apenas adicionar comentário `// fallback defensivo — short-circuit em A já cobre o caso feliz`.
+### D) Testes Deno
 
-### C) Prompt do LLM
+Novo arquivo `supabase/functions/whatsapp-webhook/dup_opener_strip_test.ts`:
+- "Obrigado. Obrigado. Qual é o melhor e-mail…" → "Obrigado. Qual é o melhor e-mail…"
+- "Certo.|||Perfeito. Perfeito. Agora preciso…" → "Certo.|||Perfeito. Agora preciso…"
+- ES "Gracias. Gracias. ¿Cuál es…" → "Gracias. ¿Cuál es…"
+- EN "Thank you. Thank you. What is…" → "Thank you. What is…"
+- Não-duplicações ("Perfeito. Obrigado.") passam intactas.
 
-Onde o system prompt ainda menciona Msg3–Msg6 com texto PT hardcoded, substituir por `getPromptTemplates(detectedChatLanguage).askName` etc. Para Msg5+Msg6 o LLM nunca mais deve ser chamado no caminho feliz, mas o reforço evita "vazamento" de PT em fallbacks.
-
-### D) Testes
-
-Novo `canonical_flow_test.ts`:
-- Para cada idioma (pt-BR/es/en/fr) e cada gate (Msg3, Msg4, Msg5, Msg6), montar fixtures mínimas de estado da conversa e verificar que o short-circuit produz exatamente o texto de `PromptTemplates`.
-- Verificar que Msg6 sai como `servicesCatalog|||askLocationSpain` (duas bolhas).
-
-Expandir `opener_idempotency_test.ts` para garantir que, depois de Msg6, o fluxo cai de volta no LLM (não fica em loop nos gates).
+Novo arquivo `offtopic_shortcircuit_test.ts`:
+- Em cada idioma, com gate de e-mail ativo e pergunta off-topic ("O que é TIE?"), o construtor da resposta determinística retorna exatamente `<ackPhrase>|||<askEmail canônico>`, sem "Obrigado." em nenhuma das bolhas.
 
 ### E) Deploy
 
-Redeploy de `whatsapp-webhook` + rodar a suíte Deno.
+Redeploy `whatsapp-webhook` após aplicar as mudanças.
 
-## Arquivos tocados
+## Arquivos a editar / criar
 
-- `supabase/functions/whatsapp-webhook/index.ts` (4 gates novos + reforço de prompt)
-- `supabase/functions/whatsapp-webhook/canonical_flow_test.ts` (novo)
-- `supabase/functions/whatsapp-webhook/opener_idempotency_test.ts` (expandir 1 caso)
+- editar: `supabase/functions/whatsapp-webhook/index.ts` (novos gates + reforço de prompt)
+- editar: `supabase/functions/whatsapp-webhook/lib/overrides.ts` (nova função `stripDuplicateShortOpeners` no pipeline final)
+- criar: `supabase/functions/whatsapp-webhook/dup_opener_strip_test.ts`
+- criar: `supabase/functions/whatsapp-webhook/offtopic_shortcircuit_test.ts`
 
-## Fora do escopo
-
-- Etapas 7 (localização/aprofundamento) e 8 (handoff) continuam com o padrão atual (LLM + travas reativas). Elas já funcionam consistentemente nos testes manuais; se quiser depois, aplicamos o mesmo padrão.
-- Não muda nenhuma tabela, RLS ou frontend.
-
-## Trade-off
-
-Ganho: zero risco de o LLM traduzir errado, esquecer bolha ou misturar idiomas em Msg3–Msg6. Bug do PT desaparece estruturalmente.
-Custo: respostas ficam fixas (sem variação tipo "Obrigado, Maria!" vs "Que bom te conhecer, Maria!"). Aceitável dado o histórico de quebras.
+Nenhuma alteração de DB, RLS, schema ou UI. Apenas lógica do webhook.
