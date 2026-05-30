@@ -61,11 +61,9 @@ export function classifyOffTopic(
 
   const q = String(lastAssistantQuestion || '')
 
-  // Pergunta factual de definição/preço/requisitos tem PRECEDÊNCIA absoluta:
-  // mesmo que contenha keyword de serviço (ex.: "O que é TIE?"), NÃO é resposta
-  // de interesse — é pergunta off-topic que deve ser parqueada.
-  const DEFINITION_QUESTION_RE = /(\bo que (?:é|e|sao|são)|\bqu[eé] es\b|\bqu[eé] son\b|\bwhat (?:is|are)\b|qu['’]?est[- ]ce que|c['’]?est quoi|\bcomo funciona\b|\bc[óo]mo funciona|\bhow (?:does|do)\b|\bcomment fonctionne\b|\bquanto custa\b|\bcu[áa]nto cuesta\b|\bhow much\b|\bcombien\b|quais (?:são|sao) os requisitos|cu[áa]les son los requisitos|what are the requirements)/i
-  if (DEFINITION_QUESTION_RE.test(raw)) return { kind: 'question' }
+  // Pergunta factual de definição/preço/requisitos tem PRECEDÊNCIA absoluta
+  // em todas as 4 línguas suportadas (PT/ES/EN/FR).
+  if (isFactualQuestion(raw)) return { kind: 'question' }
 
   // Recusas explícitas de nome/email são tratadas pelos guards específicos.
   if (q && isQuestionAboutFullName(q) && (isNameRefusal(raw) || isLikelyFullNameAnswer(raw))) return null
