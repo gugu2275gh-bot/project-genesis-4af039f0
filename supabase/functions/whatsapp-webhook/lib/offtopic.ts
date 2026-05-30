@@ -43,9 +43,10 @@ function isShortNumber(text: string): boolean {
 // ============================================================================
 const DEFINITION_QUESTION_RE = new RegExp(
   [
-    // --- PT ---
-    String.raw`\bo\s+que\s+(?:é|e|sao|são|seria|significa|significam)\b`,
-    String.raw`\bo\s+que\s+quer\s+dizer\b`,
+    // --- PT --- aceita "que" e "quê" (com circunflexo); "é/e/ê" (sem \b após acento — \b é ASCII em JS)
+    String.raw`\bo\s+qu[eê]\s+(?:é|e|ê|sao|são|seria|significa|significam)(?=\s|$|[?.!,])`,
+    String.raw`\bo\s+qu[eê]\s+quer\s+dizer\b`,
+
     String.raw`\bquanto\s+custa\b`,
     String.raw`\bcomo\s+funciona\b`,
     String.raw`\bquais\s+(?:são|sao)\s+os\s+requisitos\b`,
@@ -74,16 +75,62 @@ const DEFINITION_QUESTION_RE = new RegExp(
   'iu',
 )
 
+const FACTUAL_PREFIX_RE = /^\s*(o\s+qu[eê]|qu[eé]|what(?:'?s)?|how|qu['’]?est|c['’]?est\s+quoi|combien|comment|cu[aá]nto|c[oó]mo|quanto|como)\b/iu
+
 export function isFactualQuestion(text: string): boolean {
   const s = String(text || '').trim()
   if (!s) return false
   if (DEFINITION_QUESTION_RE.test(s)) return true
-  // Fallback: pergunta curta terminada em "?" contendo keyword de serviço
-  // (ex.: "TIE?", "Arraigo?", "Residencia?") — claramente factual.
-  if (/\?\s*$/.test(s) && s.split(/\s+/).length <= 6 && isPotentialInterestAnswer(s)) {
-    return true
+  // Fallback: pergunta curta com keyword de serviço, com OU sem '?'
+  const noQ = s.replace(/\?/g, '').trim()
+  if (s.split(/\s+/).length <= 6 && isPotentialInterestAnswer(noQ)) {
+    if (/\?\s*$/.test(s)) return true
+    if (FACTUAL_PREFIX_RE.test(s)) return true
   }
   return false
+}
+
+// ============================================================================
+// Validação de resposta por etapa do cadastro básico.
+// Para cada etapa, define o que conta como resposta VÁLIDA. Qualquer outra
+// coisa (pergunta factual, dúvida, serviço fora da hora, etc.) é off-topic.
+// ============================================================================
+export type CadastroStepKey =
+  | 'abertura' | 'nome' | 'email' | 'interesse'
+  | 'localizacao' | 'data_entrada' | 'empadronamiento'
+  | 'preHandoff' | 'handoff' | string
+
+export function isValidAnswerForStep(
+  rawMessage: string,
+  step: CadastroStepKey | undefined | null,
+  lastAssistantQuestion?: string | null,
+): boolean {
+  const s = String(rawMessage || '').trim()
+  if (!s) return false
+  if (!step) return true
+  // Pergunta factual nunca é resposta válida a uma pergunta de cadastro.
+  if (isFactualQuestion(s)) return false
+  switch (step) {
+    case 'abertura':
+      return isYesNo(s)
+    case 'nome':
+      return isLikelyFullNameAnswer(s) || isNameRefusal(s)
+    case 'email':
+      return hasValidEmail(s) || isEmailRefusal(s)
+    case 'interesse':
+      return isPotentialInterestAnswer(s) || isStructuredQuestionAnswer(s)
+    case 'localizacao':
+      return isYesNo(s) || isNeverBeenToSpainAnswer(s) || LOCATION_IN_SPAIN_HINT_RE.test(s)
+    case 'data_entrada':
+      return isPotentialEntryDateAnswer(s) || isNeverBeenToSpainAnswer(s)
+    case 'empadronamiento':
+      return isYesNo(s) || isValidSpanishCity(s)
+    case 'preHandoff':
+    case 'handoff':
+      return isYesNo(s) || isShortNumber(s) || isStructuredQuestionAnswer(s)
+    default:
+      return true
+  }
 }
 
 /**
@@ -103,11 +150,19 @@ const LOCATION_IN_SPAIN_HINT_RE = /\b(estou na espanha|estoy en espa[ñn]a|i'?m 
 export function classifyOffTopic(
   currentMessage: string,
   lastAssistantQuestion: string | null | undefined,
-  ctx?: { collectionGateActive?: boolean },
+  ctx?: { collectionGateActive?: boolean; currentStep?: CadastroStepKey | null },
 ): OffTopicResult | null {
   const raw = String(currentMessage || '').trim()
   if (!raw) return null
   if (!ctx?.collectionGateActive) return null
+
+  // Autoridade por etapa: se sabemos qual é a etapa do cadastro, exigimos
+  // resposta válida para essa etapa. Qualquer outra coisa é off-topic.
+  if (ctx.currentStep) {
+    if (isValidAnswerForStep(raw, ctx.currentStep, lastAssistantQuestion)) return null
+    return { kind: isFactualQuestion(raw) ? 'question' : 'request' }
+  }
+
 
   const q = String(lastAssistantQuestion || '')
 

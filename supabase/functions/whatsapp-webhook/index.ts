@@ -1625,7 +1625,16 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         // Isto garante recuperação retroativa se o turno em que o cliente respondeu
         // o interesse não capturou (ex.: deploy propagou no meio da conversa).
         try {
-          if (serviceMissing && rawCustomerMessage) {
+          // Só capturamos interesse a partir de mensagem livre quando a ÚLTIMA
+          // pergunta do bot foi sobre interesse / catálogo. Isso evita atribuir
+          // serviço quando o cliente faz uma pergunta factual no meio de outra
+          // etapa (ex.: "O quê é TIE" durante a etapa de e-mail).
+          const lastQ = String(lastAssistantQuestion || '')
+          const lastWasInterestQuestion = !!lastQ && (
+            isQuestionAboutInterest(lastQ)
+            || /(se encaixa em algum|encaja en alguno|fits any of these|tu caso encaja|seu caso se encaixa)/i.test(lastQ)
+          )
+          if (serviceMissing && rawCustomerMessage && lastWasInterestQuestion) {
             const detectedInterest = extractInterestFromMessage(rawCustomerMessage)
             if (detectedInterest) {
               await supabase
@@ -1640,6 +1649,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         } catch (capErr) {
           console.warn('[INTEREST_CAPTURE] non-blocking error:', capErr instanceof Error ? capErr.message : capErr)
         }
+
 
         // Wave 6 (anti-repetição em divergência): sincronizar IMEDIATAMENTE o funil
         // com o que já está em contacts/leads. Isso garante que o Gate use o funil
@@ -1985,7 +1995,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         let parkedThisTurn: PendingItem | null = null
         try {
           if (collectionGateActive && rawCustomerMessage) {
-            const off = classifyOffTopic(rawCustomerMessage, lastAssistantQuestion, { collectionGateActive: true })
+            const off = classifyOffTopic(rawCustomerMessage, lastAssistantQuestion, { collectionGateActive: true, currentStep: nextStep?.key as any })
             if (off) {
               const before = pendingQueue.length
               pendingQueue = pushPending(pendingQueue, { text: rawCustomerMessage, kind: off.kind })
