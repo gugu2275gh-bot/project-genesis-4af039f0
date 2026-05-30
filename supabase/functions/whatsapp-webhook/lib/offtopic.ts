@@ -36,6 +36,56 @@ function isShortNumber(text: string): boolean {
   return /^\s*\d{1,3}\s*$/.test(text)
 }
 
+// ============================================================================
+// Detector universal de pergunta factual (definição, significado, preço,
+// requisitos, "como funciona") cobrindo PT / ES / EN / FR. Usado por
+// classifyOffTopic e por extractInterestFromMessage para garantir paridade.
+// ============================================================================
+const DEFINITION_QUESTION_RE = new RegExp(
+  [
+    // --- PT ---
+    String.raw`\bo\s+que\s+(?:é|e|sao|são|seria|significa|significam)\b`,
+    String.raw`\bo\s+que\s+quer\s+dizer\b`,
+    String.raw`\bquanto\s+custa\b`,
+    String.raw`\bcomo\s+funciona\b`,
+    String.raw`\bquais\s+(?:são|sao)\s+os\s+requisitos\b`,
+    // --- ES --- (cobre "qué es", "que es", "qué és", "que és")
+    String.raw`\bqu[eé]\s+[eé]s\b`,
+    String.raw`\bqu[eé]\s+son\b`,
+    String.raw`\bqu[eé]\s+significa(?:n)?\b`,
+    String.raw`\bqu[eé]\s+quiere\s+decir\b`,
+    String.raw`\bcu[aá]nto\s+cuesta\b`,
+    String.raw`\bc[oó]mo\s+funciona\b`,
+    String.raw`\bcu[aá]les\s+son\s+los\s+requisitos\b`,
+    // --- EN ---
+    String.raw`\bwhat(?:'?s|\s+is|\s+are|\s+does)\b`,
+    String.raw`\bwhat\s+does\s+\S+\s+mean\b`,
+    String.raw`\bhow\s+(?:does|do|much)\b`,
+    String.raw`\bwhat\s+are\s+the\s+requirements\b`,
+    // --- FR ---
+    String.raw`qu['’]?est[- ]ce\s+que`,
+    String.raw`c['’]?est\s+quoi`,
+    String.raw`\bque\s+(?:veut|signifie)\s+dire\b`,
+    String.raw`\bcomment\s+fonctionne\b`,
+    String.raw`\bcomment\s+ça\s+marche\b`,
+    String.raw`\bcombien\s+(?:ça\s+coûte|coûte)\b`,
+    String.raw`\bquels\s+sont\s+les\s+(?:requisits|prérequis|conditions)\b`,
+  ].join('|'),
+  'iu',
+)
+
+export function isFactualQuestion(text: string): boolean {
+  const s = String(text || '').trim()
+  if (!s) return false
+  if (DEFINITION_QUESTION_RE.test(s)) return true
+  // Fallback: pergunta curta terminada em "?" contendo keyword de serviço
+  // (ex.: "TIE?", "Arraigo?", "Residencia?") — claramente factual.
+  if (/\?\s*$/.test(s) && s.split(/\s+/).length <= 6 && isPotentialInterestAnswer(s)) {
+    return true
+  }
+  return false
+}
+
 /**
  * Retorna `null` se a mensagem é resposta válida à pergunta corrente do bot
  * (ou se for uma recusa que outros guards já tratam). Caso contrário,
