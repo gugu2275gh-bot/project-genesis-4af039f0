@@ -391,6 +391,7 @@ import {
 } from './lib/funnel-state.ts'
 
 import { classifyOffTopic, getOffTopicAckPhrase } from './lib/offtopic.ts'
+import { isValidSpanishCity } from './lib/spanish-cities.ts'
 import { normalizeQueue, pushPending, getReplayPreamble, type PendingItem } from './lib/parking.ts'
 import { logTurn } from './lib/turn-log.ts'
 
@@ -2753,13 +2754,38 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             // pós-handoff é anexado APENAS à última bolha do replay.
             try {
               const preNowSent = !!funnelStateLive.pre_handoff_sent
-              const replayQueue = normalizeQueue((funnelStateLive as any).pending_questions || [])
+              let replayQueue = normalizeQueue((funnelStateLive as any).pending_questions || [])
+              if (preNowSent && replayQueue.length > 0) {
+                // Purga itens que na verdade são dados de cadastro já coletados
+                // (nome, e-mail, data, cidade, yes/no) — não devem virar pergunta no replay.
+                const isCadastroData = (t: string): boolean => {
+                  const s = String(t || '').trim()
+                  if (!s) return true
+                  if (isLikelyFullNameAnswer(s)) return true
+                  if (hasValidEmail(s)) return true
+                  if (isPotentialEntryDateAnswer(s)) return true
+                  if (isValidSpanishCity(s)) return true
+                  if (/^\s*(sim|s[íi]|yes|y|ok|vale|claro|n[ãa]o|no|nope|nunca|never)\s*[.!]?\s*$/i.test(s)) return true
+                  return false
+                }
+                const purgedCount = replayQueue.filter(it => isCadastroData(it.text)).length
+                if (purgedCount > 0) {
+                  replayQueue = replayQueue.filter(it => !isCadastroData(it.text))
+                  console.log(`[REPLAY] purga ${purgedCount} item(s) que viraram dados de cadastro`)
+                  await supabase
+                    .from('lead_funnel_state')
+                    .update({ pending_questions: replayQueue, updated_at: new Date().toISOString() })
+                    .eq('lead_id', lead.id)
+                  ;(funnelStateLive as any).pending_questions = replayQueue
+                }
+              }
               if (preNowSent && replayQueue.length > 0) {
                 console.log(`[REPLAY] iniciando drenagem de ${replayQueue.length} item(ns) parqueado(s)`)
                 const replayPreamble = getReplayPreamble(detectedChatLanguage)
                 const replaySuffix = getPostHandoffWaitSuffix(detectedChatLanguage)
                 const remaining = [...replayQueue]
                 for (let idx = 0; idx < replayQueue.length; idx++) {
+
                   const item = replayQueue[idx]
                   const isLast = idx === replayQueue.length - 1
                   const itemKb = await getKnowledgeBaseContext(supabase, item.text, undefined).catch(() => '')
@@ -2792,10 +2818,24 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                   if (!answer.toLowerCase().startsWith(replayPreamble.toLowerCase())) {
                     answer = `${replayPreamble}: ${answer.trim()}`
                   }
+                  // Guard anti re-ask: se a resposta do replay re-perguntar um campo
+                  // de cadastro (e-mail, nome, telefone), descarta o item.
+                  const reAskRe = /qual\s+(?:é|e)\s+(?:o|seu)\s+(?:melhor\s+)?(?:e-?mail|nome\s+completo|nome|telefone)|what\s+(?:is|'s)\s+your\s+(?:best\s+)?(?:e-?mail|full\s+name|name|phone)|cu[áa]l\s+es\s+tu\s+(?:mejor\s+)?(?:correo|e-?mail|nombre\s+completo|nombre|tel[eé]fono)|quel\s+est\s+votre\s+(?:meilleur\s+)?(?:e-?mail|nom\s+complet|nom|t[eé]l[eé]phone)/i
+                  if (reAskRe.test(answer)) {
+                    console.log(`[REPLAY] suppressed re-ask of cadastro field on item ${idx + 1}/${replayQueue.length}`)
+                    remaining.shift()
+                    await supabase
+                      .from('lead_funnel_state')
+                      .update({ pending_questions: remaining, updated_at: new Date().toISOString() })
+                      .eq('lead_id', lead.id)
+                    ;(funnelStateLive as any).pending_questions = remaining
+                    continue
+                  }
                   if (isLast) {
                     answer = `${answer.trim()}\n\n${replaySuffix}`
                   }
                   try {
+
                     await sendWhatsAppMessage(phoneNumber, answer)
                     await supabase.from('mensagens_cliente').insert({
                       id_lead: lead.id,
