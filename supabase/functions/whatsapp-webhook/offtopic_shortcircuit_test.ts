@@ -8,13 +8,18 @@ import { getPromptTemplates, ChatLanguage } from './lib/language.ts'
 
 const langs: ChatLanguage[] = ['pt-BR', 'es', 'en', 'fr']
 
-Deno.test('ACK de off-topic NUNCA começa com "Obrigado." / "Gracias." / "Thank you." / "Merci."', () => {
-  for (const l of langs) {
-    const ack = getOffTopicAckPhrase(l)
-    assert(!/^obrigado/i.test(ack), `PT leak em ${l}: ${ack}`)
-    assert(!/^gracias/i.test(ack), `ES leak em ${l}: ${ack}`)
-    assert(!/^thank you/i.test(ack), `EN leak em ${l}: ${ack}`)
-    assert(!/^merci/i.test(ack), `FR leak em ${l}: ${ack}`)
+Deno.test('ACK de off-topic usa frase fixa "Por favor / Please / S\'il vous plaît"', () => {
+  const pt = getOffTopicAckPhrase('pt-BR')
+  const es = getOffTopicAckPhrase('es')
+  const en = getOffTopicAckPhrase('en')
+  const fr = getOffTopicAckPhrase('fr')
+  assert(/^Por favor/.test(pt) && /cadastro básico/i.test(pt), `pt: ${pt}`)
+  assert(/^Por favor/.test(es) && /registro básico/i.test(es), `es: ${es}`)
+  assert(/^Please/.test(en) && /basic registration/i.test(en), `en: ${en}`)
+  assert(/^S'il vous plaît/.test(fr) && /enregistrement de base/i.test(fr), `fr: ${fr}`)
+  // E NUNCA começa com "Obrigado/Gracias/Thank you/Merci/Anotado/Noted"
+  for (const ack of [pt, es, en, fr]) {
+    assert(!/^(obrigado|gracias|thank you|merci|anotado|noted|not[ée])/i.test(ack), `leak: ${ack}`)
   }
 })
 
