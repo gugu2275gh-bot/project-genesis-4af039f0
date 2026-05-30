@@ -150,7 +150,7 @@ const REASK_PATTERNS: Record<keyof CapturedSnapshot, RegExp> = {
   interest: /\b(qual\s+(?:é\s+)?(?:o\s+)?seu\s+interesse|em\s+que\s+(?:posso|podemos)\s+(?:te\s+)?ajudar|qual\s+servi[çc]o|qu[eé]\s+servicio|en\s+qu[eé]\s+(?:puedo|podemos)\s+ayudarte|tu\s+caso\s+encaja|which\s+service|how\s+can\s+(?:i|we)\s+help|quel\s+service|comment\s+(?:puis|pouvons)-(?:je|nous)\s+vous\s+aider)\b/i,
   locationSpain: /\b(voc[eê]\s+(?:est[áa]|mora|vive)\s+(?:na|em)\s+espanha|est[áa]s?\s+(?:en|na)\s+espa[ñn]a|vives?\s+en\s+espa[ñn]a|are\s+you\s+(?:in|living\s+in)\s+spain|do\s+you\s+live\s+in\s+spain|(?:vous\s+)?(?:êtes|etes|vis|vivez)\s+en\s+espagne)\b/i,
   entryDate: /\b(quando\s+(?:voc[eê]\s+)?(?:entrou|chegou)\s+(?:na|em|no)\s+espa[ñn]ha?|qual\s+(?:foi\s+)?(?:a\s+)?data\s+de\s+(?:entrada|chegada)|cu[áa]ndo\s+(?:entraste|llegaste)\s+a\s+espa[ñn]a|fecha\s+de\s+(?:entrada|llegada)|when\s+did\s+you\s+(?:enter|arrive\s+in)\s+spain|date\s+of\s+(?:entry|arrival)|quand\s+(?:êtes|etes|es)-?vous\s+(?:entr[eé]|arriv[eé])|date\s+d['’]?(?:entr[eé]e|arriv[eé]e))\b/i,
-  empadronamientoCity: /\b(em\s+que\s+cidade\s+(?:voc[eê]\s+)?(?:est[áa]\s+)?empadronad|en\s+qu[eé]\s+ciudad\s+(?:est[áa]s\s+)?empadronad|in\s+which\s+city\s+are\s+you\s+(?:registered|empadronad)|dans\s+quelle\s+ville\s+êtes-?vous\s+(?:enregistr|empadronad))\b/i,
+  empadronamientoCity: /(em\s+que\s+cidade\s+(?:voc[eê]\s+)?(?:est[áa]\s+)?empadronad\w*|en\s+qu[eé]\s+ciudad\s+(?:est[áa]s\s+)?empadronad\w*|in\s+which\s+city\s+are\s+you\s+(?:registered|empadronad\w*)|dans\s+quelle\s+ville\s+êtes-?vous\s+(?:enregistr\w*|empadronad\w*))/i,
   age: /\b(qual\s+(?:é\s+)?(?:a\s+)?sua\s+idade|quantos\s+anos\s+voc[eê]\s+tem|cu[áa]ntos\s+a[ñn]os\s+tienes|how\s+old\s+are\s+you|quel\s+âge\s+avez-?vous)\b/i,
 }
 
