@@ -377,6 +377,8 @@ import {
   enforceCanonicalLanguage,
   isLocked,
   lock,
+  stripDuplicateShortOpeners,
+  composeAckPlusScripted,
 } from './lib/overrides.ts'
 
 import {
