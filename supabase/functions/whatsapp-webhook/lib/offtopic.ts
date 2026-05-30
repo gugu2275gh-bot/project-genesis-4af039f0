@@ -149,11 +149,19 @@ const LOCATION_IN_SPAIN_HINT_RE = /\b(estou na espanha|estoy en espa[ñn]a|i'?m 
 export function classifyOffTopic(
   currentMessage: string,
   lastAssistantQuestion: string | null | undefined,
-  ctx?: { collectionGateActive?: boolean },
+  ctx?: { collectionGateActive?: boolean; currentStep?: CadastroStepKey | null },
 ): OffTopicResult | null {
   const raw = String(currentMessage || '').trim()
   if (!raw) return null
   if (!ctx?.collectionGateActive) return null
+
+  // Autoridade por etapa: se sabemos qual é a etapa do cadastro, exigimos
+  // resposta válida para essa etapa. Qualquer outra coisa é off-topic.
+  if (ctx.currentStep) {
+    if (isValidAnswerForStep(raw, ctx.currentStep, lastAssistantQuestion)) return null
+    return { kind: isFactualQuestion(raw) ? 'question' : 'request' }
+  }
+
 
   const q = String(lastAssistantQuestion || '')
 
