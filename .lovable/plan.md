@@ -1,58 +1,80 @@
-# Plano: frase off-topic padrão + bloqueio total de re-perguntas
+## Diagnóstico (logs do turno do Roberto)
 
-## Objetivo
-1. Quando o usuário faz uma pergunta off-topic durante o pré-handoff (ex.: "O que é TIE?"), a resposta deve ser **exatamente** a frase pedida, traduzida por idioma — sem "Anotado", sem agradecimentos, sem reformulações.
-2. Garantir que **nenhum dado já capturado** no pré-handoff (nome, e-mail, telefone, interesse/serviço, localização Espanha, data de entrada, cidade de empadronamiento, idade, etc.) seja perguntado novamente em nenhuma circunstância.
+Mensagem do cliente: `"O que és TIE?"` (durante etapa `email`, após o bot perguntar o e-mail).
+
+Linha do tempo nos logs do `whatsapp-webhook`:
+
+1. `[INTEREST_CAPTURE] "O que és TIE?" -> RESIDENCIA_PARENTE_COMUNITARIO` → o `extractInterestFromMessage` casou a substring **TIE** com a keyword de "Residencia Parente Comunitario" e marcou `interest_confirmed=true`.
+2. `[FUNNEL_STATE] synced ... interest_confirmed=RESIDENCIA_PARENTE_COMUNITARIO -> step: email`.
+3. `[DETERMINISTIC_PATCH] ... patch: { interest_confirmed: 'RESIDENCIA_PARENTE_COMUNITARIO' }` reforçou.
+4. `[CANONICAL_SHORTCIRCUIT] msg4 askEmail em es` e `[GATE-HARD-LOCK] step=email replacing AI output with canonical script` → bot voltou a pedir o e-mail, **sem** a frase de off-topic prometida.
+
+Não houve `[PARK]` nem `[OFFTOPIC_SHORTCIRCUIT]`. Causa raiz dupla:
+
+**(A)** `classifyOffTopic` em `lib/offtopic.ts` tem o curto-circuito  
+`if (isPotentialInterestAnswer(raw) || LOCATION_IN_SPAIN_HINT_RE.test(raw)) return null`  
+**antes** de checar `QUESTION_HINT_RE`. Como "TIE" bate como serviço, a pergunta nunca é parqueada.
+
+**(B)** No `index.ts` (~linha 1628), o bloco `INTEREST_CAPTURE` chama `extractInterestFromMessage(rawCustomerMessage)` sem filtrar perguntas factuais. Mesmo que (A) seja corrigido, "O que é TIE?" ainda escreve `interest_confirmed=true` no lead e dispara o `syncFunnelFromCapturedData` → avança o gate.
 
 ## Mudanças
 
-### A) `supabase/functions/whatsapp-webhook/lib/offtopic.ts`
-Substituir o corpo de `getOffTopicAckPhrase(language)` pelas frases exatas:
+### 1) `supabase/functions/whatsapp-webhook/lib/offtopic.ts`
 
-- **pt-BR:** `Por favor, vamos terminar o cadastro básico primeiro. Em seguida podemos tratar de outros assuntos.`
-- **es:** `Por favor, terminemos primero el registro básico. A continuación podemos tratar otros temas.`
-- **en:** `Please, let's finish the basic registration first. Afterwards we can address other matters.`
-- **fr:** `S'il vous plaît, terminons d'abord l'enregistrement de base. Ensuite, nous pourrons aborder d'autres sujets.`
+Inverter a ordem no `classifyOffTopic` para que perguntas/pedidos explícitos tenham precedência sobre o atalho de interesse/localização. Acrescentar um detector específico de "pergunta factual de definição" (`o que é/qué es/what is/qu'est-ce que`) que **sempre** classifica como `question`, mesmo que a frase contenha keyword de serviço.
 
-A frase é usada por `composeAckPlusScripted` como primeira bolha quando há pergunta scripted a seguir, e isolada quando não há — comportamento atual preservado.
+```ts
+const DEFINITION_QUESTION_RE = /\b(o que (é|e|sao|são)|qu[eé] (es|son)|what (is|are)|qu['’]?est[- ]ce que|c['’]?est quoi)\b/i
 
-### B) `supabase/functions/whatsapp-webhook/index.ts` — anti-re-ask universal de dados capturados
+// ... dentro do classifyOffTopic, ANTES do bloco
+//   if (isPotentialInterestAnswer(raw) || LOCATION_IN_SPAIN_HINT_RE.test(raw)) return null
+if (DEFINITION_QUESTION_RE.test(raw) || /\?\s*$/.test(raw.trim())) {
+  // pergunta factual real — não é resposta de interesse
+  if (QUESTION_HINT_RE.test(raw) || /\?/.test(raw)) return { kind: 'question' }
+}
+```
 
-Hoje o `reAskRe` cobre apenas nome/e-mail/telefone dentro do loop de REPLAY. Vou:
+Manter os demais guards (nome, e-mail, data, cidade) como estão.
 
-1. **Extrair** a checagem para uma função `isReAskOfCapturedField(answer, captured)` que recebe o snapshot do que já foi capturado no lead (`full_name`, `email`, `phone`, `interest/service`, `location_spain`, `spain_entry_date`, `empadronamiento_city`, `age`, etc.) e retorna o campo violado, com regex multi-idioma por campo:
-   - nome completo: `qual (é )?(o )?seu nome|cu[áa]l es tu nombre|what'?s your (full )?name|comment (vous |t')?appelez`
-   - e-mail: `(seu |tu |votre )?(melhor )?(e-?mail|correo)|what'?s your email`
-   - telefone/WhatsApp: `tel[eé]fono|phone( number)?|whatsapp`
-   - interesse/serviço: `qual( é)? (o )?(seu )?interesse|servi[çc]o|tu caso encaja|qu[eé] servicio|which service`
-   - localização Espanha: `est[áa]s? (en|na) espa[ñn]a|are you in spain|vous (êtes|etes) en espagne`
-   - data entrada: `quando (você |voce )?(entrou|chegou)|cu[áa]ndo (entraste|llegaste)|when did you (enter|arrive)`
-   - cidade empadronamiento: `em que cidade|en qu[eé] ciudad|in which city|empadronad`
-   - idade: `qual (sua |a sua )?idade|cu[áa]ntos a[ñn]os|how old`
+### 2) `supabase/functions/whatsapp-webhook/index.ts` — bloquear INTEREST_CAPTURE em perguntas
 
-2. **Aplicar** a função em DOIS pontos:
-   - Dentro do loop de REPLAY (substituindo o `reAskRe` atual), com log `[REPLAY] suppressed re-ask of captured field: <campo>`.
-   - Logo após `generateAIResponse`/`generateAIResponseOpenAI` na resposta principal (fluxo normal, não-replay), com log `[GUARD] suppressed re-ask of captured field: <campo>` e descarte da bolha (ou da frase específica via split por linhas) antes do envio.
+No bloco `try { if (serviceMissing && rawCustomerMessage) { ... extractInterestFromMessage ... } }` (linhas ~1627-1642), adicionar guarda antes de chamar o extractor:
 
-3. **Snapshot de capturados**: montar a partir do `lead` atual + `pendingExtraction`/dados extraídos no turno (já existem nos helpers). Onde o campo não estiver no lead, considerar não-capturado.
+```ts
+const looksLikeFactualQuestion =
+  /\?\s*$/.test(rawCustomerMessage.trim()) ||
+  /\b(o que (é|e|sao|são)|qu[eé] (es|son)|what (is|are)|qu['’]?est[- ]ce que|c['’]?est quoi|como funciona|c[óo]mo funciona|how does|comment fonctionne|quanto custa|cu[áa]nto cuesta|how much|combien)\b/i.test(rawCustomerMessage)
 
-### C) `supabase/functions/whatsapp-webhook/offtopic_shortcircuit_test.ts`
-Atualizar asserts para validar:
-- pt: começa com `Por favor` e contém `cadastro básico`
-- es: começa com `Por favor` e contém `registro básico`
-- en: começa com `Please` e contém `basic registration`
-- fr: começa com `S'il vous plaît` e contém `enregistrement de base`
-- Mantém asserts de deduplicação existentes.
+if (serviceMissing && rawCustomerMessage && !looksLikeFactualQuestion) {
+  const detectedInterest = extractInterestFromMessage(rawCustomerMessage)
+  // ... resto igual
+}
+```
 
-### D) Novo teste `supabase/functions/whatsapp-webhook/reask_guard_test.ts`
-Cobertura unitária da função `isReAskOfCapturedField` para cada campo nos 4 idiomas, garantindo:
-- detecta re-ask quando o campo está no snapshot capturado;
-- NÃO bloqueia quando o campo ainda não foi capturado;
-- não tem falso-positivo em frases neutras (ex.: "obrigado pelo seu email").
+Mesmo padrão deve ser aplicado ao `[DETERMINISTIC_PATCH]` que está mais abaixo (procurar onde ele computa `interest_confirmed` a partir de `rawCustomerMessage` e aplicar o mesmo `looksLikeFactualQuestion` guard) — caso contrário a patch sobrescreve novamente.
 
-### E) Deploy
-Redeploy de `whatsapp-webhook` após os testes passarem.
+Resultado esperado: para `"O que és TIE?"` durante o pré-handoff,
+- `INTEREST_CAPTURE` é pulado, `serviceMissing` continua `true`;
+- `classifyOffTopic` retorna `{ kind: 'question' }` → `[PARK]` enfileira;
+- bloco `OFFTOPIC_SHORTCIRCUIT` produz `ACK off-topic ||| próxima pergunta canônica` (askEmail em ES);
+- o cliente vê: *"Por favor, terminemos primero el registro básico. A continuación podemos tratar otros temas."* + reiteração da pergunta de e-mail.
+
+### 3) Testes
+
+- Atualizar `offtopic_park_replay_test.ts` (ou criar novo `offtopic_definition_question_test.ts`) cobrindo:
+  - `classifyOffTopic("O que é TIE?", "Qual seu melhor e-mail?", { collectionGateActive: true })` → `{ kind: 'question' }`
+  - `classifyOffTopic("¿Qué es el NIE?", ...)` → `question`
+  - `classifyOffTopic("What is TIE?", ...)` → `question`
+  - `classifyOffTopic("Qu'est-ce que le TIE?", ...)` → `question`
+  - Continuar retornando `null` para `"Residencia"`, `"Nacionalidade"`, etc. (sem `?` e sem definition prefix).
+
+- Novo teste de unidade (em arquivo já existente do whatsapp-webhook) validando que `extractInterestFromMessage("O que é TIE?")` **pode** retornar uma keyword, mas o guard em `index.ts` impede a captura — alternativamente, fazer o guard dentro do próprio `extractInterestFromMessage` retornando `null` quando `looksLikeFactualQuestion` for `true`.
+
+### 4) Deploy
+
+Redeploy de `whatsapp-webhook` e validação rápida via `supabase--curl_edge_functions` simulando um webhook com `Body=O que és TIE?`.
 
 ## Fora do escopo
-- Nenhuma mudança em `lib/overrides.ts`, system prompt, gates de Msg3/4/5/6, UI, RLS, DB ou outras edge functions.
-- Lógica de classificação off-topic (`classifyOffTopic`) permanece como está — só a frase muda.
+
+- Nenhuma mudança em `lib/overrides.ts`, system prompt, RLS, DB, UI ou outras edge functions.
+- A frase de off-topic em si já está correta nas 4 línguas (mudança anterior).
