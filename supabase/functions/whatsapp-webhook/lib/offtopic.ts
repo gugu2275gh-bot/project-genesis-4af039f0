@@ -81,6 +81,12 @@ export function classifyOffTopic(
     if (/(qual sua idade|cu[áa]ntos a[ñn]os|how old)/i.test(q) && /\b\d{1,3}\b/.test(raw)) return null
   }
 
+  // Pergunta factual de definição/preço/requisitos tem PRECEDÊNCIA absoluta:
+  // mesmo que contenha keyword de serviço (ex.: "O que é TIE?"), NÃO é resposta
+  // de interesse — é pergunta off-topic que deve ser parqueada.
+  const DEFINITION_QUESTION_RE = /\b(o que (?:é|e|sao|são)|que es|qu[eé] son|what (?:is|are)|qu['’]?est[- ]ce que|c['’]?est quoi|como funciona|c[óo]mo funciona|how (?:does|do)|comment fonctionne|quanto custa|cu[áa]nto cuesta|how much|combien|quais (?:são|sao) os requisitos|cu[áa]les son los requisitos|what are the requirements)\b/i
+  if (DEFINITION_QUESTION_RE.test(raw)) return { kind: 'question' }
+
   // Resposta composta: contém um serviço válido E/OU pista de localização → não parqueia.
   // Cobre o caso clássico "Sí, ya tengo 2 años en España y quiero solicitar mi residencia",
   // que responde catálogo+localização ao mesmo tempo.
