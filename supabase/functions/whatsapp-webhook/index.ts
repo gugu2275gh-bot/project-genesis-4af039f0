@@ -2125,14 +2125,50 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         const lastWasConsent = /(perguntas? r[áa]pidas?|preguntas? r[áa]pidas?|quick questions?|questions rapides)/i.test(lastAsstLc)
         const lastWasNameQ = /(nome completo|nombre completo|full name|nom complet)/i.test(lastAsstLc)
         const lastWasEmailQ = /(e[- ]?mail|correo|courriel)/i.test(lastAsstLc) && /\?/.test(lastAsstLc)
+        // Robustez Msg4: aceita também o caso em que a última msg do usuário PARECE um nome
+        // (mesmo que lastAssistantMessage tenha sido reescrito/perdido).
+        const userJustAnsweredName = isLikelyFullNameAnswer(rawCustomerMessage || '')
 
-        if (isFirstInteraction && !isReturningClient) {
+        // OFF-TOPIC determinístico: se o cliente desviou do roteiro durante o cadastro,
+        // resposta = ACK ("Anotado…") + reiteração da pergunta canônica corrente,
+        // SEM "Obrigado.", SEM "Perfeito." e SEM passar pelo LLM.
+        if (collectionGateActive && parkedThisTurn && nextStep) {
+          try {
+            const scriptedOT = getNextScriptedQuestion(nextStep.key as any, detectedChatLanguage, {
+              userInSpain,
+              userOutsideSpain,
+              assistantTranscript: allAssistant,
+              entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+              locationKnown: funnelStateLive.location_known,
+              empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+              empadronadoCity: funnelStateLive.empadronado_city,
+              empadronadoSinceConfirmed: (funnelStateLive as any).empadronamiento_since,
+              preHandoffSent: !!funnelStateLive.pre_handoff_sent,
+              handoffSent: !!funnelStateLive.handoff_sent,
+              outsideProgress: (funnelStateLive.outside_spain_progress || {}) as any,
+              catalogSent,
+            })
+            if (scriptedOT && scriptedOT.trim().length > 0) {
+              const ackOT = getOffTopicAckPhrase(detectedChatLanguage)
+              aiResponse = scriptedOT.includes('|||')
+                ? `${ackOT}|||${scriptedOT}`
+                : `${ackOT}|||${scriptedOT}`
+              console.log('[OFFTOPIC_SHORTCIRCUIT] gate=' + nextStep.key + ' lang=' + detectedChatLanguage)
+            }
+          } catch (otErr) {
+            console.warn('[OFFTOPIC_SHORTCIRCUIT] non-blocking error:', otErr instanceof Error ? otErr.message : otErr)
+          }
+        }
+
+        if (aiResponse) {
+          // already produced by OFFTOPIC short-circuit
+        } else if (isFirstInteraction && !isReturningClient) {
           aiResponse = `${tt.openingLine1}|||${tt.openingLine2}`
           console.log('[OPENER_SHORTCIRCUIT] abertura canônica enviada em', detectedChatLanguage)
         } else if (!isReturningClient && aberturaDone && nameMissing && lastWasConsent) {
           aiResponse = tt.askName
           console.log('[CANONICAL_SHORTCIRCUIT] msg3 askName em', detectedChatLanguage)
-        } else if (!isReturningClient && !nameMissing && emailMissing && lastWasNameQ) {
+        } else if (!isReturningClient && !nameMissing && emailMissing && (lastWasNameQ || userJustAnsweredName)) {
           aiResponse = tt.thanksThenAskEmail
           console.log('[CANONICAL_SHORTCIRCUIT] msg4 askEmail em', detectedChatLanguage)
         } else if (!isReturningClient && !nameMissing && !emailMissing && serviceMissing && !catalogSent && lastWasEmailQ) {
@@ -2152,6 +2188,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             console.error('Gemini failed, trying OpenAI fallback:', geminiError instanceof Error ? geminiError.message : geminiError)
           }
         }
+
 
         // Fallback to OpenAI if Gemini returned empty or failed
         if (!aiResponse) {
