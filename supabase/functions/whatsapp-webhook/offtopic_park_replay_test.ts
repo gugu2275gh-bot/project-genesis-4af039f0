@@ -75,10 +75,10 @@ Deno.test('queue: normalizeQueue rejeita lixo', () => {
 })
 
 Deno.test('ack phrase localizado pt/es/en/fr', () => {
-  assert(getOffTopicAckPhrase('pt-BR').includes('Anotado'))
-  assert(getOffTopicAckPhrase('es').toLowerCase().includes('anotado'))
-  assert(getOffTopicAckPhrase('en').toLowerCase().includes('noted'))
-  assert(getOffTopicAckPhrase('fr').toLowerCase().includes('not'))
+  assert(getOffTopicAckPhrase('pt-BR').startsWith('Por favor') && /cadastro básico/i.test(getOffTopicAckPhrase('pt-BR')))
+  assert(getOffTopicAckPhrase('es').startsWith('Por favor') && /registro básico/i.test(getOffTopicAckPhrase('es')))
+  assert(getOffTopicAckPhrase('en').startsWith('Please') && /basic registration/i.test(getOffTopicAckPhrase('en')))
+  assert(getOffTopicAckPhrase('fr').startsWith("S'il vous plaît") && /enregistrement de base/i.test(getOffTopicAckPhrase('fr')))
 })
 
 Deno.test('replay preamble localizado pt/es/en/fr', () => {
