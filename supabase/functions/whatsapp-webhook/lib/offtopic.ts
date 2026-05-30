@@ -120,8 +120,8 @@ export function classifyOffTopic(
 
 
 export function getOffTopicAckPhrase(language: string): string {
-  if (language === 'es') return 'Anotado — trataré ese punto en cuanto terminemos este registro rapidísimo.'
-  if (language === 'en') return "Noted — I'll cover that as soon as we finish this quick intake."
-  if (language === 'fr') return 'Noté — je traiterai ce point dès que nous aurons terminé ce bref questionnaire.'
-  return 'Anotado — vou tratar desse ponto assim que terminarmos esse cadastro rapidíssimo.'
+  if (language === 'es') return 'Por favor, terminemos primero el registro básico. A continuación podemos tratar otros temas.'
+  if (language === 'en') return "Please, let's finish the basic registration first. Afterwards we can address other matters."
+  if (language === 'fr') return "S'il vous plaît, terminons d'abord l'enregistrement de base. Ensuite, nous pourrons aborder d'autres sujets."
+  return 'Por favor, vamos terminar o cadastro básico primeiro. Em seguida podemos tratar de outros assuntos.'
 }
