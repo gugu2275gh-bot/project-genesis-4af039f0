@@ -15,7 +15,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 // "qu'est-ce que X?", "como funciona", "quanto custa", etc.). Quando uma
 // pergunta dessa natureza aparece, NÃO devemos tratá-la como resposta de
 // interesse mesmo que contenha keywords de serviço (ex.: "O que é TIE?").
-const FACTUAL_QUESTION_RE = /\b(o que (?:e|sao|são)|que es|qu[eé] son|what (?:is|are)|qu['’]?est[- ]ce que|c['’]?est quoi|como funciona|c[oó]mo funciona|how (?:does|do)|comment fonctionne|quanto custa|cu[aá]nto cuesta|how much|combien|quais (?:são|sao) os requisitos|cu[aá]les son los requisitos|what are the requirements|quels sont les)\b/i
+const FACTUAL_QUESTION_RE = /(\bo que (?:é|e|sao|são)|\bque es\b|\bqu[eé] son\b|\bwhat (?:is|are)\b|qu['’]?est[- ]ce que|c['’]?est quoi|\bcomo funciona\b|\bc[oó]mo funciona|\bhow (?:does|do)\b|\bcomment fonctionne\b|\bquanto custa\b|\bcu[aá]nto cuesta\b|\bhow much\b|\bcombien\b|quais (?:são|sao) os requisitos|cu[aá]les son los requisitos|what are the requirements|quels sont les)/i
 
 export function isFactualQuestionMessage(raw: string): boolean {
   const s = String(raw || '').trim()
