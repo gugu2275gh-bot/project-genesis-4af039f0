@@ -1985,7 +1985,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         let parkedThisTurn: PendingItem | null = null
         try {
           if (collectionGateActive && rawCustomerMessage) {
-            const off = classifyOffTopic(rawCustomerMessage, lastAssistantQuestion, { collectionGateActive: true })
+            const off = classifyOffTopic(rawCustomerMessage, lastAssistantQuestion, { collectionGateActive: true, currentStep: nextStep?.key as any })
             if (off) {
               const before = pendingQueue.length
               pendingQueue = pushPending(pendingQueue, { text: rawCustomerMessage, kind: off.kind })
