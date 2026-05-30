@@ -89,12 +89,28 @@ export function classifyOffTopic(
   // Resposta MUITO curta sem pergunta corrente clara → não classifica como off-topic.
   if (raw.length <= 3 && !/[?]/.test(raw)) return null
 
+  // GUARDS anti-parking de dados de cadastro: se a mensagem parece um dado de
+  // cadastro (nome, e-mail, data, cidade espanhola) OU se NÃO há pergunta corrente
+  // do bot (primeiro turno), NUNCA parqueia — caso contrário o REPLAY vai pedir
+  // o mesmo dado de novo no final.
+  const hasAssistantQuestion = !!String(lastAssistantQuestion || '').trim()
+  if (!hasAssistantQuestion) {
+    // Sem pergunta corrente, só parqueia se for explicitamente uma pergunta.
+    if (QUESTION_HINT_RE.test(raw)) return { kind: 'question' }
+    return null
+  }
+  if (isLikelyFullNameAnswer(raw)) return null
+  if (hasValidEmail(raw)) return null
+  if (isPotentialEntryDateAnswer(raw)) return null
+  if (isValidSpanishCity(raw)) return null
+
   if (QUESTION_HINT_RE.test(raw)) return { kind: 'question' }
   if (REQUEST_HINT_RE.test(raw)) return { kind: 'request' }
   // Frase mais longa que não bate com nada esperado → trata como request (off-topic).
   if (raw.length >= 12) return { kind: 'request' }
   return null
 }
+
 
 export function getOffTopicAckPhrase(language: string): string {
   if (language === 'es') return 'Anotado — trataré ese punto en cuanto terminemos este registro rapidísimo.'
