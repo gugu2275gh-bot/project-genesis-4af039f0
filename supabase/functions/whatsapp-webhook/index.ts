@@ -2245,9 +2245,9 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                 : getShortAck(detectedChatLanguage, lastAssistantQuestion, rawCustomerMessage))
             // Para etapas com múltiplas bolhas (abertura, interesse Msg5+Msg6,
             // pré-handoff H1|||H2|||H3), o ack vira a 1ª bolha; senão prefixa a única bolha.
-            const composed = ack
-              ? (scripted.includes('|||') ? `${ack}|||${scripted}` : `${ack}\n\n${scripted}`)
-              : scripted
+            // composeAckPlusScripted descarta o ack quando ele duplicaria a abertura
+            // curta da frase canônica (ex.: ack="Obrigado." + scripted="Obrigado. Qual...").
+            const composed = composeAckPlusScripted(ack, scripted, detectedChatLanguage)
             console.log(`[GATE-HARD-LOCK] step=${nextStep.key} replacing AI output with canonical script (len=${composed.length})`)
             aiResponse = lock(composed)
           }
