@@ -2818,10 +2818,24 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                   if (!answer.toLowerCase().startsWith(replayPreamble.toLowerCase())) {
                     answer = `${replayPreamble}: ${answer.trim()}`
                   }
+                  // Guard anti re-ask: se a resposta do replay re-perguntar um campo
+                  // de cadastro (e-mail, nome, telefone), descarta o item.
+                  const reAskRe = /qual\s+(?:é|e)\s+(?:o|seu)\s+(?:melhor\s+)?(?:e-?mail|nome\s+completo|nome|telefone)|what\s+(?:is|'s)\s+your\s+(?:best\s+)?(?:e-?mail|full\s+name|name|phone)|cu[áa]l\s+es\s+tu\s+(?:mejor\s+)?(?:correo|e-?mail|nombre\s+completo|nombre|tel[eé]fono)|quel\s+est\s+votre\s+(?:meilleur\s+)?(?:e-?mail|nom\s+complet|nom|t[eé]l[eé]phone)/i
+                  if (reAskRe.test(answer)) {
+                    console.log(`[REPLAY] suppressed re-ask of cadastro field on item ${idx + 1}/${replayQueue.length}`)
+                    remaining.shift()
+                    await supabase
+                      .from('lead_funnel_state')
+                      .update({ pending_questions: remaining, updated_at: new Date().toISOString() })
+                      .eq('lead_id', lead.id)
+                    ;(funnelStateLive as any).pending_questions = remaining
+                    continue
+                  }
                   if (isLast) {
                     answer = `${answer.trim()}\n\n${replaySuffix}`
                   }
                   try {
+
                     await sendWhatsAppMessage(phoneNumber, answer)
                     await supabase.from('mensagens_cliente').insert({
                       id_lead: lead.id,
