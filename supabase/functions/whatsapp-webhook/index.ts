@@ -390,7 +390,7 @@ import {
   syncFunnelFromCapturedData,
 } from './lib/funnel-state.ts'
 
-import { classifyOffTopic, getOffTopicAckPhrase } from './lib/offtopic.ts'
+import { classifyOffTopic, getOffTopicAckPhrase, stripReAskOfCapturedFields, type CapturedSnapshot } from './lib/offtopic.ts'
 import { isValidSpanishCity } from './lib/spanish-cities.ts'
 import { normalizeQueue, pushPending, getReplayPreamble, type PendingItem } from './lib/parking.ts'
 import { logTurn } from './lib/turn-log.ts'
