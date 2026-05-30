@@ -2113,14 +2113,29 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             `Não invente, não complete lacunas, não combine com conhecimento externo.`
         }
 
-        // SHORT-CIRCUIT determinístico da ABERTURA (Msg1+Msg2):
-        // Na 1ª interação de cliente novo, NÃO confiamos no LLM para traduzir/dividir.
-        // Usamos as frases canônicas já traduzidas em lib/language.ts e enviamos
-        // as duas bolhas separadas por "|||". Garante o mesmo fluxo em PT/ES/EN/FR.
+        // SHORT-CIRCUIT determinístico do FLUXO CANÔNICO (Msg1..Msg6):
+        // Para clientes NOVOS (!isReturningClient), não confiamos no LLM para emitir
+        // as bolhas canônicas — usamos as frases já traduzidas em lib/language.ts.
+        // Cada gate exige que a ÚLTIMA pergunta do assistente seja a do passo anterior,
+        // para não atropelar quando o cliente pergunta algo fora do roteiro.
+        const tt = getPromptTemplates(detectedChatLanguage)
+        const lastAsstLc = String(lastAssistantMessage || '').toLowerCase()
+        const lastWasConsent = /(perguntas? r[áa]pidas?|preguntas? r[áa]pidas?|quick questions?|questions rapides)/i.test(lastAsstLc)
+        const lastWasNameQ = /(nome completo|nombre completo|full name|nom complet)/i.test(lastAsstLc)
+        const lastWasEmailQ = /(e[- ]?mail|correo|courriel)/i.test(lastAsstLc) && /\?/.test(lastAsstLc)
+
         if (isFirstInteraction && !isReturningClient) {
-          const tt = getPromptTemplates(detectedChatLanguage)
           aiResponse = `${tt.openingLine1}|||${tt.openingLine2}`
           console.log('[OPENER_SHORTCIRCUIT] abertura canônica enviada em', detectedChatLanguage)
+        } else if (!isReturningClient && aberturaDone && nameMissing && lastWasConsent) {
+          aiResponse = tt.askName
+          console.log('[CANONICAL_SHORTCIRCUIT] msg3 askName em', detectedChatLanguage)
+        } else if (!isReturningClient && !nameMissing && emailMissing && lastWasNameQ) {
+          aiResponse = tt.thanksThenAskEmail
+          console.log('[CANONICAL_SHORTCIRCUIT] msg4 askEmail em', detectedChatLanguage)
+        } else if (!isReturningClient && !nameMissing && !emailMissing && serviceMissing && !catalogSent && lastWasEmailQ) {
+          aiResponse = `${tt.interestQuestion}|||${tt.servicesCatalog}`
+          console.log('[CANONICAL_SHORTCIRCUIT] msg5+msg6 interesse+catalogo em', detectedChatLanguage)
         } else {
           try {
             aiResponse = await generateAIResponse(

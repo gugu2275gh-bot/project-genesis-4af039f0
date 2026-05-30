@@ -1,53 +1,83 @@
-# Garantir abertura (Msg1 + Msg2) em todos os idiomas
+# Estender o short-circuit canônico para Msg3, Msg4, Msg5 e Msg6
 
-## Diagnóstico
+## Objetivo
 
-Na 1ª interação, o sistema hoje **delega ao LLM** o envio da abertura: monta um prompt em português com as duas frases separadas por `|||` e pede para traduzir mantendo o delimitador (`index.ts` linhas 1381–1392).
+Hoje só a abertura (Msg1+Msg2) é determinística em todos os idiomas. As etapas seguintes ainda passam pelo LLM e dependem de "travas reativas" (`forceReaskEmailIfMissing`, `forceAdvanceFromInterestQuestion`, `ensureServicesAttachedToInterest`, etc.) para corrigir respostas erradas. Vamos eliminar a dependência do LLM nessas 4 mensagens, usando os textos já traduzidos em `lib/language.ts`.
 
-- Em ES o LLM dividiu corretamente → vieram as 2 bolhas (Msg1 + Msg2).
-- Em PT o LLM devolveu **só a Msg1**, sem `|||` e sem a pergunta de consentimento ("vou te fazer algumas perguntas rápidas… pode ser?"). Resultado: o cliente fica sem saber o que responder e o fluxo trava.
+## Mapeamento das bolhas
 
-A causa raiz é confiar no LLM para uma mensagem que é **100% canônica e já existe traduzida** em `lib/language.ts` (`openingLine1` / `openingLine2` em PT/ES/EN/FR).
+| Bolha | Conteúdo | Fonte canônica em `PromptTemplates` |
+|---|---|---|
+| Msg3 | Pergunta o nome completo | `askName` |
+| Msg4 | Agradece + pede e-mail | `thanksThenAskEmail` |
+| Msg5 | Pergunta o interesse | `interestQuestion` |
+| Msg6 | Catálogo de serviços | `servicesCatalog` |
 
-## Correções
+Todas já existem em PT/ES/EN/FR.
 
-### A) `supabase/functions/whatsapp-webhook/index.ts` — short-circuit determinístico na 1ª interação
+## Mudanças
 
-Antes de chamar o LLM, quando `isFirstInteraction && !isReturningClient`, montar a resposta diretamente a partir do dicionário de idioma travado e pular a chamada ao Gemini:
+### A) `supabase/functions/whatsapp-webhook/index.ts` — short-circuits determinísticos
+
+Logo após o short-circuit da abertura, adicionar gates baseados no estado da conversa (já calculado: `hasFullName`, `hasEmail`, `interestCaptured`, `servicesAttached`, transcript), antes de cair na chamada ao LLM:
 
 ```ts
-if (isFirstInteraction && !isReturningClient) {
-  const tt = getLanguageTexts(detectedChatLanguage) // já existe
-  aiResponse = `${tt.openingLine1}|||${tt.openingLine2}`
-  // pula chamada LLM, segue direto para o bloco de envio (linhas 2376+)
+const tt = getPromptTemplates(detectedChatLanguage)
+
+// Msg3: usuário respondeu "sim/ok" ao consentimento e ainda não temos nome
+if (consentAccepted && !hasFullName) {
+  aiResponse = tt.askName
+}
+// Msg4: acabou de mandar o nome, falta e-mail
+else if (justAnsweredName && !hasEmail) {
+  aiResponse = tt.thanksThenAskEmail
+}
+// Msg5: tem nome+email, ainda não perguntou interesse
+else if (hasFullName && hasEmail && !interestAsked) {
+  aiResponse = tt.interestQuestion
+}
+// Msg6: respondeu interesse, ainda não enviou catálogo
+else if (interestCaptured && !servicesAttached) {
+  aiResponse = `${tt.servicesCatalog}|||${tt.askLocationSpain}`
 }
 ```
 
-Isso garante exatamente as duas bolhas, em qualquer idioma, sempre iguais às mostradas em ES no print do usuário. Nada de tradução improvisada, nada de Msg2 faltando.
+Cada gate emite `console.log('[CANONICAL_SHORTCIRCUIT] msgN', detectedChatLanguage)` para auditoria.
 
-### B) Defesa em camada de envio (`index.ts` ~2376)
+Reaproveitar os booleanos já existentes (`isFirstInteraction`, `hasFullName`, `hasEmail`) e derivar os novos (`consentAccepted`, `justAnsweredName`, `interestAsked`, `interestCaptured`, `servicesAttached`) a partir das regex já presentes nas funções `force*`/`ensureServicesAttachedToInterest`. Sem inventar lógica nova — só centralizar.
 
-Adicionar um guard pós-processamento: se `!aberturaDone` e a resposta final só contém Msg1 (regex `obrigad[oa] por (falar|escrever)` / `gracias por (hablar|escribir)` / `thank.*for (reaching|contacting)` / `merci de (nous|m'avoir) contact`) **e** não contém Msg2 (regex já existente `perguntas? r[áa]pidas?|preguntas r[áa]pidas?|quick questions?|questions rapides`), anexar `|||${openingLine2}` antes de enviar. Funciona como rede de segurança caso algum caminho futuro volte a passar pelo LLM.
+### B) Guard pós-processamento
 
-### C) Reforço da instrução do LLM (defesa em profundidade)
+Manter as funções `force*` atuais como **rede de segurança** (caso algum caminho futuro volte a passar pelo LLM). Não remover nada — apenas adicionar comentário `// fallback defensivo — short-circuit em A já cobre o caso feliz`.
 
-Mesmo com (A) cobrindo a 1ª interação, manter o bloco "PRIMEIRA INTERAÇÃO" no system prompt como fallback, mas trocar a frase "traduza fielmente" por **"use EXATAMENTE estas duas frases já traduzidas"** seguidas das versões em PT/ES/EN/FR de `openingLine1`/`openingLine2`. Remove ambiguidade de tradução.
+### C) Prompt do LLM
 
-### D) Testes (`opener_idempotency_test.ts` e novo `opener_canonical_test.ts`)
+Onde o system prompt ainda menciona Msg3–Msg6 com texto PT hardcoded, substituir por `getPromptTemplates(detectedChatLanguage).askName` etc. Para Msg5+Msg6 o LLM nunca mais deve ser chamado no caminho feliz, mas o reforço evita "vazamento" de PT em fallbacks.
 
-- Cobrir os 4 idiomas: para `isFirstInteraction=true && !isReturningClient`, a resposta produzida pelo short-circuit é exatamente `openingLine1|||openingLine2` do idioma travado.
-- Guard B: dada uma resposta só com Msg1 em cada idioma, o pós-processador anexa `|||openingLine2`.
+### D) Testes
+
+Novo `canonical_flow_test.ts`:
+- Para cada idioma (pt-BR/es/en/fr) e cada gate (Msg3, Msg4, Msg5, Msg6), montar fixtures mínimas de estado da conversa e verificar que o short-circuit produz exatamente o texto de `PromptTemplates`.
+- Verificar que Msg6 sai como `servicesCatalog|||askLocationSpain` (duas bolhas).
+
+Expandir `opener_idempotency_test.ts` para garantir que, depois de Msg6, o fluxo cai de volta no LLM (não fica em loop nos gates).
 
 ### E) Deploy
 
-Redeploy de `whatsapp-webhook`.
+Redeploy de `whatsapp-webhook` + rodar a suíte Deno.
 
 ## Arquivos tocados
 
-- `supabase/functions/whatsapp-webhook/index.ts` (short-circuit + guard)
-- `supabase/functions/whatsapp-webhook/opener_idempotency_test.ts` (expandir)
-- `supabase/functions/whatsapp-webhook/opener_canonical_test.ts` (novo)
+- `supabase/functions/whatsapp-webhook/index.ts` (4 gates novos + reforço de prompt)
+- `supabase/functions/whatsapp-webhook/canonical_flow_test.ts` (novo)
+- `supabase/functions/whatsapp-webhook/opener_idempotency_test.ts` (expandir 1 caso)
 
 ## Fora do escopo
 
-- Etapas 3–8 do fluxo (nome, email, interesse, localização, aprofundamento, handoff) já têm proteções determinísticas. Esta entrega foca só na abertura porque é onde o usuário viu a quebra. Se quiser, posso aplicar o mesmo padrão "short-circuit canônico" a Msg3/Msg4/Msg5+Msg6 em seguida.
+- Etapas 7 (localização/aprofundamento) e 8 (handoff) continuam com o padrão atual (LLM + travas reativas). Elas já funcionam consistentemente nos testes manuais; se quiser depois, aplicamos o mesmo padrão.
+- Não muda nenhuma tabela, RLS ou frontend.
+
+## Trade-off
+
+Ganho: zero risco de o LLM traduzir errado, esquecer bolha ou misturar idiomas em Msg3–Msg6. Bug do PT desaparece estruturalmente.
+Custo: respostas ficam fixas (sem variação tipo "Obrigado, Maria!" vs "Que bom te conhecer, Maria!"). Aceitável dado o histórico de quebras.
