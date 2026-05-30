@@ -2519,6 +2519,18 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               }
             }
 
+            // ÚLTIMA camada: colapsa aberturas curtas duplicadas ("Obrigado. Obrigado.",
+            // "Perfeito. Perfeito.", "Gracias. Gracias.", etc.) — rede de segurança final.
+            try {
+              const before = aiResponseClean
+              aiResponseClean = stripDuplicateShortOpeners(aiResponseClean, detectedChatLanguage)
+              if (before !== aiResponseClean) {
+                console.log('[STRIP_DUP_OPENERS] collapsed duplicate short opener(s)')
+              }
+            } catch (dupErr) {
+              console.warn('[STRIP_DUP_OPENERS] non-blocking error:', dupErr instanceof Error ? dupErr.message : dupErr)
+            }
+
             let parts = aiResponseClean.split('|||').map(p => p.trim()).filter(Boolean)
 
             // GUARD anti-handoff prematuro: se ainda não temos os dados mínimos,
