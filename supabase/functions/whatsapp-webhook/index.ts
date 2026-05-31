@@ -2881,6 +2881,20 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                     ;(funnelStateLive as any).pending_questions = remaining
                     continue
                   }
+                  // Guard anti-opener: se a resposta do replay contém saudação ou
+                  // a abertura canônica do bot, é alucinação — descarta.
+                  const OPENER_LEAK_RE = /(é\s+um\s+prazer\s+receber\s+seu\s+contato|es\s+un\s+placer\s+recibir\s+tu\s+contacto|it'?s\s+a\s+pleasure\s+to\s+receive\s+your\s+contact|c['’]est\s+un\s+plaisir\s+de\s+recevoir|antes\s+de\s+tudo,?\s+como\s+é\s+seu\s+nome|antes\s+de\s+nada,?\s+cu[áa]l\s+es\s+tu\s+nombre|first\s+of\s+all,?\s+what(?:'?s|\s+is)\s+your\s+(?:full\s+)?name|tout\s+d['’]abord,?\s+quel\s+est\s+votre\s+nom|\bcb\s+asesor[ií]a\b.*\bnome\s+completo\b|tudo\s+bem\?|todo\s+bien\?)/i
+                  const answerWithoutPreamble = answer.replace(new RegExp(`^${replayPreamble.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:,-]?\\s*`, 'i'), '').trim()
+                  if (OPENER_LEAK_RE.test(answerWithoutPreamble) || /^\s*(ol[áa]|oi|hola|hi|hello|bonjour|salut)[!,.\s]/i.test(answerWithoutPreamble)) {
+                    console.log(`[REPLAY] discarded item ${idx + 1}/${replayQueue.length}: AI hallucinated opener/greeting for "${item.text.slice(0, 60)}"`)
+                    remaining.shift()
+                    await supabase
+                      .from('lead_funnel_state')
+                      .update({ pending_questions: remaining, updated_at: new Date().toISOString() })
+                      .eq('lead_id', lead.id)
+                    ;(funnelStateLive as any).pending_questions = remaining
+                    continue
+                  }
                   if (isLast) {
                     answer = `${answer.trim()}\n\n${replaySuffix}`
                   }
