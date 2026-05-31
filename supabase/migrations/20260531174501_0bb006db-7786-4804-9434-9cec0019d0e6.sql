@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.sync_contact_is_in_spain() FROM PUBLIC, anon, authenticated;
