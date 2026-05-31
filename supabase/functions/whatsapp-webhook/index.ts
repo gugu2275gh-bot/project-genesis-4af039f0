@@ -2790,21 +2790,28 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               let replayQueue = normalizeQueue((funnelStateLive as any).pending_questions || [])
               if (preNowSent && replayQueue.length > 0) {
                 // Purga itens que na verdade são dados de cadastro já coletados
-                // (nome, e-mail, data, cidade, yes/no) — não devem virar pergunta no replay.
+                // (nome, e-mail, data, cidade, yes/no, saudação, afirmação curta)
+                // — não devem virar pergunta no replay.
+                const collapseRepeats = (s: string) => String(s || '').replace(/([a-zA-ZáàâãéêíóôõúüñçÁÀÂÃÉÊÍÓÔÕÚÜÑÇ])\1{1,}/g, '$1')
+                const GREETING_RE = /^\s*(oi+|ol[áa]+|hi+|hello+|hey+|hola+|buen[oa]s\s*(d[ií]as|tardes|noches)?|bom\s*dia|boa\s*(tarde|noite)|bonjour|salut|good\s*(morning|afternoon|evening))\s*[.!?]*\s*$/i
+                const AFFIRM_RE = /^\s*(sim|s[íi]|yes|y|claro|correto|exato|exactly|sure|ok|okay|vale|positivo|negativo|n[ãa]o|no|nope|nunca|never|jamais|pode|pode\s+ser|podes|puede|puedes|dale|manda|vai|vamos|fala|pronto|go\s+ahead|adelante|allez(?:-?y)?)\s*[.!?]?\s*$/i
                 const isCadastroData = (t: string): boolean => {
                   const s = String(t || '').trim()
                   if (!s) return true
+                  if (s.length <= 4) return true // mensagens muito curtas nunca são dúvidas reais
+                  const norm = collapseRepeats(s)
+                  if (GREETING_RE.test(norm)) return true
+                  if (AFFIRM_RE.test(norm)) return true
                   if (isLikelyFullNameAnswer(s)) return true
                   if (hasValidEmail(s)) return true
                   if (isPotentialEntryDateAnswer(s)) return true
                   if (isValidSpanishCity(s)) return true
-                  if (/^\s*(sim|s[íi]|yes|y|ok|vale|claro|n[ãa]o|no|nope|nunca|never)\s*[.!]?\s*$/i.test(s)) return true
                   return false
                 }
                 const purgedCount = replayQueue.filter(it => isCadastroData(it.text)).length
                 if (purgedCount > 0) {
                   replayQueue = replayQueue.filter(it => !isCadastroData(it.text))
-                  console.log(`[REPLAY] purga ${purgedCount} item(s) que viraram dados de cadastro`)
+                  console.log(`[REPLAY] purga ${purgedCount} item(s) que viraram dados de cadastro/saudação/afirmação`)
                   await supabase
                     .from('lead_funnel_state')
                     .update({ pending_questions: replayQueue, updated_at: new Date().toISOString() })
@@ -2866,6 +2873,20 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                   const replayStripped = stripReAskOfCapturedFields(answer, replayCaptured)
                   if (replayStripped.removed.length > 0) {
                     console.log(`[REPLAY] suppressed re-ask of captured field(s) on item ${idx + 1}/${replayQueue.length}: ${replayStripped.removed.join(', ')}`)
+                    remaining.shift()
+                    await supabase
+                      .from('lead_funnel_state')
+                      .update({ pending_questions: remaining, updated_at: new Date().toISOString() })
+                      .eq('lead_id', lead.id)
+                    ;(funnelStateLive as any).pending_questions = remaining
+                    continue
+                  }
+                  // Guard anti-opener: se a resposta do replay contém saudação ou
+                  // a abertura canônica do bot, é alucinação — descarta.
+                  const OPENER_LEAK_RE = /(é\s+um\s+prazer\s+receber\s+seu\s+contato|es\s+un\s+placer\s+recibir\s+tu\s+contacto|it'?s\s+a\s+pleasure\s+to\s+receive\s+your\s+contact|c['’]est\s+un\s+plaisir\s+de\s+recevoir|antes\s+de\s+tudo,?\s+como\s+é\s+seu\s+nome|antes\s+de\s+nada,?\s+cu[áa]l\s+es\s+tu\s+nombre|first\s+of\s+all,?\s+what(?:'?s|\s+is)\s+your\s+(?:full\s+)?name|tout\s+d['’]abord,?\s+quel\s+est\s+votre\s+nom|\bcb\s+asesor[ií]a\b.*\bnome\s+completo\b|tudo\s+bem\?|todo\s+bien\?)/i
+                  const answerWithoutPreamble = answer.replace(new RegExp(`^${replayPreamble.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:,-]?\\s*`, 'i'), '').trim()
+                  if (OPENER_LEAK_RE.test(answerWithoutPreamble) || /^\s*(ol[áa]|oi|hola|hi|hello|bonjour|salut)[!,.\s]/i.test(answerWithoutPreamble)) {
+                    console.log(`[REPLAY] discarded item ${idx + 1}/${replayQueue.length}: AI hallucinated opener/greeting for "${item.text.slice(0, 60)}"`)
                     remaining.shift()
                     await supabase
                       .from('lead_funnel_state')
