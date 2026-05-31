@@ -2072,14 +2072,21 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           messageForAI = `${messageForAI}\n\n[MODO PÓS-HANDOFF (BPMN-3) — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
             `IDIOMA OBRIGATÓRIO E TRAVADO DA RESPOSTA: ${langName}. Definido no início da conversa, NÃO MUDA.\n` +
             `As 4 mensagens H1-H4 (pré-handoff + handoff) JÁ FORAM ENVIADAS. NÃO repita nenhuma delas.\n` +
-            `REGRAS:\n` +
-            `1. Responda APENAS com base na Base de Conhecimento (KB) fornecida no contexto, de forma breve e clara, no idioma travado.\n` +
-            `2. Se a KB não tiver a informação, diga honestamente que o especialista confirmará — sem inventar.\n` +
-            `3. PROIBIDO usar "assim que terminarmos esse rapidíssimo levantamento" — o cadastro acabou.\n` +
-            `4. NÃO peça novamente nenhum dado já coletado (nome, e-mail, interesse, localização, idade, data de entrada, empadronamento).\n` +
-            `5. NÃO escreva você mesmo a frase "Em breve um de nossos especialistas..." — a infraestrutura adiciona automaticamente como sufixo. Responda apenas o conteúdo da dúvida.\n` +
+            `\n## SUA ÚNICA TAREFA AGORA\n` +
+            `O cliente está aguardando o especialista, mas fez uma DÚVIDA FACTUAL. Você DEVE responder a dúvida usando os trechos da Base de Conhecimento (KB) abaixo. NÃO repita o handoff. NÃO diga "vou encaminhar". NÃO diga "vou pedir ao especialista". Apenas RESPONDA a dúvida em 2-5 frases claras, no idioma travado.\n` +
+            `\n## EXEMPLOS DO QUE NUNCA FAZER (frases PROIBIDAS literalmente, em qualquer idioma):\n` +
+            `❌ "Vou encaminhar suas informações para um especialista" / "Voy a remitir tu información" / "I will forward your information" / "Je vais transmettre vos informations"\n` +
+            `❌ "Vou pedir ao especialista" / "Le pediré al especialista" / "I'll ask the specialist"\n` +
+            `❌ "Analisamos cada caso individualmente" / "Analizamos cada caso"\n` +
+            `❌ "Em breve um de nossos especialistas..." (a infraestrutura adiciona como sufixo automaticamente — não escreva)\n` +
+            `❌ "Ótima pergunta, te explico assim que terminarmos" (o cadastro acabou)\n` +
+            `\n## REGRAS\n` +
+            `1. Responda a dúvida usando EXCLUSIVAMENTE a KB fornecida no contexto. Seja direto, 2-5 frases. Idioma: ${langName}.\n` +
+            `2. Se a KB realmente não tiver a informação, diga honestamente em UMA frase: "Sobre isso, o especialista confirmará os detalhes com você." (traduzido). NUNCA invente prazos/valores/requisitos.\n` +
+            `3. NÃO peça novamente nenhum dado já coletado (nome, e-mail, interesse, localização, idade, data de entrada, empadronamento).\n` +
+            `4. A frase de "aguarde um especialista" é anexada AUTOMATICAMENTE pela infra — sua resposta deve conter APENAS o conteúdo da dúvida.\n` +
             (pendingQuestionToAnswer
-              ? `6. PRIORIDADE MÁXIMA: o cliente havia feito esta pergunta DURANTE o cadastro e ficou aguardando: "${pendingQuestionToAnswer}". Responda-a AGORA com base na KB. Comece com a frase de retomada NO IDIOMA TRAVADO (${langName}): "${getReplayPreamble(detectedChatLanguage)}". JAMAIS use "Como prometi" em português se ${langName} não for português — use exatamente a frase traduzida acima.\n`
+              ? `5. PRIORIDADE MÁXIMA: o cliente havia feito esta pergunta DURANTE o cadastro e ficou aguardando: "${pendingQuestionToAnswer}". Responda-a AGORA com base na KB. Comece com a frase de retomada NO IDIOMA TRAVADO (${langName}): "${getReplayPreamble(detectedChatLanguage)}". JAMAIS use "Como prometi" em português se ${langName} não for português — use exatamente a frase traduzida acima.\n`
               : '') +
             `[FIM DO MODO PÓS-HANDOFF]`
         }
