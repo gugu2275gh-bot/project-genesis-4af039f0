@@ -70,7 +70,7 @@ Deno.test('abertura: pergunta factual real É parqueada', () => {
 const collapseRepeats = (s: string) =>
   String(s || '').replace(/([a-zA-ZáàâãéêíóôõúüñçÁÀÂÃÉÊÍÓÔÕÚÜÑÇ])\1{1,}/g, '$1')
 const GREETING_RE =
-  /^\s*(oi+|ol[áa]+|hi+|hello+|hey+|hola+|buen[oa]s\s*(d[ií]as|tardes|noches)?|bom\s*dia|boa\s*(tarde|noite)|bonjour|salut|good\s*(morning|afternoon|evening))\s*[.!?]*\s*$/i
+  /^\s*(oi+|ol[áa]+|hi+|hel+o+|hey+|hola+|buen[oa]s\s*(d[ií]as|tardes|noches)?|bom\s*dia|boa\s*(tarde|noite)|bonjour|salut|good\s*(morning|afternoon|evening))\s*[.!?]*\s*$/i
 const AFFIRM_RE =
   /^\s*(sim|s[íi]|yes|y|claro|correto|exato|exactly|sure|ok|okay|vale|positivo|negativo|n[ãa]o|no|nope|nunca|never|jamais|pode|pode\s+ser|podes|puede|puedes|dale|manda|vai|vamos|fala|pronto|go\s+ahead|adelante|allez(?:-?y)?)\s*[.!?]?\s*$/i
 
@@ -79,8 +79,8 @@ function isPurged(text: string): boolean {
   if (!s) return true
   if (s.length <= 4) return true
   const norm = collapseRepeats(s)
-  if (GREETING_RE.test(norm)) return true
-  if (AFFIRM_RE.test(norm)) return true
+  if (GREETING_RE.test(s) || GREETING_RE.test(norm)) return true
+  if (AFFIRM_RE.test(s) || AFFIRM_RE.test(norm)) return true
   return false
 }
 
