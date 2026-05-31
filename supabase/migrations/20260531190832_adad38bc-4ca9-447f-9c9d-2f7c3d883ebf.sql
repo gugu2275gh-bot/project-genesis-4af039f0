@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.cleanup_test_data() TO authenticated;
