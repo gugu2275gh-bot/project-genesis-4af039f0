@@ -2793,15 +2793,16 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                 // (nome, e-mail, data, cidade, yes/no, saudação, afirmação curta)
                 // — não devem virar pergunta no replay.
                 const collapseRepeats = (s: string) => String(s || '').replace(/([a-zA-ZáàâãéêíóôõúüñçÁÀÂÃÉÊÍÓÔÕÚÜÑÇ])\1{1,}/g, '$1')
-                const GREETING_RE = /^\s*(oi+|ol[áa]+|hi+|hello+|hey+|hola+|buen[oa]s\s*(d[ií]as|tardes|noches)?|bom\s*dia|boa\s*(tarde|noite)|bonjour|salut|good\s*(morning|afternoon|evening))\s*[.!?]*\s*$/i
+                const GREETING_RE = /^\s*(oi+|ol[áa]+|hi+|hel+o+|hey+|hola+|buen[oa]s\s*(d[ií]as|tardes|noches)?|bom\s*dia|boa\s*(tarde|noite)|bonjour|salut|good\s*(morning|afternoon|evening))\s*[.!?]*\s*$/i
                 const AFFIRM_RE = /^\s*(sim|s[íi]|yes|y|claro|correto|exato|exactly|sure|ok|okay|vale|positivo|negativo|n[ãa]o|no|nope|nunca|never|jamais|pode|pode\s+ser|podes|puede|puedes|dale|manda|vai|vamos|fala|pronto|go\s+ahead|adelante|allez(?:-?y)?)\s*[.!?]?\s*$/i
                 const isCadastroData = (t: string): boolean => {
                   const s = String(t || '').trim()
                   if (!s) return true
                   if (s.length <= 4) return true // mensagens muito curtas nunca são dúvidas reais
                   const norm = collapseRepeats(s)
-                  if (GREETING_RE.test(norm)) return true
-                  if (AFFIRM_RE.test(norm)) return true
+                  // Testa contra forma original E colapsada (cobre "hello"→"helo", "siim"→"sim")
+                  if (GREETING_RE.test(s) || GREETING_RE.test(norm)) return true
+                  if (AFFIRM_RE.test(s) || AFFIRM_RE.test(norm)) return true
                   if (isLikelyFullNameAnswer(s)) return true
                   if (hasValidEmail(s)) return true
                   if (isPotentialEntryDateAnswer(s)) return true
