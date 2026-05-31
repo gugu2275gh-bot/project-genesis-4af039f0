@@ -2790,21 +2790,28 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               let replayQueue = normalizeQueue((funnelStateLive as any).pending_questions || [])
               if (preNowSent && replayQueue.length > 0) {
                 // Purga itens que na verdade são dados de cadastro já coletados
-                // (nome, e-mail, data, cidade, yes/no) — não devem virar pergunta no replay.
+                // (nome, e-mail, data, cidade, yes/no, saudação, afirmação curta)
+                // — não devem virar pergunta no replay.
+                const collapseRepeats = (s: string) => String(s || '').replace(/([a-zA-ZáàâãéêíóôõúüñçÁÀÂÃÉÊÍÓÔÕÚÜÑÇ])\1{1,}/g, '$1')
+                const GREETING_RE = /^\s*(oi+|ol[áa]+|hi+|hello+|hey+|hola+|buen[oa]s\s*(d[ií]as|tardes|noches)?|bom\s*dia|boa\s*(tarde|noite)|bonjour|salut|good\s*(morning|afternoon|evening))\s*[.!?]*\s*$/i
+                const AFFIRM_RE = /^\s*(sim|s[íi]|yes|y|claro|correto|exato|exactly|sure|ok|okay|vale|positivo|negativo|n[ãa]o|no|nope|nunca|never|jamais|pode|pode\s+ser|podes|puede|puedes|dale|manda|vai|vamos|fala|pronto|go\s+ahead|adelante|allez(?:-?y)?)\s*[.!?]?\s*$/i
                 const isCadastroData = (t: string): boolean => {
                   const s = String(t || '').trim()
                   if (!s) return true
+                  if (s.length <= 4) return true // mensagens muito curtas nunca são dúvidas reais
+                  const norm = collapseRepeats(s)
+                  if (GREETING_RE.test(norm)) return true
+                  if (AFFIRM_RE.test(norm)) return true
                   if (isLikelyFullNameAnswer(s)) return true
                   if (hasValidEmail(s)) return true
                   if (isPotentialEntryDateAnswer(s)) return true
                   if (isValidSpanishCity(s)) return true
-                  if (/^\s*(sim|s[íi]|yes|y|ok|vale|claro|n[ãa]o|no|nope|nunca|never)\s*[.!]?\s*$/i.test(s)) return true
                   return false
                 }
                 const purgedCount = replayQueue.filter(it => isCadastroData(it.text)).length
                 if (purgedCount > 0) {
                   replayQueue = replayQueue.filter(it => !isCadastroData(it.text))
-                  console.log(`[REPLAY] purga ${purgedCount} item(s) que viraram dados de cadastro`)
+                  console.log(`[REPLAY] purga ${purgedCount} item(s) que viraram dados de cadastro/saudação/afirmação`)
                   await supabase
                     .from('lead_funnel_state')
                     .update({ pending_questions: replayQueue, updated_at: new Date().toISOString() })
