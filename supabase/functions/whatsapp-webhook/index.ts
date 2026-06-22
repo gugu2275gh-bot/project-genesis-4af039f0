@@ -1563,8 +1563,45 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           .select('service_interest, service_type_id, notes')
           .eq('id', lead.id)
           .maybeSingle()
-        const currentMessageTopicHint = await detectKnowledgeTopicHint(supabase, rawCustomerMessage || '')
+        // Detect "short ack" messages ("ok", "sim", "claro", "entendi", emojis…).
+        // These carry no topical content by themselves and MUST NOT trigger a
+        // topic reclassification — they should inherit the topic from the
+        // ongoing conversation (previous user + assistant turns). Otherwise
+        // the KB returns unrelated PDFs (e.g. user was talking about ARRAIGO
+        // SOCIAL, replies "Ok", and the agent suddenly answers about
+        // RESIDÊNCIA NÃO LUCRATIVA).
+        const SHORT_ACK_RE = /^\s*(ok+|okay|okey|vale|d[ae]le|claro|entendi|entendido|perfeito|perfecto|sim|si|sí|yes|s[ií]m|n[ãa]o|no|tudo bem|todo bien|listo|combinado|👍|✅|✔️|🙏|👌)[\s!?.…]*$/i
+        const rawTrim = (rawCustomerMessage || '').trim()
+        const isShortAck = rawTrim.length > 0 && rawTrim.length <= 25 && SHORT_ACK_RE.test(rawTrim)
+
+        // Build a "topical conversation" text: when current msg is an ack,
+        // weigh the previous user turns + recent assistant content; otherwise
+        // weigh the current message strongly.
+        const recentUserText = (history || [])
+          .filter((m: any) => m.role === 'user')
+          .slice(-5)
+          .map((m: any) => String(m.content || ''))
+          .join('\n')
+        const recentAssistantText = assistantMsgs.slice(-3).map(m => m.content).join(' ')
+
+        const currentMessageTopicHint = isShortAck
+          ? await detectKnowledgeTopicHint(
+              supabase,
+              `${recentUserText}\n${lastAssistantQuestion || ''}\n${recentAssistantText}`,
+            )
+          : await detectKnowledgeTopicHint(supabase, rawCustomerMessage || '')
         let topicHint = currentMessageTopicHint
+
+        // If we still don't have a topic, try the broader recent-conversation
+        // context BEFORE falling back to the lead's persisted service_interest
+        // — the conversation is more reliable than a stale lead field that
+        // might map to a different KB document family.
+        if (!topicHint) {
+          topicHint = await detectKnowledgeTopicHint(
+            supabase,
+            `${recentUserText}\n${recentAssistantText}\n${lastAssistantQuestion || ''}\n${rawCustomerMessage || ''}`,
+          )
+        }
         if (!topicHint && leadInterest?.service_type_id) {
           const { data: stRow } = await supabase
             .from('service_types')
@@ -1576,13 +1613,8 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         if (!topicHint && leadInterest?.service_interest && !['SEM_SERVICO', 'OUTRO'].includes(String(leadInterest.service_interest))) {
           topicHint = String(leadInterest.service_interest).replace(/_/g, ' ')
         }
-        // Try to detect topic from last assistant messages (e.g. "Residência para Práticas")
-        const recentAssistantText = assistantMsgs.slice(-3).map(m => m.content).join(' ')
-        if (!topicHint) {
-          topicHint = await detectKnowledgeTopicHint(
-            supabase,
-            `${recentAssistantText}\n${lastAssistantQuestion || ''}\n${rawCustomerMessage || ''}`,
-          )
+        if (isShortAck) {
+          console.log(`[KB] short-ack detected ("${rawTrim}") — inherited topic from recent conversation: "${topicHint}"`)
         }
         // ===== FLUXO ESTRUTURADO (Roteiro CB Asesoría — Fluxo_Mensagens_WhatsApp) =====
         // Bloqueia a Base de Conhecimento até o agente concluir TODAS as etapas do roteiro,
