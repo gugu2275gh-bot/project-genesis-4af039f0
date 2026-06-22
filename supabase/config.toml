@@ -41,3 +41,6 @@ verify_jwt = true
 
 [functions.whatsapp-stall-watchdog]
 verify_jwt = false
+
+[functions.openai-credit-check]
+verify_jwt = false
