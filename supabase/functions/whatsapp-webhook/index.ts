@@ -1272,7 +1272,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         let orchestratorDecision: TurnDecision | null = null
         try {
           const ctx = buildConversationContext(funnelState, contact as any, detectedChatLanguage)
-          const decision = decideTurn(ctx, rawCustomerMessage || currentCustomerMessage || '')
+          const decision = decideTurn(ctx, currentCustomerMessage || '')
           orchestratorDecision = decision
           if (Object.keys(decision.state_patch).length > 0) {
             funnelState = await applyTurnDecision(supabase, funnelState, decision)
