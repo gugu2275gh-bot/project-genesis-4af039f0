@@ -1,96 +1,58 @@
+# Plano: integrar Turn Orchestrator no `whatsapp-webhook/index.ts`
 
-# Refator: Máquina de Estados Determinística do Atendimento
+## Contexto
 
-## Objetivo
-Tirar do LLM qualquer decisão sobre "qual é a próxima etapa". O LLM continua redigindo texto, traduzindo, mantendo tom e respondendo dúvidas via KB. Toda transição passa a ser decidida por uma **state machine** consultando estado persistido — nunca relendo histórico.
+O `index.ts` tem 3.073 linhas (handler único de ~2.600 linhas). Reescrevê-lo do zero violaria as restrições já estabelecidas ("não alterar UX", "não alterar ordem do Bizagi", "não alterar lógica de qualificação", "reutilizar ao máximo, priorizar refatoração em vez de substituição"). A integração precisa ser **cirúrgica**: o orquestrador entra como **gate único** logo após o carregamento do estado, e os handlers legados das etapas Inside/Outside/PreHandoff/Handoff continuam — eles já são chamados via `pass_through` por design da máquina.
 
-**Compromissos:**
-- Sem mudanças no Bizagi, ordem de mensagens, qualificação, Twilio, OpenAI, Gemini, embeddings, APIs ou UX.
-- Refatoração interna do `whatsapp-webhook` apenas. Testes existentes continuam passando.
+## Mudanças no `index.ts`
 
-## Diagnóstico do que já existe (será reaproveitado, não recriado)
+1. **Imports novos** no topo do arquivo:
+   - `buildConversationContext` de `./lib/conversation-context.ts`
+   - `decideTurn, applyTurnDecision` de `./lib/turn-orchestrator.ts`
+   - `resolveCurrentStep, getStepDef` de `./lib/flow-machine.ts`
 
-| Necessidade do pedido | Já existe em | Ação |
-|---|---|---|
-| `conversations` / current_step / status | `lead_funnel_state` (step, flags, pending_questions, handoff_sent, pre_handoff_sent) | **Estender** com colunas faltantes |
-| `lead_profile` consolidado | `contacts` + trigger `sync_contact_is_in_spain` já espelha estado→contato | **Manter** — já é o perfil consolidado |
-| `lead_answers` (respostas por etapa) | Parcial: campos em `lead_funnel_state` + `outside_spain_progress` jsonb | **Estender** jsonb existente; sem nova tabela |
-| `conversation_events` | `whatsapp_turn_log` + `interactions` | **Manter** — já cobre |
-| `flow_steps` (catálogo) | Hardcoded em `index.ts`/`overrides.ts`/`questions.ts` | **Criar** módulo `lib/flow-machine.ts` em código (não tabela — evita acoplamento DB e mantém testabilidade) |
-| Perguntas paralelas | `pending_questions[]` jsonb + `lib/offtopic.ts` + `lib/parking.ts` | **Manter** — já implementado |
-| Idioma | `contacts.preferred_language` + `lib/language.ts` | **Manter** |
-| Branch Inside/Outside | `lead_funnel_state.location_known` + `outside_spain_progress` | **Manter** |
+2. **Gate do orquestrador** — inserido logo após carregar `state` e `contact` (antes de qualquer cálculo legado de "qual é a etapa atual"):
+   ```ts
+   const ctx = buildConversationContext(state, contact, language)
+   const decision = decideTurn(ctx, incomingText)
+   state = await applyTurnDecision(supabase, state, decision)
+   ```
+3. **Despacho determinístico** baseado em `decision.action.kind`:
+   - `park_offtopic` → reusa o caminho existente de "parking" (`lib/parking.ts` + replay) e **retorna** sem avançar etapa.
+   - `reask_current` → reusa o reask já existente (`questions.ts` → `getStepDef(step).ask(lang)`) e retorna.
+   - `advance` → segue para o redator LLM passando `next_step` já decidido (não recalcula).
+   - `pass_through` → cai no handler legado da etapa (Inside/Outside/PreHandoff/Handoff), que continua intocado.
 
-## Mudanças
+4. **Remoção de duplicidades** no handler:
+   - Bloco que recomputava `currentStep` via inspeção de flags (`!name_confirmed ? 'nome' : ...`) → substituído por `ctx.current_step`.
+   - Chamadas redundantes a `classifyOffTopic` na fase ONBOARDING → o orquestrador já classificou; o handler legado só roda em `pass_through`.
+   - Validações inline de nome/email/interesse/localização → já vivem em `StepDef.validate`; o handler legado dessas 4 etapas é desativado quando o orquestrador retorna `advance`/`reask`/`park`.
 
-### 1. Schema (migração mínima, aditiva)
-Adicionar em `lead_funnel_state` (não criar tabela nova):
-- `current_flow text` — ex: `ONBOARDING`, `INSIDE_SPAIN`, `OUTSIDE_SPAIN`, `KB_FREE`
-- `status text` — `ACTIVE | AWAITING_HUMAN | CLOSED`
-- `branch text` — `INSIDE | OUTSIDE | null`
-- `last_human_handoff_at timestamptz`
-- `answers jsonb default '{}'` — registro `{step → answer}` para auditoria/replay
+5. **O que permanece intocado**:
+   - Scripted dispatch (Msg1/Msg2/Msg3 do Bizagi).
+   - `getInsideSpainNextQuestion` / `getOutsideSpainNextQuestion` / `mergeOutsideProgress` (etapas marcadas `pass_through`).
+   - Anti-repeat, dedup, idempotência, KB/RAG, Twilio, Gemini/OpenAI.
+   - Toda a camada de envio de mensagem.
 
-Sem `DROP`. Sem renomear. Sem mexer em RLS/grants existentes (a tabela já tem 3 policies). Triggers existentes (`sync_contact_is_in_spain`) continuam funcionando porque só adicionamos colunas.
+## Auditoria pós-mudança (entregue no chat após implementar)
 
-### 2. Novo módulo `lib/flow-machine.ts`
-Catálogo declarativo das etapas — uma única fonte de verdade:
+- Lista exata de trechos removidos de `index.ts` (com nº de linha original).
+- Verificação ponto-a-ponto: o `index.ts` ainda calcula etapa? (Esperado: apenas via `ctx.current_step` / `decision.next_step`.)
+- LLM influencia navegação? (Esperado: não para NAME/EMAIL/INTEREST/LOCATION; Inside/Outside ainda usam extração LLM **dentro** do handler `pass_through` — isso é por design da máquina atual e foi documentado na auditoria anterior.)
+- Confirmação de que `flow-machine` + `turn-orchestrator` são a única fonte oficial para as 4 etapas determinísticas.
 
-```ts
-type StepDef = {
-  code: StepCode
-  flow: FlowCode
-  ask: (lang) => string         // delega para questions.ts existente
-  validate: (msg, ctx) => ValidationResult  // delega para extract.ts/offtopic.ts existentes
-  persist: (supabase, state, value) => Promise<Patch>  // grava em answers + colunas dedicadas
-  next: (state, value) => StepCode  // transição determinística
-}
-```
+## Testes
 
-Reaproveita 100% de:
-- `lib/questions.ts` (textos das perguntas)
-- `lib/extract.ts` (extração nome/email/interesse)
-- `lib/offtopic.ts` + `isValidAnswerForStep` (validação por etapa)
-- `lib/funnel-state.ts` (`computeNextStep`, `applyTurnUpdates`, `mergeOutsideProgress`)
+- Todos os testes existentes (`flow_machine_test`, `turn_orchestrator_test`, `handler_test`, `canonical_flow_test`, `offtopic_*`, `wave*`, etc.) devem continuar passando.
+- Sem novos testes — a cobertura unitária do orquestrador já existe.
 
-### 3. Orquestrador no `index.ts`
-Extrair em `lib/turn-orchestrator.ts` o pipeline já existente, agora explícito:
+## Riscos e mitigação
 
-```
-1. loadFunnelState        (já existe)
-2. resolveCurrentStep     (state.step — nunca infere do histórico)
-3. classifyMessage        (offtopic.classifyOffTopic — já existe)
-   ├─ se off-topic → park em pending_questions (já existe)
-   └─ se resposta válida → persist + grava em answers jsonb
-4. computeNextStep        (já existe — agora consulta flow-machine)
-5. applyTurnUpdates       (já existe)
-6. LLM redige             (ai.ts — apenas redação)
-7. overrides.lockConfirmedFieldsInResponse  (já existe — trava regressão)
-```
+- **Risco**: regressão silenciosa em fluxos não cobertos por teste (Inside/Outside aprofundamento). **Mitigação**: gate só intercepta as 4 etapas determinísticas; demais caem em `pass_through` e mantêm 100% do código legado.
+- **Risco**: dupla gravação em `lead_funnel_state` (orquestrador + handler legado). **Mitigação**: handler legado das 4 etapas é gated por `if (decision.action.kind === 'pass_through')`.
 
-Hoje esse fluxo está espalhado em ~3000 linhas de `index.ts`. Vamos **encapsular sem mudar comportamento**: o `index.ts` passa a chamar `orchestrateTurn(ctx)` e os testes em `handler_test.ts`, `canonical_flow_test.ts`, `wave5/6/7_test.ts` continuam validando o resultado fim-a-fim.
+## Detalhes técnicos
 
-### 4. Conversation Context (objeto em memória do turno)
-Tipo `ConversationContext` montado uma vez por turno a partir do estado + perfil + pending_questions, passado para todas as funções (em vez de cada uma reler do banco). Não é tabela — é estrutura em memória, evita duplicação.
-
-### 5. Testes
-- Adicionar `flow_machine_test.ts` cobrindo catálogo (transições NAME→EMAIL→INTEREST→LOCATION→INSIDE/OUTSIDE).
-- Adicionar `orchestrator_test.ts` cobrindo: pergunta paralela não perde etapa; LLM nunca decide next_step; replay de mensagem não pula etapa.
-- Todos os ~30 testes existentes devem continuar verdes (régua de não-regressão).
-
-## Entregáveis
-
-1. Migração aditiva em `lead_funnel_state` (5 colunas).
-2. `supabase/functions/whatsapp-webhook/lib/flow-machine.ts` — catálogo.
-3. `supabase/functions/whatsapp-webhook/lib/turn-orchestrator.ts` — pipeline.
-4. `supabase/functions/whatsapp-webhook/lib/conversation-context.ts` — tipo + builder.
-5. Refator interno de `index.ts` chamando o orquestrador (sem mudar entrada/saída HTTP).
-6. 2 arquivos de teste novos + verificação dos existentes.
-7. Resumo técnico no fim explicando como o estado persistido impede o agente de "se perder".
-
-## Riscos & Mitigação
-- **Risco:** quebrar testes finos de wording. **Mitigação:** o orquestrador continua chamando exatamente as mesmas funções de texto (`questions.ts`, `ai.ts`, `overrides.ts`).
-- **Risco:** divergência entre `contacts` e `lead_funnel_state`. **Mitigação:** trigger `sync_contact_is_in_spain` já garante; `loadFunnelState` já reconcilia.
-- **Risco:** refator de 3k linhas. **Mitigação:** extração incremental — manter `index.ts` como casca fina, mover blocos para o orquestrador um por vez, rodar testes a cada extração.
-
-Confirmo prosseguir com este plano?
+- Nenhuma migração SQL adicional — as colunas (`current_flow`, `status`, `branch`, `answers`, `last_human_handoff_at`) já foram criadas na migração anterior.
+- Nenhum novo arquivo. Apenas edições em `supabase/functions/whatsapp-webhook/index.ts`.
+- Tamanho estimado da mudança: ~150 linhas adicionadas (gate + dispatch), ~200–400 linhas removidas (duplicidades de decisão de etapa).
