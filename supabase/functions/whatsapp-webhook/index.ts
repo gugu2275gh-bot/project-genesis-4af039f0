@@ -1270,7 +1270,6 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         // `pass_through` e a etapa segue tratada pelo handler legado.
         // ============================================================
         let orchestratorDecision: TurnDecision | null = null
-        if (false) {
         try {
           const ctx = buildConversationContext(funnelState, contact as any, detectedChatLanguage)
           const decision = decideTurn(ctx, currentCustomerMessage || '')
@@ -1287,7 +1286,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         } catch (orchErr) {
           console.warn('[ORCHESTRATOR] non-blocking error:', orchErr instanceof Error ? orchErr.message : orchErr)
         }
-        }
+
 
 
 
