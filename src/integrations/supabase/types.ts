@@ -1437,12 +1437,16 @@ export type Database = {
       }
       lead_funnel_state: {
         Row: {
+          answers: Json
+          branch: string | null
+          current_flow: string | null
           email_confirmed: boolean
           empadronado_city: string | null
           empadronado_confirmed: boolean | null
           entry_date_confirmed: string | null
           handoff_sent: boolean
           interest_confirmed: string | null
+          last_human_handoff_at: string | null
           last_step_change: string
           lead_id: string
           location_known: string | null
@@ -1451,16 +1455,21 @@ export type Database = {
           pending_question: string | null
           pending_questions: Json
           pre_handoff_sent: boolean
+          status: string | null
           step: string
           updated_at: string
         }
         Insert: {
+          answers?: Json
+          branch?: string | null
+          current_flow?: string | null
           email_confirmed?: boolean
           empadronado_city?: string | null
           empadronado_confirmed?: boolean | null
           entry_date_confirmed?: string | null
           handoff_sent?: boolean
           interest_confirmed?: string | null
+          last_human_handoff_at?: string | null
           last_step_change?: string
           lead_id: string
           location_known?: string | null
@@ -1469,16 +1478,21 @@ export type Database = {
           pending_question?: string | null
           pending_questions?: Json
           pre_handoff_sent?: boolean
+          status?: string | null
           step?: string
           updated_at?: string
         }
         Update: {
+          answers?: Json
+          branch?: string | null
+          current_flow?: string | null
           email_confirmed?: boolean
           empadronado_city?: string | null
           empadronado_confirmed?: boolean | null
           entry_date_confirmed?: string | null
           handoff_sent?: boolean
           interest_confirmed?: string | null
+          last_human_handoff_at?: string | null
           last_step_change?: string
           lead_id?: string
           location_known?: string | null
@@ -1487,6 +1501,7 @@ export type Database = {
           pending_question?: string | null
           pending_questions?: Json
           pre_handoff_sent?: boolean
+          status?: string | null
           step?: string
           updated_at?: string
         }
