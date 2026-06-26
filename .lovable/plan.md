@@ -1,79 +1,96 @@
-## Plano
 
-### Objetivo
-Durante o pré-handoff/cadastro básico, o bot deve operar por **resposta válida esperada**:
+# Refator: Máquina de Estados Determinística do Atendimento
 
-- Se a mensagem do cliente responde validamente à pergunta atual, segue o fluxo.
-- Se não responde validamente, é sempre fora de contexto.
-- A resposta enviada deve começar com a frase localizada de fora de contexto e depois repetir a mesma pergunta necessária.
+## Objetivo
+Tirar do LLM qualquer decisão sobre "qual é a próxima etapa". O LLM continua redigindo texto, traduzindo, mantendo tom e respondendo dúvidas via KB. Toda transição passa a ser decidida por uma **state machine** consultando estado persistido — nunca relendo histórico.
 
-Exemplo para Roberto, etapa `email`:
+**Compromissos:**
+- Sem mudanças no Bizagi, ordem de mensagens, qualificação, Twilio, OpenAI, Gemini, embeddings, APIs ou UX.
+- Refatoração interna do `whatsapp-webhook` apenas. Testes existentes continuam passando.
 
-```text
-Cliente: O quê é TIE
-Bot: Por favor, vamos terminar o cadastro básico primeiro. Em seguida podemos tratar de outros assuntos.|||Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?
-```
+## Diagnóstico do que já existe (será reaproveitado, não recriado)
 
-### Mudança principal
-Substituir a lógica atual de “tentar detectar se é off-topic” por uma função determinística:
+| Necessidade do pedido | Já existe em | Ação |
+|---|---|---|
+| `conversations` / current_step / status | `lead_funnel_state` (step, flags, pending_questions, handoff_sent, pre_handoff_sent) | **Estender** com colunas faltantes |
+| `lead_profile` consolidado | `contacts` + trigger `sync_contact_is_in_spain` já espelha estado→contato | **Manter** — já é o perfil consolidado |
+| `lead_answers` (respostas por etapa) | Parcial: campos em `lead_funnel_state` + `outside_spain_progress` jsonb | **Estender** jsonb existente; sem nova tabela |
+| `conversation_events` | `whatsapp_turn_log` + `interactions` | **Manter** — já cobre |
+| `flow_steps` (catálogo) | Hardcoded em `index.ts`/`overrides.ts`/`questions.ts` | **Criar** módulo `lib/flow-machine.ts` em código (não tabela — evita acoplamento DB e mantém testabilidade) |
+| Perguntas paralelas | `pending_questions[]` jsonb + `lib/offtopic.ts` + `lib/parking.ts` | **Manter** — já implementado |
+| Idioma | `contacts.preferred_language` + `lib/language.ts` | **Manter** |
+| Branch Inside/Outside | `lead_funnel_state.location_known` + `outside_spain_progress` | **Manter** |
+
+## Mudanças
+
+### 1. Schema (migração mínima, aditiva)
+Adicionar em `lead_funnel_state` (não criar tabela nova):
+- `current_flow text` — ex: `ONBOARDING`, `INSIDE_SPAIN`, `OUTSIDE_SPAIN`, `KB_FREE`
+- `status text` — `ACTIVE | AWAITING_HUMAN | CLOSED`
+- `branch text` — `INSIDE | OUTSIDE | null`
+- `last_human_handoff_at timestamptz`
+- `answers jsonb default '{}'` — registro `{step → answer}` para auditoria/replay
+
+Sem `DROP`. Sem renomear. Sem mexer em RLS/grants existentes (a tabela já tem 3 policies). Triggers existentes (`sync_contact_is_in_spain`) continuam funcionando porque só adicionamos colunas.
+
+### 2. Novo módulo `lib/flow-machine.ts`
+Catálogo declarativo das etapas — uma única fonte de verdade:
 
 ```ts
-isValidAnswerForCurrentQuestion(rawCustomerMessage, lastAssistantQuestion, currentStep)
+type StepDef = {
+  code: StepCode
+  flow: FlowCode
+  ask: (lang) => string         // delega para questions.ts existente
+  validate: (msg, ctx) => ValidationResult  // delega para extract.ts/offtopic.ts existentes
+  persist: (supabase, state, value) => Promise<Patch>  // grava em answers + colunas dedicadas
+  next: (state, value) => StepCode  // transição determinística
+}
 ```
 
-Essa função será a autoridade no cadastro básico.
+Reaproveita 100% de:
+- `lib/questions.ts` (textos das perguntas)
+- `lib/extract.ts` (extração nome/email/interesse)
+- `lib/offtopic.ts` + `isValidAnswerForStep` (validação por etapa)
+- `lib/funnel-state.ts` (`computeNextStep`, `applyTurnUpdates`, `mergeOutsideProgress`)
 
-### Regras por etapa
+### 3. Orquestrador no `index.ts`
+Extrair em `lib/turn-orchestrator.ts` o pipeline já existente, agora explícito:
 
-1. **Consentimento inicial**
-   - Válido: sim/não equivalentes no idioma.
-   - Inválido: qualquer outra coisa → frase de fora de contexto + repetir consentimento.
+```
+1. loadFunnelState        (já existe)
+2. resolveCurrentStep     (state.step — nunca infere do histórico)
+3. classifyMessage        (offtopic.classifyOffTopic — já existe)
+   ├─ se off-topic → park em pending_questions (já existe)
+   └─ se resposta válida → persist + grava em answers jsonb
+4. computeNextStep        (já existe — agora consulta flow-machine)
+5. applyTurnUpdates       (já existe)
+6. LLM redige             (ai.ts — apenas redação)
+7. overrides.lockConfirmedFieldsInResponse  (já existe — trava regressão)
+```
 
-2. **Nome completo**
-   - Válido: nome provável ou recusa explícita já suportada.
-   - Inválido: pergunta, serviço, número, texto genérico → frase + repetir nome.
+Hoje esse fluxo está espalhado em ~3000 linhas de `index.ts`. Vamos **encapsular sem mudar comportamento**: o `index.ts` passa a chamar `orchestrateTurn(ctx)` e os testes em `handler_test.ts`, `canonical_flow_test.ts`, `wave5/6/7_test.ts` continuam validando o resultado fim-a-fim.
 
-3. **E-mail**
-   - Válido: e-mail válido ou recusa explícita de e-mail.
-   - Inválido: qualquer outro texto, incluindo “O que é TIE”, “quanto custa”, “residência”, “sim”, etc. → frase + repetir e-mail.
+### 4. Conversation Context (objeto em memória do turno)
+Tipo `ConversationContext` montado uma vez por turno a partir do estado + perfil + pending_questions, passado para todas as funções (em vez de cada uma reler do banco). Não é tabela — é estrutura em memória, evita duplicação.
 
-4. **Interesse/serviço**
-   - Válido: serviço reconhecido ou resposta estruturada válida.
-   - Inválido: pergunta factual, dúvida, pedido lateral sem serviço claro → frase + repetir pergunta de interesse.
+### 5. Testes
+- Adicionar `flow_machine_test.ts` cobrindo catálogo (transições NAME→EMAIL→INTEREST→LOCATION→INSIDE/OUTSIDE).
+- Adicionar `orchestrator_test.ts` cobrindo: pergunta paralela não perde etapa; LLM nunca decide next_step; replay de mensagem não pula etapa.
+- Todos os ~30 testes existentes devem continuar verdes (régua de não-regressão).
 
-5. **Localização Espanha / data / cidade / idade / perguntas sim-não**
-   - Válido: somente o formato esperado para aquela etapa.
-   - Inválido: frase + repetir a pergunta atual.
+## Entregáveis
 
-### Ajustes técnicos
+1. Migração aditiva em `lead_funnel_state` (5 colunas).
+2. `supabase/functions/whatsapp-webhook/lib/flow-machine.ts` — catálogo.
+3. `supabase/functions/whatsapp-webhook/lib/turn-orchestrator.ts` — pipeline.
+4. `supabase/functions/whatsapp-webhook/lib/conversation-context.ts` — tipo + builder.
+5. Refator interno de `index.ts` chamando o orquestrador (sem mudar entrada/saída HTTP).
+6. 2 arquivos de teste novos + verificação dos existentes.
+7. Resumo técnico no fim explicando como o estado persistido impede o agente de "se perder".
 
-- Em `supabase/functions/whatsapp-webhook/lib/offtopic.ts`:
-  - Criar/exportar `isValidAnswerForCurrentQuestion(...)`.
-  - Fazer `classifyOffTopic(...)` usar essa regra: com `collectionGateActive`, se não for resposta válida, retornar `{ kind: 'question' | 'request' }`.
-  - Manter `isFactualQuestion` apenas como auxiliar para classificar o tipo, não como condição obrigatória para bloquear.
+## Riscos & Mitigação
+- **Risco:** quebrar testes finos de wording. **Mitigação:** o orquestrador continua chamando exatamente as mesmas funções de texto (`questions.ts`, `ai.ts`, `overrides.ts`).
+- **Risco:** divergência entre `contacts` e `lead_funnel_state`. **Mitigação:** trigger `sync_contact_is_in_spain` já garante; `loadFunnelState` já reconcilia.
+- **Risco:** refator de 3k linhas. **Mitigação:** extração incremental — manter `index.ts` como casca fina, mover blocos para o orquestrador um por vez, rodar testes a cada extração.
 
-- Em `supabase/functions/whatsapp-webhook/index.ts`:
-  - Garantir que o guard de off-topic rode **antes** de qualquer agradecimento, extração de interesse ou patch determinístico.
-  - Quando inválido, usar sempre `getOffTopicAckPhrase(language) + '|||' + pergunta canônica da etapa atual`.
-  - Impedir que o LLM gere “Obrigado” para uma resposta inválida.
-
-- Em `supabase/functions/whatsapp-webhook/lib/extract.ts`:
-  - Bloquear extração de interesse quando a mensagem não for resposta válida à pergunta de interesse atual, para evitar capturar falso interesse em etapas como e-mail.
-
-### Testes obrigatórios
-Adicionar testes cobrindo Roberto e outras etapas:
-
-- Etapa e-mail + `O quê é TIE` → fora de contexto + repete e-mail.
-- Etapa e-mail + `residência` → fora de contexto + repete e-mail.
-- Etapa e-mail + `Sim` → fora de contexto + repete e-mail.
-- Etapa e-mail + `cliente@email.com` → válido, sem ACK off-topic.
-- Etapa nome + `O que é TIE` → fora de contexto + repete nome.
-- Etapa interesse + `Residência` → válido.
-- Etapa interesse + `O que é TIE` → fora de contexto + repete interesse.
-
-### Validação
-Após implementar:
-
-- Rodar testes do `whatsapp-webhook`.
-- Redeploy automático da função.
-- Verificar nos logs que o caso Roberto passa por `[PARK]` ou `[OFFTOPIC_SHORTCIRCUIT]`, sem resposta “Obrigado”, e que a mensagem enviada começa com a frase correta de fora de contexto.
+Confirmo prosseguir com este plano?
