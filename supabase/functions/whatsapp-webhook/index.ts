@@ -395,6 +395,11 @@ import { isValidSpanishCity } from './lib/spanish-cities.ts'
 import { normalizeQueue, pushPending, getReplayPreamble, type PendingItem } from './lib/parking.ts'
 import { logTurn } from './lib/turn-log.ts'
 
+// Wave 10 — máquina de estados determinística (fonte oficial do fluxo)
+import { buildConversationContext } from './lib/conversation-context.ts'
+import { decideTurn, applyTurnDecision, type TurnDecision } from './lib/turn-orchestrator.ts'
+import { resolveCurrentStep, getStepDef } from './lib/flow-machine.ts'
+
 export {
   FULL_NAME_DENYLIST_PATTERNS,
   isLikelyFullNameAnswer,
