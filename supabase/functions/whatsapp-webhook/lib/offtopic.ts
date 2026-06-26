@@ -154,6 +154,12 @@ const CATALOG_FOLLOWUP_RE = /(se encaixa em algum|encaja en alguno|fits any of t
 // Sinais "está na Espanha" embutidos numa resposta composta.
 const LOCATION_IN_SPAIN_HINT_RE = /\b(estou na espanha|estoy en espa[ñn]a|i'?m in spain|je suis en espagne|moro na espanha|vivo en espa[ñn]a|vivo na espanha|aqui na espanha|aqu[ií] en espa[ñn]a|\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*espa[ñn]ha?|\d+\s*(anos|años|years|ans)\s*(em|en|in)\s*spain)\b/i
 
+// Confirmação de abertura: "pode ser?", "podemos seguir?", "¿puedo?",
+// "can I?", "puis-je?", "tudo bem?", "ok?". Quando o último turno do bot é
+// essa confirmação e o cliente responde sim/não, NÃO é off-topic — mesmo que
+// a etapa já tenha avançado para 'nome' enquanto a abertura era enviada.
+const OPENING_CONFIRMATION_RE = /(pode\s+ser|podemos\s+seguir|posso\s+seguir|podemos\s+come[çc]ar|tudo\s+bem|t[áa]\s+bom|puedo\??|puedo\s+seguir|podemos\s+(seguir|empezar)|todo\s+bien|est[áa]\s+bien|can\s+i\s+(go|proceed|continue|start)|is\s+that\s+ok|sounds?\s+good|puis[- ]je|on\s+y\s+va|d['’]?accord)\s*\??\s*$/i
+
 export function classifyOffTopic(
   currentMessage: string,
   lastAssistantQuestion: string | null | undefined,
@@ -163,12 +169,19 @@ export function classifyOffTopic(
   if (!raw) return null
   if (!ctx?.collectionGateActive) return null
 
+  // Guard de abertura: sim/não em resposta a "pode ser?" nunca é off-topic,
+  // independente da etapa corrente (a etapa pode já ter avançado para 'nome').
+  const lastQ = String(lastAssistantQuestion || '').trim()
+  if (lastQ && OPENING_CONFIRMATION_RE.test(lastQ) && isYesNo(raw)) return null
+
   // Autoridade por etapa: se sabemos qual é a etapa do cadastro, exigimos
   // resposta válida para essa etapa. Qualquer outra coisa é off-topic.
   if (ctx.currentStep) {
     if (isValidAnswerForStep(raw, ctx.currentStep, lastAssistantQuestion)) return null
     return { kind: isFactualQuestion(raw) ? 'question' : 'request' }
   }
+
+
 
 
   const q = String(lastAssistantQuestion || '')
