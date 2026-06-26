@@ -2066,18 +2066,56 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         let parkedThisTurn: PendingItem | null = null
         try {
           if (collectionGateActive && rawCustomerMessage) {
-            const off = classifyOffTopic(rawCustomerMessage, lastAssistantQuestion, { collectionGateActive: true, currentStep: nextStep?.key as any })
-            if (off) {
-              const before = pendingQueue.length
-              pendingQueue = pushPending(pendingQueue, { text: rawCustomerMessage, kind: off.kind })
-              if (pendingQueue.length !== before || (pendingQueue[pendingQueue.length - 1]?.text === rawCustomerMessage)) {
-                parkedThisTurn = pendingQueue[pendingQueue.length - 1]
-                await supabase
-                  .from('lead_funnel_state')
-                  .update({ pending_questions: pendingQueue, updated_at: new Date().toISOString() })
-                  .eq('lead_id', lead.id)
-                ;(funnelStateLive as any).pending_questions = pendingQueue
-                console.log(`[PARK] enfileirado (${off.kind}) durante cadastro: "${rawCustomerMessage.slice(0, 80)}" | total=${pendingQueue.length}`)
+            // Repetition guard: ignora silenciosamente mensagens que apenas repetem
+            // um dado já confirmado (ex.: cliente reenvia o nome após o bot já tê-lo
+            // capturado). Evita que vire "off-topic" e gere o prefixo de parking.
+            const normRepeat = (s: string) => String(s || '')
+              .toLowerCase()
+              .normalize('NFD')
+              .replace(/\p{Diacritic}/gu, '')
+              .replace(/[^a-z0-9@. ]/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+            const msgNorm = normRepeat(rawCustomerMessage)
+            const recentConfirmed: string[] = []
+            try {
+              const ans = (funnelStateLive as any)?.answers || {}
+              for (const k of Object.keys(ans)) {
+                const v = ans[k]?.value
+                if (typeof v === 'string') recentConfirmed.push(v)
+              }
+            } catch (_) { /* noop */ }
+            if (contact?.full_name) recentConfirmed.push(String(contact.full_name))
+            if (contact?.email) recentConfirmed.push(String(contact.email))
+            // Global name guard: se o nome já está confirmado e a mensagem parece
+            // um nome próprio (2+ palavras alfabéticas, sem @/dígito), silencia.
+            const looksLikeName = /^[\p{L}'\- ]{3,}$/u.test(rawCustomerMessage.trim())
+              && rawCustomerMessage.trim().split(/\s+/).length >= 2
+              && !/[@\d]/.test(rawCustomerMessage)
+            const isRepeatOfConfirmed = recentConfirmed.some(v => {
+              const vn = normRepeat(v)
+              if (!vn || vn.length < 3) return false
+              return vn === msgNorm || (vn.length >= 5 && (vn.includes(msgNorm) || msgNorm.includes(vn)))
+            })
+            const nameAlreadyConfirmed = !!(funnelStateLive as any)?.name_confirmed
+            const silentlyIgnore = isRepeatOfConfirmed || (nameAlreadyConfirmed && looksLikeName)
+
+            if (silentlyIgnore) {
+              console.log(`[REPETITION_GUARD] silenced echo of confirmed data: "${rawCustomerMessage.slice(0, 80)}"`)
+            } else {
+              const off = classifyOffTopic(rawCustomerMessage, lastAssistantQuestion, { collectionGateActive: true, currentStep: nextStep?.key as any })
+              if (off) {
+                const before = pendingQueue.length
+                pendingQueue = pushPending(pendingQueue, { text: rawCustomerMessage, kind: off.kind })
+                if (pendingQueue.length !== before || (pendingQueue[pendingQueue.length - 1]?.text === rawCustomerMessage)) {
+                  parkedThisTurn = pendingQueue[pendingQueue.length - 1]
+                  await supabase
+                    .from('lead_funnel_state')
+                    .update({ pending_questions: pendingQueue, updated_at: new Date().toISOString() })
+                    .eq('lead_id', lead.id)
+                  ;(funnelStateLive as any).pending_questions = pendingQueue
+                  console.log(`[PARK] enfileirado (${off.kind}) durante cadastro: "${rawCustomerMessage.slice(0, 80)}" | total=${pendingQueue.length}`)
+                }
               }
             }
           }
