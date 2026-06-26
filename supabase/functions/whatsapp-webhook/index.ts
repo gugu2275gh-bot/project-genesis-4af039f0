@@ -2102,8 +2102,16 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
 
             if (silentlyIgnore) {
               console.log(`[REPETITION_GUARD] silenced echo of confirmed data: "${rawCustomerMessage.slice(0, 80)}"`)
+            } else if (orchestratorDecision && (orchestratorDecision.action.kind === 'advance' || orchestratorDecision.action.kind === 'reask_current')) {
+              // O Turn Orchestrator já é a autoridade da etapa atual: se ele
+              // aceitou (advance) ou rejeitou pedindo de novo (reask), NÃO
+              // duplicamos a classificação aqui — caso contrário a etapa NOVA
+              // re-avaliaria a mesma mensagem como off-topic (ex.: "tie" aceito
+              // como INTEREST e re-classificado contra LOCATION).
+              console.log(`[PARK] skip (orchestrator=${orchestratorDecision.action.kind})`)
             } else {
               const off = classifyOffTopic(rawCustomerMessage, lastAssistantQuestion, { collectionGateActive: true, currentStep: nextStep?.key as any })
+
               if (off) {
                 const before = pendingQueue.length
                 pendingQueue = pushPending(pendingQueue, { text: rawCustomerMessage, kind: off.kind })

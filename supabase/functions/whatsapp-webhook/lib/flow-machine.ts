@@ -125,12 +125,27 @@ const STEPS: Record<StepCode, StepDef> = {
     validate: (raw, state) => {
       const ok = isValidAnswerForStep(raw, 'localizacao', '')
       if (!ok) return { valid: false, reason: 'unclear_location' }
-      const v = /(espan|spain|españ)/i.test(raw) ? 'spain' : 'outside'
-      return { valid: true, value: v }
+      const t = String(raw || '').trim().toLowerCase()
+      // 1) Menção explícita de Espanha → spain
+      if (/(espan|spain|españ|madri|barcelona|valencia|sevilla|m[aá]laga|bilbao|zaragoza)/i.test(t)) {
+        return { valid: true, value: 'spain' }
+      }
+      // 2) Menção explícita de país que não é Espanha → outside
+      if (/(brasil|brazil|portugal|argentin|colomb|m[eé]xico|mexico|peru|chile|uruguai|uruguay|venezuel|paraguai|paraguay|estados unidos|usa|united states|france|fran[çc]a|italia|alemanha|inglaterra|reino unido)/i.test(t)) {
+        return { valid: true, value: 'outside' }
+      }
+      // 3) Sim/Não isolado em resposta a "Você está na Espanha?" — sim=spain, não=outside
+      const yesRe = /^\s*(sim|s[íi]|yes|y|claro|correto|exato|exactly|sure|ok|okay|vale|positivo|pode|pode\s+ser|puede|dale|si|sí)\s*[.!?]?\s*$/i
+      const noRe  = /^\s*(n[ãa]o|no|n[óo]p|nope|nunca|never|jamais|negativo)\s*[.!?]?\s*$/i
+      if (yesRe.test(t)) return { valid: true, value: 'spain' }
+      if (noRe.test(t))  return { valid: true, value: 'outside' }
+      // 4) Frase indicando que nunca esteve na Espanha → outside
+      return { valid: true, value: 'outside' }
     },
     next: (_state, value) =>
       value === 'spain' ? 'INSIDE_ENTRY_DATE' : 'OUTSIDE_AGE',
   },
+
 
   INSIDE_ENTRY_DATE: {
     code: 'INSIDE_ENTRY_DATE',
