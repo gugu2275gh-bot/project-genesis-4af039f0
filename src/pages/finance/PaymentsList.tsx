@@ -15,7 +15,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText, Download, CheckCircle, Clock, FileCheck, MessageSquare, Users, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Search, Check, DollarSign, AlertTriangle, CalendarClock, RefreshCw, FileText, Download, CheckCircle, Clock, FileCheck, MessageSquare, Users, ChevronDown, ChevronRight, Pencil } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PAYMENT_STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_FORM_LABELS } from '@/types/database';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -423,31 +424,42 @@ export default function PaymentsList() {
                 <Check className="h-4 w-4 mr-1" />
                 Confirmar
               </Button>
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setReschedulePayment(payment);
-                }}
-                title="Prorrogar"
-              >
-                <CalendarClock className="h-4 w-4" />
-              </Button>
-              {payment.contract_id && (
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedContractId(payment.contract_id);
-                    setShowRefinanceDialog(true);
-                  }}
-                  title="Reparcelar"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Editar pagamento"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setReschedulePayment(payment);
+                    }}
+                  >
+                    <CalendarClock className="h-4 w-4 mr-2" />
+                    Prorrogar
+                  </DropdownMenuItem>
+                  {payment.contract_id && (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedContractId(payment.contract_id);
+                        setShowRefinanceDialog(true);
+                      }}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Reparcelar
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               {getOverdueInfo(payment)?.isOverdue && (
                 <Button 
                   variant="ghost" 
