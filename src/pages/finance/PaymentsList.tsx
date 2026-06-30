@@ -424,31 +424,42 @@ export default function PaymentsList() {
                 <Check className="h-4 w-4 mr-1" />
                 Confirmar
               </Button>
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setReschedulePayment(payment);
-                }}
-                title="Prorrogar"
-              >
-                <CalendarClock className="h-4 w-4" />
-              </Button>
-              {payment.contract_id && (
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedContractId(payment.contract_id);
-                    setShowRefinanceDialog(true);
-                  }}
-                  title="Reparcelar"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => e.stopPropagation()}
+                    title="Editar pagamento"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setReschedulePayment(payment);
+                    }}
+                  >
+                    <CalendarClock className="h-4 w-4 mr-2" />
+                    Prorrogar
+                  </DropdownMenuItem>
+                  {payment.contract_id && (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedContractId(payment.contract_id);
+                        setShowRefinanceDialog(true);
+                      }}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Reparcelar
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               {getOverdueInfo(payment)?.isOverdue && (
                 <Button 
                   variant="ghost" 
