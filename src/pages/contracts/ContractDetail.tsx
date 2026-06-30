@@ -326,10 +326,15 @@ export default function ContractDetail() {
 
       const leadId = first.opportunities?.leads?.id || first.opportunities?.lead_id;
       const linkedLead = contractLeadLinks?.find((cl: any) => cl.lead_id === leadId)?.leads;
+      const fallbackLead = first.opportunities?.leads;
       const serviceName =
         linkedLead?.service_types?.name ||
         (linkedLead?.service_interest
           ? SERVICE_INTEREST_LABELS[linkedLead.service_interest as keyof typeof SERVICE_INTEREST_LABELS]
+          : null) ||
+        fallbackLead?.service_types?.name ||
+        (fallbackLead?.service_interest
+          ? SERVICE_INTEREST_LABELS[fallbackLead.service_interest as keyof typeof SERVICE_INTEREST_LABELS]
           : null) ||
         'Serviço';
 
