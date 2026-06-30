@@ -1324,6 +1324,7 @@ export default function ContractDetail() {
         recordId={contract.id}
         title="Histórico do Contrato"
         description="Criação, mudanças de status e demais alterações registradas."
+        defaultOpen
       />
     </div>
   );
