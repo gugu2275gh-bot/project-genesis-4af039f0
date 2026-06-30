@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { AuditHistoryPanel } from '@/components/audit/AuditHistoryPanel';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useContract, useContracts } from '@/hooks/useContracts';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useProfiles } from '@/hooks/useProfiles';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,14 @@ export default function ContractDetail() {
   const navigate = useNavigate();
   const { data: contract, isLoading } = useContract(id);
   const { updateContract, sendForApproval, markAsSigned, cancelContract, suspendContract, reactivateContract, approveContract, rejectContract } = useContracts();
+  const queryClient = useQueryClient();
+  const refreshAfterStatusChange = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['contracts'] }),
+      queryClient.invalidateQueries({ queryKey: ['contracts', id] }),
+      queryClient.invalidateQueries({ queryKey: ['audit_logs'] }),
+    ]);
+  };
   const { data: profiles = [] } = useProfiles();
   const { beneficiaries } = useBeneficiaries(id);
 
@@ -654,7 +662,7 @@ export default function ContractDetail() {
 
   const handleSendForApproval = async () => {
     await sendForApproval.mutateAsync(contract.id);
-    window.location.reload();
+    await refreshAfterStatusChange();
   };
 
   const handleMarkAsSignedWithUpload = async () => {
@@ -695,7 +703,7 @@ export default function ContractDetail() {
       
       setShowSignDialog(false);
       setSignDialogFile(null);
-      window.location.reload();
+      await refreshAfterStatusChange();
     } catch (error: any) {
       toast({
         title: 'Erro ao processar assinatura',
@@ -715,7 +723,7 @@ export default function ContractDetail() {
     });
     setShowCancelDialog(false);
     setCancellationReason('');
-    window.location.reload();
+    await refreshAfterStatusChange();
   };
 
   const handleSuspend = async () => {
@@ -726,17 +734,17 @@ export default function ContractDetail() {
     });
     setShowSuspendDialog(false);
     setSuspensionReason('');
-    window.location.reload();
+    await refreshAfterStatusChange();
   };
 
   const handleReactivate = async () => {
     await reactivateContract.mutateAsync(contract.id);
-    window.location.reload();
+    await refreshAfterStatusChange();
   };
 
   const handleApprove = async () => {
     await approveContract.mutateAsync(contract.id);
-    window.location.reload();
+    await refreshAfterStatusChange();
   };
 
   const handleReject = async () => {
@@ -744,7 +752,7 @@ export default function ContractDetail() {
     await rejectContract.mutateAsync({ id: contract.id, reason: rejectionReason });
     setShowRejectDialog(false);
     setRejectionReason('');
-    window.location.reload();
+    await refreshAfterStatusChange();
   };
 
   const contractData = contract as any;
