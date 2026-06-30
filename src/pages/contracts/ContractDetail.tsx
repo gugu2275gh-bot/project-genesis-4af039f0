@@ -1331,6 +1331,9 @@ export default function ContractDetail() {
       {/* Notes Section - Histórico de Acordos */}
       <ContractNotesSection contractId={contract.id} />
 
+      {/* Log de Pagamentos */}
+      <PaymentLogPanel payments={(contractPayments as any) || []} />
+
       {/* Histórico de Alterações (auditoria) */}
       <AuditHistoryPanel
         tableName="contracts"
