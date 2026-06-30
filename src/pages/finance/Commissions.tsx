@@ -308,11 +308,41 @@ export default function Commissions() {
       cell: (item) => item.reference_period || '-',
     },
     {
+      key: 'vat_enabled',
+      header: 'IVA',
+      cell: (item) => (
+        <div className="flex items-center gap-2">
+          <Switch
+            id={`vat-${item.id}`}
+            checked={!!item.vat_enabled}
+            onCheckedChange={() => handleToggleVat(item)}
+            disabled={updateCommission.isPending}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <Label htmlFor={`vat-${item.id}`} className="cursor-pointer text-xs text-muted-foreground">
+            {item.vat_enabled ? 'c/ IVA' : 's/ IVA'}
+          </Label>
+        </div>
+      ),
+    },
+    {
       key: 'commission_amount',
       header: 'Comissão',
-      cell: (item) => (
-        <span className="font-semibold">€{item.commission_amount?.toFixed(2) || '0.00'}</span>
-      ),
+      cell: (item) => {
+        const rate = item.commission_rate || commissionRate;
+        const baseCommission = (item.base_amount || 0) * rate;
+        const vatAmount = (item.vat_enabled ? baseCommission * IVA_RATE : 0);
+        return (
+          <div>
+            <p className="font-semibold">€{item.commission_amount?.toFixed(2) || '0.00'}</p>
+            {item.vat_enabled && (
+              <p className="text-xs text-muted-foreground">
+                Base €{baseCommission.toFixed(2)} + IVA €{vatAmount.toFixed(2)}
+              </p>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'status',
