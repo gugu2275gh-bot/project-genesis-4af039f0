@@ -163,11 +163,14 @@ export default function Commissions() {
 
 
   const handleSubmit = () => {
+    if (!formData.opportunity_id) return;
     createCommission.mutate(formData, {
       onSuccess: () => {
         setIsDialogOpen(false);
+        setSelectedServiceKey('');
         setFormData({
           contract_id: '',
+          opportunity_id: null,
           collaborator_name: '',
           collaborator_type: 'CAPTADOR',
           base_amount: 0,
@@ -178,6 +181,7 @@ export default function Commissions() {
       },
     });
   };
+
 
   const handleApprove = (commission: CommissionWithContract) => {
     approveCommission.mutate(commission.id);
