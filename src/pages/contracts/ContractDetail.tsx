@@ -1330,16 +1330,10 @@ export default function ContractDetail() {
       {/* Notes Section - Histórico de Acordos */}
       <ContractNotesSection contractId={contract.id} />
 
-      {/* Log de Pagamentos */}
-      <PaymentLogPanel payments={(contractPayments as any) || []} />
-
-      {/* Histórico de Alterações (auditoria) */}
-      <AuditHistoryPanel
-        tableName="contracts"
-        recordId={contract.id}
-        title="Histórico do Contrato"
-        description="Criação, mudanças de status e demais alterações registradas."
-        defaultOpen
+      {/* Histórico unificado (contrato + log de pagamentos) — estrito a este contrato */}
+      <ContractHistoryPanel
+        contractId={contract.id}
+        payments={(contractPayments as any) || []}
       />
     </div>
   );
