@@ -688,7 +688,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Valor Bruto (€) <span className="text-destructive">*</span></Label>
+              <Label>Valor do Serviço (€) <span className="text-destructive">*</span></Label>
               <Input
                 type="text"
                 inputMode="decimal"
