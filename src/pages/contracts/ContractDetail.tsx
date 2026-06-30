@@ -662,7 +662,7 @@ export default function ContractDetail() {
 
   const handleSendForApproval = async () => {
     await sendForApproval.mutateAsync(contract.id);
-    window.location.reload();
+    await refreshAfterStatusChange();
   };
 
   const handleMarkAsSignedWithUpload = async () => {
@@ -703,7 +703,7 @@ export default function ContractDetail() {
       
       setShowSignDialog(false);
       setSignDialogFile(null);
-      window.location.reload();
+      await refreshAfterStatusChange();
     } catch (error: any) {
       toast({
         title: 'Erro ao processar assinatura',
@@ -723,7 +723,7 @@ export default function ContractDetail() {
     });
     setShowCancelDialog(false);
     setCancellationReason('');
-    window.location.reload();
+    await refreshAfterStatusChange();
   };
 
   const handleSuspend = async () => {
@@ -734,17 +734,17 @@ export default function ContractDetail() {
     });
     setShowSuspendDialog(false);
     setSuspensionReason('');
-    window.location.reload();
+    await refreshAfterStatusChange();
   };
 
   const handleReactivate = async () => {
     await reactivateContract.mutateAsync(contract.id);
-    window.location.reload();
+    await refreshAfterStatusChange();
   };
 
   const handleApprove = async () => {
     await approveContract.mutateAsync(contract.id);
-    window.location.reload();
+    await refreshAfterStatusChange();
   };
 
   const handleReject = async () => {
@@ -752,7 +752,7 @@ export default function ContractDetail() {
     await rejectContract.mutateAsync({ id: contract.id, reason: rejectionReason });
     setShowRejectDialog(false);
     setRejectionReason('');
-    window.location.reload();
+    await refreshAfterStatusChange();
   };
 
   const contractData = contract as any;
