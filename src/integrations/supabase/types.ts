@@ -263,6 +263,7 @@ export type Database = {
           rejection_reason: string | null
           status: string | null
           updated_at: string | null
+          vat_enabled: boolean | null
         }
         Insert: {
           approved_at?: string | null
@@ -285,6 +286,7 @@ export type Database = {
           rejection_reason?: string | null
           status?: string | null
           updated_at?: string | null
+          vat_enabled?: boolean | null
         }
         Update: {
           approved_at?: string | null
@@ -307,6 +309,7 @@ export type Database = {
           rejection_reason?: string | null
           status?: string | null
           updated_at?: string | null
+          vat_enabled?: boolean | null
         }
         Relationships: [
           {
