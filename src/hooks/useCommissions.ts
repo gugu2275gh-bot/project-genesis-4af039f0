@@ -23,6 +23,7 @@ export interface Commission {
   commission_rate: number;
   commission_amount: number;
   has_invoice: boolean;
+  vat_enabled: boolean;
   status: CommissionStatus;
   paid_at: string | null;
   payment_method: string | null;
