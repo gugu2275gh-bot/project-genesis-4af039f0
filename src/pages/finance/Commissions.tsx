@@ -488,9 +488,28 @@ export default function Commissions() {
                 </p>
               </div>
 
-              <div className="bg-muted p-3 rounded-md">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="add-iva"
+                  checked={addIva}
+                  onCheckedChange={(v) => setAddIva(v === true)}
+                />
+                <Label htmlFor="add-iva" className="cursor-pointer">
+                  Adicionar IVA (21%) sobre a comissão
+                </Label>
+              </div>
+
+              <div className="bg-muted p-3 rounded-md space-y-1">
                 <p className="text-sm text-muted-foreground">
-                  Comissão calculada ({((configuredRate ?? 10)).toString()}%): <strong>€{(formData.base_amount * commissionRate).toFixed(2)}</strong>
+                  Comissão ({((configuredRate ?? 10)).toString()}%): <strong>€{baseCommission.toFixed(2)}</strong>
+                </p>
+                {addIva && (
+                  <p className="text-sm text-muted-foreground">
+                    IVA (21%): <strong>€{ivaAmount.toFixed(2)}</strong>
+                  </p>
+                )}
+                <p className="text-sm">
+                  Total: <strong>€{totalCommission.toFixed(2)}</strong>
                 </p>
               </div>
 
