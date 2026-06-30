@@ -165,12 +165,25 @@ export default function Commissions() {
   };
 
 
+  const baseCommission = formData.base_amount * commissionRate;
+  const ivaAmount = addIva ? baseCommission * IVA_RATE : 0;
+  const totalCommission = baseCommission + ivaAmount;
+
   const handleSubmit = () => {
     if (!formData.opportunity_id) return;
-    createCommission.mutate(formData, {
+    const ivaNote = addIva
+      ? `IVA aplicado (21%): €${ivaAmount.toFixed(2)} · Total c/ IVA: €${totalCommission.toFixed(2)}`
+      : 'Sem IVA';
+    const payload: CommissionInsert = {
+      ...formData,
+      base_amount: addIva ? formData.base_amount * (1 + IVA_RATE) : formData.base_amount,
+      notes: [formData.notes, ivaNote].filter(Boolean).join(' | '),
+    };
+    createCommission.mutate(payload, {
       onSuccess: () => {
         setIsDialogOpen(false);
         setSelectedServiceKey('');
+        setAddIva(false);
         setFormData({
           contract_id: '',
           opportunity_id: null,
