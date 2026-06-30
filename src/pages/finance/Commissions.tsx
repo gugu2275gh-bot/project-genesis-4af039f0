@@ -212,8 +212,23 @@ export default function Commissions() {
   };
 
 
-  const handleApprove = (commission: CommissionWithContract) => {
-    approveCommission.mutate(commission.id);
+  const handleToggleVat = (item: CommissionWithContract) => {
+    const newVatEnabled = !item.vat_enabled;
+    const rate = item.commission_rate || commissionRate;
+    const baseCommission = (item.base_amount || 0) * rate;
+    const newCommissionAmount = newVatEnabled
+      ? Math.round(baseCommission * 1.21 * 100) / 100
+      : baseCommission;
+    const notePrefix = newVatEnabled
+      ? `IVA ativado (21%): €${(newCommissionAmount - baseCommission).toFixed(2)} · Total c/ IVA: €${newCommissionAmount.toFixed(2)}`
+      : 'IVA desativado';
+    const notes = [item.notes, notePrefix].filter(Boolean).join(' | ');
+    updateCommission.mutate({
+      id: item.id,
+      vat_enabled: newVatEnabled,
+      commission_amount: newCommissionAmount,
+      notes,
+    });
   };
 
   const handleReject = () => {
