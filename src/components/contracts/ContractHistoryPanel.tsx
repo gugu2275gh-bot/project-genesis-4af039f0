@@ -72,11 +72,8 @@ export function ContractHistoryPanel({ contractId, payments, defaultOpen = true 
     enabled: open,
   });
 
-  // STRICT isolation: only payments belonging to this contract
-  const strictPayments = useMemo(
-    () => (payments || []).filter(p => p.contract_id === contractId),
-    [payments, contractId],
-  );
+  // Include all payments fetched for this contract (direct + via linked opportunities)
+  const strictPayments = useMemo(() => payments || [], [payments]);
 
   const entries = useMemo<TimelineEntry[]>(() => {
     const items: TimelineEntry[] = [];
