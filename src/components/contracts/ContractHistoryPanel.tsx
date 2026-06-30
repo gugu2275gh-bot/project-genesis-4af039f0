@@ -62,6 +62,7 @@ type TimelineEntry = {
   key: string;
   ts: string;
   kind: 'contract' | 'payment_created' | 'payment_paid';
+  category: 'contract' | 'payment';
   render: () => JSX.Element;
 };
 
