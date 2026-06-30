@@ -270,7 +270,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     if (selectedServiceName) {
       summary += `Serviço: ${selectedServiceName}\n`;
     }
-    summary += `Valor Bruto: € ${gross.toFixed(2)}\n`;
+    summary += `Valor do Serviço: € ${gross.toFixed(2)}\n`;
     if (form.apply_vat && vatAmount > 0) {
       summary += `IVA (${defaultVatRate || 21}%): + € ${vatAmount.toFixed(2)}\n`;
     }
