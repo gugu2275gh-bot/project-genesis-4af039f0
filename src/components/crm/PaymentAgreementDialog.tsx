@@ -221,7 +221,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   const handleSave = async (keepOpen = false) => {
     if (!form.amount || parseFloat(form.amount) <= 0 || isSaving || savingRef.current) {
       if (!form.amount || parseFloat(form.amount) <= 0) {
-        toast({ title: 'Valor bruto é obrigatório', variant: 'destructive' });
+        toast({ title: 'Valor do serviço é obrigatório', variant: 'destructive' });
       }
       return;
     }
