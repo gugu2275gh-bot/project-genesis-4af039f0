@@ -361,31 +361,40 @@ export default function Commissions() {
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label>Contrato</Label>
-                <Select 
-                  value={formData.contract_id} 
-                  onValueChange={handleContractChange}
+                <Label>Serviço (somente serviços com indicado)</Label>
+                <Select
+                  value={selectedServiceKey}
+                  onValueChange={handleServiceChange}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione o contrato" />
+                    <SelectValue placeholder="Selecione o serviço" />
                   </SelectTrigger>
                   <SelectContent>
-                    {contracts.map((contract) => (
-                      <SelectItem key={contract.id} value={contract.id}>
-                        {contract.opportunities?.leads?.contacts?.full_name || 'Sem nome'} - 
-                        €{contract.total_fee?.toFixed(2) || '0.00'}
+                    {eligibleServices.length === 0 && (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">
+                        Nenhum serviço com indicado disponível
+                      </div>
+                    )}
+                    {eligibleServices.map((s) => (
+                      <SelectItem
+                        key={`${s.contract_id}:${s.opportunity_id}`}
+                        value={`${s.contract_id}:${s.opportunity_id}`}
+                      >
+                        {s.client_name} — {s.service_name} (€{s.total_amount.toFixed(2)}) · Indicado: {s.referral_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {selectedClientName && (
+              {selectedService && (
                 <div className="space-y-2">
-                  <Label>Cliente</Label>
-                  <Input value={selectedClientName} disabled />
+                  <Label>Cliente / Indicado</Label>
+                  <Input value={`${selectedService.client_name} · Indicado por ${selectedService.referral_name}`} disabled />
                 </div>
               )}
+
+
 
               <div className="space-y-2">
                 <Label>Tipo</Label>
