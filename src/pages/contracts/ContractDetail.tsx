@@ -654,6 +654,7 @@ export default function ContractDetail() {
 
   const handleSendForApproval = async () => {
     await sendForApproval.mutateAsync(contract.id);
+    window.location.reload();
   };
 
   const handleMarkAsSignedWithUpload = async () => {
@@ -694,6 +695,7 @@ export default function ContractDetail() {
       
       setShowSignDialog(false);
       setSignDialogFile(null);
+      window.location.reload();
     } catch (error: any) {
       toast({
         title: 'Erro ao processar assinatura',
@@ -713,6 +715,7 @@ export default function ContractDetail() {
     });
     setShowCancelDialog(false);
     setCancellationReason('');
+    window.location.reload();
   };
 
   const handleSuspend = async () => {
@@ -723,10 +726,25 @@ export default function ContractDetail() {
     });
     setShowSuspendDialog(false);
     setSuspensionReason('');
+    window.location.reload();
   };
 
   const handleReactivate = async () => {
     await reactivateContract.mutateAsync(contract.id);
+    window.location.reload();
+  };
+
+  const handleApprove = async () => {
+    await approveContract.mutateAsync(contract.id);
+    window.location.reload();
+  };
+
+  const handleReject = async () => {
+    if (!rejectionReason.trim()) return;
+    await rejectContract.mutateAsync({ id: contract.id, reason: rejectionReason });
+    setShowRejectDialog(false);
+    setRejectionReason('');
+    window.location.reload();
   };
 
   const contractData = contract as any;
@@ -784,7 +802,7 @@ export default function ContractDetail() {
               </Button>
             )}
             {canApprove && (
-              <Button onClick={() => approveContract.mutateAsync(contract.id)} disabled={approveContract.isPending}>
+              <Button onClick={handleApprove} disabled={approveContract.isPending}>
                 <Check className="h-4 w-4 mr-2" />
                 {approveContract.isPending ? 'Aprovando...' : 'Aprovar Contrato'}
               </Button>
@@ -914,12 +932,7 @@ export default function ContractDetail() {
             </Button>
             <Button 
               variant="destructive" 
-              onClick={async () => {
-                if (!rejectionReason.trim()) return;
-                await rejectContract.mutateAsync({ id: contract.id, reason: rejectionReason });
-                setShowRejectDialog(false);
-                setRejectionReason('');
-              }}
+              onClick={handleReject}
               disabled={!rejectionReason.trim() || rejectContract.isPending}
             >
               {rejectContract.isPending ? 'Reprovando...' : 'Confirmar Reprovação'}
