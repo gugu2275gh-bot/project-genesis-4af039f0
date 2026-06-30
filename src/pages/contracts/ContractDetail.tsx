@@ -185,6 +185,42 @@ export default function ContractDetail() {
   // Get assigned user name for display
   const assignedUser = profiles.find(p => p.id === (contract as any)?.assigned_to_user_id);
 
+  // Map: serviceName -> list of fee lines extracted from payment_notes (e.g., "Taxa X: + € 100,00")
+  const feesByService = useMemo(() => {
+    const map = new Map<string, string[]>();
+    const ignoredPrefixes = [
+      'Acordo de Pagamento', 'Serviço', 'Valor Bruto', 'IVA', 'Total',
+      'Total Final', 'Método', 'Forma', 'Parcelas', 'Origem', 'Conta',
+      'Detalhe', 'Observações', 'Desconto', 'Outros Custos',
+    ];
+    (allLinkedContactNotes || []).forEach((c: any) => {
+      const raw = c?.payment_notes || '';
+      if (!raw) return;
+      raw.split('---').forEach((rawBlock: string) => {
+        const block = rawBlock.trim();
+        if (!block) return;
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+        const serviceLine = lines.find(l => l.startsWith('Serviço:'));
+        if (!serviceLine) return;
+        const fullService = serviceLine.replace('Serviço:', '').trim();
+        const baseService = fullService.split(' para ')[0].trim();
+        const feeLines: string[] = [];
+        for (const line of lines) {
+          const m = line.match(/^(.+?):\s*\+\s*€\s*([\d.,]+)\s*$/);
+          if (!m) continue;
+          const desc = m[1].trim();
+          if (ignoredPrefixes.some(p => desc.startsWith(p))) continue;
+          feeLines.push(line);
+        }
+        if (feeLines.length > 0) {
+          map.set(baseService, feeLines);
+          if (fullService !== baseService) map.set(fullService, feeLines);
+        }
+      });
+    });
+    return map;
+  }, [allLinkedContactNotes]);
+
   const generatedPaymentDetails = useMemo(() => {
     if (!contractPayments || contractPayments.length === 0) return '';
 
@@ -196,6 +232,7 @@ export default function ContractDetail() {
         currency,
       }).format(value);
     };
+
 
     // Sort: titular payments first (no beneficiary_contact_id), then beneficiaries
     const sortedPayments = [...contractPayments].sort((a: any, b: any) => {
