@@ -932,12 +932,7 @@ export default function ContractDetail() {
             </Button>
             <Button 
               variant="destructive" 
-              onClick={async () => {
-                if (!rejectionReason.trim()) return;
-                await rejectContract.mutateAsync({ id: contract.id, reason: rejectionReason });
-                setShowRejectDialog(false);
-                setRejectionReason('');
-              }}
+              onClick={handleReject}
               disabled={!rejectionReason.trim() || rejectContract.isPending}
             >
               {rejectContract.isPending ? 'Reprovando...' : 'Confirmar Reprovação'}
