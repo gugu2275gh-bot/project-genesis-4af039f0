@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Plus, 
   TrendingUp, 
@@ -134,6 +135,8 @@ export default function Commissions() {
   const [paymentMethod, setPaymentMethod] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [selectedServiceKey, setSelectedServiceKey] = useState('');
+  const [addIva, setAddIva] = useState(false);
+  const IVA_RATE = 0.21;
   const [formData, setFormData] = useState<CommissionInsert>({
     contract_id: '',
     opportunity_id: null,
@@ -162,12 +165,25 @@ export default function Commissions() {
   };
 
 
+  const baseCommission = formData.base_amount * commissionRate;
+  const ivaAmount = addIva ? baseCommission * IVA_RATE : 0;
+  const totalCommission = baseCommission + ivaAmount;
+
   const handleSubmit = () => {
     if (!formData.opportunity_id) return;
-    createCommission.mutate(formData, {
+    const ivaNote = addIva
+      ? `IVA aplicado (21%): €${ivaAmount.toFixed(2)} · Total c/ IVA: €${totalCommission.toFixed(2)}`
+      : 'Sem IVA';
+    const payload: CommissionInsert = {
+      ...formData,
+      base_amount: addIva ? formData.base_amount * (1 + IVA_RATE) : formData.base_amount,
+      notes: [formData.notes, ivaNote].filter(Boolean).join(' | '),
+    };
+    createCommission.mutate(payload, {
       onSuccess: () => {
         setIsDialogOpen(false);
         setSelectedServiceKey('');
+        setAddIva(false);
         setFormData({
           contract_id: '',
           opportunity_id: null,
@@ -472,9 +488,28 @@ export default function Commissions() {
                 </p>
               </div>
 
-              <div className="bg-muted p-3 rounded-md">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="add-iva"
+                  checked={addIva}
+                  onCheckedChange={(v) => setAddIva(v === true)}
+                />
+                <Label htmlFor="add-iva" className="cursor-pointer">
+                  Adicionar IVA (21%) sobre a comissão
+                </Label>
+              </div>
+
+              <div className="bg-muted p-3 rounded-md space-y-1">
                 <p className="text-sm text-muted-foreground">
-                  Comissão calculada ({((configuredRate ?? 10)).toString()}%): <strong>€{(formData.base_amount * commissionRate).toFixed(2)}</strong>
+                  Comissão ({((configuredRate ?? 10)).toString()}%): <strong>€{baseCommission.toFixed(2)}</strong>
+                </p>
+                {addIva && (
+                  <p className="text-sm text-muted-foreground">
+                    IVA (21%): <strong>€{ivaAmount.toFixed(2)}</strong>
+                  </p>
+                )}
+                <p className="text-sm">
+                  Total: <strong>€{totalCommission.toFixed(2)}</strong>
                 </p>
               </div>
 
