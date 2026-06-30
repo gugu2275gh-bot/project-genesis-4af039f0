@@ -539,10 +539,8 @@ export default function Commissions() {
       <Tabs defaultValue="all">
         <TabsList>
           <TabsTrigger value="all">Todas ({commissions.length})</TabsTrigger>
-          <TabsTrigger value="pending-approval">Aprovação ({pendingApproval.length})</TabsTrigger>
+          <TabsTrigger value="pending-approval">Pendentes ({pendingApproval.length})</TabsTrigger>
           <TabsTrigger value="approved">Aprovadas ({approved.length})</TabsTrigger>
-          <TabsTrigger value="to-pay">A Pagar ({pendingToPay.length})</TabsTrigger>
-          <TabsTrigger value="to-receive">A Receber ({pendingToReceive.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="mt-4">
@@ -554,17 +552,10 @@ export default function Commissions() {
         </TabsContent>
 
         <TabsContent value="approved" className="mt-4">
-          <DataTable columns={columns} data={approved} emptyMessage="Nenhuma comissão aprovada aguardando pagamento" />
-        </TabsContent>
-
-        <TabsContent value="to-pay" className="mt-4">
-          <DataTable columns={columns} data={pendingToPay} emptyMessage="Nenhuma comissão a pagar" />
-        </TabsContent>
-
-        <TabsContent value="to-receive" className="mt-4">
-          <DataTable columns={columns} data={pendingToReceive} emptyMessage="Nenhuma comissão a receber" />
+          <DataTable columns={columns} data={approved} emptyMessage="Nenhuma comissão aprovada" />
         </TabsContent>
       </Tabs>
+
 
       {/* Pay Dialog */}
       <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
