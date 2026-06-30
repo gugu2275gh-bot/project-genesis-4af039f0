@@ -96,11 +96,18 @@ export default function ContractDetail() {
     enabled: allLinkedContactIds.length > 0,
   });
 
-  // Fetch all opportunity IDs for linked leads
+  // Fetch all opportunity IDs for ALL leads of the contacts linked to this contract
+  // (titular + beneficiaries), so payments from any service of those contacts appear here.
   const { data: linkedOpportunityIds } = useQuery({
-    queryKey: ['contract-linked-opportunities', id, contractLeadLinks],
+    queryKey: ['contract-linked-opportunities', id, allLinkedContactIds],
     queryFn: async () => {
-      const leadIds = contractLeadLinks?.map(cl => cl.lead_id) || [];
+      if (allLinkedContactIds.length === 0) return [];
+      const { data: contactLeads, error: leadsError } = await supabase
+        .from('leads')
+        .select('id')
+        .in('contact_id', allLinkedContactIds);
+      if (leadsError) throw leadsError;
+      const leadIds = (contactLeads || []).map(l => l.id);
       if (leadIds.length === 0) return [];
       const { data, error } = await supabase
         .from('opportunities')
@@ -109,7 +116,7 @@ export default function ContractDetail() {
       if (error) throw error;
       return data?.map(o => o.id) || [];
     },
-    enabled: !!contractLeadLinks && contractLeadLinks.length > 0,
+    enabled: allLinkedContactIds.length > 0,
   });
 
   const { data: contractPayments } = useQuery({
@@ -125,7 +132,7 @@ export default function ContractDetail() {
       
       const { data, error } = await supabase
         .from('payments')
-        .select('*, beneficiary_contact:beneficiary_contact_id(full_name, document_type, document_number), opportunities:opportunity_id(id, lead_id, leads:lead_id(id, service_type_id, service_interest))')
+        .select('*, beneficiary_contact:beneficiary_contact_id(full_name, document_type, document_number), opportunities:opportunity_id(id, lead_id, leads:lead_id(id, service_type_id, service_interest, service_types:service_type_id(name)))')
         .or(orConditions.join(','));
       
       if (error) throw error;
@@ -319,10 +326,15 @@ export default function ContractDetail() {
 
       const leadId = first.opportunities?.leads?.id || first.opportunities?.lead_id;
       const linkedLead = contractLeadLinks?.find((cl: any) => cl.lead_id === leadId)?.leads;
+      const fallbackLead = first.opportunities?.leads;
       const serviceName =
         linkedLead?.service_types?.name ||
         (linkedLead?.service_interest
           ? SERVICE_INTEREST_LABELS[linkedLead.service_interest as keyof typeof SERVICE_INTEREST_LABELS]
+          : null) ||
+        fallbackLead?.service_types?.name ||
+        (fallbackLead?.service_interest
+          ? SERVICE_INTEREST_LABELS[fallbackLead.service_interest as keyof typeof SERVICE_INTEREST_LABELS]
           : null) ||
         'Serviço';
 
