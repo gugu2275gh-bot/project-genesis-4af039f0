@@ -189,7 +189,7 @@ export default function ContractDetail() {
   const feesByService = useMemo(() => {
     const map = new Map<string, string[]>();
     const ignoredPrefixes = [
-      'Acordo de Pagamento', 'Serviço', 'Valor Bruto', 'IVA', 'Total',
+      'Acordo de Pagamento', 'Serviço', 'Valor do Serviço', 'Valor Bruto', 'IVA', 'Total',
       'Total Final', 'Método', 'Forma', 'Parcelas', 'Origem', 'Conta',
       'Detalhe', 'Observações', 'Desconto', 'Outros Custos',
     ];
@@ -348,7 +348,7 @@ export default function ContractDetail() {
       const grossAmount = pickField('gross_amount') || (first.gross_amount ?? first.amount);
       const formattedGrossAmount = formatMoney(grossAmount);
       if (formattedGrossAmount) {
-        lines.push(`Valor Bruto: ${formattedGrossAmount}`);
+        lines.push(`Valor do Serviço: ${formattedGrossAmount}`);
       }
 
       // IVA: prefer stored vat_amount; if 0 but apply_vat + vat_rate exist, compute from gross
