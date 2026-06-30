@@ -442,7 +442,7 @@ export default function Commissions() {
               </div>
 
               <div className="space-y-2">
-                <Label>Valor Total do Serviço (€)</Label>
+                <Label>Honorário do Serviço (€)</Label>
                 <Input
                   type="text"
                   inputMode="decimal"
