@@ -1,14 +1,16 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { History, ChevronDown, ChevronRight, User as UserIcon } from 'lucide-react';
+import { History, ChevronDown, ChevronRight, User as UserIcon, CalendarPlus, CalendarCheck, Receipt } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuditLogs } from '@/hooks/useAuditLogs';
-import { useReactivationLog } from '@/hooks/useReactivationLog';
+import { supabase } from '@/integrations/supabase/client';
+import { PAYMENT_STATUS_LABELS } from '@/types/database';
 
 interface UnifiedHistoryPanelProps {
   contactId: string;
@@ -31,27 +33,11 @@ const ACTION_VARIANTS: Record<string, 'default' | 'secondary' | 'destructive' | 
   UPDATE: 'secondary',
 };
 
-const REACT_ACTION_LABELS: Record<string, string> = {
-  direct_route: 'Roteamento Direto',
-  ask_confirmation: 'Pediu Confirmação',
-  ask_disambiguation: 'Desambiguação',
-  new_subject: 'Novo Assunto',
-  fallback_manual: 'Fallback Manual',
-  insufficient_context: 'Contexto Insuficiente',
-};
-
-const CONFIRMATION_LABELS: Record<string, string> = {
-  pending: 'Aguardando',
-  confirmed: 'Confirmado',
-  denied: 'Negado',
-  no_response: 'Sem Resposta',
-};
-
-const CONFIRMATION_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-  confirmed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-  denied: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-  no_response: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
+const PAYMENT_STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  CONFIRMADO: 'default',
+  PENDENTE: 'secondary',
+  ATRASADO: 'destructive',
+  CANCELADO: 'outline',
 };
 
 function summarizeEntry(action: string, oldData: any, newData: any): string {
@@ -125,9 +111,98 @@ function AuditList({ logs, loading }: { logs: any[] | undefined; loading: boolea
   );
 }
 
+function formatAmount(amount: number | null, currency?: string | null) {
+  if (amount == null) return '-';
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: currency || 'EUR',
+  }).format(amount);
+}
+
+function PaymentLogList({ payments, loading }: { payments: any[] | undefined; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+      </div>
+    );
+  }
+  if (!payments || payments.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground py-4 text-center">
+        Nenhum pagamento encontrado.
+      </p>
+    );
+  }
+  const entries: { key: string; ts: string; node: JSX.Element }[] = [];
+  payments.forEach(p => {
+    const status = p.status || 'PENDENTE';
+    const header = (
+      <div className="flex items-center gap-2 flex-wrap">
+        <Badge variant={PAYMENT_STATUS_VARIANTS[status] || 'secondary'} className="gap-1">
+          <Receipt className="h-3 w-3" />
+          {PAYMENT_STATUS_LABELS[status as keyof typeof PAYMENT_STATUS_LABELS] || status}
+        </Badge>
+        <span className="text-sm font-medium">{formatAmount(p.amount, p.currency)}</span>
+        {p.installment_number != null && (
+          <span className="text-xs text-muted-foreground">Parcela {p.installment_number}</span>
+        )}
+        {p.contracts?.contract_number && (
+          <span className="text-xs text-muted-foreground">• Contrato Nº {p.contracts.contract_number}</span>
+        )}
+      </div>
+    );
+    entries.push({
+      key: `c-${p.id}`,
+      ts: p.created_at,
+      node: (
+        <>
+          {header}
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <CalendarPlus className="h-3 w-3" />
+              Pagamento preenchido em{' '}
+              {format(new Date(p.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+            </span>
+          </div>
+        </>
+      ),
+    });
+    if (p.paid_at) {
+      entries.push({
+        key: `p-${p.id}`,
+        ts: p.paid_at,
+        node: (
+          <>
+            {header}
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <CalendarCheck className="h-3 w-3" />
+                Pagamento aprovado em{' '}
+                {format(new Date(p.paid_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              </span>
+            </div>
+          </>
+        ),
+      });
+    }
+  });
+  entries.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+  return (
+    <ul className="space-y-3 max-h-96 overflow-y-auto">
+      {entries.map(e => (
+        <li key={e.key} className="flex gap-3 border-l-2 border-muted pl-3 py-1">
+          <div className="flex-1 space-y-1">{e.node}</div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function UnifiedHistoryPanel({ contactId, leadIds }: UnifiedHistoryPanelProps) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<'ficha' | 'servicos'>('ficha');
+  const [tab, setTab] = useState<'ficha' | 'servicos' | 'contratos' | 'pagamentos'>('ficha');
 
   const { data: contactLogs, isLoading: loadingContact } = useAuditLogs({
     tableName: 'contacts',
@@ -141,7 +216,57 @@ export function UnifiedHistoryPanel({ contactId, leadIds }: UnifiedHistoryPanelP
     enabled: open && tab === 'servicos' && leadIds.length > 0,
   });
 
-  
+  // Resolve contract IDs related to this contact (via opportunities, contract_leads, beneficiaries)
+  const { data: contractIds = [], isLoading: loadingContractIds } = useQuery({
+    queryKey: ['contact-contract-ids', contactId, leadIds],
+    enabled: open && (tab === 'contratos' || tab === 'pagamentos'),
+    queryFn: async () => {
+      const ids = new Set<string>();
+      if (leadIds.length > 0) {
+        const [{ data: opps }, { data: cls }] = await Promise.all([
+          supabase.from('opportunities').select('id').in('lead_id', leadIds),
+          supabase.from('contract_leads').select('contract_id').in('lead_id', leadIds),
+        ]);
+        const oppIds = (opps || []).map(o => o.id);
+        if (oppIds.length > 0) {
+          const { data: cs } = await supabase
+            .from('contracts')
+            .select('id')
+            .in('opportunity_id', oppIds);
+          (cs || []).forEach(c => ids.add(c.id));
+        }
+        (cls || []).forEach(cl => cl.contract_id && ids.add(cl.contract_id));
+      }
+      const { data: cbs } = await supabase
+        .from('contract_beneficiaries')
+        .select('contract_id')
+        .eq('contact_id', contactId);
+      (cbs || []).forEach(cb => cb.contract_id && ids.add(cb.contract_id));
+      return Array.from(ids);
+    },
+  });
+
+  const { data: contractLogs, isLoading: loadingContracts } = useAuditLogs({
+    tableName: 'contracts',
+    recordIds: contractIds,
+    enabled: open && tab === 'contratos' && contractIds.length > 0,
+  });
+
+  const { data: contactPayments, isLoading: loadingPayments } = useQuery({
+    queryKey: ['contact-payments-log', contactId, contractIds],
+    enabled: open && tab === 'pagamentos',
+    queryFn: async () => {
+      const orParts: string[] = [`beneficiary_contact_id.eq.${contactId}`];
+      contractIds.forEach(cid => orParts.push(`contract_id.eq.${cid}`));
+      const { data, error } = await supabase
+        .from('payments')
+        .select('id, amount, currency, status, installment_number, created_at, paid_at, contract_id, contracts:contract_id(contract_number)')
+        .or(orParts.join(','))
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
   return (
     <Card>
@@ -157,7 +282,7 @@ export function UnifiedHistoryPanel({ contactId, leadIds }: UnifiedHistoryPanelP
               Histórico e Logs
             </CardTitle>
             <CardDescription>
-              Mesclagens e mudanças de status deste contato.
+              Ficha, serviços, contratos e pagamentos deste contato.
             </CardDescription>
           </div>
           {open ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
@@ -166,9 +291,11 @@ export function UnifiedHistoryPanel({ contactId, leadIds }: UnifiedHistoryPanelP
       {open && (
         <CardContent>
           <Tabs value={tab} onValueChange={v => setTab(v as any)}>
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="ficha">Ficha</TabsTrigger>
               <TabsTrigger value="servicos">Serviços</TabsTrigger>
+              <TabsTrigger value="contratos">Contratos</TabsTrigger>
+              <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
             </TabsList>
 
             <TabsContent value="ficha" className="mt-4">
@@ -177,6 +304,14 @@ export function UnifiedHistoryPanel({ contactId, leadIds }: UnifiedHistoryPanelP
 
             <TabsContent value="servicos" className="mt-4">
               <AuditList logs={leadLogs} loading={loadingLeads} />
+            </TabsContent>
+
+            <TabsContent value="contratos" className="mt-4">
+              <AuditList logs={contractLogs} loading={loadingContractIds || loadingContracts} />
+            </TabsContent>
+
+            <TabsContent value="pagamentos" className="mt-4">
+              <PaymentLogList payments={contactPayments} loading={loadingContractIds || loadingPayments} />
             </TabsContent>
           </Tabs>
         </CardContent>
