@@ -72,11 +72,8 @@ export function ContractHistoryPanel({ contractId, payments, defaultOpen = true 
     enabled: open,
   });
 
-  // STRICT isolation: only payments belonging to this contract
-  const strictPayments = useMemo(
-    () => (payments || []).filter(p => p.contract_id === contractId),
-    [payments, contractId],
-  );
+  // Include all payments fetched for this contract (direct + via linked opportunities)
+  const strictPayments = useMemo(() => payments || [], [payments]);
 
   const entries = useMemo<TimelineEntry[]>(() => {
     const items: TimelineEntry[] = [];
@@ -189,7 +186,7 @@ export function ContractHistoryPanel({ contractId, payments, defaultOpen = true 
           <div className="flex flex-col items-start gap-1">
             <CardTitle className="flex items-center gap-2">
               <History className="h-5 w-5" />
-              Histórico do Contrato
+              Histórico e Logs
             </CardTitle>
             <CardDescription>
               Alterações do contrato e log de pagamentos (preenchimento e aprovação).
