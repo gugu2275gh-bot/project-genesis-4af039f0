@@ -164,6 +164,10 @@ export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOp
             <Receipt className="h-3 w-3" />
             {PAYMENT_STATUS_LABELS[status as keyof typeof PAYMENT_STATUS_LABELS] || status}
           </Badge>
+          <Badge variant="outline" className="gap-1 border-accent text-accent">
+            <Receipt className="h-3 w-3" />
+            Pagamento
+          </Badge>
           <span className="text-sm font-medium">{formatAmount(p.amount, p.currency)}</span>
           {p.installment_number != null && (
             <span className="text-xs text-muted-foreground">Parcela {p.installment_number}</span>
@@ -178,6 +182,7 @@ export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOp
         key: `pay-create-${p.id}`,
         ts: p.created_at,
         kind: 'payment_created',
+        category: 'payment',
         render: () => (
           <>
             {headerLine}
@@ -197,6 +202,7 @@ export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOp
           key: `pay-paid-${p.id}`,
           ts: p.paid_at,
           kind: 'payment_paid',
+          category: 'payment',
           render: () => (
             <>
               {headerLine}
