@@ -958,7 +958,8 @@ export default function PaymentsList() {
         // Group filtered payments by contract
         const groupsMap = new Map<string, { key: string; contract: any; clientName: string; items: typeof filteredPayments }>();
         filteredPayments.forEach((p: any) => {
-          const key = p.contract_id || `no-contract-${p.opportunity_id || p.id}`;
+          const resolvedContractId = p.contract_id || p.contracts?.id || null;
+          const key = resolvedContractId || `no-contract-${p.opportunity_id || p.id}`;
           if (!groupsMap.has(key)) {
             groupsMap.set(key, {
               key,
