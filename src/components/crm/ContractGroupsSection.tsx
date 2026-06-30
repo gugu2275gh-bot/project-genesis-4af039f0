@@ -442,6 +442,7 @@ export function ContractGroupsSection({
     const ignoredPrefixes = [
       'Acordo de Pagamento',
       'Serviço',
+      'Valor do Serviço',
       'Valor Bruto',
       'IVA',
       'Total',
