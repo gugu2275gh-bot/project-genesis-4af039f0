@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { 
   Plus, 
   TrendingUp, 
@@ -54,6 +55,7 @@ export default function Commissions() {
     commissions, 
     isLoading, 
     createCommission, 
+    updateCommission,
     approveCommission,
     rejectCommission,
     markAsPaid,
@@ -143,7 +145,10 @@ export default function Commissions() {
     collaborator_name: '',
     collaborator_type: 'CAPTADOR',
     base_amount: 0,
+    commission_rate: commissionRate,
+    commission_amount: 0,
     has_invoice: true,
+    vat_enabled: false,
     reference_period: '',
     paid_at: null,
   });
@@ -155,11 +160,15 @@ export default function Commissions() {
   const handleServiceChange = (key: string) => {
     setSelectedServiceKey(key);
     const svc = eligibleServices.find((s) => `${s.contract_id}:${s.opportunity_id}` === key);
+    const baseAmount = svc?.total_amount ?? 0;
+    const baseCommission = baseAmount * commissionRate;
     setFormData((prev) => ({
       ...prev,
       contract_id: svc?.contract_id || '',
       opportunity_id: svc?.opportunity_id || null,
-      base_amount: svc?.total_amount ?? 0,
+      base_amount: baseAmount,
+      commission_rate: commissionRate,
+      commission_amount: baseCommission,
       collaborator_name: svc?.referral_name || prev.collaborator_name,
     }));
   };
@@ -176,7 +185,9 @@ export default function Commissions() {
       : 'Sem IVA';
     const payload: CommissionInsert = {
       ...formData,
-      base_amount: addIva ? formData.base_amount * (1 + IVA_RATE) : formData.base_amount,
+      vat_enabled: addIva,
+      commission_rate: commissionRate,
+      commission_amount: totalCommission,
       notes: [formData.notes, ivaNote].filter(Boolean).join(' | '),
     };
     createCommission.mutate(payload, {
@@ -190,7 +201,10 @@ export default function Commissions() {
           collaborator_name: '',
           collaborator_type: 'CAPTADOR',
           base_amount: 0,
+          commission_rate: commissionRate,
+          commission_amount: 0,
           has_invoice: true,
+          vat_enabled: false,
           reference_period: '',
           paid_at: null,
         });
@@ -201,6 +215,25 @@ export default function Commissions() {
 
   const handleApprove = (commission: CommissionWithContract) => {
     approveCommission.mutate(commission.id);
+  };
+
+  const handleToggleVat = (item: CommissionWithContract) => {
+    const newVatEnabled = !item.vat_enabled;
+    const rate = item.commission_rate || commissionRate;
+    const baseCommission = (item.base_amount || 0) * rate;
+    const newCommissionAmount = newVatEnabled
+      ? Math.round(baseCommission * 1.21 * 100) / 100
+      : baseCommission;
+    const notePrefix = newVatEnabled
+      ? `IVA ativado (21%): €${(newCommissionAmount - baseCommission).toFixed(2)} · Total c/ IVA: €${newCommissionAmount.toFixed(2)}`
+      : 'IVA desativado';
+    const notes = [item.notes, notePrefix].filter(Boolean).join(' | ');
+    updateCommission.mutate({
+      id: item.id,
+      vat_enabled: newVatEnabled,
+      commission_amount: newCommissionAmount,
+      notes,
+    });
   };
 
   const handleReject = () => {
@@ -275,11 +308,41 @@ export default function Commissions() {
       cell: (item) => item.reference_period || '-',
     },
     {
+      key: 'vat_enabled',
+      header: 'IVA',
+      cell: (item) => (
+        <div className="flex items-center gap-2">
+          <Switch
+            id={`vat-${item.id}`}
+            checked={!!item.vat_enabled}
+            onCheckedChange={() => handleToggleVat(item)}
+            disabled={updateCommission.isPending}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <Label htmlFor={`vat-${item.id}`} className="cursor-pointer text-xs text-muted-foreground">
+            {item.vat_enabled ? 'c/ IVA' : 's/ IVA'}
+          </Label>
+        </div>
+      ),
+    },
+    {
       key: 'commission_amount',
       header: 'Comissão',
-      cell: (item) => (
-        <span className="font-semibold">€{item.commission_amount?.toFixed(2) || '0.00'}</span>
-      ),
+      cell: (item) => {
+        const rate = item.commission_rate || commissionRate;
+        const baseCommission = (item.base_amount || 0) * rate;
+        const vatAmount = (item.vat_enabled ? baseCommission * IVA_RATE : 0);
+        return (
+          <div>
+            <p className="font-semibold">€{item.commission_amount?.toFixed(2) || '0.00'}</p>
+            {item.vat_enabled && (
+              <p className="text-xs text-muted-foreground">
+                Base €{baseCommission.toFixed(2)} + IVA €{vatAmount.toFixed(2)}
+              </p>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'status',

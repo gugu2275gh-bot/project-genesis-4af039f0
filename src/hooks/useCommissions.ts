@@ -23,6 +23,7 @@ export interface Commission {
   commission_rate: number;
   commission_amount: number;
   has_invoice: boolean;
+  vat_enabled: boolean;
   status: CommissionStatus;
   paid_at: string | null;
   payment_method: string | null;
@@ -70,7 +71,10 @@ export interface CommissionInsert {
   collaborator_name: string;
   collaborator_type: 'CAPTADOR' | 'FORNECEDOR';
   base_amount: number;
+  commission_rate?: number;
+  commission_amount?: number;
   has_invoice?: boolean;
+  vat_enabled?: boolean;
   notes?: string;
   reference_period?: string;
   paid_at?: string | null;
@@ -155,13 +159,19 @@ export function useCommissions() {
 
   const createCommission = useMutation({
     mutationFn: async (commission: CommissionInsert) => {
+      const rate = commission.commission_rate ?? 0.10;
+      const baseCommission = (commission.base_amount || 0) * rate;
+      const vatMultiplier = commission.vat_enabled ? 1.21 : 1;
+      const payload = {
+        ...commission,
+        commission_rate: rate,
+        commission_amount: commission.commission_amount ?? Math.round(baseCommission * vatMultiplier * 100) / 100,
+        status: 'PENDENTE_APROVACAO',
+        created_by_user_id: user?.id,
+      };
       const { data, error } = await supabase
         .from('commissions')
-        .insert({
-          ...commission,
-          status: 'PENDENTE_APROVACAO',
-          created_by_user_id: user?.id,
-        })
+        .insert(payload)
         .select()
         .single();
       
