@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { History, ChevronDown, ChevronRight, User as UserIcon, CalendarPlus, CalendarCheck, Receipt } from 'lucide-react';
+import { History, ChevronDown, ChevronRight, User as UserIcon, CalendarPlus, CalendarCheck, Receipt, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuditLogs } from '@/hooks/useAuditLogs';
