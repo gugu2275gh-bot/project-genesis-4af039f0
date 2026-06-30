@@ -387,10 +387,8 @@ export default function ContractDetail() {
       const totalFinal = groupPayments.reduce(
         (sum: number, p: any) => sum + Number(p.amount ?? 0),
         0
-      ) + matchedFees.reduce((s: number, feeLine: string) => {
-        const m = feeLine.match(/€\s*([\d.,]+)/);
-        return s + (m ? Number(m[1].replace(/\./g, '').replace(',', '.')) : 0);
-      }, 0);
+      );
+
 
       const formattedTotalFinal = formatMoney(totalFinal);
       if (formattedTotalFinal) {
