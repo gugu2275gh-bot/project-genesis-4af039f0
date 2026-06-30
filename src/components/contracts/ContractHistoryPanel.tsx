@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { History, ChevronDown, ChevronRight, User as UserIcon, CalendarPlus, CalendarCheck, Receipt } from 'lucide-react';
+import { History, ChevronDown, ChevronRight, User as UserIcon, CalendarPlus, CalendarCheck, Receipt, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuditLogs } from '@/hooks/useAuditLogs';
@@ -62,6 +62,7 @@ type TimelineEntry = {
   key: string;
   ts: string;
   kind: 'contract' | 'payment_created' | 'payment_paid';
+  category: 'contract' | 'payment';
   render: () => JSX.Element;
 };
 
@@ -118,6 +119,7 @@ export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOp
         key: `log-${log.id}`,
         ts: log.created_at,
         kind: 'contract',
+        category: 'contract',
         render: () => {
           let summary = '';
           if (log.action === 'STATUS_CHANGE' && log.old_data?.status && log.new_data?.status) {
@@ -132,6 +134,10 @@ export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOp
               <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant={ACTION_VARIANTS[log.action] || 'secondary'}>
                   {ACTION_LABELS[log.action] || log.action}
+                </Badge>
+                <Badge variant="outline" className="gap-1 border-primary text-primary">
+                  <FileText className="h-3 w-3" />
+                  Contrato
                 </Badge>
                 {summary && <span className="text-sm">{summary}</span>}
               </div>
@@ -158,6 +164,10 @@ export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOp
             <Receipt className="h-3 w-3" />
             {PAYMENT_STATUS_LABELS[status as keyof typeof PAYMENT_STATUS_LABELS] || status}
           </Badge>
+          <Badge variant="outline" className="gap-1 border-accent text-accent">
+            <Receipt className="h-3 w-3" />
+            Pagamento
+          </Badge>
           <span className="text-sm font-medium">{formatAmount(p.amount, p.currency)}</span>
           {p.installment_number != null && (
             <span className="text-xs text-muted-foreground">Parcela {p.installment_number}</span>
@@ -172,6 +182,7 @@ export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOp
         key: `pay-create-${p.id}`,
         ts: p.created_at,
         kind: 'payment_created',
+        category: 'payment',
         render: () => (
           <>
             {headerLine}
@@ -191,6 +202,7 @@ export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOp
           key: `pay-paid-${p.id}`,
           ts: p.paid_at,
           kind: 'payment_paid',
+          category: 'payment',
           render: () => (
             <>
               {headerLine}
@@ -244,7 +256,12 @@ export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOp
           ) : (
             <ul className="space-y-3">
               {entries.map(e => (
-                <li key={e.key} className="flex gap-3 border-l-2 border-muted pl-3 py-1">
+                <li
+                  key={e.key}
+                  className={`flex gap-3 border-l-2 pl-3 py-1 ${
+                    e.category === 'contract' ? 'border-l-primary' : 'border-l-accent'
+                  }`}
+                >
                   <div className="flex-1 space-y-1">{e.render()}</div>
                 </li>
               ))}
