@@ -651,7 +651,7 @@ export default function PaymentsList() {
                 )}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>Valor Bruto (€)</Label>
+                    <Label>Valor do Serviço (€)</Label>
                     <Input
                       type="number"
                       value={newPayment.amount}
