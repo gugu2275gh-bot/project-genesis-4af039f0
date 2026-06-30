@@ -213,6 +213,10 @@ export default function Commissions() {
   };
 
 
+  const handleApprove = (commission: CommissionWithContract) => {
+    approveCommission.mutate(commission.id);
+  };
+
   const handleToggleVat = (item: CommissionWithContract) => {
     const newVatEnabled = !item.vat_enabled;
     const rate = item.commission_rate || commissionRate;
