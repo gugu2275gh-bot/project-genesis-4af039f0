@@ -189,7 +189,7 @@ export default function ContractDetail() {
   const feesByService = useMemo(() => {
     const map = new Map<string, string[]>();
     const ignoredPrefixes = [
-      'Acordo de Pagamento', 'Serviço', 'Valor Bruto', 'IVA', 'Total',
+      'Acordo de Pagamento', 'Serviço', 'Valor do Serviço', 'Valor Bruto', 'IVA', 'Total',
       'Total Final', 'Método', 'Forma', 'Parcelas', 'Origem', 'Conta',
       'Detalhe', 'Observações', 'Desconto', 'Outros Custos',
     ];
