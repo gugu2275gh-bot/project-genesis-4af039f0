@@ -242,7 +242,7 @@ export function useCommissions() {
     mutationFn: async ({ id, ...updates }: Partial<Commission> & { id: string }) => {
       const { data, error } = await supabase
         .from('commissions')
-        .update(updates)
+        .update(updates as any)
         .eq('id', id)
         .select()
         .single();
