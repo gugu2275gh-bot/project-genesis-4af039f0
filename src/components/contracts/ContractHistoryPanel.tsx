@@ -65,7 +65,7 @@ type TimelineEntry = {
   render: () => JSX.Element;
 };
 
-export function ContractHistoryPanel({ contractId, payments, defaultOpen = true }: ContractHistoryPanelProps) {
+export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOpen = true }: ContractHistoryPanelProps) {
   const [open, setOpen] = useState(defaultOpen);
 
   const { data: logs, isLoading } = useAuditLogs({
@@ -74,8 +74,41 @@ export function ContractHistoryPanel({ contractId, payments, defaultOpen = true 
     enabled: open,
   });
 
-  // Include all payments fetched for this contract (direct + via linked opportunities)
-  const strictPayments = useMemo(() => payments || [], [payments]);
+  // Fetch ONLY this contract's payments (direct contract_id OR via opportunities of this contract's leads)
+  const { data: strictPayments = [], isLoading: loadingPayments } = useQuery({
+    queryKey: ['contract-history-payments', contractId],
+    enabled: open && !!contractId,
+    queryFn: async () => {
+      // 1) Opportunities tied to THIS contract:
+      //    a) contracts.opportunity_id (legacy single link)
+      //    b) opportunities of leads in contract_leads for THIS contract
+      const [{ data: contractRow }, { data: cls }] = await Promise.all([
+        supabase.from('contracts').select('opportunity_id').eq('id', contractId).maybeSingle(),
+        supabase.from('contract_leads').select('lead_id').eq('contract_id', contractId),
+      ]);
+      const oppIds = new Set<string>();
+      if (contractRow?.opportunity_id) oppIds.add(contractRow.opportunity_id);
+      const leadIds = (cls || []).map(c => c.lead_id).filter(Boolean) as string[];
+      if (leadIds.length > 0) {
+        const { data: opps } = await supabase
+          .from('opportunities')
+          .select('id')
+          .in('lead_id', leadIds);
+        (opps || []).forEach(o => oppIds.add(o.id));
+      }
+
+      const orParts: string[] = [`contract_id.eq.${contractId}`];
+      Array.from(oppIds).forEach(oid => orParts.push(`opportunity_id.eq.${oid}`));
+
+      const { data, error } = await supabase
+        .from('payments')
+        .select('id, amount, currency, status, installment_number, created_at, paid_at, contract_id, beneficiary_contact:beneficiary_contact_id(full_name)')
+        .or(orParts.join(','));
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
 
   const entries = useMemo<TimelineEntry[]>(() => {
     const items: TimelineEntry[] = [];
