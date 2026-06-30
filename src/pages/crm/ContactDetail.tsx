@@ -2162,7 +2162,7 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
         if (feeMatch) {
           const desc = feeMatch[1].trim();
           // Skip known non-fee lines
-          if (['Acordo de Pagamento', 'Serviço', 'Valor Bruto', 'IVA', 'Total', 'Total Final', 'Método', 'Forma', 'Parcelas', 'Origem', 'Conta', 'Detalhe', 'Observações', 'Desconto'].some(k => desc.startsWith(k))) continue;
+          if (['Acordo de Pagamento', 'Serviço', 'Valor do Serviço', 'Valor Bruto', 'IVA', 'Total', 'Total Final', 'Método', 'Forma', 'Parcelas', 'Origem', 'Conta', 'Detalhe', 'Observações', 'Desconto'].some(k => desc.startsWith(k))) continue;
           feeLines.push({ description: desc, amount: feeMatch[2].replace(',', '.') });
         }
       }
@@ -2180,7 +2180,7 @@ function BeneficiaryServicesSection({ contactId, contact, beneficiaryServiceCase
           const feeMatch = trimmedLine.match(/^(.+?):\s*\+\s*€\s*([\d.,]+)\s*$/);
           if (feeMatch) {
             const desc = feeMatch[1].trim();
-            if (['Acordo de Pagamento', 'Serviço', 'Valor Bruto', 'IVA', 'Total', 'Total Final', 'Método', 'Forma', 'Parcelas', 'Origem', 'Conta', 'Detalhe', 'Observações', 'Desconto'].some(k => desc.startsWith(k))) continue;
+            if (['Acordo de Pagamento', 'Serviço', 'Valor do Serviço', 'Valor Bruto', 'IVA', 'Total', 'Total Final', 'Método', 'Forma', 'Parcelas', 'Origem', 'Conta', 'Detalhe', 'Observações', 'Desconto'].some(k => desc.startsWith(k))) continue;
             feeLines.push({ description: desc, amount: feeMatch[2].replace(',', '.') });
           }
         }
