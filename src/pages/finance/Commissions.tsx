@@ -78,15 +78,65 @@ export default function Commissions() {
     },
   });
   const commissionRate = (configuredRate ?? 10) / 100;
-  
+
+  // Lista de SERVIÇOS (oportunidades) elegíveis para comissão manual:
+  // apenas serviços cujo cliente tem indicado preenchido.
+  const { data: eligibleServices = [] } = useQuery({
+    queryKey: ['commission-eligible-services'],
+    queryFn: async () => {
+      const result: Array<{
+        opportunity_id: string;
+        contract_id: string;
+        client_name: string;
+        referral_name: string;
+        service_name: string;
+        total_amount: number;
+      }> = [];
+
+      for (const c of contracts) {
+        const opps: Array<{ id: string; total_amount: number | null; lead: any }> = [];
+        if (c.opportunities) {
+          opps.push({ id: c.opportunities.id, total_amount: c.opportunities.total_amount, lead: c.opportunities.leads });
+        }
+        for (const cl of c.contract_leads || []) {
+          if (cl.leads?.id && !opps.some(o => o.lead?.id === cl.leads.id)) {
+            // buscar oportunidade do lead
+            const { data: oppRow } = await supabase
+              .from('opportunities')
+              .select('id, total_amount, leads(id, service_interest, service_types(name), contacts(full_name, referral_name))')
+              .eq('lead_id', cl.leads.id)
+              .maybeSingle();
+            if (oppRow) opps.push({ id: oppRow.id, total_amount: oppRow.total_amount, lead: (oppRow as any).leads });
+          }
+        }
+        for (const o of opps) {
+          const referral = o.lead?.contacts?.referral_name?.trim();
+          if (!referral) continue;
+          result.push({
+            opportunity_id: o.id,
+            contract_id: c.id,
+            client_name: o.lead?.contacts?.full_name || 'Sem nome',
+            referral_name: referral,
+            service_name: o.lead?.service_types?.name || o.lead?.service_interest || 'Serviço',
+            total_amount: Number(o.total_amount || 0),
+          });
+        }
+      }
+      return result;
+    },
+    enabled: contracts.length > 0,
+  });
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [payDialogOpen, setPayDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [selectedCommission, setSelectedCommission] = useState<CommissionWithContract | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
+  const [selectedServiceKey, setSelectedServiceKey] = useState('');
   const [formData, setFormData] = useState<CommissionInsert>({
     contract_id: '',
+    opportunity_id: null,
     collaborator_name: '',
     collaborator_type: 'CAPTADOR',
     base_amount: 0,
@@ -95,25 +145,32 @@ export default function Commissions() {
     paid_at: null,
   });
 
-  const selectedContract = contracts.find((c) => c.id === formData.contract_id);
-  const selectedClientName =
-    selectedContract?.opportunities?.leads?.contacts?.full_name || '';
+  const selectedService = eligibleServices.find(
+    (s) => `${s.contract_id}:${s.opportunity_id}` === selectedServiceKey,
+  );
 
-  const handleContractChange = (contractId: string) => {
-    const contract = contracts.find((c) => c.id === contractId);
+  const handleServiceChange = (key: string) => {
+    setSelectedServiceKey(key);
+    const svc = eligibleServices.find((s) => `${s.contract_id}:${s.opportunity_id}` === key);
     setFormData((prev) => ({
       ...prev,
-      contract_id: contractId,
-      base_amount: contract?.total_fee ?? prev.base_amount,
+      contract_id: svc?.contract_id || '',
+      opportunity_id: svc?.opportunity_id || null,
+      base_amount: svc?.total_amount ?? 0,
+      collaborator_name: svc?.referral_name || prev.collaborator_name,
     }));
   };
 
+
   const handleSubmit = () => {
+    if (!formData.opportunity_id) return;
     createCommission.mutate(formData, {
       onSuccess: () => {
         setIsDialogOpen(false);
+        setSelectedServiceKey('');
         setFormData({
           contract_id: '',
+          opportunity_id: null,
           collaborator_name: '',
           collaborator_type: 'CAPTADOR',
           base_amount: 0,
@@ -124,6 +181,7 @@ export default function Commissions() {
       },
     });
   };
+
 
   const handleApprove = (commission: CommissionWithContract) => {
     approveCommission.mutate(commission.id);
@@ -174,9 +232,27 @@ export default function Commissions() {
     },
     {
       key: 'client',
-      header: 'Cliente',
-      cell: (item) => item.contracts?.opportunities?.leads?.contacts?.full_name || '-',
+      header: 'Cliente / Serviço',
+      cell: (item) => {
+        const clientName =
+          item.opportunity?.leads?.contacts?.full_name ||
+          item.contracts?.opportunities?.leads?.contacts?.full_name ||
+          '-';
+        const serviceName =
+          item.opportunity?.leads?.service_types?.name ||
+          item.opportunity?.leads?.service_interest ||
+          null;
+        return (
+          <div>
+            <p className="font-medium">{clientName}</p>
+            {serviceName && (
+              <p className="text-xs text-muted-foreground">{serviceName}</p>
+            )}
+          </div>
+        );
+      },
     },
+
     {
       key: 'reference_period',
       header: 'Período',
@@ -303,31 +379,40 @@ export default function Commissions() {
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label>Contrato</Label>
-                <Select 
-                  value={formData.contract_id} 
-                  onValueChange={handleContractChange}
+                <Label>Serviço (somente serviços com indicado)</Label>
+                <Select
+                  value={selectedServiceKey}
+                  onValueChange={handleServiceChange}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione o contrato" />
+                    <SelectValue placeholder="Selecione o serviço" />
                   </SelectTrigger>
                   <SelectContent>
-                    {contracts.map((contract) => (
-                      <SelectItem key={contract.id} value={contract.id}>
-                        {contract.opportunities?.leads?.contacts?.full_name || 'Sem nome'} - 
-                        €{contract.total_fee?.toFixed(2) || '0.00'}
+                    {eligibleServices.length === 0 && (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">
+                        Nenhum serviço com indicado disponível
+                      </div>
+                    )}
+                    {eligibleServices.map((s) => (
+                      <SelectItem
+                        key={`${s.contract_id}:${s.opportunity_id}`}
+                        value={`${s.contract_id}:${s.opportunity_id}`}
+                      >
+                        {s.client_name} — {s.service_name} (€{s.total_amount.toFixed(2)}) · Indicado: {s.referral_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {selectedClientName && (
+              {selectedService && (
                 <div className="space-y-2">
-                  <Label>Cliente</Label>
-                  <Input value={selectedClientName} disabled />
+                  <Label>Cliente / Indicado</Label>
+                  <Input value={`${selectedService.client_name} · Indicado por ${selectedService.referral_name}`} disabled />
                 </div>
               )}
+
+
 
               <div className="space-y-2">
                 <Label>Tipo</Label>
@@ -357,7 +442,7 @@ export default function Commissions() {
               </div>
 
               <div className="space-y-2">
-                <Label>Valor Total do Serviço (€)</Label>
+                <Label>Honorário do Serviço (€)</Label>
                 <Input
                   type="text"
                   inputMode="decimal"
