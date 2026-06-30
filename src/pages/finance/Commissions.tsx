@@ -135,6 +135,8 @@ export default function Commissions() {
   const [paymentMethod, setPaymentMethod] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [selectedServiceKey, setSelectedServiceKey] = useState('');
+  const [addIva, setAddIva] = useState(false);
+  const IVA_RATE = 0.21;
   const [formData, setFormData] = useState<CommissionInsert>({
     contract_id: '',
     opportunity_id: null,
