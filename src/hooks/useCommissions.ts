@@ -16,6 +16,7 @@ export const COMMISSION_STATUS_LABELS: Record<CommissionStatus, string> = {
 export interface Commission {
   id: string;
   contract_id: string;
+  opportunity_id: string | null;
   collaborator_name: string;
   collaborator_type: 'CAPTADOR' | 'FORNECEDOR';
   base_amount: number;
@@ -48,6 +49,16 @@ export interface CommissionWithContract extends Commission {
       } | null;
     } | null;
   } | null;
+  opportunity?: {
+    id: string;
+    total_amount: number | null;
+    leads: {
+      id: string;
+      contacts: { full_name: string; referral_name: string | null } | null;
+      service_types: { name: string } | null;
+      service_interest: string | null;
+    } | null;
+  } | null;
   approved_by_profile?: {
     full_name: string;
   } | null;
@@ -55,6 +66,7 @@ export interface CommissionWithContract extends Commission {
 
 export interface CommissionInsert {
   contract_id: string;
+  opportunity_id?: string | null;
   collaborator_name: string;
   collaborator_type: 'CAPTADOR' | 'FORNECEDOR';
   base_amount: number;
@@ -63,6 +75,7 @@ export interface CommissionInsert {
   reference_period?: string;
   paid_at?: string | null;
 }
+
 
 export function useCommissions() {
   const { toast } = useToast();
