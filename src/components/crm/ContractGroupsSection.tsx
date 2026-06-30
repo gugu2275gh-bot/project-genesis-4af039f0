@@ -473,7 +473,7 @@ export function ContractGroupsSection({
 
         const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
         const serviceName = lines.find(line => line.startsWith('Serviço:'))?.replace('Serviço:', '').trim() || '';
-        const grossAmountLine = lines.find(line => line.startsWith('Valor Bruto:'));
+        const grossAmountLine = lines.find(line => line.startsWith('Valor do Serviço:') || line.startsWith('Valor Bruto:'));
         const totalFinalLine = lines.find(line => line.startsWith('Total Final:'));
         const observationLine = lines.find(line => line.startsWith('Observações:'));
         const observation = observationLine ? observationLine.replace('Observações:', '').trim() : '';
@@ -494,7 +494,9 @@ export function ContractGroupsSection({
 
         return {
           serviceName,
-          grossAmount: grossAmountLine ? parseMoneyValue(grossAmountLine, 'Valor Bruto') : null,
+          grossAmount: grossAmountLine
+            ? parseMoneyValue(grossAmountLine, grossAmountLine.startsWith('Valor do Serviço:') ? 'Valor do Serviço' : 'Valor Bruto')
+            : null,
           totalFinal: totalFinalLine ? parseMoneyValue(totalFinalLine, 'Total Final') : null,
           fees,
           observation,
