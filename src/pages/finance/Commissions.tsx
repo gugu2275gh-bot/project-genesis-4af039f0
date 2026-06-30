@@ -184,7 +184,9 @@ export default function Commissions() {
       : 'Sem IVA';
     const payload: CommissionInsert = {
       ...formData,
-      base_amount: addIva ? formData.base_amount * (1 + IVA_RATE) : formData.base_amount,
+      vat_enabled: addIva,
+      commission_rate: commissionRate,
+      commission_amount: totalCommission,
       notes: [formData.notes, ivaNote].filter(Boolean).join(' | '),
     };
     createCommission.mutate(payload, {
@@ -198,7 +200,10 @@ export default function Commissions() {
           collaborator_name: '',
           collaborator_type: 'CAPTADOR',
           base_amount: 0,
+          commission_rate: commissionRate,
+          commission_amount: 0,
           has_invoice: true,
+          vat_enabled: false,
           reference_period: '',
           paid_at: null,
         });
