@@ -816,7 +816,7 @@ export default function PaymentsList() {
                 {(newPayment.amount && (newPayment.discount_type || newPayment.apply_vat)) && (
                   <div className="rounded-lg border bg-muted/50 p-3 space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Valor Bruto</span>
+                      <span className="text-muted-foreground">Valor do Serviço</span>
                       <span>€ {calculatedAmounts.gross.toFixed(2)}</span>
                     </div>
                     {newPayment.apply_vat && (
