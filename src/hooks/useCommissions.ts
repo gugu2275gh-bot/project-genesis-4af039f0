@@ -103,7 +103,18 @@ export function useCommissions() {
             ),
             payments (
               id,
-              status
+              status,
+              opportunity_id
+            )
+          ),
+          opportunity:opportunities!commissions_opportunity_id_fkey (
+            id,
+            total_amount,
+            leads (
+              id,
+              service_interest,
+              service_types ( name ),
+              contacts ( full_name, referral_name )
             )
           )
         `)
@@ -111,11 +122,16 @@ export function useCommissions() {
       
       if (error) throw error;
 
-      // Mostrar apenas comissões cujo contrato já tem ao menos um pagamento confirmado.
+      // Mostrar apenas comissões cujo serviço (oportunidade) já teve ao menos um pagamento confirmado,
+      // ou cujo contrato (quando não houver oportunidade vinculada) teve algum pagamento confirmado.
       const filtered = (data || []).filter((c: any) => {
         const payments = c.contracts?.payments || [];
+        if (c.opportunity_id) {
+          return payments.some((p: any) => p.status === 'CONFIRMADO' && p.opportunity_id === c.opportunity_id);
+        }
         return payments.some((p: any) => p.status === 'CONFIRMADO');
       });
+
 
       // Fetch approver names separately
       const approverIds = [...new Set(filtered.filter((c: any) => c.approved_by_user_id).map((c: any) => c.approved_by_user_id) || [])];
