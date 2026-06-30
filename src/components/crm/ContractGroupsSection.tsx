@@ -1268,7 +1268,7 @@ export function ContractGroupsSection({
         const p = leadPayments[0];
         const currency = p.currency || 'EUR';
         const symbol = currency === 'EUR' ? '€' : currency;
-        block += `Valor Bruto: ${symbol} ${Number(p.gross_amount || p.amount).toFixed(2)}\n`;
+        block += `Valor do Serviço: ${symbol} ${Number(p.gross_amount || p.amount).toFixed(2)}\n`;
         if (p.vat_amount && Number(p.vat_amount) > 0) {
           block += `IVA (${p.vat_rate || 21}%): + ${symbol} ${Number(p.vat_amount).toFixed(2)}\n`;
         }
