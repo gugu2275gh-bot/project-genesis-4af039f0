@@ -232,9 +232,27 @@ export default function Commissions() {
     },
     {
       key: 'client',
-      header: 'Cliente',
-      cell: (item) => item.contracts?.opportunities?.leads?.contacts?.full_name || '-',
+      header: 'Cliente / Serviço',
+      cell: (item) => {
+        const clientName =
+          item.opportunity?.leads?.contacts?.full_name ||
+          item.contracts?.opportunities?.leads?.contacts?.full_name ||
+          '-';
+        const serviceName =
+          item.opportunity?.leads?.service_types?.name ||
+          item.opportunity?.leads?.service_interest ||
+          null;
+        return (
+          <div>
+            <p className="font-medium">{clientName}</p>
+            {serviceName && (
+              <p className="text-xs text-muted-foreground">{serviceName}</p>
+            )}
+          </div>
+        );
+      },
     },
+
     {
       key: 'reference_period',
       header: 'Período',
