@@ -232,7 +232,7 @@ export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOp
       </CardHeader>
       {open && (
         <CardContent>
-          {isLoading ? (
+          {(isLoading || loadingPayments) ? (
             <div className="space-y-2">
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
