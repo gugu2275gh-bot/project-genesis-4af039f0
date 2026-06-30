@@ -221,7 +221,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
   const handleSave = async (keepOpen = false) => {
     if (!form.amount || parseFloat(form.amount) <= 0 || isSaving || savingRef.current) {
       if (!form.amount || parseFloat(form.amount) <= 0) {
-        toast({ title: 'Valor bruto é obrigatório', variant: 'destructive' });
+        toast({ title: 'Valor do serviço é obrigatório', variant: 'destructive' });
       }
       return;
     }
@@ -270,7 +270,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     if (selectedServiceName) {
       summary += `Serviço: ${selectedServiceName}\n`;
     }
-    summary += `Valor Bruto: € ${gross.toFixed(2)}\n`;
+    summary += `Valor do Serviço: € ${gross.toFixed(2)}\n`;
     if (form.apply_vat && vatAmount > 0) {
       summary += `IVA (${defaultVatRate || 21}%): + € ${vatAmount.toFixed(2)}\n`;
     }
@@ -688,7 +688,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Valor Bruto (€) <span className="text-destructive">*</span></Label>
+              <Label>Valor do Serviço (€) <span className="text-destructive">*</span></Label>
               <Input
                 type="text"
                 inputMode="decimal"
@@ -965,7 +965,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
           {(form.amount && (form.discount_type || form.apply_vat || totalFees > 0)) && (
             <div className="rounded-lg border bg-muted/50 p-3 space-y-1 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Valor Bruto</span>
+                <span className="text-muted-foreground">Valor do Serviço</span>
                 <span>€ {calculatedAmounts.gross.toFixed(2)}</span>
               </div>
               {form.apply_vat && (
