@@ -144,7 +144,10 @@ export default function Commissions() {
     collaborator_name: '',
     collaborator_type: 'CAPTADOR',
     base_amount: 0,
+    commission_rate: commissionRate,
+    commission_amount: 0,
     has_invoice: true,
+    vat_enabled: false,
     reference_period: '',
     paid_at: null,
   });
