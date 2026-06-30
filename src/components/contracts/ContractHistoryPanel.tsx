@@ -119,6 +119,7 @@ export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOp
         key: `log-${log.id}`,
         ts: log.created_at,
         kind: 'contract',
+        category: 'contract',
         render: () => {
           let summary = '';
           if (log.action === 'STATUS_CHANGE' && log.old_data?.status && log.new_data?.status) {
@@ -133,6 +134,10 @@ export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOp
               <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant={ACTION_VARIANTS[log.action] || 'secondary'}>
                   {ACTION_LABELS[log.action] || log.action}
+                </Badge>
+                <Badge variant="outline" className="gap-1 border-primary text-primary">
+                  <FileText className="h-3 w-3" />
+                  Contrato
                 </Badge>
                 {summary && <span className="text-sm">{summary}</span>}
               </div>
