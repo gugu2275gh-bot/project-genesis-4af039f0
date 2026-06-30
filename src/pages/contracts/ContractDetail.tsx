@@ -802,7 +802,7 @@ export default function ContractDetail() {
               </Button>
             )}
             {canApprove && (
-              <Button onClick={() => approveContract.mutateAsync(contract.id)} disabled={approveContract.isPending}>
+              <Button onClick={handleApprove} disabled={approveContract.isPending}>
                 <Check className="h-4 w-4 mr-2" />
                 {approveContract.isPending ? 'Aprovando...' : 'Aprovar Contrato'}
               </Button>
