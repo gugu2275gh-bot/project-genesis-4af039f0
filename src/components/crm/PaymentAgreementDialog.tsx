@@ -965,7 +965,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
           {(form.amount && (form.discount_type || form.apply_vat || totalFees > 0)) && (
             <div className="rounded-lg border bg-muted/50 p-3 space-y-1 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Valor Bruto</span>
+                <span className="text-muted-foreground">Valor do Serviço</span>
                 <span>€ {calculatedAmounts.gross.toFixed(2)}</span>
               </div>
               {form.apply_vat && (
