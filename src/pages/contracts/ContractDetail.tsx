@@ -96,11 +96,18 @@ export default function ContractDetail() {
     enabled: allLinkedContactIds.length > 0,
   });
 
-  // Fetch all opportunity IDs for linked leads
+  // Fetch all opportunity IDs for ALL leads of the contacts linked to this contract
+  // (titular + beneficiaries), so payments from any service of those contacts appear here.
   const { data: linkedOpportunityIds } = useQuery({
-    queryKey: ['contract-linked-opportunities', id, contractLeadLinks],
+    queryKey: ['contract-linked-opportunities', id, allLinkedContactIds],
     queryFn: async () => {
-      const leadIds = contractLeadLinks?.map(cl => cl.lead_id) || [];
+      if (allLinkedContactIds.length === 0) return [];
+      const { data: contactLeads, error: leadsError } = await supabase
+        .from('leads')
+        .select('id')
+        .in('contact_id', allLinkedContactIds);
+      if (leadsError) throw leadsError;
+      const leadIds = (contactLeads || []).map(l => l.id);
       if (leadIds.length === 0) return [];
       const { data, error } = await supabase
         .from('opportunities')
@@ -109,7 +116,7 @@ export default function ContractDetail() {
       if (error) throw error;
       return data?.map(o => o.id) || [];
     },
-    enabled: !!contractLeadLinks && contractLeadLinks.length > 0,
+    enabled: allLinkedContactIds.length > 0,
   });
 
   const { data: contractPayments } = useQuery({
