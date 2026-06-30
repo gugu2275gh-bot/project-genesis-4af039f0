@@ -35,6 +35,14 @@ export default function ContractDetail() {
   const navigate = useNavigate();
   const { data: contract, isLoading } = useContract(id);
   const { updateContract, sendForApproval, markAsSigned, cancelContract, suspendContract, reactivateContract, approveContract, rejectContract } = useContracts();
+  const queryClient = useQueryClient();
+  const refreshAfterStatusChange = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['contracts'] }),
+      queryClient.invalidateQueries({ queryKey: ['contracts', id] }),
+      queryClient.invalidateQueries({ queryKey: ['audit_logs'] }),
+    ]);
+  };
   const { data: profiles = [] } = useProfiles();
   const { beneficiaries } = useBeneficiaries(id);
 
