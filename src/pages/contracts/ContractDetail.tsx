@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { AuditHistoryPanel } from '@/components/audit/AuditHistoryPanel';
+import { PaymentLogPanel } from '@/components/payments/PaymentLogPanel';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useContract, useContracts } from '@/hooks/useContracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -1329,6 +1330,9 @@ export default function ContractDetail() {
 
       {/* Notes Section - Histórico de Acordos */}
       <ContractNotesSection contractId={contract.id} />
+
+      {/* Log de Pagamentos */}
+      <PaymentLogPanel payments={(contractPayments as any) || []} />
 
       {/* Histórico de Alterações (auditoria) */}
       <AuditHistoryPanel
