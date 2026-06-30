@@ -159,11 +159,15 @@ export default function Commissions() {
   const handleServiceChange = (key: string) => {
     setSelectedServiceKey(key);
     const svc = eligibleServices.find((s) => `${s.contract_id}:${s.opportunity_id}` === key);
+    const baseAmount = svc?.total_amount ?? 0;
+    const baseCommission = baseAmount * commissionRate;
     setFormData((prev) => ({
       ...prev,
       contract_id: svc?.contract_id || '',
       opportunity_id: svc?.opportunity_id || null,
-      base_amount: svc?.total_amount ?? 0,
+      base_amount: baseAmount,
+      commission_rate: commissionRate,
+      commission_amount: baseCommission,
       collaborator_name: svc?.referral_name || prev.collaborator_name,
     }));
   };
