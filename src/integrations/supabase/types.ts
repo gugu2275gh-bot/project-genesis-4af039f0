@@ -256,6 +256,7 @@ export type Database = {
           has_invoice: boolean | null
           id: string
           notes: string | null
+          opportunity_id: string | null
           paid_at: string | null
           payment_method: string | null
           reference_period: string | null
@@ -277,6 +278,7 @@ export type Database = {
           has_invoice?: boolean | null
           id?: string
           notes?: string | null
+          opportunity_id?: string | null
           paid_at?: string | null
           payment_method?: string | null
           reference_period?: string | null
@@ -298,6 +300,7 @@ export type Database = {
           has_invoice?: boolean | null
           id?: string
           notes?: string | null
+          opportunity_id?: string | null
           paid_at?: string | null
           payment_method?: string | null
           reference_period?: string | null
@@ -325,6 +328,13 @@ export type Database = {
             columns: ["created_by_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commissions_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
             referencedColumns: ["id"]
           },
         ]
