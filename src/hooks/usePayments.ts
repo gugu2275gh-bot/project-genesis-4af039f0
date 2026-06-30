@@ -86,6 +86,7 @@ export function usePayments() {
         return payments;
       }
 
+      // 1) Direct match: contracts.opportunity_id = payment.opportunity_id
       const { data: contracts, error: contractsError } = await supabase
         .from('contracts')
         .select('*')
@@ -94,9 +95,45 @@ export function usePayments() {
 
       if (contractsError) throw contractsError;
 
-      const contractByOpportunityId = new Map(
+      const contractByOpportunityId = new Map<string, any>(
         (contracts || []).map((contract) => [contract.opportunity_id, contract])
       );
+
+      // 2) For opps still without contract, resolve via contract_leads (M2M)
+      const remainingOppIds = orphanOpportunityIds.filter(
+        (oppId) => !contractByOpportunityId.has(oppId)
+      );
+
+      if (remainingOppIds.length > 0) {
+        const { data: oppRows } = await supabase
+          .from('opportunities')
+          .select('id, lead_id')
+          .in('id', remainingOppIds);
+
+        const leadIds = Array.from(
+          new Set((oppRows || []).map((o: any) => o.lead_id).filter(Boolean))
+        );
+
+        if (leadIds.length > 0) {
+          const { data: clRows } = await supabase
+            .from('contract_leads')
+            .select('lead_id, contract_id, contracts:contract_id(*)')
+            .in('lead_id', leadIds);
+
+          const contractByLeadId = new Map<string, any>();
+          (clRows || []).forEach((row: any) => {
+            const c = row.contracts;
+            if (c && (c.status === 'APROVADO' || c.status === 'ASSINADO')) {
+              contractByLeadId.set(row.lead_id, c);
+            }
+          });
+
+          (oppRows || []).forEach((o: any) => {
+            const c = contractByLeadId.get(o.lead_id);
+            if (c) contractByOpportunityId.set(o.id, c);
+          });
+        }
+      }
 
       return payments.map((payment) => ({
         ...payment,
