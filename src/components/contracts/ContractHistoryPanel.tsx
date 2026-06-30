@@ -256,7 +256,12 @@ export function ContractHistoryPanel({ contractId, payments: _ignored, defaultOp
           ) : (
             <ul className="space-y-3">
               {entries.map(e => (
-                <li key={e.key} className="flex gap-3 border-l-2 border-muted pl-3 py-1">
+                <li
+                  key={e.key}
+                  className={`flex gap-3 border-l-2 pl-3 py-1 ${
+                    e.category === 'contract' ? 'border-l-primary' : 'border-l-accent'
+                  }`}
+                >
                   <div className="flex-1 space-y-1">{e.render()}</div>
                 </li>
               ))}
