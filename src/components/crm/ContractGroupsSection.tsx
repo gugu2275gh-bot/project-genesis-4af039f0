@@ -1111,7 +1111,7 @@ export function ContractGroupsSection({
                    const leadServiceName = getLeadDisplayName(lead);
                    const matchedBlock = parsedPaymentNoteBlocks.find(b => b.serviceName === leadServiceName);
                    const observationOnly = matchedBlock?.observation || '';
-                   setEditPaymentData({
+                    setEditPaymentData({
                      amount: leadPayment.amount,
                      payment_method: leadPayment.payment_method,
                      payment_form: leadPayment.payment_form,
@@ -1122,6 +1122,7 @@ export function ContractGroupsSection({
                      gross_amount: leadPayment.gross_amount,
                      serviceTypeId: lead.service_type_id || '',
                      installments,
+                     fees: matchedBlock?.fees || [],
                      notes: observationOnly,
                      leadId: lead.id,
                      opportunityId: leadPayment.opportunity_id,
@@ -1132,6 +1133,7 @@ export function ContractGroupsSection({
                    setEditPaymentData({
                      amount: 0,
                      serviceTypeId: lead.service_type_id || '',
+                     fees: matchedBlock?.fees || [],
                      notes: matchedBlock?.observation || '',
                      leadId: lead.id,
                    });
