@@ -71,7 +71,10 @@ export interface CommissionInsert {
   collaborator_name: string;
   collaborator_type: 'CAPTADOR' | 'FORNECEDOR';
   base_amount: number;
+  commission_rate?: number;
+  commission_amount?: number;
   has_invoice?: boolean;
+  vat_enabled?: boolean;
   notes?: string;
   reference_period?: string;
   paid_at?: string | null;
