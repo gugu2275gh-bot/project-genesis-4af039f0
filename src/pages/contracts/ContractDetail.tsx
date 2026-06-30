@@ -432,7 +432,7 @@ export default function ContractDetail() {
     }
     allBlocks.push(...groupBlocks);
     return allBlocks.join('\n---\n');
-  }, [contract?.currency, contractLeadLinks, contractPayments]);
+  }, [contract?.currency, contractLeadLinks, contractPayments, feesByService]);
 
   // Fallback: filter payment_notes from linked contacts when there are no active payments yet
   const filteredPaymentNotes = useMemo(() => {
