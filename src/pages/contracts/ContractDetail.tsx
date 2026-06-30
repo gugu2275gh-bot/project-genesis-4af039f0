@@ -348,7 +348,7 @@ export default function ContractDetail() {
       const grossAmount = pickField('gross_amount') || (first.gross_amount ?? first.amount);
       const formattedGrossAmount = formatMoney(grossAmount);
       if (formattedGrossAmount) {
-        lines.push(`Valor Bruto: ${formattedGrossAmount}`);
+        lines.push(`Valor do Serviço: ${formattedGrossAmount}`);
       }
 
       // IVA: prefer stored vat_amount; if 0 but apply_vat + vat_rate exist, compute from gross
