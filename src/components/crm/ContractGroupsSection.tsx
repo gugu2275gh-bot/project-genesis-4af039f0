@@ -1305,7 +1305,7 @@ export function ContractGroupsSection({
         const vatTotal = leadPayments.reduce((sum: number, p: any) => sum + Number(p.vat_amount || 0), 0);
         const discountTotal = leadPayments.reduce((sum: number, p: any) => sum + Number(p.discount_value || 0), 0);
         if (grossTotal > 0) {
-          block += `Valor Bruto: ${symbol} ${grossTotal.toFixed(2)}\n`;
+          block += `Valor do Serviço: ${symbol} ${grossTotal.toFixed(2)}\n`;
         }
         if (vatTotal > 0) {
           block += `IVA (${first?.vat_rate || 21}%): + ${symbol} ${vatTotal.toFixed(2)}\n`;
