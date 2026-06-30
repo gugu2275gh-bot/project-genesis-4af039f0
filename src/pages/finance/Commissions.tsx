@@ -55,6 +55,7 @@ export default function Commissions() {
     commissions, 
     isLoading, 
     createCommission, 
+    updateCommission,
     approveCommission,
     rejectCommission,
     markAsPaid,
