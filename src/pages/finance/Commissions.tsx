@@ -531,11 +531,34 @@ export default function Commissions() {
 
               <div className="space-y-2">
                 <Label>Nome do Colaborador</Label>
-                <Input
-                  value={formData.collaborator_name}
-                  onChange={(e) => setFormData({ ...formData, collaborator_name: e.target.value })}
-                  placeholder="Nome completo"
-                />
+                {formData.collaborator_type === 'FORNECEDOR' ? (
+                  <Select
+                    value={formData.collaborator_name || ''}
+                    onValueChange={(v) => setFormData({ ...formData, collaborator_name: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o fornecedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {suppliers.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          Nenhum fornecedor ativo cadastrado
+                        </div>
+                      )}
+                      {suppliers.map((s: any) => (
+                        <SelectItem key={s.id} value={s.name}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    value={formData.collaborator_name}
+                    onChange={(e) => setFormData({ ...formData, collaborator_name: e.target.value })}
+                    placeholder="Nome completo"
+                  />
+                )}
               </div>
 
               <div className="space-y-2">
