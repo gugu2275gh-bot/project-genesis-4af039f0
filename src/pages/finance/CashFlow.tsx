@@ -146,7 +146,7 @@ export default function CashFlow() {
     },
     {
       key: 'payment_account',
-      header: 'Conta',
+      header: 'Método de Pagamento',
       cell: (item) => {
         const account = PAYMENT_ACCOUNTS.find(a => a.value === item.payment_account);
         return account?.label || item.payment_account || '-';
@@ -319,7 +319,7 @@ export default function CashFlow() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Conta</Label>
+                  <Label>Método de Pagamento</Label>
                   <Select 
                     value={formData.payment_account || ''} 
                     onValueChange={(v) => setFormData({ ...formData, payment_account: v })}
