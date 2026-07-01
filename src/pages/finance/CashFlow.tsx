@@ -77,7 +77,6 @@ export default function CashFlow() {
   } = useCashFlow(startDate, endDate);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [customAccountDetail, setCustomAccountDetail] = useState('');
   const [formData, setFormData] = useState<CashFlowInsert>({
     type: 'ENTRADA',
     category: '',
@@ -89,20 +88,16 @@ export default function CashFlow() {
   });
 
   const handleSubmit = () => {
-    const submitData = { ...formData };
-    if (formData.payment_account === 'OUTRO' && customAccountDetail) {
-      submitData.description = `[Conta: ${customAccountDetail}] ${formData.description || ''}`.trim();
-    }
-    createEntry.mutate(submitData, {
+    createEntry.mutate(formData, {
       onSuccess: () => {
         setIsDialogOpen(false);
-        setCustomAccountDetail('');
         setFormData({
           type: 'ENTRADA',
           category: '',
           amount: 0,
           description: '',
           payment_account: '',
+          payment_account_detail: '',
           reference_date: format(today, 'yyyy-MM-dd'),
         });
       },
@@ -150,7 +145,11 @@ export default function CashFlow() {
       header: 'Método de Pagamento',
       cell: (item) => {
         const account = PAYMENT_ACCOUNTS.find(a => a.value === item.payment_account);
-        return account?.label || item.payment_account || '-';
+        const label = account?.label || item.payment_account || '-';
+        if (item.payment_account_detail) {
+          return `${label} (${item.payment_account_detail})`;
+        }
+        return label;
       },
     },
     {
@@ -339,16 +338,14 @@ export default function CashFlow() {
                 </div>
               </div>
 
-              {formData.payment_account === 'OUTRO' && (
-                <div className="space-y-2">
-                  <Label>Detalhe da conta *</Label>
-                  <Input
-                    value={customAccountDetail}
-                    onChange={(e) => setCustomAccountDetail(e.target.value)}
-                    placeholder="Especifique a conta de pagamento"
-                  />
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label>Conta de Pagamento</Label>
+                <Input
+                  value={formData.payment_account_detail || ''}
+                  onChange={(e) => setFormData({ ...formData, payment_account_detail: e.target.value })}
+                  placeholder="Ex: Banco do Brasil, Conta 12345-6"
+                />
+              </div>
 
               <Button onClick={handleSubmit} className="w-full" disabled={createEntry.isPending}>
                 {createEntry.isPending ? 'Salvando...' : 'Registrar Lançamento'}
