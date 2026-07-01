@@ -458,51 +458,15 @@ export default function Commissions() {
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label>Serviço (somente serviços com indicado)</Label>
-                <Select
-                  value={selectedServiceKey}
-                  onValueChange={handleServiceChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o serviço" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {eligibleServices.length === 0 && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">
-                        Nenhum serviço com indicado disponível
-                      </div>
-                    )}
-                    {eligibleServices.map((s) => (
-                      <SelectItem
-                        key={`${s.contract_id}:${s.opportunity_id}`}
-                        value={`${s.contract_id}:${s.opportunity_id}`}
-                      >
-                        {s.client_name} — {s.service_name} (€{s.total_amount.toFixed(2)}) · Indicado: {s.referral_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedService && (
-                <div className="space-y-2">
-                  <Label>Cliente / Indicado</Label>
-                  <Input value={`${selectedService.client_name} · Indicado por ${selectedService.referral_name}`} disabled />
-                </div>
-              )}
-
-
-
-              <div className="space-y-2">
                 <Label>Tipo</Label>
-                <Select 
-                  value={formData.collaborator_type} 
-                  onValueChange={(v: 'CAPTADOR' | 'FORNECEDOR') => 
+                <Select
+                  value={formData.collaborator_type || ''}
+                  onValueChange={(v: 'CAPTADOR' | 'FORNECEDOR') =>
                     setFormData({ ...formData, collaborator_type: v })
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="CAPTADOR">Captador (a pagar)</SelectItem>
@@ -510,6 +474,39 @@ export default function Commissions() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {formData.collaborator_type && (
+                <div className="space-y-2">
+                  <Label>
+                    {formData.collaborator_type === 'CAPTADOR'
+                      ? 'Serviço (somente serviços com indicado)'
+                      : 'Contrato / Serviço'}
+                  </Label>
+                  <Select
+                    value={selectedServiceKey}
+                    onValueChange={handleServiceChange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o serviço" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {eligibleServices.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          Nenhum serviço com indicado disponível
+                        </div>
+                      )}
+                      {eligibleServices.map((s) => (
+                        <SelectItem
+                          key={`${s.contract_id}:${s.opportunity_id}`}
+                          value={`${s.contract_id}:${s.opportunity_id}`}
+                        >
+                          {s.client_name} — {s.service_name} (€{s.total_amount.toFixed(2)}) · Indicado: {s.referral_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Nome do Colaborador</Label>
