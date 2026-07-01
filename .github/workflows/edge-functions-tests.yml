@@ -1,0 +1,44 @@
+name: Edge Functions Tests
+
+on:
+  push:
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/edge-functions-tests.yml'
+  pull_request:
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/edge-functions-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  deno-tests:
+    name: Deno tests (whatsapp-webhook)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.44.x
+
+      - name: Cache Deno dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/deno
+          key: ${{ runner.os }}-deno-${{ hashFiles('supabase/functions/**/*.ts') }}
+          restore-keys: |
+            ${{ runner.os }}-deno-
+
+      - name: Run outside_progress_yesno regression tests
+        working-directory: supabase/functions/whatsapp-webhook
+        run: deno test --allow-net --allow-env --no-check outside_progress_yesno_test.ts
+
+      - name: Run whatsapp-webhook full test suite
+        working-directory: supabase/functions/whatsapp-webhook
+        run: deno test --allow-net --allow-env --no-check
