@@ -129,6 +129,7 @@ export type Database = {
           invoice_number: string | null
           is_invoiced: boolean | null
           payment_account: string | null
+          payment_account_detail: string | null
           reference_date: string | null
           related_commission_id: string | null
           related_contract_id: string | null
@@ -147,6 +148,7 @@ export type Database = {
           invoice_number?: string | null
           is_invoiced?: boolean | null
           payment_account?: string | null
+          payment_account_detail?: string | null
           reference_date?: string | null
           related_commission_id?: string | null
           related_contract_id?: string | null
@@ -165,6 +167,7 @@ export type Database = {
           invoice_number?: string | null
           is_invoiced?: boolean | null
           payment_account?: string | null
+          payment_account_detail?: string | null
           reference_date?: string | null
           related_commission_id?: string | null
           related_contract_id?: string | null

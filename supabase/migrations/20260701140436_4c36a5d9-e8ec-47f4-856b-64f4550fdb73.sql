@@ -1,0 +1,1 @@
+ALTER TABLE public.cash_flow ADD COLUMN payment_account_detail text;
