@@ -412,7 +412,7 @@ export function usePayments() {
             amount_without_vat: Math.round(amountWithoutVat * 100) / 100,
             vat_rate: vatRate,
             vat_amount: Math.round(vatAmount * 100) / 100,
-            total_amount: totalAmount,
+            total_amount: Math.round(totalAmount * 100) / 100,
             status: 'EMITIDA',
             created_by_user_id: user?.id,
           }).select().single();
