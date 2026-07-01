@@ -127,7 +127,7 @@ export function isValidAnswerForStep(
     case 'interesse':
       return isPotentialInterestAnswer(s) || isStructuredQuestionAnswer(s)
     case 'localizacao':
-      return isYesNo(s) || isNeverBeenToSpainAnswer(s) || LOCATION_IN_SPAIN_HINT_RE.test(s)
+      return isYesNo(s) || isNeverBeenToSpainAnswer(s) || LOCATION_IN_SPAIN_HINT_RE.test(s) || LOCATION_COUNTRY_HINT_RE.test(s)
     case 'data_entrada':
       return isPotentialEntryDateAnswer(s) || isNeverBeenToSpainAnswer(s)
     case 'empadronamiento':
@@ -160,6 +160,47 @@ const LOCATION_IN_SPAIN_HINT_RE = /\b(estou na espanha|estoy en espa[ñn]a|i'?m 
 // a etapa já tenha avançado para 'nome' enquanto a abertura era enviada.
 const OPENING_CONFIRMATION_RE = /(pode\s+ser|podemos\s+seguir|posso\s+seguir|podemos\s+come[çc]ar|tudo\s+bem|t[áa]\s+bom|puedo\??|puedo\s+seguir|podemos\s+(seguir|empezar)|todo\s+bien|est[áa]\s+bien|can\s+i\s+(go|proceed|continue|start)|is\s+that\s+ok|sounds?\s+good|puis[- ]je|on\s+y\s+va|d['’]?accord)\s*\??\s*$/i
 
+// Países / regiões suportados na etapa `localizacao`. Reflete a lista usada
+// pelo validator determinístico de LOCATION em `flow-machine.ts`.
+const LOCATION_COUNTRY_HINT_RE = /(espan|spain|españ|madri|barcelona|valencia|sevilla|m[aá]laga|bilbao|zaragoza|brasil|brazil|portugal|argentin|colomb|m[eé]xico|mexico|peru|chile|uruguai|uruguay|venezuel|paraguai|paraguay|estados unidos|usa|united states|france|fran[çc]a|italia|alemanha|inglaterra|reino unido)/i
+
+// Detecta "tentativa plausível" de resposta à etapa atual — ainda que
+// malformada. Serve para diferenciar "resposta ruim" (→ reask) de
+// "off-topic explícito" (→ park). Só é consultado quando `isValidAnswerForStep`
+// já rejeitou a mensagem.
+function looksLikeStepAttempt(text: string, step: CadastroStepKey | null | undefined): boolean {
+  const s = String(text || '').trim()
+  if (!s || !step) return false
+  switch (step) {
+    case 'nome': {
+      // 1-4 tokens só com letras/hífens (parece uma tentativa de nome,
+      // mesmo que curta demais para passar no ≥2 palavras).
+      const words = s.split(/\s+/).filter(Boolean)
+      if (words.length < 1 || words.length > 4) return false
+      return words.every((w) => /^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'\-]{0,29}$/.test(w))
+    }
+    case 'email':
+      // Só considera tentativa de e-mail se tiver `@`.
+      return /@/.test(s)
+    case 'localizacao':
+      // Menção a país/cidade conhecidos, mesmo em frase composta
+      // ("Estou em España", "Estou no Brasil ainda").
+      return LOCATION_COUNTRY_HINT_RE.test(s) || isYesNo(s) || isNeverBeenToSpainAnswer(s)
+    case 'data_entrada':
+      // Qualquer sequência com dígitos ou meses aparentes → tentativa de data.
+      return /\d/.test(s) || /(jan|fev|feb|mar|abr|apr|mai|may|jun|jul|ago|aug|sep|set|out|oct|nov|dez|dec|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)/i.test(s)
+    case 'empadronamiento':
+      // Sim/não ou cidade — cobertura via isYesNo + fallback textual curto.
+      return isYesNo(s) || (s.length <= 40 && /^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'\s\-]*$/.test(s))
+    case 'interesse':
+      // Palavra-chave de serviço já vira valid; qualquer outra coisa é off-topic.
+      return false
+    default:
+      return false
+  }
+}
+
+
 export function classifyOffTopic(
   currentMessage: string,
   lastAssistantQuestion: string | null | undefined,
@@ -175,10 +216,19 @@ export function classifyOffTopic(
   if (lastQ && OPENING_CONFIRMATION_RE.test(lastQ) && isYesNo(raw)) return null
 
   // Autoridade por etapa: se sabemos qual é a etapa do cadastro, exigimos
-  // resposta válida para essa etapa. Qualquer outra coisa é off-topic.
+  // resposta válida para essa etapa. Quando a mensagem é *tentativa plausível*
+  // de responder a etapa (mesmo que malformada — ex.: "João" no passo NAME,
+  // "Estou em España" no passo LOCATION), devolvemos null para que o
+  // validador retorne reask/advance. Só parqueia como off-topic quando a
+  // mensagem é pergunta factual, pedido explícito, ou claramente não bate
+  // com o formato esperado da etapa.
   if (ctx.currentStep) {
     if (isValidAnswerForStep(raw, ctx.currentStep, lastAssistantQuestion)) return null
-    return { kind: isFactualQuestion(raw) ? 'question' : 'request' }
+    if (isFactualQuestion(raw)) return { kind: 'question' }
+    if (QUESTION_HINT_RE.test(raw)) return { kind: 'question' }
+    if (REQUEST_HINT_RE.test(raw)) return { kind: 'request' }
+    if (looksLikeStepAttempt(raw, ctx.currentStep)) return null
+    return { kind: 'request' }
   }
 
 
@@ -210,6 +260,13 @@ export function classifyOffTopic(
     if (/(qual sua idade|cu[áa]ntos a[ñn]os|how old)/i.test(q) && /\b\d{1,3}\b/.test(raw)) return null
   }
 
+
+  // Pedido/pergunta explícito ("Quero fazer um curso", "I need help with visa")
+  // tem precedência sobre a heurística de "keyword de serviço", que dispararia
+  // falso-positivo em "curso"/"visa"/"visado" mesmo quando o cliente está
+  // pedindo algo que não faz parte do catálogo CB.
+  if (REQUEST_HINT_RE.test(raw)) return { kind: 'request' }
+  if (QUESTION_HINT_RE.test(raw)) return { kind: 'question' }
 
   // Resposta composta: contém um serviço válido E/OU pista de localização → não parqueia.
   // Cobre o caso clássico "Sí, ya tengo 2 años en España y quiero solicitar mi residencia",
