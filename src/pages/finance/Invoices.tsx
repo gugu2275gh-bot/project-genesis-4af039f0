@@ -301,7 +301,7 @@ export default function Invoices() {
               </Button>
             </>
           )}
-          <Button size="sm" variant="ghost">
+          <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); handleDownloadInvoice(item); }}>
             <Download className="h-4 w-4" />
           </Button>
         </div>
