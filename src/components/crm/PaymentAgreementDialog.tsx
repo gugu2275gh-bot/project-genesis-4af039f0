@@ -1093,18 +1093,12 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               value={referralName}
               onChange={(e) => setReferralName(e.target.value)}
               placeholder="Nome de quem indicou (colaborador, parceiro, cliente...)"
-              disabled={isPermuta}
             />
             <div className="flex items-center gap-2 pt-1">
               <Checkbox
                 id="permuta-checkbox"
                 checked={isPermuta}
-                onCheckedChange={(checked) => {
-                  const v = checked === true;
-                  setIsPermuta(v);
-                  if (v) setReferralName('Permuta');
-                  else if (referralName === 'Permuta') setReferralName('');
-                }}
+                onCheckedChange={(checked) => setIsPermuta(checked === true)}
               />
               <Label htmlFor="permuta-checkbox" className="cursor-pointer font-normal">
                 Permuta (a indicação é uma permuta)
