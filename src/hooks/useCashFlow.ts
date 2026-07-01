@@ -53,7 +53,8 @@ export function useCashFlow(startDate?: string, endDate?: string) {
       let query = supabase
         .from('cash_flow')
         .select('*')
-        .order('reference_date', { ascending: false });
+        .order('reference_date', { ascending: false })
+        .order('created_at', { ascending: false });
       
       if (startDate) {
         query = query.gte('reference_date', startDate);
