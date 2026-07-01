@@ -2018,6 +2018,7 @@ export type Database = {
           opportunity_id: string
           original_due_date: string | null
           paid_at: string | null
+          payment_account_id: string | null
           payment_form: Database["public"]["Enums"]["payment_form"] | null
           payment_link: string | null
           payment_method: Database["public"]["Enums"]["payment_method"] | null
@@ -2052,6 +2053,7 @@ export type Database = {
           opportunity_id: string
           original_due_date?: string | null
           paid_at?: string | null
+          payment_account_id?: string | null
           payment_form?: Database["public"]["Enums"]["payment_form"] | null
           payment_link?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
@@ -2086,6 +2088,7 @@ export type Database = {
           opportunity_id?: string
           original_due_date?: string | null
           paid_at?: string | null
+          payment_account_id?: string | null
           payment_form?: Database["public"]["Enums"]["payment_form"] | null
           payment_link?: string | null
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
@@ -2124,6 +2127,13 @@ export type Database = {
             columns: ["opportunity_id"]
             isOneToOne: false
             referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_payment_account_id_fkey"
+            columns: ["payment_account_id"]
+            isOneToOne: false
+            referencedRelation: "payment_accounts"
             referencedColumns: ["id"]
           },
           {

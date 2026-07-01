@@ -1,0 +1,2 @@
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS payment_account_id uuid REFERENCES public.payment_accounts(id);
+CREATE INDEX IF NOT EXISTS idx_payments_payment_account_id ON public.payments(payment_account_id);
