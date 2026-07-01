@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { CB_LOGO_BASE64 } from "./cb-logo-base64";
 
 interface ReceiptData {
   receiptNumber: string;
@@ -42,13 +43,13 @@ function formatEUR(value: number, currency = "EUR"): string {
 }
 
 function drawLogo(doc: jsPDF, x: number, y: number, size: number) {
-  // Burgundy square with "CB" monogram
-  doc.setFillColor(...BRAND.burgundy);
-  doc.roundedRect(x, y, size, size, 2, 2, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(size * 0.55);
-  doc.text("CB", x + size / 2, y + size / 2 + size * 0.18, { align: "center" });
+  try {
+    doc.addImage(CB_LOGO_BASE64, "PNG", x, y, size, size, undefined, "FAST");
+  } catch {
+    // Fallback: burgundy square
+    doc.setFillColor(...BRAND.burgundy);
+    doc.roundedRect(x, y, size, size, 2, 2, "F");
+  }
 }
 
 export function generateReceipt(data: ReceiptData): Blob {
