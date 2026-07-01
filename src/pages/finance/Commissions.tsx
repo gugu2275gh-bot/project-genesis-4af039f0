@@ -508,6 +508,14 @@ export default function Commissions() {
                 </div>
               )}
 
+              {selectedService && (
+                <div className="space-y-2">
+                  <Label>Cliente / Indicado</Label>
+                  <Input value={`${selectedService.client_name} · Indicado por ${selectedService.referral_name}`} disabled />
+                </div>
+              )}
+
+
               <div className="space-y-2">
                 <Label>Nome do Colaborador</Label>
                 <Input
