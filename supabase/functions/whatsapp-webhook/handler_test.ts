@@ -253,8 +253,12 @@ Deno.test({
       // Twilio should have been called with the Spanish reply
       const twilioCalls = fetchMock.callsMatching(/connector-gateway\.lovable\.dev\/twilio/)
       assert(twilioCalls.length >= 1)
-      // Pode ser saudação ES ou D1 Msg 6 (serviços) — ambas em espanhol
-      assert(/Hola|Cuál|arraigo|residencia/i.test(twilioCalls[0].body || ''), 'Twilio body should contain ES reply')
+      // Pode ser saudação ES, Msg 3 (nombre) ou D1 Msg 6 (servicios) — tudo em espanhol.
+      // O corpo Twilio é form-urlencoded, então "¿"/"á" viram %XX; casamos tokens ASCII.
+      assert(
+        /Hola|nombre|Antes\+de\+nada|Perfecto|arraigo|residencia|servicios/i.test(twilioCalls[0].body || ''),
+        'Twilio body should contain ES reply',
+      )
     } finally {
       fetchMock.restore()
     }

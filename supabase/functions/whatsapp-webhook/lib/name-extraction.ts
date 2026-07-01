@@ -46,6 +46,13 @@ export function stripNameIntroPrefix(text: string): string {
 
 export function isLikelyFullNameAnswer(text: string): boolean {
   const original = String(text || '').trim()
+  if (!original) return false
+  // Se o texto é INTEIRAMENTE consumido por um prefixo de introdução
+  // ("Me llamo", "Meu nome é", "My name is") sem qualquer nome depois,
+  // NÃO é um nome válido — evita que "Me llamo" (2 palavras) passe
+  // no cheque de "≥2 palavras alfa".
+  const strippedRaw = original.replace(NAME_INTRO_PREFIX_RE, '').replace(/[.,!?;:"'\s]+$/g, '').trim()
+  if (strippedRaw.length === 0) return false
   // Avalia também a versão sem prefixo de introdução, p/ aceitar
   // "Me llamo Pedro Henrique Rodrigues" como nome válido sem cair no
   // bloqueio de FIRST_PERSON_VERB_RE (que pegaria "soy/sou/am").
