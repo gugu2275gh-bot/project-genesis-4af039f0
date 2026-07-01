@@ -36,6 +36,49 @@ import { useContracts } from '@/hooks/useContracts';
 import { useContacts } from '@/hooks/useContacts';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { downloadInvoice } from '@/lib/generate-invoice';
+
+function handleDownloadInvoice(inv: Invoice) {
+  const issueDate = format(new Date(inv.issued_at), 'dd/MM/yyyy');
+  const yearStr = format(new Date(inv.issued_at), 'yyyy');
+  const numOnly = inv.invoice_number.includes('-')
+    ? inv.invoice_number.split('-').slice(1).join('-')
+    : inv.invoice_number;
+  const addressLines = inv.client_address
+    ? inv.client_address.split(/\n|,\s*/).filter(Boolean)
+    : [];
+  const extras = inv.additional_costs || {};
+  const extraItems = Object.entries(extras).map(([desc, amt]) => ({
+    date: issueDate,
+    description: desc,
+    quantity: 1,
+    amount: Number(amt) || 0,
+  }));
+  const pagosDelegados = Object.values(extras).reduce((s, v) => s + (Number(v) || 0), 0);
+  downloadInvoice({
+    invoiceNumber: numOnly,
+    year: yearStr,
+    issueDate,
+    clientName: inv.client_name,
+    clientDocument: inv.client_document || undefined,
+    clientAddressLines: addressLines,
+    items: [
+      {
+        date: issueDate,
+        description: inv.service_description,
+        quantity: 1,
+        amount: inv.amount_without_vat,
+      },
+      ...extraItems,
+    ],
+    honorarios: inv.amount_without_vat,
+    pagosDelegados,
+    vatBase: inv.amount_without_vat,
+    vatRate: inv.vat_rate,
+    vatAmount: inv.vat_amount,
+    totalLiquido: inv.total_amount + pagosDelegados,
+  });
+}
 
 const STATUS_BADGES = {
   EMITIDA: { label: 'Emitida', variant: 'outline' as const, icon: FileText },
