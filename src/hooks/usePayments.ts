@@ -376,8 +376,16 @@ export function usePayments() {
 
         const cashFlowEntryId = cashFlowEntry?.id;
 
-        // 7. NOVO: Verificar se precisa emitir fatura fiscal
-        const requiresInvoice = OFFICIAL_ACCOUNTS.includes(paymentAccount);
+        // 7. Verificar se a conta de pagamento selecionada emite fatura automática
+        let requiresInvoice = false;
+        if ((payment as any).payment_account_id) {
+          const { data: acc } = await supabase
+            .from('payment_accounts')
+            .select('issues_invoice')
+            .eq('id', (payment as any).payment_account_id)
+            .maybeSingle();
+          requiresInvoice = !!acc?.issues_invoice;
+        }
         let invoiceNumber: string | null = null;
 
         if (requiresInvoice) {
