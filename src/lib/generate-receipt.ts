@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { CB_LOGO_BASE64 } from "./cb-logo-base64";
 
 interface ReceiptData {
   receiptNumber: string;
