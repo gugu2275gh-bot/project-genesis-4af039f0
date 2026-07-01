@@ -203,6 +203,7 @@ export default function PaymentsList() {
       payment_form: newPayment.payment_form,
       status: 'PENDENTE',
       beneficiary_contact_id: newPayment.beneficiary_contact_id || null,
+      payment_account_id: newPayment.payment_account_id || null,
     });
     setIsDialogOpen(false);
     setOppBeneficiaries([]);
