@@ -199,7 +199,7 @@ export default function Commissions() {
           contract_id: '',
           opportunity_id: null,
           collaborator_name: '',
-          collaborator_type: 'CAPTADOR',
+          collaborator_type: '' as any,
           base_amount: 0,
           commission_rate: commissionRate,
           commission_amount: 0,
