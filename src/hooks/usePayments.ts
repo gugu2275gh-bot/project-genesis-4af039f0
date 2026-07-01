@@ -392,11 +392,11 @@ export function usePayments() {
           // Gerar fatura automática para contas oficiais
           invoiceNumber = await getNextInvoiceNumber();
           
-          // Cálculo do IVA (21%): valor do pagamento é o total bruto
-          const totalAmount = payment.amount;
+          // Cálculo do IVA (21%): valor do pagamento é a BASE sem IVA
+          const amountWithoutVat = payment.amount;
           const vatRate = 0.21;
-          const amountWithoutVat = totalAmount / (1 + vatRate);
-          const vatAmount = totalAmount - amountWithoutVat;
+          const vatAmount = amountWithoutVat * vatRate;
+          const totalAmount = amountWithoutVat + vatAmount;
 
           // Obter tipo de serviço para descrição
           const serviceType = opportunity?.leads?.service_interest || 'assessoria';
@@ -412,7 +412,7 @@ export function usePayments() {
             amount_without_vat: Math.round(amountWithoutVat * 100) / 100,
             vat_rate: vatRate,
             vat_amount: Math.round(vatAmount * 100) / 100,
-            total_amount: totalAmount,
+            total_amount: Math.round(totalAmount * 100) / 100,
             status: 'EMITIDA',
             created_by_user_id: user?.id,
           }).select().single();
