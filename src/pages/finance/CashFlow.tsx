@@ -84,6 +84,7 @@ export default function CashFlow() {
     amount: 0,
     description: '',
     payment_account: '',
+    payment_account_detail: '',
     reference_date: format(today, 'yyyy-MM-dd'),
   });
 
