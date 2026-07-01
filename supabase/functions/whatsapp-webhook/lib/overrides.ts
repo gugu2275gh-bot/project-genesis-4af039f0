@@ -154,8 +154,26 @@ const A4_FAMILIAR_RE = /\bfamiliar (europeu|europeo)|family member.*(eu|spain|eu
 const A5_REMOTO_RE = /\b(trabalha remoto|trabajas? remoto|trabajas? de forma remota|work remotely|travaillez[- ]vous [àa] distance)\b/i
 const A6_FORMACAO_RE = /\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree|formation sup[ée]rieure)\b/i
 
-const YES_RE = /^\s*(sim|si|s[ií]|yes|yeah|yep|claro|positivo|afirmativo|tenho|tengo|i (do|have)|oui|of course|sure)\b/i
-const NO_RE = /^\s*(n[ãa]o|no|nope|nay|negativo|nunca|jamais|non|i don'?t|no tengo|no he)\b/i
+const YES_TOKENS_RE = /\b(sim|si|yes|yeah|yep|claro|positivo|afirmativo|tenho|tengo|oui|of course|sure|correto|isso|exato|exatamente|certo|perfeito)\b/
+const NO_TOKENS_RE = /\b(nao|no|nope|nay|negativo|nunca|jamais|non|nenhum|nenhuma|ningun|ninguna|none|neither)\b/
+const I_DO_RE = /\bi (do|have)\b/
+const I_DONT_RE = /\bi (don'?t|do not|haven'?t|have not)\b/
+const NO_TENGO_RE = /\bno (tengo|he)\b/
+
+function normalize(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
+/** Detecta sim/não em qualquer posição da mensagem, com normalização de acentos.
+ *  Prioriza "não" quando ambos aparecem, para tratar "acho que não sei" etc. */
+function detectYesNo(msg: string): 'yes' | 'no' | null {
+  const n = normalize(msg)
+  const isNo = NO_TOKENS_RE.test(n) || I_DONT_RE.test(n) || NO_TENGO_RE.test(n)
+  if (isNo) return 'no'
+  const isYes = YES_TOKENS_RE.test(n) || I_DO_RE.test(n)
+  if (isYes) return 'yes'
+  return null
+}
 
 export function extractOutsideProgressPatch(
   previousAssistantMessage: string,
@@ -177,11 +195,12 @@ export function extractOutsideProgressPatch(
     const m = msg.match(/\b(1[2-9]|[2-9]\d)\b/)
     if (m) out.a2_age = m[1]
   }
-  const yn = (): 'yes' | 'no' | null => (YES_RE.test(msg) ? 'yes' : NO_RE.test(msg) ? 'no' : null)
+  const yn = (): 'yes' | 'no' | null => detectYesNo(msg)
   if (A3_EUROPA_RE.test(prevQ)) { const v = yn(); if (v) out.a3_europe_6m = v }
   if (A4_FAMILIAR_RE.test(prevQ)) { const v = yn(); if (v) out.a4_eu_family = v }
   if (A5_REMOTO_RE.test(prevQ)) { const v = yn(); if (v) out.a5_remote = v }
   if (A6_FORMACAO_RE.test(prevQ)) { const v = yn(); if (v) out.a6_higher_ed = v }
+
 
   if (Object.keys(out).length > 0) {
     try { console.log('[OUTSIDE_PROGRESS_PATCH]', JSON.stringify({ prevQ: prevQ.slice(0, 80), msg: msg.slice(0, 60), out })) } catch { /* noop */ }
