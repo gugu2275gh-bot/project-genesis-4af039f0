@@ -143,7 +143,7 @@ export default function Commissions() {
     contract_id: '',
     opportunity_id: null,
     collaborator_name: '',
-    collaborator_type: 'CAPTADOR',
+    collaborator_type: '' as any,
     base_amount: 0,
     commission_rate: commissionRate,
     commission_amount: 0,
@@ -199,7 +199,7 @@ export default function Commissions() {
           contract_id: '',
           opportunity_id: null,
           collaborator_name: '',
-          collaborator_type: 'CAPTADOR',
+          collaborator_type: '' as any,
           base_amount: 0,
           commission_rate: commissionRate,
           commission_amount: 0,
@@ -458,31 +458,55 @@ export default function Commissions() {
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label>Serviço (somente serviços com indicado)</Label>
+                <Label>Tipo</Label>
                 <Select
-                  value={selectedServiceKey}
-                  onValueChange={handleServiceChange}
+                  value={formData.collaborator_type || ''}
+                  onValueChange={(v: 'CAPTADOR' | 'FORNECEDOR') =>
+                    setFormData({ ...formData, collaborator_type: v })
+                  }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione o serviço" />
+                    <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    {eligibleServices.length === 0 && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">
-                        Nenhum serviço com indicado disponível
-                      </div>
-                    )}
-                    {eligibleServices.map((s) => (
-                      <SelectItem
-                        key={`${s.contract_id}:${s.opportunity_id}`}
-                        value={`${s.contract_id}:${s.opportunity_id}`}
-                      >
-                        {s.client_name} — {s.service_name} (€{s.total_amount.toFixed(2)}) · Indicado: {s.referral_name}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="CAPTADOR">Captador (a pagar)</SelectItem>
+                    <SelectItem value="FORNECEDOR">Fornecedor (a receber)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
+              {formData.collaborator_type && (
+                <div className="space-y-2">
+                  <Label>
+                    {formData.collaborator_type === 'CAPTADOR'
+                      ? 'Serviço (somente serviços com indicado)'
+                      : 'Contrato / Serviço'}
+                  </Label>
+                  <Select
+                    value={selectedServiceKey}
+                    onValueChange={handleServiceChange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o serviço" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {eligibleServices.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          Nenhum serviço com indicado disponível
+                        </div>
+                      )}
+                      {eligibleServices.map((s) => (
+                        <SelectItem
+                          key={`${s.contract_id}:${s.opportunity_id}`}
+                          value={`${s.contract_id}:${s.opportunity_id}`}
+                        >
+                          {s.client_name} — {s.service_name} (€{s.total_amount.toFixed(2)}) · Indicado: {s.referral_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {selectedService && (
                 <div className="space-y-2">
@@ -491,25 +515,6 @@ export default function Commissions() {
                 </div>
               )}
 
-
-
-              <div className="space-y-2">
-                <Label>Tipo</Label>
-                <Select 
-                  value={formData.collaborator_type} 
-                  onValueChange={(v: 'CAPTADOR' | 'FORNECEDOR') => 
-                    setFormData({ ...formData, collaborator_type: v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CAPTADOR">Captador (a pagar)</SelectItem>
-                    <SelectItem value="FORNECEDOR">Fornecedor (a receber)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
 
               <div className="space-y-2">
                 <Label>Nome do Colaborador</Label>
