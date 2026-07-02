@@ -107,7 +107,7 @@ export function computeDeterministicFunnelPatch(
   } else if (isQuestionAboutInterest(prevQ) && msg.length >= 3) {
     // Fallback: cliente respondeu à pergunta de interesse com texto que não casou
     // com nenhum keyword conhecido → preserva o cru para o normalizer cair em OUTRO.
-    patch.interest_confirmed = msg
+    patch.interest_confirmed = 'A_DEFINIR'
   }
 
   // Data de entrada — aceita pergunta canônica detectada via prevQ OU via varredura
