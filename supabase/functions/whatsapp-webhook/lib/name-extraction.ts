@@ -29,7 +29,15 @@ const FIRST_PERSON_VERB_RE = /\b(tenho|tenha|quero|queria|preciso|sou|estou|vou|
 // Prefixos de introdução de nome em PT/ES/EN/FR. Usado para remover
 // "Me llamo", "Meu nome é", "My name is", "Je m'appelle" etc. antes de
 // persistir o nome em contacts.full_name.
-const NAME_INTRO_PREFIX_RE = /^\s*(?:ol[áa]|hola|hello|hi|hey|bonjour|salut)?[\s,!.\-:]*(?:eu\s+)?(?:me\s+chamo|meu\s+nome\s+(?:completo\s+)?(?:é|e)|sou\s+(?:o|a)\s+|aqui\s+(?:é|e)\s+(?:o|a)\s+|me\s+llamo|mi\s+nombre\s+(?:completo\s+)?es|soy\s+|mi\s+nombre[:]\s*|my\s+(?:full\s+)?name\s+is|i\s*['’]?\s*am\s+|i\s*['’]?m\s+|this\s+is\s+|name[:]\s*|nome[:]\s*|nombre[:]\s*|je\s+m['’]appelle|mon\s+nom\s+(?:complet\s+)?est|je\s+suis\s+)[\s,:\-]*/i
+// Também remove acks isolados que vêm antes do nome ("ok THAYANA",
+// "vale Pedro Silva", "sim João Almeida") — o cliente aceitou o pedido
+// e emendou o nome na mesma mensagem.
+const ACK_PREFIX_RE_SOURCE = '(?:ok|okay|vale|beleza|blz|certo|claro|perfeito|sim|si|s[íi]|yes|yep|yeah|oui|d[’\']accord|dale|hai|si claro)'
+const GREETING_RE_SOURCE = '(?:ol[áa]|hola|hello|hi|hey|bonjour|salut)'
+const NAME_INTRO_PREFIX_RE = new RegExp(
+  `^\\s*(?:${ACK_PREFIX_RE_SOURCE}|${GREETING_RE_SOURCE})?[\\s,!.\\-:]*(?:${ACK_PREFIX_RE_SOURCE}|${GREETING_RE_SOURCE})?[\\s,!.\\-:]*(?:eu\\s+)?(?:me\\s+chamo|meu\\s+nome\\s+(?:completo\\s+)?(?:é|e)|sou\\s+(?:o|a)\\s+|aqui\\s+(?:é|e)\\s+(?:o|a)\\s+|me\\s+llamo|mi\\s+nombre\\s+(?:completo\\s+)?es|soy\\s+|mi\\s+nombre[:]\\s*|my\\s+(?:full\\s+)?name\\s+is|i\\s*[’\']?\\s*am\\s+|i\\s*[’\']?m\\s+|this\\s+is\\s+|name[:]\\s*|nome[:]\\s*|nombre[:]\\s*|je\\s+m[’\']appelle|mon\\s+nom\\s+(?:complet\\s+)?est|je\\s+suis\\s+)?[\\s,:\\-]*`,
+  'i',
+)
 
 /**
  * Remove introduções como "Me llamo", "Meu nome é", "My name is",
