@@ -127,7 +127,7 @@ export function isValidAnswerForStep(
     case 'interesse':
       return isPotentialInterestAnswer(s) || isStructuredQuestionAnswer(s)
     case 'localizacao':
-      return isYesNo(s) || isNeverBeenToSpainAnswer(s) || LOCATION_IN_SPAIN_HINT_RE.test(s) || LOCATION_COUNTRY_HINT_RE.test(s)
+      return isYesNo(s) || isNeverBeenToSpainAnswer(s) || LOCATION_IN_SPAIN_HINT_RE.test(s) || LOCATION_COUNTRY_HINT_RE.test(s) || LOCATION_NEGATION_HINT_RE.test(s)
     case 'data_entrada':
       return isPotentialEntryDateAnswer(s) || isNeverBeenToSpainAnswer(s)
     case 'empadronamiento':
