@@ -307,10 +307,10 @@ export function classifyOffTopic(
 
 
 export function getOffTopicAckPhrase(language: string): string {
-  if (language === 'es') return 'Por favor, terminemos primero el registro básico. A continuación podemos tratar otros temas.'
-  if (language === 'en') return "Please, let's finish the basic registration first. Afterwards we can address other matters."
-  if (language === 'fr') return "S'il vous plaît, terminons d'abord l'enregistrement de base. Ensuite, nous pourrons aborder d'autres sujets."
-  return 'Por favor, vamos terminar o cadastro básico primeiro. Em seguida podemos tratar de outros assuntos.'
+  if (language === 'es') return 'Por favor, para orientarte de la mejor manera, vamos a terminar rápidamente el registro básico. Luego hablamos sobre los demás detalles, ¿te parece?'
+  if (language === 'en') return "Please, so I can guide you in the best way, let's quickly finish the basic registration. Then we can talk about the other details, alright?"
+  if (language === 'fr') return "S'il vous plaît, pour vous orienter au mieux, terminons rapidement l'enregistrement de base. Ensuite, nous parlerons des autres détails, d'accord ?"
+  return 'Por favor, para eu te direcionar da melhor forma, vamos finalizar rapidinho o cadastro básico. Depois a gente conversa sobre os outros detalhes, combinado?'
 }
 
 // ============================================================================
