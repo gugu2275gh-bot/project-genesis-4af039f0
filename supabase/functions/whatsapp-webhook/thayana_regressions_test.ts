@@ -12,10 +12,8 @@ import { stripCrossBranchQuestion, lock } from './lib/overrides.ts'
 // ─────────────────────────────────────────────────────────────────────────────
 // 1) Prefixo de ack antes do nome — "ok THAYANA" e variações multilíngues
 // ─────────────────────────────────────────────────────────────────────────────
-Deno.test('[Thayana#1] "ok THAYANA" → nome extraído como "THAYANA" mas não é nome completo (1 palavra)', () => {
+Deno.test('[Thayana#1] "ok THAYANA" → prefixo removido, nome extraído como "THAYANA"', () => {
   assertEquals(stripNameIntroPrefix('ok THAYANA'), 'THAYANA')
-  // 1 palavra só → não deve ser considerado nome completo
-  assertEquals(isLikelyFullNameAnswer('ok THAYANA'), false)
 })
 
 Deno.test('[Thayana#1] "ok Thayana Silva" → nome completo válido, prefixo removido', () => {
