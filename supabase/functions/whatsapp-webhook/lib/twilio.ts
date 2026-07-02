@@ -68,3 +68,87 @@ export async function sendWhatsAppMessage(phone: string, message: string): Promi
 
   console.log('Message sent successfully via Twilio')
 }
+
+/**
+ * Normaliza texto para comparação de duplicidade:
+ * - lowercase, remove acentos, colapsa espaços, strip pontuação repetida.
+ */
+export function normalizeForDedup(text: string): string {
+  if (!text) return ''
+  return sanitizeOutgoingText(text)
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}\s?!.,]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const buf = new TextEncoder().encode(input)
+  const digest = await crypto.subtle.digest('SHA-256', buf)
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * Envio idempotente + guarda de near-duplicate.
+ *
+ * Estratégia:
+ *  1. Guarda cross-process: insere hash em `message_dedup` (unique). Se conflito → skip.
+ *     Hash cobre janela de 60s (bucket temporal) por lead+conteúdo normalizado.
+ *  2. Guarda near-duplicate: consulta `mensagens_cliente` últimos 90s do mesmo lead
+ *     e compara conteúdo normalizado; se idêntico → skip.
+ *  3. Se passar nas duas, chama sendWhatsAppMessage.
+ *
+ * Retorna { sent: boolean, reason?: string }.
+ */
+export async function sendOutgoingIdempotent(
+  supabase: any,
+  args: { phone: string; leadId: string | null; body: string; windowSeconds?: number },
+): Promise<{ sent: boolean; reason?: string }> {
+  const { phone, leadId, body } = args
+  const windowSec = args.windowSeconds ?? 60
+  const norm = normalizeForDedup(body)
+  if (!norm) return { sent: false, reason: 'empty_body' }
+
+  const bucket = Math.floor(Date.now() / (windowSec * 1000))
+  const dedupKey = `out:${leadId || 'nolead'}:${phone}:${bucket}:${norm.slice(0, 500)}`
+  const hash = await sha256Hex(dedupKey)
+
+  // (1) idempotência via unique constraint
+  const { error: dupErr } = await supabase
+    .from('message_dedup')
+    .insert({ message_id: `send:${hash}` })
+  if (dupErr) {
+    const msg = String(dupErr.message || '')
+    if (msg.includes('duplicate') || msg.includes('unique') || (dupErr as any).code === '23505') {
+      console.log('[SEND_DEDUP] skipping duplicate (hash hit):', hash.slice(0, 12))
+      return { sent: false, reason: 'dedup_hash' }
+    }
+    console.warn('[SEND_DEDUP] message_dedup insert failed (continuing):', msg)
+  }
+
+  // (2) near-duplicate: última mensagem IA/ROUTING nos últimos 90s
+  if (leadId) {
+    const since = new Date(Date.now() - 90_000).toISOString()
+    const { data: recents } = await supabase
+      .from('mensagens_cliente')
+      .select('mensagem_IA, conteudo, created_at')
+      .eq('id_lead', leadId)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(5)
+    if (Array.isArray(recents)) {
+      for (const r of recents) {
+        const txt = (r as any).mensagem_IA || (r as any).conteudo || ''
+        if (!txt) continue
+        if (normalizeForDedup(txt) === norm) {
+          console.log('[SEND_DEDUP] skipping near-duplicate (last 90s match)')
+          return { sent: false, reason: 'near_duplicate' }
+        }
+      }
+    }
+  }
+
+  await sendWhatsAppMessage(phone, body)
+  return { sent: true }
+}

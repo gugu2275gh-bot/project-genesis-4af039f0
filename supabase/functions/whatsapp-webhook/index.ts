@@ -418,7 +418,7 @@ export {
 
 
 // Wave 3b step 7: Twilio + AI providers + extraction moved to lib/
-import { getMediaPlaceholder, sendWhatsAppMessage } from './lib/twilio.ts'
+import { getMediaPlaceholder, sendWhatsAppMessage, sendOutgoingIdempotent } from './lib/twilio.ts'
 import {
   rewriteResponseToLanguage,
   enforceResponseLanguage,
@@ -892,15 +892,20 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
                       const options = sectorNames.map((s, i) => `*${i + 1}.* ${sectorLabels[s] || s}`).join('\n')
                       const disambigMsg = `Olá! Você está em contato com mais de um setor da nossa equipe.\n\nPara direcionar sua mensagem corretamente, responda apenas com o *número*:\n\n${options}\n\nOu descreva brevemente sobre qual assunto deseja tratar. 😊`
 
-                      await sendWhatsAppMessage(phoneNumber, disambigMsg)
-
-                      await supabase.from('mensagens_cliente').insert({
-                        id_lead: lead.id,
-                        phone_id: parseInt(phoneNumber),
-                        mensagem_IA: disambigMsg,
-                        origem: 'ROUTING',
+                      const disambigRes = await sendOutgoingIdempotent(supabase, {
+                        phone: phoneNumber, leadId: lead.id, body: disambigMsg,
                       })
-                      console.log('Multichat: disambiguation message sent')
+                      if (disambigRes.sent) {
+                        await supabase.from('mensagens_cliente').insert({
+                          id_lead: lead.id,
+                          phone_id: parseInt(phoneNumber),
+                          mensagem_IA: disambigMsg,
+                          origem: 'ROUTING',
+                        })
+                        console.log('Multichat: disambiguation message sent')
+                      } else {
+                        console.log('Multichat: disambiguation skipped —', disambigRes.reason)
+                      }
                     } catch (disambigErr) {
                       console.error('Disambiguation send error:', disambigErr instanceof Error ? disambigErr.message : disambigErr)
                     }
@@ -2309,14 +2314,20 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           if (!knowledgeContext) {
             console.log('[KB-STRICT] No KB match found — sending standard fallback message')
             try {
-              await sendWhatsAppMessage(phoneNumber, kbStrictFallback)
-              await supabase.from('mensagens_cliente').insert({
-                id_lead: lead.id,
-                tipo: 'TEXTO',
-                conteudo: kbStrictFallback,
-                direcao: 'SAINDO',
-                origem: 'AGENTE_IA',
+              const kbRes = await sendOutgoingIdempotent(supabase, {
+                phone: phoneNumber, leadId: lead.id, body: kbStrictFallback,
               })
+              if (kbRes.sent) {
+                await supabase.from('mensagens_cliente').insert({
+                  id_lead: lead.id,
+                  tipo: 'TEXTO',
+                  conteudo: kbStrictFallback,
+                  direcao: 'SAINDO',
+                  origem: 'AGENTE_IA',
+                })
+              } else {
+                console.log('[KB-STRICT] Skipped duplicate fallback —', kbRes.reason)
+              }
             } catch (e) {
               console.error('[KB-STRICT] Failed to send fallback:', e instanceof Error ? e.message : e)
             }
@@ -2957,23 +2968,28 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             }
             for (let i = 0; i < parts.length; i++) {
               const part = parts[i]
-              await sendWhatsAppMessage(phoneNumber, part)
-
-              await supabase.from('mensagens_cliente').insert({
-                id_lead: lead.id,
-                phone_id: parseInt(phoneNumber),
-                mensagem_IA: part,
-                origem: 'IA',
+              const sendRes = await sendOutgoingIdempotent(supabase, {
+                phone: phoneNumber, leadId: lead.id, body: part,
               })
+              if (!sendRes.sent) {
+                console.log(`[SEND_DEDUP] skipped part ${i + 1}/${parts.length} —`, sendRes.reason)
+              } else {
+                await supabase.from('mensagens_cliente').insert({
+                  id_lead: lead.id,
+                  phone_id: parseInt(phoneNumber),
+                  mensagem_IA: part,
+                  origem: 'IA',
+                })
 
-              await supabase.from('interactions').insert({
-                lead_id: lead.id,
-                contact_id: contact.id,
-                channel: 'WHATSAPP',
-                direction: 'OUTBOUND',
-                content: part,
-                origin_bot: true,
-              })
+                await supabase.from('interactions').insert({
+                  lead_id: lead.id,
+                  contact_id: contact.id,
+                  channel: 'WHATSAPP',
+                  direction: 'OUTBOUND',
+                  content: part,
+                  origin_bot: true,
+                })
+              }
 
               if (i < parts.length - 1) {
                 await new Promise(r => setTimeout(r, 350))
