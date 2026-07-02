@@ -1187,7 +1187,13 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         const inboundText = String(displayBody || message.body || '').trim()
         const normalizedInbound = inboundText.toLowerCase().replace(/[.!?…\s]+$/g, '').trim()
         const ACK_RE = /^(ok|okay|okey|k|kk|vale|blz|beleza|certo|claro|perfeito|entendi|entendido|obrigad[oa]|obrigada|obrigado|valeu|gracias|muchas gracias|thanks|thank you|thx|ty|merci|hum+|mmh+|hmm+|aha+|humm+|👍|🙏|👌|✅|😊|🙂)$/i
-        const THANKS_ONLY_RE = /^(muito\s+)?(obrigad[oa]|obrigada|obrigado|valeu|gracias|muchas\s+gracias|mil\s+gracias|thanks|thank\s+you|thx|ty|merci(\s+beaucoup)?)[!.\s👍🙏👌✅😊🙂]*$/i
+        // Detecção ampla de agradecimentos PT/ES/EN/FR:
+        // - "obrigado", "obrigada de novo", "muito obrigado mesmo", "obg", "brigado"
+        // - "vale", "vale gracias", "gracias", "muchas gracias", "mil gracias", "gracias de nuevo", "grato/a"
+        // - "thanks", "thanks!", "thanks a lot", "thank you so much", "thx", "ty", "tks"
+        // - "merci", "merci beaucoup", "danke"
+        const THANKS_TOKEN = '(?:muito\\s+|muy\\s+|mui\\s+|mt\\s+|so\\s+|really\\s+)?(?:obrigad[oa]|obg|brigad[oa]|agradecid[oa]|grat[oa]|valeu|vlw|gracias|graci[ñn]as|grazas|mercies?|merci|danke|thanks?|thx|tks|tysm|ty|thank\\s*(?:you|u))(?:\\s+(?:mesmo|demais|mesmo\\s+assim|de\\s+novo|novamente|otra\\s+vez|de\\s+nuevo|nuevamente|a\\s+lot|so\\s+much|very\\s+much|beaucoup|mil|muito|muitas?|muchas?|mil\\s+vezes))?'
+        const THANKS_ONLY_RE = new RegExp(`^(?:ok+\\s+|okay\\s+|vale\\s+|blz\\s+|beleza\\s+|perfeito\\s+|perfecto\\s+|listo\\s+)?${THANKS_TOKEN}(?:[,!.\\s]+${THANKS_TOKEN})*[!.\\s👍🙏👌✅✔️😊🙂❤️💚💛]*$`, 'i')
         const isEmojiOnly = /^(?:[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+)$/u.test(inboundText)
         const isShortAck = (ACK_RE.test(normalizedInbound) || isEmojiOnly)
           && inboundText.length < 25
