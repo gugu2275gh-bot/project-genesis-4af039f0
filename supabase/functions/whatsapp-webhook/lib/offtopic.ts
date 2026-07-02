@@ -170,6 +170,11 @@ const LOCATION_COUNTRY_HINT_RE = /(espan|spain|españ|madri|barcelona|valencia|s
 // o resto ("naum", "todavia no", "not yet", "pas encore", "noch nicht", …).
 const LOCATION_NEGATION_HINT_RE = /(^|\s)(naum|ainda\s+naum|ainda\s+n[ãa]o|todav[ií]a\s+no|not\s+yet|pas\s+encore|noch\s+nicht|je\s+ne\s+suis\s+pas)\b/i
 
+// Intenção futura (PT/ES/EN/FR) — mesmo sem citar país deve ser aceito como
+// resposta legítima à etapa `localizacao` (o validator determinístico
+// classifica como `outside`).
+const LOCATION_INTENT_HINT_RE = /\b(quero|queria|pretendo|penso|planejo|planeio|sonho|vou|irei|gostaria|gostava|quiero|voy\s+a|pienso|planeo|sue[ñn]o|gustar[ií]a|want\s+to|wanna|going\s+to|gonna|planning\s+to|would\s+like\s+to|thinking\s+(of|about)|dreaming\s+of|je\s+(veux|voudrais|compte|pense|vais|souhaite|r[êe]ve))\b/i
+
 // Detecta "tentativa plausível" de resposta à etapa atual — ainda que
 // malformada. Serve para diferenciar "resposta ruim" (→ reask) de
 // "off-topic explícito" (→ park). Só é consultado quando `isValidAnswerForStep`
