@@ -12,8 +12,12 @@ export const FULL_NAME_DENYLIST_PATTERNS: RegExp[] = [
   /\b(madre|padre|hijo|hija|hermano|hermana|esposo|esposa|novio|novia|amigo|amiga)\b/i,
   /\b(mother|father|son|daughter|brother|sister|husband|wife|friend)\b/i,
   /^(sao paulo|sp|rio|rio de janeiro|brasilia|belo horizonte|salvador|recife|fortaleza|porto alegre|curitiba|manaus|brasil|portugal|espanha|madri|madrid|barcelona|valencia|sevilla|lisboa|porto|paris|londres)$/i,
+  // Meta-tokens da PRÓPRIA pergunta ("nome completo?", "full name?") não podem virar nome
+  /^(completo|completa|complet[eo]s?|nome|nombre|name|full\s*name|nom|apellido|sobrenome)$/i,
+  /\b(completo|completa|complet[eo]s?)\b/i,
   /^\d/,
 ]
+
 
 // Padrões de RECUSA / FRASES (não são nomes) — pt/es/en/fr.
 export const NAME_REFUSAL_PATTERNS: RegExp[] = [

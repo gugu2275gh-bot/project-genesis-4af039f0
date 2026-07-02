@@ -1183,21 +1183,34 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           .eq('lead_id', lead.id)
           .maybeSingle()
         const handoffReached = !!(fs?.pre_handoff_sent || fs?.handoff_sent)
+        const handoffFinal = !!fs?.handoff_sent
         const inboundText = String(displayBody || message.body || '').trim()
         const normalizedInbound = inboundText.toLowerCase().replace(/[.!?…\s]+$/g, '').trim()
-        const ACK_RE = /^(ok|okay|okey|k|kk|vale|blz|beleza|certo|claro|perfeito|entendi|entendido|obrigad[oa]|obrigada|obrigado|valeu|gracias|thanks|thank you|thx|ty|merci|hum+|mmh+|hmm+|aha+|humm+|👍|🙏|👌|✅|😊|🙂)$/i
+        const ACK_RE = /^(ok|okay|okey|k|kk|vale|blz|beleza|certo|claro|perfeito|entendi|entendido|obrigad[oa]|obrigada|obrigado|valeu|gracias|muchas gracias|thanks|thank you|thx|ty|merci|hum+|mmh+|hmm+|aha+|humm+|👍|🙏|👌|✅|😊|🙂)$/i
+        const THANKS_ONLY_RE = /^(muito\s+)?(obrigad[oa]|obrigada|obrigado|valeu|gracias|muchas\s+gracias|mil\s+gracias|thanks|thank\s+you|thx|ty|merci(\s+beaucoup)?)[!.\s👍🙏👌✅😊🙂]*$/i
         const isEmojiOnly = /^(?:[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+)$/u.test(inboundText)
         const isShortAck = (ACK_RE.test(normalizedInbound) || isEmojiOnly)
           && inboundText.length < 25
           && !inboundText.includes('?')
-        if (handoffReached && isShortAck) {
+        const isThanksOnly = THANKS_ONLY_RE.test(normalizedInbound) && !inboundText.includes('?')
+        // Fix 3: após handoff_sent=true (transferência efetiva), silencia IA
+        // para qualquer mensagem que NÃO seja pergunta explícita.
+        if (handoffFinal && !inboundText.includes('?')) {
+          aiPausedByHuman = true
+          console.log(`[POST_HANDOFF_SILENCE] IA pausada — handoff_sent=true, mensagem sem pergunta: "${inboundText.slice(0, 40)}"`)
+        } else if (handoffReached && isShortAck) {
           aiPausedByHuman = true
           console.log(`[POST_HANDOFF_ACK] pausando IA — cliente enviou ack curto "${inboundText}" após handoff`)
+        } else if (isThanksOnly) {
+          // Fix 5: agradecimento puro NUNCA gera resposta duplicada da IA
+          aiPausedByHuman = true
+          console.log(`[THANKS_ONLY_SILENCE] IA pausada — mensagem é apenas agradecimento: "${inboundText.slice(0, 40)}"`)
         }
       }
     } catch (postHandoffErr) {
       console.warn('[POST_HANDOFF_ACK] non-blocking error:', postHandoffErr instanceof Error ? postHandoffErr.message : postHandoffErr)
     }
+
 
     // CONCURRENT-PROCESSING LOCK: impede que dois webhooks concorrentes
     // (mensagens do mesmo cliente com < 2s de diferença) gerem respostas

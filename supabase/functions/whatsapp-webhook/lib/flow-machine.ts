@@ -192,7 +192,16 @@ const STEPS: Record<StepCode, StepDef> = {
     flow: 'INSIDE_SPAIN',
     answerType: 'date',
     ask: () => '', // perguntas Inside já são montadas por getInsideSpainNextQuestion
-    validate: () => ({ valid: true }),
+    validate: (raw) => {
+      const t = String(raw || '').trim()
+      // Aceita datas plausíveis OU "ainda não cheguei / not yet" (tratado outside).
+      // Rejeita respostas vazias, agradecimentos, acks curtos.
+      if (!t || t.length < 2) return { valid: false, reason: 'empty' }
+      if (/^(ok|okay|vale|sim|si|s[íi]|no|n[ãa]o|obrigad[oa]|gracias|thanks|merci|👍|🙏)[.!\s]*$/i.test(t)) {
+        return { valid: false, reason: 'ack_not_date' }
+      }
+      return { valid: true, value: t }
+    },
     next: ALWAYS('INSIDE_EMPADRONADO'),
   },
 
@@ -201,7 +210,19 @@ const STEPS: Record<StepCode, StepDef> = {
     flow: 'INSIDE_SPAIN',
     answerType: 'yes_no',
     ask: () => '',
-    validate: () => ({ valid: true }),
+    validate: (raw) => {
+      const t = String(raw || '').trim().toLowerCase()
+      if (!t) return { valid: false, reason: 'empty' }
+      // Precisa de sim/não claro (ou cidade quando afirmativo)
+      if (/\b(sim|s[íi]|si|yes|y|claro|correto|exato|positivo|no|n[ãa]o|nope|jamais|nunca|negativo)\b/i.test(t)) {
+        return { valid: true, value: t }
+      }
+      // Cidade espanhola conta como "sim, empadronado em X"
+      if (/\b(madri|madrid|barcelona|valencia|sevilla|m[aá]laga|bilbao|zaragoza|alicante|murcia|palma|granada)\b/i.test(t)) {
+        return { valid: true, value: t }
+      }
+      return { valid: false, reason: 'no_yesno_answer' }
+    },
     next: ALWAYS('PRE_HANDOFF'),
   },
 
@@ -210,9 +231,17 @@ const STEPS: Record<StepCode, StepDef> = {
     flow: 'OUTSIDE_SPAIN',
     answerType: 'text',
     ask: () => '', // perguntas Outside já são montadas por getOutsideSpainNextQuestion
-    validate: () => ({ valid: true }),
+    validate: (raw) => {
+      const t = String(raw || '').trim()
+      if (!t || t.length < 2) return { valid: false, reason: 'empty' }
+      if (/^(ok|okay|vale|obrigad[oa]|gracias|thanks|merci|👍|🙏)[.!\s]*$/i.test(t)) {
+        return { valid: false, reason: 'ack_not_answer' }
+      }
+      return { valid: true, value: t }
+    },
     next: ALWAYS('PRE_HANDOFF'),
   },
+
 
   PRE_HANDOFF: {
     code: 'PRE_HANDOFF',

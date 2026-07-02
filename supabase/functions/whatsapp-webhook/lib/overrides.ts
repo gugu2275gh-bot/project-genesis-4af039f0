@@ -1815,7 +1815,11 @@ const INSIDE_ONLY_PATTERNS: RegExp[] = [
   /(?:[^.!?\n]*?\b(?:when|quando|cuando|quand)\b[^?]{0,60}?\b(?:enter|cheg|lleg|arriv)\w*\b[^?]{0,60}?\b(?:espanha|espana|españa|spain|espagne)\b[^?]*\?)/gi,
   // "Está empadronado?" / "En qué ciudad estás empadronado?"
   /(?:[^.!?\n]*?\bempadron\w*\b[^?]*\?)/gi,
+  // "Qual é a sua situação aqui na Espanha?" e variantes cross-branch
+  /(?:[^.!?\n]*?\b(?:situa[cç][ãa]o|situaci[oó]n|situation)\b[^?]{0,40}?\b(?:aqui|aca|acá|here|ici)\b[^?]{0,40}?\b(?:espanha|espana|españa|spain|espagne)?\b[^?]*\?)/gi,
+  /(?:[^.!?\n]*?\bcomo est[áa]\s+(?:sua|tua)?\s*situa[cç][ãa]o\b[^?]*\?)/gi,
 ]
+
 
 const OUTSIDE_ONLY_PATTERNS: RegExp[] = [
   /(?:[^.!?\n]*?\b(?:qual sua idade|cu[áa]ntos a[ñn]os tienes|how old are you|quel [âa]ge avez[- ]vous)\b[^?]*\?)/gi,
