@@ -112,6 +112,14 @@ export function parseEntryDateFromText(text: string, today: Date = new Date()): 
     if (y < 100) y += y < 50 ? 2000 : 1900
     return buildResult(y, months[m[1].toLowerCase()], +m[2])
   }
+  // NOVO: "mês YYYY" (sem dia) → assume dia 1
+  const monthYearRe = new RegExp(`\\b(${monthRe})\\s+(?:de\\s+|del\\s+)?(\\d{4})\\b`, 'i')
+  m = normalized.match(monthYearRe)
+  if (m) return buildResult(+m[2], months[m[1].toLowerCase()], 1)
+  // NOVO: "YYYY mês" (sem dia)
+  const yearMonthRe = new RegExp(`\\b(\\d{4})\\s+(?:de\\s+)?(${monthRe})\\b`, 'i')
+  m = normalized.match(yearMonthRe)
+  if (m) return buildResult(+m[1], months[m[2].toLowerCase()], 1)
 
   return null
 }
