@@ -18,6 +18,20 @@ export function getMediaPlaceholder(mediaType: string, language: ChatLanguage): 
   return `[Cliente enviou um ${media}]`
 }
 
+/**
+ * Sanitiza sequências de pontuação estranhas que às vezes surgem quando a IA
+ * concatena um canonical já finalizado com "?" adicional
+ * (ex.: "(exemplo: 22/05/2025).?" → "(exemplo: 22/05/2025)?").
+ */
+export function sanitizeOutgoingText(text: string): string {
+  if (!text) return text
+  return text
+    .replace(/([)\]\d])\s*\.\s*\?/g, '$1?')
+    .replace(/\s+\?/g, '?')
+    .replace(/\?\s*\?+/g, '?')
+    .replace(/\.\s*\?/g, '?')
+}
+
 export async function sendWhatsAppMessage(phone: string, message: string): Promise<void> {
   const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio'
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
@@ -29,6 +43,7 @@ export async function sendWhatsAppMessage(phone: string, message: string): Promi
   }
 
   const TWILIO_FROM_NUMBER = 'whatsapp:+34654378464'
+  const cleanMessage = sanitizeOutgoingText(message)
   console.log('Sending via Twilio Gateway:', { phone })
 
   const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
@@ -41,7 +56,7 @@ export async function sendWhatsAppMessage(phone: string, message: string): Promi
     body: new URLSearchParams({
       To: `whatsapp:+${phone}`,
       From: TWILIO_FROM_NUMBER,
-      Body: message,
+      Body: cleanMessage,
     }),
   })
 

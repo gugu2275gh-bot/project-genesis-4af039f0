@@ -50,8 +50,10 @@ export function isPotentialEntryDateAnswer(text: string): boolean {
   const hasDateRange = new RegExp(`${numericFullDate.source}.{0,20}(ate|até|a|to|-).{0,20}${numericFullDate.source}`, 'i').test(raw)
   const monthName = '(janeiro|fevereiro|marco|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|january|february|march|april|may|june|july|august|september|october|november|december|janvier|fevrier|février|mars|avril|mai|juin|juillet|aout|août|septembre|octobre|novembre|decembre|décembre)'
   const hasFullMonthNameDate = new RegExp(`\\b(\\d{1,2}\\s+(de\\s+)?${monthName}\\s+(de\\s+)?\\d{2,4}|${monthName}\\s+\\d{1,2}(st|nd|rd|th)?[,]?\\s+\\d{2,4})\\b`).test(normalized)
+  // NOVO: aceita "mês YYYY" ou "YYYY mês" sem dia (ex.: "setembro 2024")
+  const hasMonthYearOnly = new RegExp(`\\b(${monthName}\\s+(de\\s+|del\\s+)?\\d{4}|\\d{4}\\s+(de\\s+)?${monthName})\\b`).test(normalized)
 
-  return hasDateRange || hasSingleDate || hasFullMonthNameDate
+  return hasDateRange || hasSingleDate || hasFullMonthNameDate || hasMonthYearOnly
 }
 
 /**
@@ -110,6 +112,14 @@ export function parseEntryDateFromText(text: string, today: Date = new Date()): 
     if (y < 100) y += y < 50 ? 2000 : 1900
     return buildResult(y, months[m[1].toLowerCase()], +m[2])
   }
+  // NOVO: "mês YYYY" (sem dia) → assume dia 1
+  const monthYearRe = new RegExp(`\\b(${monthRe})\\s+(?:de\\s+|del\\s+)?(\\d{4})\\b`, 'i')
+  m = normalized.match(monthYearRe)
+  if (m) return buildResult(+m[2], months[m[1].toLowerCase()], 1)
+  // NOVO: "YYYY mês" (sem dia)
+  const yearMonthRe = new RegExp(`\\b(\\d{4})\\s+(?:de\\s+)?(${monthRe})\\b`, 'i')
+  m = normalized.match(yearMonthRe)
+  if (m) return buildResult(+m[1], months[m[2].toLowerCase()], 1)
 
   return null
 }
