@@ -56,7 +56,7 @@ export async function sendWhatsAppMessage(phone: string, message: string): Promi
     body: new URLSearchParams({
       To: `whatsapp:+${phone}`,
       From: TWILIO_FROM_NUMBER,
-      Body: message,
+      Body: cleanMessage,
     }),
   })
 
