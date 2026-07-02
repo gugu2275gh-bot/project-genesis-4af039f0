@@ -2314,14 +2314,20 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           if (!knowledgeContext) {
             console.log('[KB-STRICT] No KB match found — sending standard fallback message')
             try {
-              await sendWhatsAppMessage(phoneNumber, kbStrictFallback)
-              await supabase.from('mensagens_cliente').insert({
-                id_lead: lead.id,
-                tipo: 'TEXTO',
-                conteudo: kbStrictFallback,
-                direcao: 'SAINDO',
-                origem: 'AGENTE_IA',
+              const kbRes = await sendOutgoingIdempotent(supabase, {
+                phone: phoneNumber, leadId: lead.id, body: kbStrictFallback,
               })
+              if (kbRes.sent) {
+                await supabase.from('mensagens_cliente').insert({
+                  id_lead: lead.id,
+                  tipo: 'TEXTO',
+                  conteudo: kbStrictFallback,
+                  direcao: 'SAINDO',
+                  origem: 'AGENTE_IA',
+                })
+              } else {
+                console.log('[KB-STRICT] Skipped duplicate fallback —', kbRes.reason)
+              }
             } catch (e) {
               console.error('[KB-STRICT] Failed to send fallback:', e instanceof Error ? e.message : e)
             }
