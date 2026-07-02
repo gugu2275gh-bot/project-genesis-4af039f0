@@ -1800,3 +1800,54 @@ export function composeAckPlusScripted(
   return s.includes('|||') ? `${a}|||${s}` : `${a}\n\n${s}`
 }
 
+
+// ============================================================================
+// Safety net final: purga perguntas cross-branch (INSIDE ↔ OUTSIDE) que
+// escaparam de todos os overrides anteriores. Roda como ÚLTIMA barreira antes
+// do envio ao Twilio. É deliberadamente agressiva: se detecta uma pergunta
+// canônica do ramo oposto ao `location_known` do funil, remove a frase-alvo
+// inteira (do início dela até o próximo `?`).
+// ============================================================================
+
+const INSIDE_ONLY_PATTERNS: RegExp[] = [
+  // "Qual foi a data exata da sua entrada na Espanha?" e variantes PT/ES/EN/FR
+  /(?:[^.!?\n]*?\b(?:entrada|entrou|entrar|entered|entry|entree|chegada|chegou|llegada|llegaste|arrival|arrived)\b[^?]*?\b(?:espanha|espana|españa|spain|espagne)\b[^?]*\?)/gi,
+  /(?:[^.!?\n]*?\b(?:when|quando|cuando|quand)\b[^?]{0,60}?\b(?:enter|cheg|lleg|arriv)\w*\b[^?]{0,60}?\b(?:espanha|espana|españa|spain|espagne)\b[^?]*\?)/gi,
+  // "Está empadronado?" / "En qué ciudad estás empadronado?"
+  /(?:[^.!?\n]*?\bempadron\w*\b[^?]*\?)/gi,
+]
+
+const OUTSIDE_ONLY_PATTERNS: RegExp[] = [
+  /(?:[^.!?\n]*?\b(?:qual sua idade|cu[áa]ntos a[ñn]os tienes|how old are you|quel [âa]ge avez[- ]vous)\b[^?]*\?)/gi,
+  /(?:[^.!?\n]*?\beuropa\b[^?]{0,40}?\b(?:6 meses|seis meses|last 6 months|6 months|derniers 6 mois)\b[^?]*\?)/gi,
+  /(?:[^.!?\n]*?\b(?:trabalha remoto|trabajas? remoto|work remotely|travaillez[- ]vous [àa] distance)\b[^?]*\?)/gi,
+  /(?:[^.!?\n]*?\b(?:forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree|formation sup[ée]rieure)\b[^?]*\?)/gi,
+  /(?:[^.!?\n]*?\bfamiliar (?:europeu|europeo)\b[^?]*\?)/gi,
+]
+
+/**
+ * Última linha de defesa: remove perguntas exclusivas do ramo oposto ao
+ * `location_known` já confirmado no funil. Preserva o restante do texto.
+ * Se sobrar apenas whitespace/preâmbulo sem pergunta, retorna string vazia
+ * (o caller deve tratar como "no reply") — melhor mudo do que perguntar algo
+ * fora do ramo do cliente.
+ */
+export function stripCrossBranchQuestion(
+  aiResponse: string,
+  locationKnown: 'spain' | 'outside' | null | undefined,
+): string {
+  if (!aiResponse || !locationKnown) return aiResponse
+  if (isLocked(aiResponse)) return aiResponse
+  const patterns = locationKnown === 'outside' ? INSIDE_ONLY_PATTERNS : OUTSIDE_ONLY_PATTERNS
+  let out = aiResponse
+  let removedAny = false
+  for (const re of patterns) {
+    const before = out
+    out = out.replace(re, '').replace(/[ \t]{2,}/g, ' ')
+    if (out !== before) removedAny = true
+  }
+  if (removedAny) {
+    console.warn(`[CROSS_BRANCH_SCRUB] location=${locationKnown} — removida pergunta cross-branch`)
+  }
+  return out.replace(/\n{3,}/g, '\n\n').trim()
+}
