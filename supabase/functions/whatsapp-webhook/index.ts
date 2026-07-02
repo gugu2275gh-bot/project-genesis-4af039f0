@@ -892,15 +892,20 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
                       const options = sectorNames.map((s, i) => `*${i + 1}.* ${sectorLabels[s] || s}`).join('\n')
                       const disambigMsg = `Olá! Você está em contato com mais de um setor da nossa equipe.\n\nPara direcionar sua mensagem corretamente, responda apenas com o *número*:\n\n${options}\n\nOu descreva brevemente sobre qual assunto deseja tratar. 😊`
 
-                      await sendWhatsAppMessage(phoneNumber, disambigMsg)
-
-                      await supabase.from('mensagens_cliente').insert({
-                        id_lead: lead.id,
-                        phone_id: parseInt(phoneNumber),
-                        mensagem_IA: disambigMsg,
-                        origem: 'ROUTING',
+                      const disambigRes = await sendOutgoingIdempotent(supabase, {
+                        phone: phoneNumber, leadId: lead.id, body: disambigMsg,
                       })
-                      console.log('Multichat: disambiguation message sent')
+                      if (disambigRes.sent) {
+                        await supabase.from('mensagens_cliente').insert({
+                          id_lead: lead.id,
+                          phone_id: parseInt(phoneNumber),
+                          mensagem_IA: disambigMsg,
+                          origem: 'ROUTING',
+                        })
+                        console.log('Multichat: disambiguation message sent')
+                      } else {
+                        console.log('Multichat: disambiguation skipped —', disambigRes.reason)
+                      }
                     } catch (disambigErr) {
                       console.error('Disambiguation send error:', disambigErr instanceof Error ? disambigErr.message : disambigErr)
                     }
