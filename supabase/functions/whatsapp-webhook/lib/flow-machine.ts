@@ -133,19 +133,23 @@ const STEPS: Record<StepCode, StepDef> = {
       //    - "Ainda não", "Todavía no", "Not yet", "Pas encore"
       //    - "Nao eu disse que quero ir" (mesmo que a frase depois mencione "espanha")
       const explicitNegation =
-        /^\s*(n[ãa]o|no|nope|nah|non|jamais|nunca|negativo)\b/i.test(t)
-        || /\b(ainda n[ãa]o|todav[ií]a no|not yet|pas encore)\b/i.test(t)
-        || /\b(n[ãa]o (estou|moro|vivo|estoy|vivo)|no (estoy|vivo|moro)|i'?m not( in)?|not in spain|je ne suis pas)\b/i.test(t)
+        /^\s*(n[ãa]o|naum|nao|no|nope|nah|non|jamais|nunca|negativo|neg)\b/i.test(t)
+        || /\b(ainda n[ãa]o|ainda naum|todav[ií]a no|not yet|pas encore|noch nicht)\b/i.test(t)
+        || /\b(n[ãa]o (estou|moro|vivo|to|tô|estoy|vivo)|naum (estou|to|tô|moro|vivo)|no (estoy|vivo|moro|estou)|i'?m not( in)?|not in spain|je ne suis pas)\b/i.test(t)
       if (explicitNegation) return { valid: true, value: 'outside' }
 
       // 0b) INTENÇÃO FUTURA de ir para a Espanha (ainda não está lá) → outside.
       //     Ex.: "quero ir para Espanha", "pretendo ir", "planejo mudar",
-      //     "quiero ir a España", "want to go to Spain", "je veux aller".
+      //     "quiero ir a España", "want to go to Spain", "je veux aller",
+      //     "penso em ir", "sonho em morar", "vou em breve pra Espanha".
       const futureIntent =
-        /\b(quero|queria|pretendo|penso|planejo|vou|irei)\s+(ir|mudar|me\s+mudar|viajar|morar)\b/i.test(t)
-        || /\b(quiero|pretendo|pienso|voy a|planeo)\s+(ir|mudar|mudarme|viajar|vivir)\b/i.test(t)
-        || /\b(want to|planning to|going to|plan to|hope to)\s+(go|move|travel|live)\b/i.test(t)
-        || /\b(je\s+(veux|voudrais|compte|pense|vais))\s+(aller|d[ée]m[ée]nager|voyager|vivre)\b/i.test(t)
+        /\b(quero|queria|pretendo|penso|planejo|planeio|sonho|vou|irei|gostaria|gostava)\s+(em\s+)?(ir|indo|mudar|me\s+mudar|mudar-me|viajar|morar|conhecer|visitar)\b/i.test(t)
+        || /\b(quiero|queria|pretendo|pienso|voy a|planeo|sue[ñn]o con|me\s+gustar[ií]a)\s+(ir|mudar|mudarme|viajar|vivir|conocer|visitar)\b/i.test(t)
+        || /\b(want to|wanna|planning to|going to|gonna|plan to|hope to|would like to|thinking of|thinking about|dreaming of)\s+(go|move|moving|travel|traveling|live|living|visit|visiting)\b/i.test(t)
+        || /\b(je\s+(veux|voudrais|compte|pense|vais|souhaite|r[êe]ve))\s+(de\s+|d')?(aller|d[ée]m[ée]nager|voyager|vivre|visiter)\b/i.test(t)
+        // Português: "vou/pretendo/quero" + preposição direta ao destino (sem verbo intermediário)
+        // Ex.: "vou pra Espanha", "pretendo pra Madrid", "quero pra Espanha em 2026"
+        || /\b(vou|irei|pretendo|quero|queria|planejo|gostaria)\s+(pra|para|pro|a|à|ao|em)\s+(espanha|espa[ñn]a|spain|madri|madrid|barcelona|europa)\b/i.test(t)
       if (futureIntent) return { valid: true, value: 'outside' }
 
       // 1) Menção explícita a país que não é Espanha → outside
