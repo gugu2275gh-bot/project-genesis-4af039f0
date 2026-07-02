@@ -1171,6 +1171,70 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       console.log('AI agent paused: human agent (SISTEMA) is handling this lead')
     }
 
+    // POST-HANDOFF ACK GUARD: se o funil já sinalizou handoff (pre_handoff_sent
+    // ou handoff_sent = true) e o cliente enviou apenas um ack curto
+    // ("ok", "obrigada", "vale", "gracias", "thanks", "hum", emoji-only, etc.),
+    // NÃO deve haver reengajamento pela IA. O especialista humano assumirá.
+    try {
+      if (!aiPausedByHuman) {
+        const { data: fs } = await supabase
+          .from('lead_funnel_state')
+          .select('pre_handoff_sent, handoff_sent')
+          .eq('lead_id', lead.id)
+          .maybeSingle()
+        const handoffReached = !!(fs?.pre_handoff_sent || fs?.handoff_sent)
+        const inboundText = String(displayBody || message.body || '').trim()
+        const normalizedInbound = inboundText.toLowerCase().replace(/[.!?…\s]+$/g, '').trim()
+        const ACK_RE = /^(ok|okay|okey|k|kk|vale|blz|beleza|certo|claro|perfeito|entendi|entendido|obrigad[oa]|obrigada|obrigado|valeu|gracias|thanks|thank you|thx|ty|merci|hum+|mmh+|hmm+|aha+|humm+|👍|🙏|👌|✅|😊|🙂)$/i
+        const isEmojiOnly = /^(?:[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+)$/u.test(inboundText)
+        const isShortAck = (ACK_RE.test(normalizedInbound) || isEmojiOnly)
+          && inboundText.length < 25
+          && !inboundText.includes('?')
+        if (handoffReached && isShortAck) {
+          aiPausedByHuman = true
+          console.log(`[POST_HANDOFF_ACK] pausando IA — cliente enviou ack curto "${inboundText}" após handoff`)
+        }
+      }
+    } catch (postHandoffErr) {
+      console.warn('[POST_HANDOFF_ACK] non-blocking error:', postHandoffErr instanceof Error ? postHandoffErr.message : postHandoffErr)
+    }
+
+    // CONCURRENT-PROCESSING LOCK: impede que dois webhooks concorrentes
+    // (mensagens do mesmo cliente com < 2s de diferença) gerem respostas
+    // duplicadas. Usa message_dedup como advisory lock por lead com bucket
+    // temporal de 30s.
+    let concurrentLockAcquired = false
+    let concurrentLockKey: string | null = null
+    if (!aiPausedByHuman && !skipAIAgent) {
+      try {
+        const bucket = Math.floor(Date.now() / 30_000)
+        concurrentLockKey = `ai_lock:${lead.id}:${bucket}`
+        const { error: lockErr } = await supabase
+          .from('message_dedup')
+          .insert({ message_id: concurrentLockKey })
+        if (lockErr) {
+          // 23505 = unique_violation → outra invocação já pegou o lock
+          if ((lockErr as any).code === '23505') {
+            console.log('[CONCURRENT_LOCK] outra invocação já está processando este lead, saindo')
+            if (webhookLog?.id) {
+              await supabase.from('webhook_logs').update({ processed: true }).eq('id', webhookLog.id)
+            }
+            await logTurn({ supabase, exit_reason: 'ANTI_DUP', lead_id: lead.id, contact_id: contact?.id, phone: phoneNumber, message_id: message.messageId, inbound_text: message.body, details: { reason: 'concurrent_lock_held', key: concurrentLockKey } })
+            return new Response(
+              JSON.stringify({ success: true, message: 'Skipped: concurrent processing lock held' }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+          } else {
+            console.warn('[CONCURRENT_LOCK] insert falhou (não-bloqueante):', lockErr.message)
+          }
+        } else {
+          concurrentLockAcquired = true
+        }
+      } catch (lockCatch) {
+        console.warn('[CONCURRENT_LOCK] non-blocking error:', lockCatch instanceof Error ? lockCatch.message : lockCatch)
+      }
+    }
+
     // Check if WhatsApp bot is enabled and Gemini key is available
     const { data: botConfigs } = await supabase
       .from('system_config')
