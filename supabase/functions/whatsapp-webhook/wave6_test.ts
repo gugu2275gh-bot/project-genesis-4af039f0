@@ -24,10 +24,12 @@ Deno.test('isPotentialInterestAnswer tolerates typos and PT spelling', () => {
 
 Deno.test('computeDeterministicFunnelPatch grava interesse no contexto ES', () => {
   const patch = computeDeterministicFunnelPatch(ES_Q, 'cuurso')
-  assertEquals(patch.interest_confirmed, 'cuurso')
+  // "cuurso" não bate no enum canônico → fallback A_DEFINIR (avança o funil).
+  assertEquals(patch.interest_confirmed, 'A_DEFINIR')
 })
 
 Deno.test('computeDeterministicFunnelPatch grava interesse para "autorizacion de regresso"', () => {
   const patch = computeDeterministicFunnelPatch(ES_Q, 'autorizacion de regresso')
-  assertEquals(patch.interest_confirmed, 'autorizacion de regresso')
+  // Frase não canônica → fallback A_DEFINIR.
+  assertEquals(patch.interest_confirmed, 'A_DEFINIR')
 })
