@@ -349,7 +349,7 @@ const REASK_PATTERNS: Record<keyof CapturedSnapshot, RegExp> = {
   locationSpain: /\b(voc[eê]\s+(?:est[áa]|mora|vive)\s+(?:na|em)\s+espanha|est[áa]s?\s+(?:en|na)\s+espa[ñn]a|vives?\s+en\s+espa[ñn]a|are\s+you\s+(?:in|living\s+in)\s+spain|do\s+you\s+live\s+in\s+spain|(?:vous\s+)?(?:êtes|etes|vis|vivez)\s+en\s+espagne)\b/i,
   entryDate: /(quando\s+(?:voc[eê]\s+)?(?:entrou|chegou)\s+(?:na|em|no)\s+espa[ñn]ha?|cu[áa]ndo\s+(?:entraste|llegaste)\s+a\s+espa[ñn]a|when\s+did\s+you\s+(?:enter|arrive\s+in)\s+spain|quand\s+(?:êtes|etes|es)-?vous\s+(?:entr[eé]|arriv[eé])|(?:qual\s+(?:foi\s+)?(?:a\s+)?)?data\s+(?:\w+\s+){0,3}(?:da|de|do|sua|tua)?\s*(?:entrada|chegada)|fecha\s+(?:\w+\s+){0,3}(?:de|del|de\s+tu|de\s+su)?\s*(?:entrada|llegada)|date\s+(?:\w+\s+){0,3}of\s+(?:your\s+)?(?:entry|arrival)|date\s+(?:\w+\s+){0,4}(?:d['’]?)?(?:entr[eé]e|arriv[eé]e))/i,
   empadronamientoCity: /(em\s+que\s+cidade\s+(?:voc[eê]\s+)?(?:est[áa]\s+)?empadronad\w*|en\s+qu[eé]\s+ciudad\s+(?:est[áa]s\s+)?empadronad\w*|in\s+which\s+city\s+are\s+you\s+(?:registered|empadronad\w*)|dans\s+quelle\s+ville\s+êtes-?vous\s+(?:enregistr\w*|empadronad\w*))/i,
-  age: /\b(qual\s+(?:é\s+)?(?:a\s+)?sua\s+idade|quantos\s+anos\s+voc[eê]\s+tem|cu[áa]ntos\s+a[ñn]os\s+tienes|how\s+old\s+are\s+you|quel\s+âge\s+avez-?vous)\b/i,
+  age: /\b(qual\s+(?:é\s+)?(?:a\s+)?sua\s+idade|quantos\s+anos\s+voc[eê]\s+tem|cu[áa]ntos\s+a[ñn]os(?:\s+tienes)?|cu[áa]l\s+es\s+tu\s+edad|how\s+old\s+are\s+you|what(?:'s|\s+is)\s+your\s+age|quel\s+[âa]ge\s+(?:avez[- ]vous|as[- ]tu))\b/i,
 }
 
 export function findReAskField(text: string, captured: CapturedSnapshot): keyof CapturedSnapshot | null {
