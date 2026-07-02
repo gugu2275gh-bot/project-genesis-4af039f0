@@ -148,7 +148,7 @@ export function computeDeterministicFunnelPatch(
 // ============================================================================
 // Ramo A (fora da Espanha) — extração determinística por pergunta-âncora
 // ============================================================================
-const A2_AGE_RE = /\b(qual sua idade|cu[áa]ntos a[ñn]os|how old|quel [âa]ge)\b/i
+const A2_AGE_RE = /\b(qual\s+(?:é\s+)?(?:a\s+)?sua\s+idade|quantos\s+anos\s+voc[eê]\s+tem|cu[áa]ntos\s+a[ñn]os(?:\s+tienes)?|cu[áa]l\s+es\s+tu\s+edad|how\s+old\s+are\s+you|what(?:'s|\s+is)\s+your\s+age|quel\s+[âa]ge\s+(?:avez[- ]vous|as[- ]tu))\b/i
 const A3_EUROPA_RE = /\beuropa nos [úu]ltimos 6 meses|europa en los [úu]ltimos 6 meses|europe in the last 6 months|europe au cours des 6 derniers mois\b/i
 const A4_FAMILIAR_RE = /\bfamiliar (europeu|europeo)|family member.*(eu|spain|european)|membre.*famille.*(europ|espagn)/i
 const A5_REMOTO_RE = /\b(trabalha remoto|trabajas? remoto|trabajas? de forma remota|work remotely|travaillez[- ]vous [àa] distance)\b/i
