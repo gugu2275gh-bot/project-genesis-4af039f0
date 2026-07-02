@@ -117,7 +117,7 @@ export async function sendOutgoingIdempotent(
   // (1) idempotência via unique constraint
   const { error: dupErr } = await supabase
     .from('message_dedup')
-    .insert({ hash })
+    .insert({ message_id: `send:${hash}` })
   if (dupErr) {
     const msg = String(dupErr.message || '')
     if (msg.includes('duplicate') || msg.includes('unique') || (dupErr as any).code === '23505') {
