@@ -3037,116 +3037,16 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                 }
               }
               if (preNowSent && replayQueue.length > 0) {
-                console.log(`[REPLAY] iniciando drenagem de ${replayQueue.length} item(ns) parqueado(s)`)
-                const replayPreamble = getReplayPreamble(detectedChatLanguage)
-                const replaySuffix = getPostHandoffWaitSuffix(detectedChatLanguage)
-                const remaining = [...replayQueue]
-                for (let idx = 0; idx < replayQueue.length; idx++) {
-
-                  const item = replayQueue[idx]
-                  const isLast = idx === replayQueue.length - 1
-                  const itemKb = await getKnowledgeBaseContext(supabase, item.text, undefined).catch(() => '')
-                  const replayStateDirective = buildStateDirective(funnelStateLive, detectedChatLanguage)
-                  const replaySystem = `${resolvedSystemPrompt}${replayStateDirective}\n\nVocê está RESPONDENDO uma dúvida que o cliente havia feito durante o cadastro inicial. Responda de forma BREVE (≤3 frases), no idioma travado. NÃO faça perguntas. NÃO peça nome, e-mail, idade ou qualquer dado de cadastro — TUDO já foi coletado. NÃO repita H1/H2/H3 nem cumprimentos ("tudo bem", "olá"). Comece literalmente com "${replayPreamble}: " seguido APENAS do conteúdo factual da resposta.`
-                  let answer = ''
-                  try {
-                    answer = await generateAIResponse(
-                      [],
-                      item.text,
-                      replaySystem,
-                      geminiApiKey,
-                      itemKb,
-                      detectedChatLanguage,
-                    )
-                  } catch (e) {
-                    console.warn('[REPLAY] gemini error item', idx, e instanceof Error ? e.message : e)
-                  }
-                  if (!answer) {
-                    try {
-                      answer = await generateAIResponseOpenAI([], item.text, replaySystem, itemKb, detectedChatLanguage)
-                    } catch (_) { /* ignore */ }
-                  }
-                  if (!answer) {
-                    answer = `${replayPreamble}: ${kbStrictFallback}`
-                  }
-                  // Normaliza idioma do preâmbulo (segurança contra resposta PT em ES/EN)
-                  answer = enforceReplayPreambleLanguage(answer, detectedChatLanguage)
-                  // Garante preâmbulo
-                  if (!answer.toLowerCase().startsWith(replayPreamble.toLowerCase())) {
-                    answer = `${replayPreamble}: ${answer.trim()}`
-                  }
-                  // Guard anti re-ask: se a resposta do replay re-perguntar QUALQUER
-                  // campo já capturado, descarta o item.
-                  const replayCaptured: CapturedSnapshot = {
-                    fullName: !nameMissing,
-                    email: !emailMissing,
-                    phone: true,
-                    interest: !serviceMissing,
-                    locationSpain: !!funnelStateLive.location_known,
-                    entryDate: !!funnelStateLive.entry_date_confirmed,
-                    empadronamientoCity: !!funnelStateLive.empadronado_city,
-                    age: !!(funnelStateLive as any).age_confirmed,
-                  }
-                  const replayStripped = stripReAskOfCapturedFields(answer, replayCaptured)
-                  if (replayStripped.removed.length > 0) {
-                    console.log(`[REPLAY] suppressed re-ask of captured field(s) on item ${idx + 1}/${replayQueue.length}: ${replayStripped.removed.join(', ')}`)
-                    remaining.shift()
-                    await supabase
-                      .from('lead_funnel_state')
-                      .update({ pending_questions: remaining, updated_at: new Date().toISOString() })
-                      .eq('lead_id', lead.id)
-                    ;(funnelStateLive as any).pending_questions = remaining
-                    continue
-                  }
-                  // Guard anti-opener: se a resposta do replay contém saudação ou
-                  // a abertura canônica do bot, é alucinação — descarta.
-                  const OPENER_LEAK_RE = /(é\s+um\s+prazer\s+receber\s+seu\s+contato|es\s+un\s+placer\s+recibir\s+tu\s+contacto|it'?s\s+a\s+pleasure\s+to\s+receive\s+your\s+contact|c['’]est\s+un\s+plaisir\s+de\s+recevoir|antes\s+de\s+tudo,?\s+como\s+é\s+seu\s+nome|antes\s+de\s+nada,?\s+cu[áa]l\s+es\s+tu\s+nombre|first\s+of\s+all,?\s+what(?:'?s|\s+is)\s+your\s+(?:full\s+)?name|tout\s+d['’]abord,?\s+quel\s+est\s+votre\s+nom|\bcb\s+asesor[ií]a\b.*\bnome\s+completo\b|tudo\s+bem\?|todo\s+bien\?)/i
-                  const answerWithoutPreamble = answer.replace(new RegExp(`^${replayPreamble.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:,-]?\\s*`, 'i'), '').trim()
-                  if (OPENER_LEAK_RE.test(answerWithoutPreamble) || /^\s*(ol[áa]|oi|hola|hi|hello|bonjour|salut)[!,.\s]/i.test(answerWithoutPreamble)) {
-                    console.log(`[REPLAY] discarded item ${idx + 1}/${replayQueue.length}: AI hallucinated opener/greeting for "${item.text.slice(0, 60)}"`)
-                    remaining.shift()
-                    await supabase
-                      .from('lead_funnel_state')
-                      .update({ pending_questions: remaining, updated_at: new Date().toISOString() })
-                      .eq('lead_id', lead.id)
-                    ;(funnelStateLive as any).pending_questions = remaining
-                    continue
-                  }
-                  if (isLast) {
-                    answer = `${answer.trim()}\n\n${replaySuffix}`
-                  }
-                  try {
-
-                    await sendWhatsAppMessage(phoneNumber, answer)
-                    await supabase.from('mensagens_cliente').insert({
-                      id_lead: lead.id,
-                      phone_id: parseInt(phoneNumber),
-                      mensagem_IA: answer,
-                      origem: 'IA',
-                    })
-                    await supabase.from('interactions').insert({
-                      lead_id: lead.id,
-                      contact_id: contact.id,
-                      channel: 'WHATSAPP',
-                      direction: 'OUTBOUND',
-                      content: answer,
-                      origin_bot: true,
-                    })
-                    // Remove o item da fila persistida (idempotente).
-                    remaining.shift()
-                    await supabase
-                      .from('lead_funnel_state')
-                      .update({ pending_questions: remaining, updated_at: new Date().toISOString() })
-                      .eq('lead_id', lead.id)
-                    ;(funnelStateLive as any).pending_questions = remaining
-                    console.log(`[REPLAY] item ${idx + 1}/${replayQueue.length} entregue, restantes=${remaining.length}`)
-                    if (!isLast) await new Promise(r => setTimeout(r, 350))
-                  } catch (sendErr) {
-                    console.warn('[REPLAY] envio falhou — item permanece na fila:', sendErr instanceof Error ? sendErr.message : sendErr)
-                    break // não tenta os próximos para preservar a ordem
-                  }
-                }
+                // REPLAY DESATIVADO: apenas limpa a fila para não reenviar depois.
+                // O especialista humano responde as dúvidas parqueadas manualmente.
+                console.log(`[REPLAY] desativado — descartando ${replayQueue.length} item(ns) parqueado(s) sem responder`)
+                await supabase
+                  .from('lead_funnel_state')
+                  .update({ pending_questions: [], updated_at: new Date().toISOString() })
+                  .eq('lead_id', lead.id)
+                ;(funnelStateLive as any).pending_questions = []
               }
+
             } catch (replayErr) {
               console.warn('[REPLAY] non-blocking error:', replayErr instanceof Error ? replayErr.message : replayErr)
             }
