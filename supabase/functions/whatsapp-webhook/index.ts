@@ -358,6 +358,7 @@ import {
   sanitizeLocationQuestion,
   forceCorrectBlockForLocation,
   enforceBlockCompletion,
+  stripCrossBranchQuestion,
   forceServicesMessageAfterInterest,
   ensureServicesAttachedToInterest,
   computeDeterministicFunnelPatch,
