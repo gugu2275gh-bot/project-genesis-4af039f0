@@ -2592,6 +2592,33 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             })
             aiResponseClean = stripLockedSentinel(aiResponseClean)
 
+            // Safety net final: purga perguntas cross-branch (INSIDE ↔ OUTSIDE)
+            // que escaparam a forceCorrectBlockForLocation/enforceBlockCompletion.
+            // Se a resposta ficar sem pergunta, é preferível não enviar nada.
+            try {
+              const scrubbed = stripCrossBranchQuestion(aiResponseClean, funnelStateLive.location_known)
+              if (scrubbed !== aiResponseClean) {
+                // Se a limpeza removeu TUDO ou deixou só ack sem pergunta,
+                // cai para a próxima pergunta canônica do ramo correto.
+                if (!scrubbed || scrubbed.length < 12 || !/\?/.test(scrubbed)) {
+                  if (funnelStateLive.location_known === 'outside') {
+                    const canonical = getOutsideSpainNextQuestion(detectedChatLanguage, allAssistant, {
+                      entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+                      locationKnown: funnelStateLive.location_known,
+                      outsideProgress: (funnelStateLive.outside_spain_progress || {}) as any,
+                    })
+                    aiResponseClean = canonical || scrubbed
+                  } else {
+                    aiResponseClean = scrubbed
+                  }
+                } else {
+                  aiResponseClean = scrubbed
+                }
+              }
+            } catch (scrubErr) {
+              console.warn('[CROSS_BRANCH_SCRUB] non-blocking error:', scrubErr instanceof Error ? scrubErr.message : scrubErr)
+            }
+
             // Hard dedup: descarta blocos canônicos (catálogo, pergunta de
             // interesse) e parágrafos quase-literais já enviados antes.
             try {
