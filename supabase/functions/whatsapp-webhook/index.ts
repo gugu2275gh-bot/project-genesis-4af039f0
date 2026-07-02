@@ -2968,23 +2968,28 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             }
             for (let i = 0; i < parts.length; i++) {
               const part = parts[i]
-              await sendWhatsAppMessage(phoneNumber, part)
-
-              await supabase.from('mensagens_cliente').insert({
-                id_lead: lead.id,
-                phone_id: parseInt(phoneNumber),
-                mensagem_IA: part,
-                origem: 'IA',
+              const sendRes = await sendOutgoingIdempotent(supabase, {
+                phone: phoneNumber, leadId: lead.id, body: part,
               })
+              if (!sendRes.sent) {
+                console.log(`[SEND_DEDUP] skipped part ${i + 1}/${parts.length} —`, sendRes.reason)
+              } else {
+                await supabase.from('mensagens_cliente').insert({
+                  id_lead: lead.id,
+                  phone_id: parseInt(phoneNumber),
+                  mensagem_IA: part,
+                  origem: 'IA',
+                })
 
-              await supabase.from('interactions').insert({
-                lead_id: lead.id,
-                contact_id: contact.id,
-                channel: 'WHATSAPP',
-                direction: 'OUTBOUND',
-                content: part,
-                origin_bot: true,
-              })
+                await supabase.from('interactions').insert({
+                  lead_id: lead.id,
+                  contact_id: contact.id,
+                  channel: 'WHATSAPP',
+                  direction: 'OUTBOUND',
+                  content: part,
+                  origin_bot: true,
+                })
+              }
 
               if (i < parts.length - 1) {
                 await new Promise(r => setTimeout(r, 350))
