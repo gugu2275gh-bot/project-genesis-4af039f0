@@ -3,6 +3,28 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts'
 import { parseEntryDateFromText, isPotentialEntryDateAnswer } from './lib/questions.ts'
 import { sanitizeOutgoingText } from './lib/twilio.ts'
+import { extractOutsideProgressPatch } from './lib/overrides.ts'
+
+Deno.test('extractOutsideProgressPatch: extrai idade quando pergunta é "¿Cuál es tu edad?" (ES)', () => {
+  const p = extractOutsideProgressPatch('¿Cuál es tu edad?', 'Tengo 60 años')
+  assertEquals(p.a2_age, '60')
+})
+
+Deno.test('extractOutsideProgressPatch: extrai idade em PT ("Qual sua idade?")', () => {
+  const p = extractOutsideProgressPatch('Qual sua idade?', '42')
+  assertEquals(p.a2_age, '42')
+})
+
+Deno.test('extractOutsideProgressPatch: extrai idade em EN ("How old are you?")', () => {
+  const p = extractOutsideProgressPatch('How old are you?', 'I am 35 years old')
+  assertEquals(p.a2_age, '35')
+})
+
+Deno.test('extractOutsideProgressPatch: extrai idade após preâmbulo A1 (ES completo)', () => {
+  const q = 'Entendido. Entonces seguimos por tu escenario fuera de España.\n\n¿Cuál es tu edad?'
+  const p = extractOutsideProgressPatch(q, '60 años')
+  assertEquals(p.a2_age, '60')
+})
 
 Deno.test('parseEntryDateFromText: mês por extenso + ano (PT)', () => {
   const r = parseEntryDateFromText('Setembro 2024', new Date('2026-07-03'))
