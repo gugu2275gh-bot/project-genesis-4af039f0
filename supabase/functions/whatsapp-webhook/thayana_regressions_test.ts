@@ -112,9 +112,10 @@ Deno.test('[Thayana#3] chave do lock segue formato ai_lock:{lead_id}:{bucket30s}
 
 Deno.test('[Thayana#3] duas mensagens no mesmo bucket de 30s → mesma chave (colide → lock funciona)', () => {
   const leadId = '871157aa-8a6c-426a-8013-7e9895cc725b'
-  const t0 = 1_700_000_000_000
+  // Base alinhada ao início de um bucket (múltiplo de 30_000)
+  const t0 = 56_666_666 * 30_000
   const k1 = buildAiLockKey(leadId, t0)
-  const k2 = buildAiLockKey(leadId, t0 + 29_000) // 29s depois
+  const k2 = buildAiLockKey(leadId, t0 + 29_000) // 29s depois, ainda no mesmo bucket
   assertEquals(k1, k2)
 })
 
