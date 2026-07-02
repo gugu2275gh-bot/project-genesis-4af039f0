@@ -32,9 +32,9 @@ const FIRST_PERSON_VERB_RE = /\b(tenho|tenha|quero|queria|preciso|sou|estou|vou|
 // Também remove acks isolados que vêm antes do nome ("ok THAYANA",
 // "vale Pedro Silva", "sim João Almeida") — o cliente aceitou o pedido
 // e emendou o nome na mesma mensagem.
-// IMPORTANTE: alternativas mais longas primeiro (okay antes de ok, yeah antes de yes)
-// para evitar match parcial que deixe sufixos como "ay" no nome extraído.
-const ACK_PREFIX_RE_SOURCE = '(?:okay|okey|beleza|perfeito|entendido|entendi|claro|certo|valeu|vale|blz|okay|okey|yeah|yep|yes|si claro|s[íi]|sim|si|ok|oui|d[’\']accord|dale|hai)'
+// IMPORTANTE: alternativas mais longas primeiro (okay antes de ok, sim antes de si,
+// yeah antes de yes) para evitar match parcial que deixe sufixos no nome extraído.
+const ACK_PREFIX_RE_SOURCE = '(?:okay|okey|beleza|perfeito|entendido|entendi|claro|certo|valeu|vale|blz|yeah|yep|yes|si claro|sim|s[íi]|si|ok|oui|d[’\']accord|dale|hai)'
 const GREETING_RE_SOURCE = '(?:ol[áa]|hola|hello|hi|hey|bonjour|salut)'
 const NAME_INTRO_PREFIX_RE = new RegExp(
   `^\\s*(?:${ACK_PREFIX_RE_SOURCE}|${GREETING_RE_SOURCE})?[\\s,!.\\-:]*(?:${ACK_PREFIX_RE_SOURCE}|${GREETING_RE_SOURCE})?[\\s,!.\\-:]*(?:eu\\s+)?(?:me\\s+chamo|meu\\s+nome\\s+(?:completo\\s+)?(?:é|e)|sou\\s+(?:o|a)\\s+|aqui\\s+(?:é|e)\\s+(?:o|a)\\s+|me\\s+llamo|mi\\s+nombre\\s+(?:completo\\s+)?es|soy\\s+|mi\\s+nombre[:]\\s*|my\\s+(?:full\\s+)?name\\s+is|i\\s*[’\']?\\s*am\\s+|i\\s*[’\']?m\\s+|this\\s+is\\s+|name[:]\\s*|nome[:]\\s*|nombre[:]\\s*|je\\s+m[’\']appelle|mon\\s+nom\\s+(?:complet\\s+)?est|je\\s+suis\\s+)?[\\s,:\\-]*`,
