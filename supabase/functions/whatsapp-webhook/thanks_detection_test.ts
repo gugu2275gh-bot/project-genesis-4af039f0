@@ -1,7 +1,7 @@
 import { assertEquals } from 'https://deno.land/std@0.177.0/testing/asserts.ts'
 
 // Replica exata do THANKS_ONLY_RE em index.ts — se mudar lá, mudar aqui.
-const THANKS_TOKEN = '(?:muito\\s+|muy\\s+|mui\\s+|mt\\s+|so\\s+|really\\s+)?(?:obrigad[oa]|obg|brigad[oa]|agradecid[oa]|grat[oa]|valeu|vlw|gracias|graci[ñn]as|grazas|mercies?|merci|danke|thanks?|thx|tks|tysm|ty|thank\\s*(?:you|u))(?:\\s+(?:mesmo|demais|mesmo\\s+assim|de\\s+novo|novamente|otra\\s+vez|de\\s+nuevo|nuevamente|a\\s+lot|so\\s+much|very\\s+much|beaucoup|mil|muito|muitas?|muchas?|mil\\s+vezes))?'
+const THANKS_TOKEN = '(?:muito\\s+|muy\\s+|mui\\s+|mt\\s+|so\\s+|really\\s+)?(?:obrigad(?:[oa]|[ãa]o|ona)|obg|brigad(?:[oa]|[ãa]o)|agradecid[oa]|grat[oa]|valeu|vlw|gracias|graci[ñn]as|grazas|mercies?|merci|danke|thanks?|thx|tks|tysm|ty|thank\\s*(?:you|u))(?:\\s+(?:mesmo|demais|mesmo\\s+assim|de\\s+novo|novamente|otra\\s+vez|de\\s+nuevo|nuevamente|a\\s+lot|so\\s+much|very\\s+much|beaucoup|mil|muito|muitas?|muchas?|mil\\s+vezes))?'
 const THANKS_ONLY_RE = new RegExp(`^(?:ok+\\s+|okay\\s+|vale\\s+|blz\\s+|beleza\\s+|perfeito\\s+|perfecto\\s+|listo\\s+)?${THANKS_TOKEN}(?:[,!.\\s]+${THANKS_TOKEN})*[!.\\s👍🙏👌✅✔️😊🙂❤️💚💛]*$`, 'i')
 
 function normalize(t: string) {
