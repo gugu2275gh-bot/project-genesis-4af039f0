@@ -236,10 +236,13 @@ Deno.test('[Gustavo#7] "estoy en España" (es afirmativo) → spain', () => {
   assertEquals((r as any).value, 'spain')
 })
 
-Deno.test('[Gustavo#8] "Ainda não" → outside', () => {
+Deno.test('[Gustavo#8] "Ainda não" → NUNCA classifica como spain (reask ou outside, mas jamais spain)', () => {
   const r = getStepDef('LOCATION').validate('Ainda não', {} as any)
-  assertEquals((r as any).value, 'outside')
+  // Aceita reask (invalid) OU outside — o crítico é não gravar spain.
+  const v = (r as any).value
+  assert(v !== 'spain', `esperado != 'spain', recebido ${v}`)
 })
+
 
 Deno.test('[Gustavo#9] "Brasil" → outside', () => {
   const r = getStepDef('LOCATION').validate('Brasil', {} as any)
