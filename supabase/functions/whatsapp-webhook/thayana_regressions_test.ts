@@ -189,3 +189,62 @@ Deno.test('[Thayana#4] mensagem substantiva (não bate ACK_RE) NÃO é ack', () 
   assertEquals(isShortAck('quero contratar o serviço'), false)
   assertEquals(isShortAck('preciso de ajuda'), false)
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// [Gustavo] Regressões do validador LOCATION (flow-machine).
+// Bug real: cliente respondeu "Nao eu disse que quero ir para espanha" à
+// pergunta "Você está na Espanha?" e o sistema gravou location_known='spain'
+// (branch INSIDE) porque a menção literal a "espanha" foi checada ANTES da
+// negação. Consequência: perguntou "data de entrada na Espanha" 2x.
+// ─────────────────────────────────────────────────────────────────────────────
+import { getStepDef } from './lib/flow-machine.ts'
+
+Deno.test('[Gustavo#1] "Nao eu disse que quero ir para espanha" → outside', () => {
+  const def = getStepDef('LOCATION')
+  const r = def.validate('Nao eu disse que quero ir para espanha', {} as any)
+  assertEquals(r.valid, true)
+  assertEquals((r as any).value, 'outside')
+})
+
+Deno.test('[Gustavo#2] "Não, quero ir pra Espanha" → outside', () => {
+  const r = getStepDef('LOCATION').validate('Não, quero ir pra Espanha', {} as any)
+  assertEquals((r as any).value, 'outside')
+})
+
+Deno.test('[Gustavo#3] "No, quiero ir a España" (es) → outside', () => {
+  const r = getStepDef('LOCATION').validate('No, quiero ir a España', {} as any)
+  assertEquals((r as any).value, 'outside')
+})
+
+Deno.test('[Gustavo#4] "I want to go to Spain" (en, intenção futura) → outside', () => {
+  const r = getStepDef('LOCATION').validate('I want to go to Spain', {} as any)
+  assertEquals((r as any).value, 'outside')
+})
+
+Deno.test('[Gustavo#5] "Quero mudar para Madrid" (intenção + cidade) → outside', () => {
+  const r = getStepDef('LOCATION').validate('Quero mudar para Madrid', {} as any)
+  assertEquals((r as any).value, 'outside')
+})
+
+Deno.test('[Gustavo#6] "Sim, estou em Madrid" → spain (afirmativo continua funcionando)', () => {
+  const r = getStepDef('LOCATION').validate('Sim, estou em Madrid', {} as any)
+  assertEquals((r as any).value, 'spain')
+})
+
+Deno.test('[Gustavo#7] "estoy en España" (es afirmativo) → spain', () => {
+  const r = getStepDef('LOCATION').validate('estoy en España', {} as any)
+  assertEquals((r as any).value, 'spain')
+})
+
+Deno.test('[Gustavo#8] "Ainda não" → NUNCA classifica como spain (reask ou outside, mas jamais spain)', () => {
+  const r = getStepDef('LOCATION').validate('Ainda não', {} as any)
+  // Aceita reask (invalid) OU outside — o crítico é não gravar spain.
+  const v = (r as any).value
+  assert(v !== 'spain', `esperado != 'spain', recebido ${v}`)
+})
+
+
+Deno.test('[Gustavo#9] "Brasil" → outside', () => {
+  const r = getStepDef('LOCATION').validate('Brasil', {} as any)
+  assertEquals((r as any).value, 'outside')
+})

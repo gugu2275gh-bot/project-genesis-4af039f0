@@ -126,22 +126,58 @@ const STEPS: Record<StepCode, StepDef> = {
       const ok = isValidAnswerForStep(raw, 'localizacao', '')
       if (!ok) return { valid: false, reason: 'unclear_location' }
       const t = String(raw || '').trim().toLowerCase()
-      // 1) Menção explícita de Espanha → spain
-      if (/(espan|spain|españ|madri|barcelona|valencia|sevilla|m[aá]laga|bilbao|zaragoza)/i.test(t)) {
-        return { valid: true, value: 'spain' }
-      }
-      // 2) Menção explícita de país que não é Espanha → outside
+
+      // 0) NEGAÇÃO EXPLÍCITA tem prioridade máxima. Cobre:
+      //    - "Não", "No", "Nope", "Jamais"
+      //    - "Não estou/moro/vivo na Espanha", "No estoy en España"
+      //    - "Ainda não", "Todavía no", "Not yet", "Pas encore"
+      //    - "Nao eu disse que quero ir" (mesmo que a frase depois mencione "espanha")
+      const explicitNegation =
+        /^\s*(n[ãa]o|no|nope|nah|non|jamais|nunca|negativo)\b/i.test(t)
+        || /\b(ainda n[ãa]o|todav[ií]a no|not yet|pas encore)\b/i.test(t)
+        || /\b(n[ãa]o (estou|moro|vivo|estoy|vivo)|no (estoy|vivo|moro)|i'?m not( in)?|not in spain|je ne suis pas)\b/i.test(t)
+      if (explicitNegation) return { valid: true, value: 'outside' }
+
+      // 0b) INTENÇÃO FUTURA de ir para a Espanha (ainda não está lá) → outside.
+      //     Ex.: "quero ir para Espanha", "pretendo ir", "planejo mudar",
+      //     "quiero ir a España", "want to go to Spain", "je veux aller".
+      const futureIntent =
+        /\b(quero|queria|pretendo|penso|planejo|vou|irei)\s+(ir|mudar|me\s+mudar|viajar|morar)\b/i.test(t)
+        || /\b(quiero|pretendo|pienso|voy a|planeo)\s+(ir|mudar|mudarme|viajar|vivir)\b/i.test(t)
+        || /\b(want to|planning to|going to|plan to|hope to)\s+(go|move|travel|live)\b/i.test(t)
+        || /\b(je\s+(veux|voudrais|compte|pense|vais))\s+(aller|d[ée]m[ée]nager|voyager|vivre)\b/i.test(t)
+      if (futureIntent) return { valid: true, value: 'outside' }
+
+      // 1) Menção explícita a país que não é Espanha → outside
       if (/(brasil|brazil|portugal|argentin|colomb|m[eé]xico|mexico|peru|chile|uruguai|uruguay|venezuel|paraguai|paraguay|estados unidos|usa|united states|france|fran[çc]a|italia|alemanha|inglaterra|reino unido)/i.test(t)) {
         return { valid: true, value: 'outside' }
       }
-      // 3) Sim/Não isolado em resposta a "Você está na Espanha?" — sim=spain, não=outside
+
+      // 2) Sim/Não isolado em resposta a "Você está na Espanha?" — sim=spain
       const yesRe = /^\s*(sim|s[íi]|yes|y|claro|correto|exato|exactly|sure|ok|okay|vale|positivo|pode|pode\s+ser|puede|dale|si|sí)\s*[.!?]?\s*$/i
-      const noRe  = /^\s*(n[ãa]o|no|n[óo]p|nope|nunca|never|jamais|negativo)\s*[.!?]?\s*$/i
       if (yesRe.test(t)) return { valid: true, value: 'spain' }
-      if (noRe.test(t))  return { valid: true, value: 'outside' }
-      // 4) Frase indicando que nunca esteve na Espanha → outside
+
+      // 3) Afirmação explícita de estar na Espanha (verbo de estado + local)
+      if (/\b(j[áa] estou|ya estoy|estou (na |em )?espanha|estoy en espa[ñn]a|i'?m in spain|aqui na espanha|aqu[ií] en espa[ñn]a|je suis en espagne|moro (na |em )?espanha|vivo (na |em )?espanha)\b/i.test(t)) {
+        return { valid: true, value: 'spain' }
+      }
+
+      // 4) Menção a cidade espanhola (sem verbo de intenção) → spain
+      if (/\b(madri|madrid|barcelona|valencia|sevilla|m[aá]laga|bilbao|zaragoza|alicante|murcia|palma|granada)\b/i.test(t)) {
+        return { valid: true, value: 'spain' }
+      }
+
+      // 5) Menção genérica a "Espanha/España/Spain" SEM negação nem intenção
+      //    futura (já filtradas acima) → assume spain como último recurso.
+      if (/\b(espanha|espa[ñn]a|spain|espagne)\b/i.test(t)) {
+        return { valid: true, value: 'spain' }
+      }
+
+      // 6) Fallback: assume outside (mais seguro — evita pedir dados INSIDE
+      //    para quem não está no país).
       return { valid: true, value: 'outside' }
     },
+
     next: (_state, value) =>
       value === 'spain' ? 'INSIDE_ENTRY_DATE' : 'OUTSIDE_AGE',
   },
