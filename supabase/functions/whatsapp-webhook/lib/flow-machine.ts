@@ -143,7 +143,7 @@ const STEPS: Record<StepCode, StepDef> = {
       //     "quiero ir a España", "want to go to Spain", "je veux aller",
       //     "penso em ir", "sonho em morar", "vou em breve pra Espanha".
       const futureIntent =
-        /\b(quero|queria|pretendo|penso|planejo|planeio|sonho|vou|irei|gostaria|gostava)\s+(em\s+)?(ir|indo|mudar|me\s+mudar|mudar-me|viajar|morar|conhecer|visitar)\b/i.test(t)
+        /\b(quero|queria|pretendo|penso|planejo|planeio|sonho|vou|irei|gostaria|gostava)\s+(em\s+|de\s+|a\s+|para\s+|pra\s+)?(ir|indo|mudar|me\s+mudar|mudar-me|viajar|morar|conhecer|visitar)\b/i.test(t)
         || /\b(quiero|queria|pretendo|pienso|voy a|planeo|sue[ñn]o con|me\s+gustar[ií]a)\s+(ir|mudar|mudarme|viajar|vivir|conocer|visitar)\b/i.test(t)
         || /\b(want to|wanna|planning to|going to|gonna|plan to|hope to|would like to|thinking of|thinking about|dreaming of)\s+(go|move|moving|travel|traveling|live|living|visit|visiting)\b/i.test(t)
         || /\b(je\s+(veux|voudrais|compte|pense|vais|souhaite|r[êe]ve))\s+(de\s+|d')?(aller|d[ée]m[ée]nager|voyager|vivre|visiter)\b/i.test(t)
