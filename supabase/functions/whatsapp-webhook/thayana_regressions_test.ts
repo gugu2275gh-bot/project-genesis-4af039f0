@@ -248,3 +248,85 @@ Deno.test('[Gustavo#9] "Brasil" → outside', () => {
   const r = getStepDef('LOCATION').validate('Brasil', {} as any)
   assertEquals((r as any).value, 'outside')
 })
+
+// ---------------------------------------------------------------------------
+// [LOCATION variações] Negação — erros de acentuação, grafias alternativas,
+// slang de internet e formas multi-idioma (PT/ES/EN/FR/DE).
+// ---------------------------------------------------------------------------
+
+const V = (msg: string) => getStepDef('LOCATION').validate(msg, {} as any)
+const assertOutside = (msg: string) => {
+  const r: any = V(msg)
+  assertEquals(r.value, 'outside', `"${msg}" deveria ser outside, veio ${r.value}`)
+}
+const assertNotSpain = (msg: string) => {
+  const r: any = V(msg)
+  assert(r.value !== 'spain', `"${msg}" NUNCA pode ser spain, veio ${r.value}`)
+}
+const assertSpain = (msg: string) => {
+  const r: any = V(msg)
+  assertEquals(r.value, 'spain', `"${msg}" deveria ser spain, veio ${r.value}`)
+}
+
+// --- Negação sem acentuação / slang ---
+Deno.test('[NEG#1] "nao" (sem til)', () => assertOutside('nao'))
+Deno.test('[NEG#2] "naum" (slang BR)', () => assertOutside('naum'))
+Deno.test('[NEG#3] "naum estou na espanha"', () => assertOutside('naum estou na espanha'))
+Deno.test('[NEG#4] "nao to na espanha" (fala coloquial)', () => assertOutside('nao to na espanha'))
+Deno.test('[NEG#5] "não tô na Espanha ainda"', () => assertOutside('não tô na Espanha ainda'))
+Deno.test('[NEG#6] "ainda naum" (slang + sem til)', () => assertOutside('ainda naum'))
+Deno.test('[NEG#7] "nunca fui pra Espanha"', () => assertOutside('nunca fui pra Espanha'))
+Deno.test('[NEG#8] "jamais estive"', () => assertOutside('jamais estive'))
+Deno.test('[NEG#9] "negativo, moro no Brasil"', () => assertOutside('negativo, moro no Brasil'))
+
+// --- Negação ES/EN/FR/DE ---
+Deno.test('[NEG#10] ES "no estoy en espana" (sem ñ)', () => assertOutside('no estoy en espana'))
+Deno.test('[NEG#11] ES "todavia no" (sem acento)', () => assertOutside('todavia no'))
+Deno.test('[NEG#12] ES "todavía no, quiero ir"', () => assertOutside('todavía no, quiero ir'))
+Deno.test('[NEG#13] EN "not yet"', () => assertOutside('not yet'))
+Deno.test('[NEG#14] EN "I\'m not in Spain"', () => assertOutside("I'm not in Spain"))
+Deno.test('[NEG#15] EN "im not in spain" (sem apóstrofo)', () => assertOutside('im not in spain'))
+Deno.test('[NEG#16] FR "pas encore"', () => assertOutside('pas encore'))
+Deno.test('[NEG#17] FR "je ne suis pas en Espagne"', () => assertOutside('je ne suis pas en Espagne'))
+Deno.test('[NEG#18] DE "noch nicht"', () => assertOutside('noch nicht'))
+
+// --- Intenção futura — variações PT ---
+Deno.test('[INT#1] "queria ir pra Espanha"', () => assertOutside('queria ir pra Espanha'))
+Deno.test('[INT#2] "penso em ir para Espanha" (com preposição)', () => assertOutside('penso em ir para Espanha'))
+Deno.test('[INT#3] "sonho em morar na Espanha"', () => assertOutside('sonho em morar na Espanha'))
+Deno.test('[INT#4] "gostaria de conhecer Madrid"', () => assertOutside('gostaria de conhecer Madrid'))
+Deno.test('[INT#5] "gostava de mudar-me para Espanha" (PT-PT)', () => assertOutside('gostava de mudar-me para Espanha'))
+Deno.test('[INT#6] "planeio visitar Barcelona"', () => assertOutside('planeio visitar Barcelona'))
+Deno.test('[INT#7] "vou pra Espanha em 2026" (sem verbo intermediário)', () => assertOutside('vou pra Espanha em 2026'))
+Deno.test('[INT#8] "quero pra Madrid ano que vem"', () => assertOutside('quero pra Madrid ano que vem'))
+
+// --- Intenção futura — variações ES ---
+Deno.test('[INT#9] ES "me gustaría vivir en España"', () => assertOutside('me gustaría vivir en España'))
+Deno.test('[INT#10] ES "sueño con mudarme a Madrid"', () => assertOutside('sueño con mudarme a Madrid'))
+Deno.test('[INT#11] ES "pienso ir a España"', () => assertOutside('pienso ir a España'))
+Deno.test('[INT#12] ES "voy a mudarme"', () => assertOutside('voy a mudarme'))
+
+// --- Intenção futura — variações EN ---
+Deno.test('[INT#13] EN "wanna move to Spain"', () => assertOutside('wanna move to Spain'))
+Deno.test('[INT#14] EN "gonna travel to Spain"', () => assertOutside('gonna travel to Spain'))
+Deno.test('[INT#15] EN "would like to live in Spain"', () => assertOutside('would like to live in Spain'))
+Deno.test('[INT#16] EN "thinking of moving to Spain"', () => assertOutside('thinking of moving to Spain'))
+Deno.test('[INT#17] EN "dreaming of living in Barcelona"', () => assertOutside('dreaming of living in Barcelona'))
+
+// --- Intenção futura — FR ---
+Deno.test('[INT#18] FR "je souhaite déménager en Espagne"', () => assertOutside('je souhaite déménager en Espagne'))
+Deno.test('[INT#19] FR "je rêve de vivre en Espagne"', () => assertOutside('je rêve de vivre en Espagne'))
+Deno.test('[INT#20] FR "je voudrais aller à Madrid"', () => assertOutside('je voudrais aller à Madrid'))
+
+// --- Casos ambíguos com menção a Espanha — nunca podem virar spain ---
+Deno.test('[AMB#1] "não sei, quero ir pra Espanha algum dia"', () => assertNotSpain('não sei, quero ir pra Espanha algum dia'))
+Deno.test('[AMB#2] "nao, ainda vou pra españa" (typo + slang)', () => assertNotSpain('nao, ainda vou pra españa'))
+Deno.test('[AMB#3] "naum, penso em morar em Madrid"', () => assertNotSpain('naum, penso em morar em Madrid'))
+
+// --- Afirmações continuam funcionando (regressão inversa) ---
+Deno.test('[POS#1] "sim, moro em Barcelona"', () => assertSpain('sim, moro em Barcelona'))
+Deno.test('[POS#2] "estou em Málaga" (com acento)', () => assertSpain('estou em Málaga'))
+Deno.test('[POS#3] "estoy en espana" (afirmativo sem ñ)', () => assertSpain('estoy en espana'))
+Deno.test('[POS#4] "ya estoy en España"', () => assertSpain('ya estoy en España'))
+Deno.test('[POS#5] "vivo na Espanha há 3 anos"', () => assertSpain('vivo na Espanha há 3 anos'))
+

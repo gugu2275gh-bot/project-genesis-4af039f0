@@ -127,7 +127,7 @@ export function isValidAnswerForStep(
     case 'interesse':
       return isPotentialInterestAnswer(s) || isStructuredQuestionAnswer(s)
     case 'localizacao':
-      return isYesNo(s) || isNeverBeenToSpainAnswer(s) || LOCATION_IN_SPAIN_HINT_RE.test(s) || LOCATION_COUNTRY_HINT_RE.test(s)
+      return isYesNo(s) || isNeverBeenToSpainAnswer(s) || LOCATION_IN_SPAIN_HINT_RE.test(s) || LOCATION_COUNTRY_HINT_RE.test(s) || LOCATION_NEGATION_HINT_RE.test(s) || LOCATION_INTENT_HINT_RE.test(s)
     case 'data_entrada':
       return isPotentialEntryDateAnswer(s) || isNeverBeenToSpainAnswer(s)
     case 'empadronamiento':
@@ -163,6 +163,17 @@ const OPENING_CONFIRMATION_RE = /(pode\s+ser|podemos\s+seguir|posso\s+seguir|pod
 // Países / regiões suportados na etapa `localizacao`. Reflete a lista usada
 // pelo validator determinístico de LOCATION em `flow-machine.ts`.
 const LOCATION_COUNTRY_HINT_RE = /(espan|spain|españ|madri|barcelona|valencia|sevilla|m[aá]laga|bilbao|zaragoza|brasil|brazil|portugal|argentin|colomb|m[eé]xico|mexico|peru|chile|uruguai|uruguay|venezuel|paraguai|paraguay|estados unidos|usa|united states|france|fran[çc]a|italia|alemanha|inglaterra|reino unido)/i
+
+// Formas de negação (slang, sem acentuação, multi-idioma) que devem ser
+// aceitas como resposta legítima à etapa `localizacao` — mesmo quando não
+// contêm nome de país. `isYesNo` já cobre "não/no/nunca" ISO, este RE cobre
+// o resto ("naum", "todavia no", "not yet", "pas encore", "noch nicht", …).
+const LOCATION_NEGATION_HINT_RE = /(^|\s)(naum|ainda\s+naum|ainda\s+n[ãa]o|todav[ií]a\s+no|not\s+yet|pas\s+encore|noch\s+nicht|je\s+ne\s+suis\s+pas)\b/i
+
+// Intenção futura (PT/ES/EN/FR) — mesmo sem citar país deve ser aceito como
+// resposta legítima à etapa `localizacao` (o validator determinístico
+// classifica como `outside`).
+const LOCATION_INTENT_HINT_RE = /\b(quero|queria|pretendo|penso|planejo|planeio|sonho|vou|irei|gostaria|gostava|quiero|voy\s+a|pienso|planeo|sue[ñn]o|gustar[ií]a|want\s+to|wanna|going\s+to|gonna|planning\s+to|would\s+like\s+to|thinking\s+(of|about)|dreaming\s+of|je\s+(veux|voudrais|compte|pense|vais|souhaite|r[êe]ve))\b/i
 
 // Detecta "tentativa plausível" de resposta à etapa atual — ainda que
 // malformada. Serve para diferenciar "resposta ruim" (→ reask) de
