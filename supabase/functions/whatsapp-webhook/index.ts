@@ -3009,9 +3009,11 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                 ai_error: 'empty_after_dedup_and_safety_net',
                 funnel_step_before: funnelStateLive?.step ?? null,
               })
+              await releaseConcurrentLock()
               return new Response(JSON.stringify({ success: true, aiResponseSent: false, reason: 'empty_after_dedup' }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
               })
+
             }
             for (let i = 0; i < parts.length; i++) {
               const part = parts[i]
