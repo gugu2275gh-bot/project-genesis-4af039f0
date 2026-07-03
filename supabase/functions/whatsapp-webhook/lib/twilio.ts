@@ -132,14 +132,14 @@ export async function sendOutgoingIdempotent(
     const since = new Date(Date.now() - 90_000).toISOString()
     const { data: recents } = await supabase
       .from('mensagens_cliente')
-      .select('mensagem_IA, conteudo, created_at')
+      .select('mensagem_IA, created_at')
       .eq('id_lead', leadId)
       .gte('created_at', since)
       .order('created_at', { ascending: false })
       .limit(5)
     if (Array.isArray(recents)) {
       for (const r of recents) {
-        const txt = (r as any).mensagem_IA || (r as any).conteudo || ''
+        const txt = (r as any).mensagem_IA || ''
         if (!txt) continue
         if (normalizeForDedup(txt) === norm) {
           console.log('[SEND_DEDUP] skipping near-duplicate (last 90s match)')
