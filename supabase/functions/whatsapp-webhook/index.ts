@@ -1267,7 +1267,9 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           }
         } else {
           concurrentLockAcquired = true
+          __concurrentLockKeyOuter = concurrentLockKey
         }
+
       } catch (lockCatch) {
         console.warn('[CONCURRENT_LOCK] non-blocking error:', lockCatch instanceof Error ? lockCatch.message : lockCatch)
       }
