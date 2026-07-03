@@ -1220,7 +1220,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         const isThanksOnly = THANKS_ONLY_RE.test(normalizedInbound) && !inboundText.includes('?')
         // Frases de espera/aguardo PT/ES/EN/FR que também NÃO devem
         // reengajar a IA após handoff (cliente está aguardando humano).
-        const WAITING_RE = /^(?:ok+[,!.\s]*)?(?:fico|vou ficar|estou|estarei|seguirei|sigo|quedo|me quedo|estoy|estar[ée]|voy a estar|i(?:'|)?ll (?:be )?wait(?:ing)?|waiting|awaiting|je (?:vais )?attend(?:s|re)?)\b[\s\S]{0,60}?(?:aguard\w*|espera\w*|esperando|attente|attend\w*|wait\w*|hearing back|your (?:reply|response))[!.\s👍🙏👌✅✔️😊🙂❤️💚💛]*$/i
+        const WAITING_RE = /^(?:ok+[,!.\s]*)?(?:fico|vou ficar|estou|estarei|seguirei|sigo|quedo|me quedo|estoy|estar[ée]|voy a estar|i(?:'|)?ll (?:be )?wait(?:ing)?|waiting|awaiting|je (?:vais )?attend(?:s|re)?|j['\u2019]?attends?)(?=[\s,.!?]|$)(?:[\s\S]{0,60}?(?:aguard\w*|espera\w*|esperando|attente|attend\w*|wait\w*|hear(?:ing)? back|your (?:reply|response)))?[!.\s👍🙏👌✅✔️😊🙂❤️💚💛]*$/i
         const isWaitingOnly = WAITING_RE.test(inboundText) && !inboundText.includes('?')
         // Opção B: após handoff_sent=true, IA continua respondendo qualquer
         // mensagem com conteúdo — só silencia em ack/thanks/waiting/emoji puros
