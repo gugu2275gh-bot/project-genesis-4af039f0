@@ -1218,11 +1218,16 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           && inboundText.length < 25
           && !inboundText.includes('?')
         const isThanksOnly = THANKS_ONLY_RE.test(normalizedInbound) && !inboundText.includes('?')
-        // Fix 3: após handoff_sent=true (transferência efetiva), silencia IA
-        // para qualquer mensagem que NÃO seja pergunta explícita.
-        if (handoffFinal && !inboundText.includes('?')) {
+        // Frases de espera/aguardo PT/ES/EN/FR que também NÃO devem
+        // reengajar a IA após handoff (cliente está aguardando humano).
+        const WAITING_RE = /^(?:ok+[,!.\s]*)?(?:fico|vou ficar|estou|estarei|seguirei|sigo|quedo|me quedo|estoy|estar[ée]|voy a estar|i(?:'|)?ll (?:be )?wait(?:ing)?|waiting|awaiting|je (?:vais )?attend(?:s|re)?)\b[\s\S]{0,60}?(?:aguard\w*|espera\w*|esperando|attente|attend\w*|wait\w*|hearing back|your (?:reply|response))[!.\s👍🙏👌✅✔️😊🙂❤️💚💛]*$/i
+        const isWaitingOnly = WAITING_RE.test(inboundText) && !inboundText.includes('?')
+        // Opção B: após handoff_sent=true, IA continua respondendo qualquer
+        // mensagem com conteúdo — só silencia em ack/thanks/waiting/emoji puros
+        // (mensagens que apenas confirmam recebimento e aguardam humano).
+        if (handoffFinal && (isShortAck || isThanksOnly || isWaitingOnly || isEmojiOnly)) {
           aiPausedByHuman = true
-          console.log(`[POST_HANDOFF_SILENCE] IA pausada — handoff_sent=true, mensagem sem pergunta: "${inboundText.slice(0, 40)}"`)
+          console.log(`[POST_HANDOFF_SILENCE] IA pausada — handoff_sent=true + ack/thanks/waiting: "${inboundText.slice(0, 40)}"`)
         } else if (handoffReached && isShortAck) {
           aiPausedByHuman = true
           console.log(`[POST_HANDOFF_ACK] pausando IA — cliente enviou ack curto "${inboundText}" após handoff`)
@@ -1230,6 +1235,9 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           // Fix 5: agradecimento puro NUNCA gera resposta duplicada da IA
           aiPausedByHuman = true
           console.log(`[THANKS_ONLY_SILENCE] IA pausada — mensagem é apenas agradecimento: "${inboundText.slice(0, 40)}"`)
+        } else if (isWaitingOnly) {
+          aiPausedByHuman = true
+          console.log(`[WAITING_ONLY_SILENCE] IA pausada — cliente sinalizou aguardo: "${inboundText.slice(0, 40)}"`)
         }
       }
     } catch (postHandoffErr) {
