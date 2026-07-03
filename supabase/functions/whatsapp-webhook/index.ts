@@ -2376,9 +2376,11 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             } catch (e) {
               console.error('[KB-STRICT] Failed to send fallback:', e instanceof Error ? e.message : e)
             }
+            await releaseConcurrentLock()
             return new Response(JSON.stringify({ success: true, kb_strict_fallback: true }), {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             })
+
           }
           resolvedSystemPrompt += `\n\n## MODO ESTRITO — BASE DE CONHECIMENTO\n` +
             `Você DEVE responder EXCLUSIVAMENTE com base nos trechos da Base de Conhecimento fornecidos no contexto. ` +
