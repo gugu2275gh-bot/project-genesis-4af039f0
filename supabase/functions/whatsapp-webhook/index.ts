@@ -294,6 +294,7 @@ import { extractTextFromOpenAIResponse } from './lib/ai.ts'
 import {
   type ChatLanguage,
   detectChatLanguage,
+  detectChatLanguageOrNull,
   getLanguageDirective,
   getTransientErrorReply,
   normalizeForLanguageChecks,
@@ -1319,27 +1320,48 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         const langCodeMap: Record<ChatLanguage, string> = { 'pt-BR': 'pt', 'es': 'es', 'en': 'en', 'fr': 'fr' }
 
         let detectedChatLanguage: ChatLanguage
+        // Junta as últimas mensagens do cliente para dar mais material à detecção
+        // (mensagens muito curtas/typos como "good mroning" isoladas não disparam nenhum sinal).
+        const recentUserMsgs = history.filter((m: any) => m.role === 'user').slice(-4).map((m: any) => String(m.content || ''))
+        const combinedSample = [...recentUserMsgs, currentCustomerMessage].join(' \n ').trim()
+
         if (isFirstInteraction) {
-          // Primeira interação: detectar a partir da mensagem (ignora o default 'pt' do schema) e travar.
-          detectedChatLanguage = detectChatLanguage(currentCustomerMessage)
-          const currentLangCode = langCodeMap[detectedChatLanguage]
-          await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
-          contact.preferred_language = currentLangCode
-          console.log('Language locked (first detection):', detectedChatLanguage, 'sample:', currentCustomerMessage.slice(0, 80))
+          // Primeira interação: só TRAVA se houver sinal positivo. Sem sinal → responde em pt-BR
+          // provisoriamente mas mantém preferred_language nulo para re-detectar na próxima mensagem.
+          const positive = detectChatLanguageOrNull(combinedSample)
+          if (positive) {
+            detectedChatLanguage = positive
+            const currentLangCode = langCodeMap[detectedChatLanguage]
+            await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
+            contact.preferred_language = currentLangCode
+            console.log('Language locked (first detection):', detectedChatLanguage, 'sample:', combinedSample.slice(0, 120))
+          } else {
+            detectedChatLanguage = 'pt-BR'
+            console.log('Language provisional pt-BR (no positive signal yet); will re-detect on next inbound')
+          }
         } else if (contact.preferred_language && preferredLangMap[contact.preferred_language]) {
-          // Mensagens subsequentes: usar o idioma travado, sem reavaliar.
-          detectedChatLanguage = preferredLangMap[contact.preferred_language]
-          console.log('Language locked (from contact):', detectedChatLanguage)
+          // Re-detecção suave: nos primeiros turnos, se o cliente começa a escrever claramente
+          // em outro idioma, permite trocar o lock uma vez (cobre caso do 1º msg ser typo curto).
+          const locked = preferredLangMap[contact.preferred_language]
+          const positive = detectChatLanguageOrNull(combinedSample)
+          if (positive && positive !== locked && recentUserMsgs.length <= 4) {
+            detectedChatLanguage = positive
+            const currentLangCode = langCodeMap[detectedChatLanguage]
+            await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
+            contact.preferred_language = currentLangCode
+            console.log('Language re-locked (early positive signal):', locked, '→', detectedChatLanguage)
+          } else {
+            detectedChatLanguage = locked
+            console.log('Language locked (from contact):', detectedChatLanguage)
+          }
         } else {
           // Fallback (contato legado sem preferred_language e não é 1ª msg).
-          // Hardening: detectar pela PRIMEIRA mensagem do cliente no histórico,
-          // não pela atual (que pode ser curta tipo "ok" e induzir troca de idioma).
           const firstUserMsg = (history.find((m: any) => m.role === 'user')?.content || currentCustomerMessage) as string
-          detectedChatLanguage = detectChatLanguage(firstUserMsg)
+          detectedChatLanguage = detectChatLanguageOrNull(combinedSample) ?? detectChatLanguage(firstUserMsg)
           const currentLangCode = langCodeMap[detectedChatLanguage]
           await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
           contact.preferred_language = currentLangCode
-          console.log('Language locked (fallback detection from first user msg):', detectedChatLanguage)
+          console.log('Language locked (fallback detection):', detectedChatLanguage)
         }
 
         // Wave 4: carregar estado persistente do funil

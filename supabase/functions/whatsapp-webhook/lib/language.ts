@@ -3,7 +3,7 @@
 
 export type ChatLanguage = 'pt-BR' | 'es' | 'en' | 'fr'
 
-export function detectChatLanguage(text: string): ChatLanguage {
+export function detectChatLanguageOrNull(text: string): ChatLanguage | null {
   const sample = text.toLowerCase().normalize('NFC')
 
   // Strong Spanish signals (must run BEFORE Portuguese to avoid false positives like
@@ -23,11 +23,16 @@ export function detectChatLanguage(text: string): ChatLanguage {
     return 'fr'
   }
 
-  if (/\b(hello|hi|thanks|thank you|name|email|need|help|spain|how|what|can you|please|good morning|good evening)\b/.test(sample)) {
+  // English — include common typos (mroning, mornin, plz) and short greetings
+  if (/\b(hello|hi|hey|thanks|thank you|name|email|need|help|helping|spain|how|what|where|when|why|can you|could you|would you|please|plz|good morning|good evening|good afternoon|mroning|mornin|are you|i am|i'm|my|your|information|info)\b/.test(sample)) {
     return 'en'
   }
 
-  return 'pt-BR'
+  return null
+}
+
+export function detectChatLanguage(text: string): ChatLanguage {
+  return detectChatLanguageOrNull(text) ?? 'pt-BR'
 }
 
 export function getLanguageDirective(language: ChatLanguage): string {
