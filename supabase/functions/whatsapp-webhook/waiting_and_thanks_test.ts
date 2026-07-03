@@ -10,7 +10,7 @@ const ACK_RE = /^(ok|okay|okey|k|kk|vale|blz|beleza|certo|claro|perfeito|entendi
 const THANKS_TOKEN = '(?:muito\\s+|muy\\s+|mui\\s+|mt\\s+|so\\s+|really\\s+|muchas\\s+|muchisimas\\s+|much[íi]simas\\s+|muitas\\s+|mil\\s+)?(?:obrigad(?:[oa]|[ãa]o|ona)|obg|brigad(?:[oa]|[ãa]o)|agradecid[oa]|grat[oa]|valeu|vlw|gracias|graci[ñn]as|grazas|mercies?|merci|danke|thanks?|thx|tks|tysm|ty|thank\\s*(?:you|u))(?:\\s+(?:mesmo|demais|mesmo\\s+assim|de\\s+novo|novamente|otra\\s+vez|de\\s+nuevo|nuevamente|a\\s+lot|so\\s+much|very\\s+much|beaucoup|mil|muito|muitas?|muchas?|mil\\s+vezes))?'
 const THANKS_ONLY_RE = new RegExp(`^(?:ok+\\s+|okay\\s+|vale\\s+|blz\\s+|beleza\\s+|perfeito\\s+|perfecto\\s+|listo\\s+)?${THANKS_TOKEN}(?:[,!.\\s]+${THANKS_TOKEN})*[!.\\s👍🙏👌✅✔️😊🙂❤️💚💛]*$`, 'i')
 
-const WAITING_RE = /^(?:ok+[,!.\s]*)?(?:fico|vou ficar|estou|estarei|seguirei|sigo|quedo|me quedo|estoy|estar[ée]|voy a estar|i(?:'|)?ll (?:be )?wait(?:ing)?|waiting|awaiting|je (?:vais )?attend(?:s|re)?)\b[\s\S]{0,60}?(?:aguard\w*|espera\w*|esperando|attente|attend\w*|wait\w*|hearing back|your (?:reply|response))[!.\s👍🙏👌✅✔️😊🙂❤️💚💛]*$/i
+const WAITING_RE = /^(?:ok+[,!.\s]*)?(?:fico|vou ficar|estou|estarei|seguirei|sigo|quedo|me quedo|estoy|estar[ée]|voy a estar|i(?:'|)?ll (?:be )?wait(?:ing)?|waiting|awaiting|je (?:vais )?attend(?:s|re)?|j['\u2019]?attends?)(?=[\s,.!?]|$)(?:[\s\S]{0,60}?(?:aguard\w*|espera\w*|esperando|attente|attend\w*|wait\w*|hear(?:ing)? back|your (?:reply|response)))?[!.\s👍🙏👌✅✔️😊🙂❤️💚💛]*$/i
 
 const EMOJI_ONLY_RE = /^(?:[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+)$/u
 
