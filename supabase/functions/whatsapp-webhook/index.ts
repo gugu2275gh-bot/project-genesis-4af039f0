@@ -294,6 +294,7 @@ import { extractTextFromOpenAIResponse } from './lib/ai.ts'
 import {
   type ChatLanguage,
   detectChatLanguage,
+  detectChatLanguageOrNull,
   getLanguageDirective,
   getTransientErrorReply,
   normalizeForLanguageChecks,
