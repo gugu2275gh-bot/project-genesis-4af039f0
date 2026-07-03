@@ -1999,10 +1999,12 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         // (name/email/interest/location), consideramos a abertura concluída
         // mesmo que o regex de consent (Msg2) não tenha casado no transcript.
         // Isso evita reabrir a abertura depois que o cliente já avançou (bug Gustavo).
-        const aberturaSignals = sentAny(/\b(obrigad[oa] por (falar|escrever|entrar)|gracias por (hablar|escribir)|thanks? for (reaching|contacting))\b/i)
+        const aberturaSignals = sentAny(/\b(obrigad[oa] por (falar|escrever|entrar|contat)|gracias por (hablar|escribir|contact)|thank(?:s| you)? for (reaching|contacting|writing))\b/i)
           && sentAny(/\b(perguntas? r[áa]pidas?|preguntas r[áa]pidas|quick questions?|entender (seu|tu|your) caso|direcionar|derivar|direct you)\b/i)
+        const aberturaStateSent = !!((funnelStateLive.outside_spain_progress || {}) as any).opener_sent
         const aberturaAutoDone =
           isReturningClient
+          || aberturaStateSent
           || !!funnelStateLive.name_confirmed
           || !!funnelStateLive.email_confirmed
           || !!funnelStateLive.interest_confirmed
