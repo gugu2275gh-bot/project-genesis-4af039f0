@@ -454,11 +454,24 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
     return new Response('Verification failed', { status: 403, headers: corsHeaders })
   }
 
+  let __concurrentLockKeyOuter: string | null = null
+  let __supabaseOuter: any = null
+  const releaseConcurrentLock = async () => {
+    if (__concurrentLockKeyOuter && __supabaseOuter) {
+      try {
+        await __supabaseOuter.from('message_dedup').delete().eq('message_id', __concurrentLockKeyOuter)
+      } catch (_e) { /* non-blocking */ }
+      __concurrentLockKeyOuter = null
+    }
+  }
+
   try {
     const supabase = deps.supabase ?? createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
+    __supabaseOuter = supabase
+
 
     // Parse request body - handle both JSON and form-encoded (Twilio)
     const contentType = req.headers.get('content-type') || ''
@@ -1254,7 +1267,9 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           }
         } else {
           concurrentLockAcquired = true
+          __concurrentLockKeyOuter = concurrentLockKey
         }
+
       } catch (lockCatch) {
         console.warn('[CONCURRENT_LOCK] non-blocking error:', lockCatch instanceof Error ? lockCatch.message : lockCatch)
       }
@@ -2361,9 +2376,11 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             } catch (e) {
               console.error('[KB-STRICT] Failed to send fallback:', e instanceof Error ? e.message : e)
             }
+            await releaseConcurrentLock()
             return new Response(JSON.stringify({ success: true, kb_strict_fallback: true }), {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             })
+
           }
           resolvedSystemPrompt += `\n\n## MODO ESTRITO — BASE DE CONHECIMENTO\n` +
             `Você DEVE responder EXCLUSIVAMENTE com base nos trechos da Base de Conhecimento fornecidos no contexto. ` +
@@ -2992,9 +3009,11 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                 ai_error: 'empty_after_dedup_and_safety_net',
                 funnel_step_before: funnelStateLive?.step ?? null,
               })
+              await releaseConcurrentLock()
               return new Response(JSON.stringify({ success: true, aiResponseSent: false, reason: 'empty_after_dedup' }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
               })
+
             }
             for (let i = 0; i < parts.length; i++) {
               const part = parts[i]
@@ -3188,6 +3207,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
       await supabase.from('webhook_logs').update({ processed: true }).eq('id', webhookLog.id)
     }
 
+    await releaseConcurrentLock()
     return new Response(
       JSON.stringify({ 
         success: true, 
@@ -3201,12 +3221,14 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     console.error('WhatsApp webhook error:', errorMessage)
+    await releaseConcurrentLock()
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 }
+
 
 export { handler }
 
