@@ -1320,14 +1320,22 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         const langCodeMap: Record<ChatLanguage, string> = { 'pt-BR': 'pt', 'es': 'es', 'en': 'en', 'fr': 'fr' }
 
         let detectedChatLanguage: ChatLanguage
-        // Junta as últimas mensagens do cliente para dar mais material à detecção
-        // (mensagens muito curtas/typos como "good mroning" isoladas não disparam nenhum sinal).
-        const recentUserMsgs = history.filter((m: any) => m.role === 'user').slice(-4).map((m: any) => String(m.content || ''))
+        // Junta as últimas mensagens do cliente (via mensagens_cliente) para dar mais material
+        // à detecção (mensagens curtas/typos como "good mroning" isoladas não disparam sinal).
+        let recentUserMsgs: string[] = []
+        try {
+          const { data: recentRows } = await supabase
+            .from('mensagens_cliente')
+            .select('mensagem_cliente, created_at')
+            .eq('id_lead', lead.id)
+            .not('mensagem_cliente', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(6)
+          recentUserMsgs = (recentRows || []).map((r: any) => String(r.mensagem_cliente || '')).filter(Boolean).reverse()
+        } catch (_) { /* ignore */ }
         const combinedSample = [...recentUserMsgs, currentCustomerMessage].join(' \n ').trim()
 
         if (isFirstInteraction) {
-          // Primeira interação: só TRAVA se houver sinal positivo. Sem sinal → responde em pt-BR
-          // provisoriamente mas mantém preferred_language nulo para re-detectar na próxima mensagem.
           const positive = detectChatLanguageOrNull(combinedSample)
           if (positive) {
             detectedChatLanguage = positive
@@ -1355,9 +1363,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
             console.log('Language locked (from contact):', detectedChatLanguage)
           }
         } else {
-          // Fallback (contato legado sem preferred_language e não é 1ª msg).
-          const firstUserMsg = (history.find((m: any) => m.role === 'user')?.content || currentCustomerMessage) as string
-          detectedChatLanguage = detectChatLanguageOrNull(combinedSample) ?? detectChatLanguage(firstUserMsg)
+          detectedChatLanguage = detectChatLanguageOrNull(combinedSample) ?? 'pt-BR'
           const currentLangCode = langCodeMap[detectedChatLanguage]
           await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
           contact.preferred_language = currentLangCode
