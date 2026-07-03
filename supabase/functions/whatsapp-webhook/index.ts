@@ -454,11 +454,24 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
     return new Response('Verification failed', { status: 403, headers: corsHeaders })
   }
 
+  let __concurrentLockKeyOuter: string | null = null
+  let __supabaseOuter: any = null
+  const releaseConcurrentLock = async () => {
+    if (__concurrentLockKeyOuter && __supabaseOuter) {
+      try {
+        await __supabaseOuter.from('message_dedup').delete().eq('message_id', __concurrentLockKeyOuter)
+      } catch (_e) { /* non-blocking */ }
+      __concurrentLockKeyOuter = null
+    }
+  }
+
   try {
     const supabase = deps.supabase ?? createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
+    __supabaseOuter = supabase
+
 
     // Parse request body - handle both JSON and form-encoded (Twilio)
     const contentType = req.headers.get('content-type') || ''
