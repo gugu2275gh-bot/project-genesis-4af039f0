@@ -3203,6 +3203,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
       await supabase.from('webhook_logs').update({ processed: true }).eq('id', webhookLog.id)
     }
 
+    await releaseConcurrentLock()
     return new Response(
       JSON.stringify({ 
         success: true, 
@@ -3216,12 +3217,14 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     console.error('WhatsApp webhook error:', errorMessage)
+    await releaseConcurrentLock()
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 }
+
 
 export { handler }
 
