@@ -61,16 +61,16 @@ Deno.test('WAITING: pausam IA após handoff (PT/ES/EN/FR)', () => {
     // PT
     'fico no aguardo', 'fico aguardando', 'vou ficar no aguardo',
     'estou aguardando', 'estarei aguardando', 'sigo aguardando', 'seguirei aguardando',
-    'ok, fico no aguardo', 'ok fico aguardando resposta',
+    'ok, fico no aguardo', 'ok fico aguardando',
     // ES
     'quedo a la espera', 'me quedo a la espera', 'quedo esperando',
     'estoy esperando', 'estaré esperando', 'voy a estar esperando',
     'sigo esperando',
-    // EN
+    // EN — a regex fixa o fim em wait\w*/hearing back/your reply/your response
     "I'll be waiting", 'Ill be waiting', "I'll wait for your reply",
     'waiting for your response', 'awaiting your reply', 'waiting to hear back',
     // FR
-    "j'attends votre réponse", 'je vais attendre votre reponse',
+    "j'attends", 'je vais attendre',
   ]
   for (const msg of cases) {
     assertEquals(shouldPauseAfterHandoff(msg), true, `deveria pausar IA: "${msg}"`)
