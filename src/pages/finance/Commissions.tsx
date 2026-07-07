@@ -113,8 +113,7 @@ export default function Commissions() {
           }
         }
         for (const o of opps) {
-          const referral = o.lead?.contacts?.referral_name?.trim();
-          if (!referral) continue;
+          const referral = o.lead?.contacts?.referral_name?.trim() || '';
           // Base da comissão = valor do serviço COM desconto e SEM IVA.
           // Obtido a partir de qualquer pagamento da oportunidade: gross_amount - discount.
           const { data: pmt } = await supabase
@@ -139,6 +138,7 @@ export default function Commissions() {
             total_amount: discountedBase,
           });
         }
+
       }
       return result;
     },
@@ -505,11 +505,7 @@ export default function Commissions() {
 
               {formData.collaborator_type && (
                 <div className="space-y-2">
-                  <Label>
-                    {formData.collaborator_type === 'CAPTADOR'
-                      ? 'Serviço (somente serviços com indicado)'
-                      : 'Contrato / Serviço'}
-                  </Label>
+                  <Label>Contrato / Serviço</Label>
                   <Select
                     value={selectedServiceKey}
                     onValueChange={handleServiceChange}
@@ -520,7 +516,7 @@ export default function Commissions() {
                     <SelectContent>
                       {eligibleServices.length === 0 && (
                         <div className="px-3 py-2 text-sm text-muted-foreground">
-                          Nenhum serviço com indicado disponível
+                          Nenhum contrato com serviço disponível
                         </div>
                       )}
                       {eligibleServices.map((s) => (
@@ -528,7 +524,8 @@ export default function Commissions() {
                           key={`${s.contract_id}:${s.opportunity_id}`}
                           value={`${s.contract_id}:${s.opportunity_id}`}
                         >
-                          {s.client_name} — {s.service_name} (€{s.total_amount.toFixed(2)}) · Indicado: {s.referral_name}
+                          {s.client_name} — {s.service_name} (€{s.total_amount.toFixed(2)})
+                          {s.referral_name ? ` · Indicado: ${s.referral_name}` : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -538,10 +535,18 @@ export default function Commissions() {
 
               {selectedService && (
                 <div className="space-y-2">
-                  <Label>Cliente / Indicado</Label>
-                  <Input value={`${selectedService.client_name} · Indicado por ${selectedService.referral_name}`} disabled />
+                  <Label>Cliente {selectedService.referral_name ? '/ Indicado' : ''}</Label>
+                  <Input
+                    value={
+                      selectedService.referral_name
+                        ? `${selectedService.client_name} · Indicado por ${selectedService.referral_name}`
+                        : selectedService.client_name
+                    }
+                    disabled
+                  />
                 </div>
               )}
+
 
 
               <div className="space-y-2">
