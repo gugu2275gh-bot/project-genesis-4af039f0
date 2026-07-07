@@ -133,6 +133,7 @@ export default function Commissions() {
           result.push({
             opportunity_id: o.id,
             contract_id: c.id,
+            contract_number: c.contract_number,
             client_name: o.lead?.contacts?.full_name || 'Sem nome',
             referral_name: referral,
             service_name: o.lead?.service_types?.name || o.lead?.service_interest || 'Serviço',
