@@ -1037,7 +1037,7 @@ export default function PaymentsList() {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        {group.items.length} pagamento(s) · {paidCount} confirmado(s) · {pendingCount} pendente(s)
+                        {activeItems.length} pagamento(s) · {paidCount} confirmado(s) · {pendingCount} pendente(s)
                       </div>
                     </div>
                     <div className="text-right shrink-0">
