@@ -2925,6 +2925,28 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               }
             }
 
+            // GUARD "uma pergunta por vez" durante APROFUNDAMENTO.
+            // Durante Inside/Outside deepening o LLM deve fazer UMA pergunta por rodada
+            // e aguardar a resposta. Se emitir múltiplas bolhas contendo perguntas
+            // (ex.: "data de entrada?|||está empadronado?"), mantemos apenas até a
+            // primeira bolha com "?" e descartamos as demais.
+            try {
+              if (nextStep?.key === 'aprofundamento' && parts.length > 1) {
+                const hasQ = (s: string) => /[?？¿]/.test(s)
+                const firstQIdx = parts.findIndex(hasQ)
+                if (firstQIdx >= 0) {
+                  const anyExtraQ = parts.slice(firstQIdx + 1).some(hasQ)
+                  if (anyExtraQ) {
+                    const kept = parts.slice(0, firstQIdx + 1)
+                    console.warn('[GUARD] aprofundamento_one_question_per_turn — dropped extra question bubbles. before=', parts.length, 'after=', kept.length)
+                    parts = kept
+                  }
+                }
+              }
+            } catch (oneQErr) {
+              console.warn('[GUARD] one-question guard non-blocking error:', oneQErr instanceof Error ? oneQErr.message : oneQErr)
+            }
+
             // Continuidade do pré-handoff: completa H1/H2/H3 se algum estiver faltando.
             // Só roda se já temos dados mínimos — sem isso, NÃO devemos completar handoff.
             if (hasMinimumDataForHandoff) {
