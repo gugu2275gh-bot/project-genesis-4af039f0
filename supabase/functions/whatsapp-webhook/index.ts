@@ -1926,7 +1926,10 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               if (funnelStateLive.interest_confirmed) serviceMissing = false
               if (isAutoLocation) {
                 ;(funnelStateLive as any).__justAutoLocationSpain = true
-                console.log('[AUTO_LOCATION] spain from evidence:', JSON.stringify(detPatch.location_evidence || ''))
+                if (detPatch.location_city_hint) {
+                  ;(funnelStateLive as any).__justAutoLocationCity = detPatch.location_city_hint
+                }
+                console.log('[AUTO_LOCATION] spain from evidence:', JSON.stringify(detPatch.location_evidence || ''), 'city:', detPatch.location_city_hint || '-')
               }
               console.log('[DET_PATCH]', JSON.stringify(safe))
             }
@@ -2370,19 +2373,49 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         resolvedSystemPrompt += buildStateDirective(funnelStateLive, detectedChatLanguage)
 
         // Confirmação leve quando a localização foi auto-detectada neste turno.
-        // Evita re-perguntar cru "você está na Espanha?" e evita pular direto para a data.
+        // Adapta o texto conforme (a) evidência incluiu cidade ou só país e
+        // (b) já sabemos a data de entrada — evitando re-perguntar o que já temos.
         if ((funnelStateLive as any).__justAutoLocationSpain) {
           const lang = detectedChatLanguage
-          const softConfirm =
-            lang === 'es'
-              ? "\n\n## LOCALIZACIÓN AUTO-DETECTADA\nLa clienta mencionó espontáneamente que YA ESTÁ EN ESPAÑA. NO vuelvas a preguntar si está en España. Confirma de forma suave EN LA MISMA frase y ya pide la fecha de entrada. Ej.: \"Perfecto, entonces ya estás en España, ¿verdad? Cuéntame desde cuándo llegaste.\""
-              : lang === 'en'
-              ? "\n\n## AUTO-DETECTED LOCATION\nThe client spontaneously mentioned she is ALREADY IN SPAIN. Do NOT ask again if she is in Spain. Softly confirm IN THE SAME sentence and ask for the entry date. Ex.: \"Great, so you're already in Spain, right? Tell me since when you arrived.\""
-              : lang === 'fr'
-              ? "\n\n## LOCALISATION AUTO-DÉTECTÉE\nLa cliente a mentionné spontanément qu'elle EST DÉJÀ EN ESPAGNE. NE redemandez PAS si elle est en Espagne. Confirmez doucement DANS LA MÊME phrase et demandez la date d'entrée. Ex.: \"Parfait, vous êtes donc déjà en Espagne, n'est-ce pas ? Dites-moi depuis quand vous êtes arrivée.\""
-              : "\n\n## LOCALIZAÇÃO AUTO-DETECTADA\nA cliente mencionou espontaneamente que JÁ ESTÁ NA ESPANHA. NÃO pergunte de novo se ela está na Espanha. Confirme de leve NA MESMA frase e já peça a data de entrada. Ex.: \"Perfeito, então você já está na Espanha, certo? Me conta desde quando chegou.\""
-          resolvedSystemPrompt += softConfirm
+          const city = String((funnelStateLive as any).__justAutoLocationCity || '').trim()
+          const hasEntryDate = !!funnelStateLive.entry_date_confirmed
+          const place = {
+            pt: city ? `em ${city}` : 'na Espanha',
+            es: city ? `en ${city}` : 'en España',
+            en: city ? `in ${city}` : 'in Spain',
+            fr: city ? `à ${city}` : 'en Espagne',
+          }
+          // Próxima pergunta: se já temos a data de entrada, pulamos para empadronamento;
+          // caso contrário, pedimos a data. Nunca re-perguntamos "você está na Espanha?".
+          const nextAsk = hasEntryDate
+            ? {
+                pt: 'você já está empadronada em alguma cidade?',
+                es: '¿ya estás empadronada en alguna ciudad?',
+                en: 'are you already registered (empadronada) in any city?',
+                fr: 'êtes-vous déjà inscrite (empadronada) dans une ville ?',
+              }
+            : {
+                pt: 'me conta desde quando você chegou.',
+                es: 'cuéntame desde cuándo llegaste.',
+                en: 'tell me since when you arrived.',
+                fr: 'dites-moi depuis quand vous êtes arrivée.',
+              }
+          const header = {
+            pt: '## LOCALIZAÇÃO AUTO-DETECTADA',
+            es: '## LOCALIZACIÓN AUTO-DETECTADA',
+            en: '## AUTO-DETECTED LOCATION',
+            fr: '## LOCALISATION AUTO-DÉTECTÉE',
+          }
+          const rule = {
+            pt: `A cliente mencionou espontaneamente que JÁ ESTÁ ${place.pt.toUpperCase()}. NÃO pergunte de novo se ela está na Espanha${city ? ' nem em que cidade mora' : ''}${hasEntryDate ? ' nem quando chegou (já sabemos)' : ''}. Confirme de leve NA MESMA frase e já emende a próxima pergunta. Ex.: "Perfeito, então você já está ${place.pt}, certo? ${nextAsk.pt.charAt(0).toUpperCase() + nextAsk.pt.slice(1)}"`,
+            es: `La clienta mencionó espontáneamente que YA ESTÁ ${place.es.toUpperCase()}. NO vuelvas a preguntar si está en España${city ? ' ni en qué ciudad vive' : ''}${hasEntryDate ? ' ni cuándo llegó (ya lo sabemos)' : ''}. Confirma de forma suave EN LA MISMA frase y enlaza la siguiente pregunta. Ej.: "Perfecto, entonces ya estás ${place.es}, ¿verdad? ${nextAsk.es.charAt(0).toUpperCase() + nextAsk.es.slice(1)}"`,
+            en: `The client spontaneously mentioned she is ALREADY ${place.en.toUpperCase()}. Do NOT ask again if she is in Spain${city ? ' or in which city she lives' : ''}${hasEntryDate ? ' or when she arrived (we already know)' : ''}. Softly confirm IN THE SAME sentence and chain the next question. Ex.: "Great, so you're already ${place.en}, right? ${nextAsk.en.charAt(0).toUpperCase() + nextAsk.en.slice(1)}"`,
+            fr: `La cliente a mentionné spontanément qu'elle EST DÉJÀ ${place.fr.toUpperCase()}. NE redemandez PAS si elle est en Espagne${city ? ' ni dans quelle ville elle vit' : ''}${hasEntryDate ? " ni quand elle est arrivée (nous le savons déjà)" : ''}. Confirmez doucement DANS LA MÊME phrase et enchaînez la question suivante. Ex.: "Parfait, vous êtes donc déjà ${place.fr}, n'est-ce pas ? ${nextAsk.fr.charAt(0).toUpperCase() + nextAsk.fr.slice(1)}"`,
+          }
+          const key = (lang === 'es' || lang === 'en' || lang === 'fr') ? lang : 'pt'
+          resolvedSystemPrompt += `\n\n${header[key]}\n${rule[key]}`
         }
+
 
 
         if (kbStrictMode) {
