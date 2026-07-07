@@ -104,6 +104,7 @@ export function computeDeterministicFunnelPatch(
       patch.location_known = 'spain'
       patch.location_source = 'auto_opener_claim'
       patch.location_evidence = claim.evidence
+      if (claim.city) patch.location_city_hint = claim.city
     }
   }
   // NOTA: NÃO consolidamos location_known fora do contexto da pergunta de
