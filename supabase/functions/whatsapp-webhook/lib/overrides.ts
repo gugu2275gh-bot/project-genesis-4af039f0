@@ -18,6 +18,7 @@ import {
   getEmailQuestion,
   getEmailReaskQuestion,
   getEntryDateNeedsYearQuestion,
+  detectSpainResidenceClaim,
   getEntryDateFutureConfirmQuestion,
   getOutsideSpainAgeQuestion,
   getEmpadronadoQuestion,
