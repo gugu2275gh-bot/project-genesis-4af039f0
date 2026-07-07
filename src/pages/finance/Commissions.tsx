@@ -90,6 +90,7 @@ export default function Commissions() {
       const result: Array<{
         opportunity_id: string;
         contract_id: string;
+        contract_number: string | null;
         client_name: string;
         referral_name: string;
         service_name: string;
