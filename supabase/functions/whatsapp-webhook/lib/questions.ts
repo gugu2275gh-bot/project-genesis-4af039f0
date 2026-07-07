@@ -820,19 +820,8 @@ export function detectSpainResidenceClaim(text: string): { matched: boolean; evi
     if (!m || !m[1]) continue
     const candidate = m[1].split(/[,.;!?]|(?:\s+e\s+)|(?:\s+y\s+)|(?:\s+and\s+)|(?:\s+et\s+)/i)[0].trim()
     if (!candidate) continue
-    // Import lazy — evita ciclo. Validador exportado por spanish-cities.ts.
-    try {
-      // deno-lint-ignore no-explicit-any
-      const mod: any = (globalThis as any).__spanishCities
-      const isSpanish = mod?.isValidSpanishCity ? mod.isValidSpanishCity(candidate) : null
-      if (isSpanish === true) return { matched: true, evidence: m[0].trim() }
-      if (isSpanish === false) continue
-    } catch (_) { /* ignore */ }
-    // Fallback estático (mais comuns) caso globalThis não esteja preenchido.
-    const commonSet = new Set(['madrid','barcelona','valencia','sevilla','zaragoza','malaga','málaga','murcia','palma','las palmas','bilbao','alicante','córdoba','cordoba','valladolid','vigo','gijon','gijón','granada','a coruña','a coruna','coruña','coruna','vitoria','elche','oviedo','santa cruz de tenerife','pamplona','almeria','almería','san sebastian','san sebastián','donostia','burgos','santander','castellon','castellón','logroño','logrono','badajoz','salamanca','huelva','lleida','tarragona','leon','león','cadiz','cádiz','jaén','jaen','ourense','girona','lugo','caceres','cáceres','melilla','ceuta','toledo','albacete','pontevedra','guadalajara','mérida','merida','marbella','fuenlabrada','mostoles','móstoles','alcorcón','alcorcon','getafe','leganes','leganés','alcala de henares','alcalá de henares'])
-    if (commonSet.has(candidate.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''))) {
-      return { matched: true, evidence: m[0].trim() }
-    }
+    if (isValidSpanishCity(candidate)) return { matched: true, evidence: m[0].trim() }
+
   }
 
   return { matched: false, evidence: '' }
