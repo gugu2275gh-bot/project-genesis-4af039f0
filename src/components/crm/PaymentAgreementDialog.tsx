@@ -968,6 +968,18 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                 <span className="text-muted-foreground">Valor do Serviço</span>
                 <span>€ {calculatedAmounts.gross.toFixed(2)}</span>
               </div>
+              {calculatedAmounts.discountAmount > 0 && (
+                <>
+                  <div className="flex justify-between text-destructive">
+                    <span>Desconto</span>
+                    <span>- € {calculatedAmounts.discountAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between font-medium border-t pt-1">
+                    <span>Subtotal</span>
+                    <span>€ {calculatedAmounts.discountedBase.toFixed(2)}</span>
+                  </div>
+                </>
+              )}
               {form.apply_vat && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">IVA ({defaultVatRate || 21}%)</span>
@@ -980,18 +992,6 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
                   <span>+ € {parseFloat(fee.amount).toFixed(2)}</span>
                 </div>
               ))}
-              {(form.apply_vat && calculatedAmounts.discountAmount > 0) && (
-                <div className="flex justify-between font-medium border-t pt-1">
-                  <span>Total</span>
-                  <span>€ {calculatedAmounts.totalBeforeDiscount.toFixed(2)}</span>
-                </div>
-              )}
-              {calculatedAmounts.discountAmount > 0 && (
-                <div className="flex justify-between text-destructive">
-                  <span>Desconto</span>
-                  <span>- € {calculatedAmounts.discountAmount.toFixed(2)}</span>
-                </div>
-              )}
               <div className="flex justify-between font-semibold border-t pt-1">
                 <span>Total Final</span>
                 <span>€ {calculatedAmounts.finalAmount.toFixed(2)}</span>
