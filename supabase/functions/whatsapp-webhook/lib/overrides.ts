@@ -66,6 +66,8 @@ export function computeDeterministicFunnelPatch(
   currentMessage: string,
 ): {
   location_known?: 'spain' | 'outside'
+  location_source?: 'auto_opener_claim'
+  location_evidence?: string
   interest_confirmed?: string
   empadronado_city?: string
   empadronado_confirmed?: boolean
