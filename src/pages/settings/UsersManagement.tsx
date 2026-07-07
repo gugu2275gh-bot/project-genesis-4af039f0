@@ -46,7 +46,8 @@ import {
   XCircle,
   Loader2,
   Pencil,
-  Trash2
+  Trash2,
+  KeyRound
 } from 'lucide-react';
 import {
   AlertDialog,
