@@ -231,10 +231,16 @@ export default function PaymentsList() {
     setPaidAtDate(format(new Date(), 'yyyy-MM-dd'));
   };
 
+  // Parse YYYY-MM-DD as local date to avoid UTC off-by-one
+  const parseDueDate = (s: string) => {
+    const [y, m, d] = s.split('T')[0].split('-').map(Number);
+    return new Date(y, (m || 1) - 1, d || 1);
+  };
+
   // Helper to check if payment is overdue
   const getOverdueInfo = (payment: typeof payments[0]) => {
     if (payment.status !== 'PENDENTE' || !payment.due_date) return null;
-    const dueDate = new Date(payment.due_date);
+    const dueDate = parseDueDate(payment.due_date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
