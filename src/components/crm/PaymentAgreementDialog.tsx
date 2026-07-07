@@ -274,6 +274,12 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       summary += `Serviço: ${selectedServiceName}\n`;
     }
     summary += `Valor do Serviço: € ${gross.toFixed(2)}\n`;
+    if (discountAmount > 0) {
+      summary += `Desconto: - € ${discountAmount.toFixed(2)}`;
+      if (form.discount_type === 'PERCENTUAL') summary += ` (${form.discount_value}%)`;
+      summary += '\n';
+      summary += `Subtotal: € ${calculatedAmounts.discountedBase.toFixed(2)}\n`;
+    }
     if (form.apply_vat && vatAmount > 0) {
       summary += `IVA (${defaultVatRate || 21}%): + € ${vatAmount.toFixed(2)}\n`;
     }
@@ -283,15 +289,6 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       validFees.forEach(fee => {
         summary += `  ${fee.description || 'Custo'}: + € ${parseFloat(fee.amount).toFixed(2)}\n`;
       });
-    }
-    const totalBeforeDiscount = calculatedAmounts.totalBeforeDiscount;
-    if (form.apply_vat || discountAmount > 0 || validFees.length > 0) {
-      summary += `Total: € ${totalBeforeDiscount.toFixed(2)}\n`;
-    }
-    if (discountAmount > 0) {
-      summary += `Desconto: - € ${discountAmount.toFixed(2)}`;
-      if (form.discount_type === 'PERCENTUAL') summary += ` (${form.discount_value}%)`;
-      summary += '\n';
     }
     summary += `Total Final: € ${finalAmount.toFixed(2)}\n`;
     summary += `Método: ${methodLabel}\n`;
