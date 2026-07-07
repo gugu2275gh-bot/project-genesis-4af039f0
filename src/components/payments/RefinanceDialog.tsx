@@ -105,7 +105,7 @@ export function RefinanceDialog({
       if (insertError) throw insertError;
 
       toast({ title: "Reparcelamento realizado com sucesso" });
-      queryClient.invalidateQueries({ queryKey: ["payments"] });
+      await queryClient.invalidateQueries({ queryKey: ["payments"], refetchType: "active" });
       onOpenChange(false);
     } catch (error: any) {
       toast({ title: "Erro ao reparcelar", description: error.message, variant: "destructive" });
