@@ -2369,6 +2369,22 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         // Wave 4: diretiva de estado do funil (anti F1/F4)
         resolvedSystemPrompt += buildStateDirective(funnelStateLive, detectedChatLanguage)
 
+        // Confirmação leve quando a localização foi auto-detectada neste turno.
+        // Evita re-perguntar cru "você está na Espanha?" e evita pular direto para a data.
+        if ((funnelStateLive as any).__justAutoLocationSpain) {
+          const lang = detectedChatLanguage
+          const softConfirm =
+            lang === 'es'
+              ? "\n\n## LOCALIZACIÓN AUTO-DETECTADA\nLa clienta mencionó espontáneamente que YA ESTÁ EN ESPAÑA. NO vuelvas a preguntar si está en España. Confirma de forma suave EN LA MISMA frase y ya pide la fecha de entrada. Ej.: \"Perfecto, entonces ya estás en España, ¿verdad? Cuéntame desde cuándo llegaste.\""
+              : lang === 'en'
+              ? "\n\n## AUTO-DETECTED LOCATION\nThe client spontaneously mentioned she is ALREADY IN SPAIN. Do NOT ask again if she is in Spain. Softly confirm IN THE SAME sentence and ask for the entry date. Ex.: \"Great, so you're already in Spain, right? Tell me since when you arrived.\""
+              : lang === 'fr'
+              ? "\n\n## LOCALISATION AUTO-DÉTECTÉE\nLa cliente a mentionné spontanément qu'elle EST DÉJÀ EN ESPAGNE. NE redemandez PAS si elle est en Espagne. Confirmez doucement DANS LA MÊME phrase et demandez la date d'entrée. Ex.: \"Parfait, vous êtes donc déjà en Espagne, n'est-ce pas ? Dites-moi depuis quand vous êtes arrivée.\""
+              : "\n\n## LOCALIZAÇÃO AUTO-DETECTADA\nA cliente mencionou espontaneamente que JÁ ESTÁ NA ESPANHA. NÃO pergunte de novo se ela está na Espanha. Confirme de leve NA MESMA frase e já peça a data de entrada. Ex.: \"Perfeito, então você já está na Espanha, certo? Me conta desde quando chegou.\""
+          resolvedSystemPrompt += softConfirm
+        }
+
+
         if (kbStrictMode) {
           if (!knowledgeContext) {
             console.log('[KB-STRICT] No KB match found — sending standard fallback message')
