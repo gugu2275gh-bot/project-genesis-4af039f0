@@ -999,9 +999,10 @@ export default function PaymentsList() {
           <div className="space-y-3">
             {groups.map((group) => {
               const isExpanded = expandedContracts[group.key] ?? false;
-              const totalAmount = group.items.reduce((sum, p) => sum + (p.amount || 0), 0);
-              const paidCount = group.items.filter((p) => p.status === 'CONFIRMADO').length;
-              const pendingCount = group.items.filter((p) => p.status === 'PENDENTE').length;
+              const activeItems = group.items.filter((p) => p.status !== 'ESTORNADO');
+              const totalAmount = activeItems.reduce((sum, p) => sum + (p.amount || 0), 0);
+              const paidCount = activeItems.filter((p) => p.status === 'CONFIRMADO').length;
+              const pendingCount = activeItems.filter((p) => p.status === 'PENDENTE').length;
               const contractStatus = group.contract?.status;
               const contractLabel =
                 contractStatus === 'APROVADO' ? 'A Assinar' :
