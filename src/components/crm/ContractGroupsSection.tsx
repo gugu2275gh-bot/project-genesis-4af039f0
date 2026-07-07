@@ -575,8 +575,10 @@ export function ContractGroupsSection({
       };
     }
 
+    // For installments, gross_amount is stored per-row as the service TOTAL
+    // (same value repeated). Use the first payment's gross_amount, not a sum.
     return {
-      grossAmount: null,
+      grossAmount: Number(leadPayments[0]?.gross_amount || 0) || null,
       totalFinal: leadPayments.reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0),
     };
   }, []);
