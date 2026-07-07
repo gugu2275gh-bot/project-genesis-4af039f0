@@ -231,10 +231,16 @@ export default function PaymentsList() {
     setPaidAtDate(format(new Date(), 'yyyy-MM-dd'));
   };
 
+  // Parse YYYY-MM-DD as local date to avoid UTC off-by-one
+  const parseDueDate = (s: string) => {
+    const [y, m, d] = s.split('T')[0].split('-').map(Number);
+    return new Date(y, (m || 1) - 1, d || 1);
+  };
+
   // Helper to check if payment is overdue
   const getOverdueInfo = (payment: typeof payments[0]) => {
     if (payment.status !== 'PENDENTE' || !payment.due_date) return null;
-    const dueDate = new Date(payment.due_date);
+    const dueDate = parseDueDate(payment.due_date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -299,7 +305,7 @@ export default function PaymentsList() {
               <AlertTriangle className="h-4 w-4" />
             )}
             <span>
-              {format(new Date(payment.due_date), 'dd/MM/yyyy', { locale: ptBR })}
+              {format(parseDueDate(payment.due_date), 'dd/MM/yyyy', { locale: ptBR })}
             </span>
             {overdueInfo?.isOverdue && (
               <span className="text-xs">
@@ -1053,7 +1059,14 @@ export default function PaymentsList() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {group.items.map((p) => (
+                          {[...group.items].sort((a: any, b: any) => {
+                            const ai = a.installment_number ?? 9999;
+                            const bi = b.installment_number ?? 9999;
+                            if (ai !== bi) return ai - bi;
+                            const ad = a.due_date || '';
+                            const bd = b.due_date || '';
+                            return ad.localeCompare(bd);
+                          }).map((p) => (
                             <TableRow key={p.id} className={getRowClassName(p)}>
                               {columns.map((col) => (
                                 <TableCell key={col.key} className={col.className}>
