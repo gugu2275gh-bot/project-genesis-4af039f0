@@ -267,6 +267,33 @@ export default function UsersManagement() {
       });
     },
   });
+
+  // Reset password mutation - sends password reset email
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const origin = window.location.origin;
+      const productionOrigin = 'https://cb.innovatia.com.br';
+      const isPreviewDomain = origin.includes('lovableproject.com') || origin.includes('id-preview--');
+      const redirectBase = isPreviewDomain ? productionOrigin : origin;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${redirectBase}/reset-password`,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_data, email) => {
+      toast({
+        title: 'Email de redefinição enviado',
+        description: `Um link para redefinir a senha foi enviado para ${email}.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Erro ao enviar email de redefinição',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
   const updateProfileMutation = useMutation({
     mutationFn: async (data: { id: string; full_name: string; phone: string }) => {
       const { error } = await supabase
