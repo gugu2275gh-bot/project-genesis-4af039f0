@@ -115,13 +115,28 @@ export default function Commissions() {
         for (const o of opps) {
           const referral = o.lead?.contacts?.referral_name?.trim();
           if (!referral) continue;
+          // Base da comissão = valor do serviço COM desconto e SEM IVA.
+          // Obtido a partir de qualquer pagamento da oportunidade: gross_amount - discount.
+          const { data: pmt } = await supabase
+            .from('payments')
+            .select('gross_amount, discount_type, discount_value')
+            .eq('opportunity_id', o.id)
+            .limit(1)
+            .maybeSingle();
+          let discountedBase = Number(o.total_amount || 0);
+          if (pmt) {
+            const gross = Number(pmt.gross_amount || 0);
+            const dv = Number(pmt.discount_value || 0);
+            const discount = pmt.discount_type === 'PERCENTUAL' ? gross * (dv / 100) : dv;
+            discountedBase = Math.max(0, Math.round((gross - discount) * 100) / 100);
+          }
           result.push({
             opportunity_id: o.id,
             contract_id: c.id,
             client_name: o.lead?.contacts?.full_name || 'Sem nome',
             referral_name: referral,
             service_name: o.lead?.service_types?.name || o.lead?.service_interest || 'Serviço',
-            total_amount: Number(o.total_amount || 0),
+            total_amount: discountedBase,
           });
         }
       }
