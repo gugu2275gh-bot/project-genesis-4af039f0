@@ -305,7 +305,7 @@ export default function PaymentsList() {
               <AlertTriangle className="h-4 w-4" />
             )}
             <span>
-              {format(new Date(payment.due_date), 'dd/MM/yyyy', { locale: ptBR })}
+              {format(parseDueDate(payment.due_date), 'dd/MM/yyyy', { locale: ptBR })}
             </span>
             {overdueInfo?.isOverdue && (
               <span className="text-xs">
