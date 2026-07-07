@@ -1926,7 +1926,10 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               if (funnelStateLive.interest_confirmed) serviceMissing = false
               if (isAutoLocation) {
                 ;(funnelStateLive as any).__justAutoLocationSpain = true
-                console.log('[AUTO_LOCATION] spain from evidence:', JSON.stringify(detPatch.location_evidence || ''))
+                if (detPatch.location_city_hint) {
+                  ;(funnelStateLive as any).__justAutoLocationCity = detPatch.location_city_hint
+                }
+                console.log('[AUTO_LOCATION] spain from evidence:', JSON.stringify(detPatch.location_evidence || ''), 'city:', detPatch.location_city_hint || '-')
               }
               console.log('[DET_PATCH]', JSON.stringify(safe))
             }
