@@ -123,7 +123,7 @@ export function RescheduleDialog({ open, onOpenChange, payment }: RescheduleDial
           <div className="space-y-2">
             <Label>Data Original</Label>
             <Input
-              value={payment.due_date ? format(new Date(payment.due_date), "dd/MM/yyyy") : "Não definida"}
+              value={payment.due_date ? format(parseLocalDate(payment.due_date), "dd/MM/yyyy") : "Não definida"}
               disabled
             />
           </div>
