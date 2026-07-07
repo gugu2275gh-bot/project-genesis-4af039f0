@@ -72,10 +72,11 @@ export function RefinanceDialog({
 
     setIsLoading(true);
     try {
-      // 1. Cancel pending payments by updating the reason (status handled separately)
+      // 1. Cancel pending payments (marked as ESTORNADO) so they don't stay pending
       const { error: cancelError } = await supabase
         .from("payments")
         .update({
+          status: "ESTORNADO" as const,
           rescheduled_reason: "Reparcelamento - Parcela cancelada para reparcelamento",
           rescheduled_at: new Date().toISOString(),
         })
