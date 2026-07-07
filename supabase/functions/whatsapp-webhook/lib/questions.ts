@@ -741,3 +741,99 @@ export function getShortAck(
   }
   return ackYesNo[language] || ackYesNo['pt-BR']
 }
+
+/**
+ * Detector CONSERVADOR de residência atual na Espanha declarada espontaneamente.
+ *
+ * Só retorna { matched:true } quando o cliente afirma, em presente do indicativo,
+ * que ESTÁ / MORA / VIVE / RESIDE na Espanha (ou em cidade espanhola conhecida).
+ *
+ * NUNCA aciona por:
+ *  - passado ("estive na Espanha", "was in Spain", "j'étais")
+ *  - futuro/intenção ("vou pra Espanha", "quiero ir", "I'm going to")
+ *  - terceiros ("minha família mora na Espanha", "mi familia vive en España")
+ *  - condicional ("se eu for", "quando eu chegar")
+ *
+ * Usado APENAS para auto-preencher location_known='spain'. Nunca 'outside'.
+ */
+export function detectSpainResidenceClaim(text: string): { matched: boolean; evidence: string } {
+  const raw = String(text || '').trim()
+  if (!raw) return { matched: false, evidence: '' }
+  const n = normalizeForLanguageChecks(raw)
+  if (!n) return { matched: false, evidence: '' }
+
+  // ==== BLOQUEIOS (rejeição explícita) ====
+  // Terceiros: sujeito NÃO é o cliente. Se detectar padrões "família/filho/marido/pai/etc.",
+  // rejeita todo o texto para evitar falso positivo.
+  const THIRD_PARTY = /\b(minha|meu|mi|mis|my|ma|mon|mes)\s+(familia|família|filho|filha|filhos|filhas|marido|esposa|esposo|mulher|pai|mae|mãe|hijo|hija|hijos|hijas|esposo|esposa|padre|madre|husband|wife|son|daughter|children|kids|father|mother|mari|femme|fils|fille|pere|mere|père|mère)\b/i
+  if (THIRD_PARTY.test(n)) return { matched: false, evidence: '' }
+
+  // Passado / futuro / condicional
+  const NEGATIVE_CONTEXT = new RegExp([
+    // passado PT/ES
+    '\\b(estive|estava|estivemos|fui|fomos|morei|moramos|vivi|vivemos|residi|estuve|estaba|estuvimos|viví|vivimos|viviamos|residí|residía)\\b',
+    // passado EN
+    '\\b(was|were|used to|have been|had been|lived|resided)\\b',
+    // passado FR
+    "\\b(étais|etais|étions|etions|j ai vécu|ai vecu|j'ai vécu|habitais|habitions|résidais|residais|j'étais|j etais)\\b",
+    // futuro/intenção
+    '\\b(vou|iremos|vamos ir|pretendo|penso em ir|quero ir|planejo|voy a ir|voy a mudarme|pienso ir|quiero ir|planeo|i want to go|i plan to|i m going to|i am going to|going to move|i ll move|je vais aller|je compte|je pense aller|je vais m installer)\\b',
+    // condicional
+    '\\b(se eu for|quando eu chegar|se eu chegar|si voy|cuando llegue|si llego|if i go|when i arrive|when i get|si je vais|quand j arriverai)\\b',
+  ].join('|'), 'i')
+  if (NEGATIVE_CONTEXT.test(n)) return { matched: false, evidence: '' }
+
+  // ==== PADRÕES POSITIVOS (presente + 1ª pessoa + Espanha) ====
+  const SPAIN = '(espanha|espana|spain|espagne)'
+  const patterns: Array<{ re: RegExp; lang: string }> = [
+    // PT
+    { re: new RegExp(`\\b(estou|to|tou|moro|vivo|resido|me encontro)\\s+(aqui\\s+)?(na|em|no)\\s+${SPAIN}\\b`, 'i'), lang: 'pt' },
+    { re: new RegExp(`\\bja\\s+(estou|moro|vivo|resido)\\s+(aqui\\s+)?(na|em)\\s+${SPAIN}\\b`, 'i'), lang: 'pt' },
+    // ES
+    { re: new RegExp(`\\b(estoy|vivo|resido|me encuentro)\\s+(actualmente\\s+|ya\\s+)?(en|aqui en)\\s+${SPAIN}\\b`, 'i'), lang: 'es' },
+    { re: new RegExp(`\\bya\\s+(estoy|vivo|resido)\\s+(aqui\\s+)?en\\s+${SPAIN}\\b`, 'i'), lang: 'es' },
+    // EN
+    { re: new RegExp(`\\bi\\s*(am|m)\\s+(currently\\s+|already\\s+)?(in|living in|residing in)\\s+${SPAIN}\\b`, 'i'), lang: 'en' },
+    { re: new RegExp(`\\bi\\s+(live|reside)\\s+in\\s+${SPAIN}\\b`, 'i'), lang: 'en' },
+    // FR
+    { re: new RegExp(`\\bje\\s+(suis|vis|reside|réside|habite)\\s+(actuellement\\s+|deja\\s+|déjà\\s+)?(en|à|a)\\s+${SPAIN}\\b`, 'i'), lang: 'fr' },
+    { re: new RegExp(`\\bj\\s*habite\\s+(en|à|a)\\s+${SPAIN}\\b`, 'i'), lang: 'fr' },
+  ]
+  for (const p of patterns) {
+    const m = raw.match(p.re) || n.match(p.re)
+    if (m) return { matched: true, evidence: m[0].trim() }
+  }
+
+  // ==== "estou/moro/vivo em <cidade espanhola>" ====
+  // Extrai o token após o verbo+preposição e valida contra a base de cidades INE.
+  const cityPreps: RegExp[] = [
+    /\b(?:estou|to|tou|moro|vivo|resido|me encontro)\s+(?:aqui\s+)?(?:em|na|no)\s+([a-záàâãéèêíïóôõöúüñç' .-]{2,40})/i,
+    /\b(?:estoy|vivo|resido|me encuentro)\s+(?:actualmente\s+|ya\s+)?(?:en)\s+([a-záàâãéèêíïóôõöúüñç' .-]{2,40})/i,
+    /\bi\s*(?:am|m)\s+(?:currently\s+|already\s+)?(?:in|living in)\s+([a-záàâãéèêíïóôõöúüñç' .-]{2,40})/i,
+    /\bi\s+(?:live|reside)\s+in\s+([a-záàâãéèêíïóôõöúüñç' .-]{2,40})/i,
+    /\bje\s+(?:suis|vis|habite|réside|reside)\s+(?:actuellement\s+)?(?:à|a|en|dans)\s+([a-záàâãéèêíïóôõöúüñç' .-]{2,40})/i,
+    /\bj\s*habite\s+(?:à|a|en|dans)\s+([a-záàâãéèêíïóôõöúüñç' .-]{2,40})/i,
+  ]
+  for (const re of cityPreps) {
+    const m = raw.match(re)
+    if (!m || !m[1]) continue
+    const candidate = m[1].split(/[,.;!?]|(?:\s+e\s+)|(?:\s+y\s+)|(?:\s+and\s+)|(?:\s+et\s+)/i)[0].trim()
+    if (!candidate) continue
+    // Import lazy — evita ciclo. Validador exportado por spanish-cities.ts.
+    try {
+      // deno-lint-ignore no-explicit-any
+      const mod: any = (globalThis as any).__spanishCities
+      const isSpanish = mod?.isValidSpanishCity ? mod.isValidSpanishCity(candidate) : null
+      if (isSpanish === true) return { matched: true, evidence: m[0].trim() }
+      if (isSpanish === false) continue
+    } catch (_) { /* ignore */ }
+    // Fallback estático (mais comuns) caso globalThis não esteja preenchido.
+    const commonSet = new Set(['madrid','barcelona','valencia','sevilla','zaragoza','malaga','málaga','murcia','palma','las palmas','bilbao','alicante','córdoba','cordoba','valladolid','vigo','gijon','gijón','granada','a coruña','a coruna','coruña','coruna','vitoria','elche','oviedo','santa cruz de tenerife','pamplona','almeria','almería','san sebastian','san sebastián','donostia','burgos','santander','castellon','castellón','logroño','logrono','badajoz','salamanca','huelva','lleida','tarragona','leon','león','cadiz','cádiz','jaén','jaen','ourense','girona','lugo','caceres','cáceres','melilla','ceuta','toledo','albacete','pontevedra','guadalajara','mérida','merida','marbella','fuenlabrada','mostoles','móstoles','alcorcón','alcorcon','getafe','leganes','leganés','alcala de henares','alcalá de henares'])
+    if (commonSet.has(candidate.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''))) {
+      return { matched: true, evidence: m[0].trim() }
+    }
+  }
+
+  return { matched: false, evidence: '' }
+}
+
