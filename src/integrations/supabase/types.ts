@@ -3358,6 +3358,10 @@ export type Database = {
         }
         Returns: Json
       }
+      opportunity_discounted_base: {
+        Args: { _opportunity_id: string }
+        Returns: number
+      }
     }
     Enums: {
       app_role:
