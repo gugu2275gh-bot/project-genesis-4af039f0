@@ -18,6 +18,7 @@ import {
   getEmailQuestion,
   getEmailReaskQuestion,
   getEntryDateNeedsYearQuestion,
+  detectSpainResidenceClaim,
   getEntryDateFutureConfirmQuestion,
   getOutsideSpainAgeQuestion,
   getEmpadronadoQuestion,
@@ -65,6 +66,8 @@ export function computeDeterministicFunnelPatch(
   currentMessage: string,
 ): {
   location_known?: 'spain' | 'outside'
+  location_source?: 'auto_opener_claim'
+  location_evidence?: string
   interest_confirmed?: string
   empadronado_city?: string
   empadronado_confirmed?: boolean
@@ -88,6 +91,19 @@ export function computeDeterministicFunnelPatch(
   if (prevHasLocationQ) {
     if (YES.test(msg)) patch.location_known = 'spain'
     else if (NO.test(msg)) patch.location_known = 'outside'
+  }
+
+  // Auto-detecção CONSERVADORA (multi-idioma): cliente afirma espontaneamente que
+  // ESTÁ / MORA / VIVE / RESIDE na Espanha (ou em cidade espanhola conhecida).
+  // Só grava 'spain' (nunca 'outside') e só quando ainda não temos localização.
+  // Registra location_source='auto_opener_claim' para rastreio via override_applied.
+  if (patch.location_known === undefined) {
+    const claim = detectSpainResidenceClaim(msg)
+    if (claim.matched) {
+      patch.location_known = 'spain'
+      patch.location_source = 'auto_opener_claim'
+      patch.location_evidence = claim.evidence
+    }
   }
   // NOTA: NÃO consolidamos location_known fora do contexto da pergunta de
   // localização. Mesmo declarações como "no estoy en España" só são gravadas

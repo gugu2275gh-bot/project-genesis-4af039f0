@@ -1,6 +1,7 @@
 // @ts-nocheck
 // Wave 3b step 4: question detectors + localized model phrases
 import { type ChatLanguage, normalizeForLanguageChecks, getPromptTemplates } from './language.ts'
+import { isValidSpanishCity } from './spanish-cities.ts'
 
 export function isStructuredQuestionAnswer(text: string): boolean {
   const sample = normalizeForLanguageChecks(text)
@@ -741,3 +742,100 @@ export function getShortAck(
   }
   return ackYesNo[language] || ackYesNo['pt-BR']
 }
+
+/**
+ * Detector CONSERVADOR de residência atual na Espanha declarada espontaneamente.
+ *
+ * Só retorna { matched:true } quando o cliente afirma, em presente do indicativo,
+ * que ESTÁ / MORA / VIVE / RESIDE na Espanha (ou em cidade espanhola conhecida).
+ *
+ * NUNCA aciona por:
+ *  - passado ("estive na Espanha", "was in Spain", "j'étais")
+ *  - futuro/intenção ("vou pra Espanha", "quiero ir", "I'm going to")
+ *  - terceiros ("minha família mora na Espanha", "mi familia vive en España")
+ *  - condicional ("se eu for", "quando eu chegar")
+ *
+ * Usado APENAS para auto-preencher location_known='spain'. Nunca 'outside'.
+ */
+export function detectSpainResidenceClaim(text: string): { matched: boolean; evidence: string } {
+  const raw = String(text || '').trim()
+  if (!raw) return { matched: false, evidence: '' }
+  const n = normalizeForLanguageChecks(raw)
+  if (!n) return { matched: false, evidence: '' }
+
+  // ==== BLOQUEIOS (rejeição explícita) ====
+  // Terceiros: sujeito NÃO é o cliente. Se detectar padrões "família/filho/marido/pai/etc.",
+  // rejeita todo o texto para evitar falso positivo.
+  const THIRD_PARTY = /\b(minha|meu|mi|mis|my|ma|mon|mes)\s+(familia|família|filho|filha|filhos|filhas|marido|esposa|esposo|mulher|pai|mae|mãe|hijo|hija|hijos|hijas|esposo|esposa|padre|madre|husband|wife|son|daughter|children|kids|father|mother|mari|femme|fils|fille|pere|mere|père|mère)\b/i
+  if (THIRD_PARTY.test(n)) return { matched: false, evidence: '' }
+
+  // Passado / futuro / condicional / negação direta
+  const NEGATIVE_CONTEXT = new RegExp([
+    // passado PT/ES
+    '\\b(estive|estava|estivemos|fui|fomos|morei|moramos|vivi|vivemos|residi|estuve|estaba|estuvimos|vivi|vivimos|viviamos|residi|residia)\\b',
+    // passado EN
+    '\\b(was|were|used to|have been|had been|lived|resided)\\b',
+    // passado FR (normalizado — sem acentos e sem apóstrofos)
+    "\\b(etais|etions|j ai vecu|ai vecu|habitais|habitions|residais|j etais)\\b",
+    // futuro/intenção
+    '\\b(vou|iremos|vamos ir|pretendo|penso em ir|quero ir|planejo|voy a ir|voy a mudarme|pienso ir|quiero ir|planeo|i want to go|i plan to|i m going to|i am going to|going to move|i ll move|je vais aller|je compte|je pense aller|je vais m installer)\\b',
+    // condicional
+    '\\b(se eu for|quando eu chegar|se eu chegar|si voy|cuando llegue|si llego|if i go|when i arrive|when i get|si je vais|quand j arriverai)\\b',
+    // negação direta antes do verbo de residência (máx 15 chars entre)
+    '\\b(nao|no|not|never|jamais|non)\\b[^.!?]{0,15}\\b(estou|to|tou|moro|vivo|resido|estoy|live|reside|habite|suis|vis)\\b',
+  ].join('|'), 'i')
+  if (NEGATIVE_CONTEXT.test(n)) return { matched: false, evidence: '' }
+
+  // ==== PADRÕES POSITIVOS (presente + 1ª pessoa + Espanha) ====
+  // Rodamos SEMPRE sobre o texto normalizado (`n`) — sem acentos, sem apóstrofos,
+  // lowercase — para lidar com "I'm", "j'habite", "España" etc. de forma uniforme.
+  const SPAIN = '(espanha|espana|spain|espagne)'
+  const patterns: RegExp[] = [
+    // PT
+    new RegExp(`\\b(estou|to|tou|moro|vivo|resido|me encontro)\\s+(aqui\\s+)?(na|em|no)\\s+${SPAIN}\\b`, 'i'),
+    new RegExp(`\\bja\\s+(estou|moro|vivo|resido)\\s+(aqui\\s+)?(na|em)\\s+${SPAIN}\\b`, 'i'),
+    // ES
+    new RegExp(`\\b(estoy|vivo|resido|me encuentro)\\s+(actualmente\\s+|ya\\s+)?(en|aqui en)\\s+${SPAIN}\\b`, 'i'),
+    new RegExp(`\\bya\\s+(estoy|vivo|resido)\\s+(aqui\\s+)?en\\s+${SPAIN}\\b`, 'i'),
+    // EN — normalizado transforma "I'm" em "i m"
+    new RegExp(`\\bi\\s*(am|m)\\s+(currently\\s+|already\\s+)?(in|living in|residing in)\\s+${SPAIN}\\b`, 'i'),
+    new RegExp(`\\bi\\s+(live|reside)\\s+in\\s+${SPAIN}\\b`, 'i'),
+    // FR — normalizado transforma "j'habite" em "j habite"
+    new RegExp(`\\bje\\s+(suis|vis|reside|habite)\\s+(actuellement\\s+|deja\\s+)?(en|a)\\s+${SPAIN}\\b`, 'i'),
+    new RegExp(`\\bj\\s+habite\\s+(en|a)\\s+${SPAIN}\\b`, 'i'),
+  ]
+  for (const re of patterns) {
+    const m = n.match(re)
+    if (m) return { matched: true, evidence: m[0].trim() }
+  }
+
+  // ==== "estou/moro/vivo em <cidade espanhola>" (sobre `n`) ====
+  const cityPreps: RegExp[] = [
+    /\b(?:estou|to|tou|moro|vivo|resido|me encontro)\s+(?:aqui\s+)?(?:em|na|no)\s+([a-z][a-z '.-]{1,40})/i,
+    /\b(?:estoy|vivo|resido|me encuentro)\s+(?:actualmente\s+|ya\s+)?(?:en)\s+([a-z][a-z '.-]{1,40})/i,
+    /\bi\s*(?:am|m)\s+(?:currently\s+|already\s+)?(?:in|living in)\s+([a-z][a-z '.-]{1,40})/i,
+    /\bi\s+(?:live|reside)\s+in\s+([a-z][a-z '.-]{1,40})/i,
+    /\bje\s+(?:suis|vis|habite|reside)\s+(?:actuellement\s+)?(?:a|en|dans)\s+([a-z][a-z '.-]{1,40})/i,
+    /\bj\s+habite\s+(?:a|en|dans)\s+([a-z][a-z '.-]{1,40})/i,
+  ]
+  const STOPWORD_TAIL = /^(agora|actualmente|actualment|already|now|maintenant|desde|hace|há|ha|depuis|since|for|por|pela|pelo|em|and|e|y|et|mas|pero|but|mais|com|con|with|avec)\b/i
+  for (const re of cityPreps) {
+    const m = n.match(re)
+    if (!m || !m[1]) continue
+    // split por conectores e pontuação
+    let candidate = m[1].split(/[,.;!?]|(?:\s+e\s+)|(?:\s+y\s+)|(?:\s+and\s+)|(?:\s+et\s+)/i)[0].trim()
+    if (!candidate) continue
+    // tenta candidato completo, depois trunca palavra a palavra até 1 palavra
+    const words = candidate.split(/\s+/)
+    for (let k = words.length; k >= 1; k--) {
+      const sub = words.slice(0, k).join(' ')
+      // rejeita se última palavra é stopword (evita "valencia agora")
+      if (k === words.length && k > 1 && STOPWORD_TAIL.test(words[k - 1])) continue
+      if (isValidSpanishCity(sub)) return { matched: true, evidence: `${m[0].trim()}` }
+    }
+  }
+
+  return { matched: false, evidence: '' }
+}
+
+
