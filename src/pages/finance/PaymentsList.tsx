@@ -1059,7 +1059,14 @@ export default function PaymentsList() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {group.items.map((p) => (
+                          {[...group.items].sort((a: any, b: any) => {
+                            const ai = a.installment_number ?? 9999;
+                            const bi = b.installment_number ?? 9999;
+                            if (ai !== bi) return ai - bi;
+                            const ad = a.due_date || '';
+                            const bd = b.due_date || '';
+                            return ad.localeCompare(bd);
+                          }).map((p) => (
                             <TableRow key={p.id} className={getRowClassName(p)}>
                               {columns.map((col) => (
                                 <TableCell key={col.key} className={col.className}>
