@@ -1920,8 +1920,14 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             if (detPatch.empadronado_confirmed !== undefined && (funnelStateLive.empadronado_confirmed === null || funnelStateLive.empadronado_confirmed === undefined)) safe.empadronado_confirmed = detPatch.empadronado_confirmed
             if (detPatch.empadronado_city && !funnelStateLive.empadronado_city) safe.empadronado_city = detPatch.empadronado_city
             if (Object.keys(safe).length > 0) {
-              funnelStateLive = await applyTurnUpdates(supabase, funnelStateLive, safe as any, { override_applied: 'deterministic_pre_ai' })
+              const isAutoLocation = safe.location_known === 'spain' && detPatch.location_source === 'auto_opener_claim'
+              const overrideTag = isAutoLocation ? 'auto_location_spain_from_opener' : 'deterministic_pre_ai'
+              funnelStateLive = await applyTurnUpdates(supabase, funnelStateLive, safe as any, { override_applied: overrideTag })
               if (funnelStateLive.interest_confirmed) serviceMissing = false
+              if (isAutoLocation) {
+                ;(funnelStateLive as any).__justAutoLocationSpain = true
+                console.log('[AUTO_LOCATION] spain from evidence:', JSON.stringify(detPatch.location_evidence || ''))
+              }
               console.log('[DET_PATCH]', JSON.stringify(safe))
             }
           }
