@@ -41,8 +41,12 @@ interface RescheduleDialogProps {
 }
 
 export function RescheduleDialog({ open, onOpenChange, payment }: RescheduleDialogProps) {
+  const parseLocalDate = (s: string) => {
+    const [y, m, d] = s.split('T')[0].split('-').map(Number);
+    return new Date(y, (m || 1) - 1, d || 1);
+  };
   const [newDueDate, setNewDueDate] = useState<Date | undefined>(
-    payment.due_date ? new Date(payment.due_date) : addDays(new Date(), 7)
+    payment.due_date ? parseLocalDate(payment.due_date) : addDays(new Date(), 7)
   );
   const [reason, setReason] = useState("");
   const [notifyClient, setNotifyClient] = useState(true);
