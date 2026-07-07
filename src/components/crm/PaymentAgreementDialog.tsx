@@ -203,16 +203,19 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     const round2 = (v: number) => Math.round(v * 100) / 100;
     const gross = round2(parseFloat(form.amount) || 0);
     const vatRate = form.apply_vat ? (defaultVatRate || 21) / 100 : 0;
-    const vatAmount = round2(gross * vatRate);
-    const totalBeforeDiscount = round2(gross + vatAmount + totalFees);
+    // Discount is applied to the service value FIRST, then IVA is calculated on the discounted base
     let discountAmount = 0;
     if (form.discount_type === 'PERCENTUAL') {
-      discountAmount = round2(totalBeforeDiscount * ((parseFloat(form.discount_value) || 0) / 100));
+      discountAmount = round2(gross * ((parseFloat(form.discount_value) || 0) / 100));
     } else if (form.discount_type === 'VALOR') {
       discountAmount = round2(parseFloat(form.discount_value) || 0);
     }
-    const finalAmount = round2(Math.max(0, totalBeforeDiscount - discountAmount));
-    return { gross, discountAmount, totalBeforeDiscount, vatAmount, finalAmount, vatRate };
+    discountAmount = Math.min(discountAmount, gross);
+    const discountedBase = round2(Math.max(0, gross - discountAmount));
+    const vatAmount = round2(discountedBase * vatRate);
+    const totalBeforeDiscount = round2(gross + round2(gross * vatRate) + totalFees);
+    const finalAmount = round2(discountedBase + vatAmount + totalFees);
+    return { gross, discountAmount, discountedBase, totalBeforeDiscount, vatAmount, finalAmount, vatRate };
   }, [form.amount, form.discount_type, form.discount_value, form.apply_vat, defaultVatRate, totalFees]);
 
   const [isSaving, setIsSaving] = useState(false);
