@@ -113,8 +113,7 @@ export default function Commissions() {
           }
         }
         for (const o of opps) {
-          const referral = o.lead?.contacts?.referral_name?.trim();
-          if (!referral) continue;
+          const referral = o.lead?.contacts?.referral_name?.trim() || '';
           // Base da comissão = valor do serviço COM desconto e SEM IVA.
           // Obtido a partir de qualquer pagamento da oportunidade: gross_amount - discount.
           const { data: pmt } = await supabase
@@ -139,6 +138,7 @@ export default function Commissions() {
             total_amount: discountedBase,
           });
         }
+
       }
       return result;
     },
