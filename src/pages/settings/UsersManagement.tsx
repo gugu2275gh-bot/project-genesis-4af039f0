@@ -957,6 +957,41 @@ export default function UsersManagement() {
                                 <Button
                                   variant="outline"
                                   size="sm"
+                                  title="Resetar senha"
+                                >
+                                  <KeyRound className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Resetar senha</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Enviar um email de redefinição de senha para <strong>{user.full_name}</strong> ({user.email})?
+                                    O usuário receberá um link para criar uma nova senha.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => resetPasswordMutation.mutate(user.email)}
+                                    disabled={resetPasswordMutation.isPending}
+                                  >
+                                    {resetPasswordMutation.isPending ? (
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    ) : (
+                                      <KeyRound className="h-4 w-4 mr-2" />
+                                    )}
+                                    Enviar email
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   title="Excluir usuário"
                                   className="text-destructive hover:text-destructive"
                                 >
