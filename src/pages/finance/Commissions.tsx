@@ -526,7 +526,7 @@ export default function Commissions() {
                           key={`${s.contract_id}:${s.opportunity_id}`}
                           value={`${s.contract_id}:${s.opportunity_id}`}
                         >
-                          {s.client_name} — {s.service_name} (€{s.total_amount.toFixed(2)})
+                          {s.contract_number ? `Contrato ${s.contract_number} · ` : ''}{s.client_name} — {s.service_name} (€{s.total_amount.toFixed(2)})
                           {s.referral_name ? ` · Indicado: ${s.referral_name}` : ''}
                         </SelectItem>
                       ))}
