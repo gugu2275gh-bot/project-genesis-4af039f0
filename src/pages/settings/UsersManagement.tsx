@@ -46,7 +46,8 @@ import {
   XCircle,
   Loader2,
   Pencil,
-  Trash2
+  Trash2,
+  KeyRound
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -261,6 +262,33 @@ export default function UsersManagement() {
     onError: (error: Error) => {
       toast({
         title: 'Erro ao excluir usuário',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Reset password mutation - sends password reset email
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const origin = window.location.origin;
+      const productionOrigin = 'https://cb.innovatia.com.br';
+      const isPreviewDomain = origin.includes('lovableproject.com') || origin.includes('id-preview--');
+      const redirectBase = isPreviewDomain ? productionOrigin : origin;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${redirectBase}/reset-password`,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_data, email) => {
+      toast({
+        title: 'Email de redefinição enviado',
+        description: `Um link para redefinir a senha foi enviado para ${email}.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Erro ao enviar email de redefinição',
         description: error.message,
         variant: 'destructive',
       });
@@ -923,6 +951,41 @@ export default function UsersManagement() {
                                 <CheckCircle2 className="h-4 w-4 text-success" />
                               )}
                             </Button>
+
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  title="Resetar senha"
+                                >
+                                  <KeyRound className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Resetar senha</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Enviar um email de redefinição de senha para <strong>{user.full_name}</strong> ({user.email})?
+                                    O usuário receberá um link para criar uma nova senha.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => resetPasswordMutation.mutate(user.email)}
+                                    disabled={resetPasswordMutation.isPending}
+                                  >
+                                    {resetPasswordMutation.isPending ? (
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    ) : (
+                                      <KeyRound className="h-4 w-4 mr-2" />
+                                    )}
+                                    Enviar email
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
 
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
