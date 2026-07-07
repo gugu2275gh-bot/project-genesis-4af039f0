@@ -1301,9 +1301,14 @@ export function ContractGroupsSection({
         const currency = leadPayments[0]?.currency || 'EUR';
         const symbol = currency === 'EUR' ? '€' : currency;
         const first = leadPayments[0] as any;
-        const grossTotal = leadPayments.reduce((sum: number, p: any) => sum + Number(p.gross_amount || 0), 0);
-        const vatTotal = leadPayments.reduce((sum: number, p: any) => sum + Number(p.vat_amount || 0), 0);
-        const discountTotal = leadPayments.reduce((sum: number, p: any) => sum + Number(p.discount_value || 0), 0);
+        // gross_amount, discount_value and vat_amount are stored per-installment as
+        // the TOTAL of the service (same value repeated on every row). Do NOT sum
+        // them across installments — take the value from the first payment.
+        const grossTotal = Number(first?.gross_amount || 0);
+        const vatTotal = leadPayments.some((p: any) => Number(p.vat_amount || 0) > 0)
+          ? (Number(first?.vat_amount || 0) || leadPayments.reduce((sum: number, p: any) => sum + Number(p.vat_amount || 0), 0))
+          : 0;
+        const discountTotal = Number(first?.discount_value || 0);
         if (grossTotal > 0) {
           block += `Valor do Serviço: ${symbol} ${grossTotal.toFixed(2)}\n`;
         }
