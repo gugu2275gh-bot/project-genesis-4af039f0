@@ -90,6 +90,7 @@ export default function Commissions() {
       const result: Array<{
         opportunity_id: string;
         contract_id: string;
+        contract_number: string | null;
         client_name: string;
         referral_name: string;
         service_name: string;
@@ -132,6 +133,7 @@ export default function Commissions() {
           result.push({
             opportunity_id: o.id,
             contract_id: c.id,
+            contract_number: c.contract_number,
             client_name: o.lead?.contacts?.full_name || 'Sem nome',
             referral_name: referral,
             service_name: o.lead?.service_types?.name || o.lead?.service_interest || 'Serviço',
@@ -524,7 +526,7 @@ export default function Commissions() {
                           key={`${s.contract_id}:${s.opportunity_id}`}
                           value={`${s.contract_id}:${s.opportunity_id}`}
                         >
-                          {s.client_name} — {s.service_name} (€{s.total_amount.toFixed(2)})
+                          {s.contract_number ? `Contrato ${s.contract_number} · ` : ''}{s.client_name} — {s.service_name} (€{s.total_amount.toFixed(2)})
                           {s.referral_name ? ` · Indicado: ${s.referral_name}` : ''}
                         </SelectItem>
                       ))}
