@@ -322,7 +322,7 @@ export function getPreHandoffSummaryMessage(language: ChatLanguage): string {
   if (language === 'fr') {
     return 'Parfait, je peux déjà avoir une première vision de votre cas.|||Chez CB, nous analysons chaque cas individuellement, en cherchant toujours la voie la plus sûre et conforme à la loi.'
   }
-  return 'Perfeito, já consigo ter uma visao inicial do seu caso.|||Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
+  return 'Perfeito, já consigo ter uma visão inicial do seu caso.|||Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
 }
 
 // H3 — texto literal do diagrama (única bolha; H4 removida na v2)
