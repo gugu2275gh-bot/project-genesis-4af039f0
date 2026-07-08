@@ -256,10 +256,10 @@ export function getEmpadronadoQuestion(language: ChatLanguage): string {
 }
 
 export function getEmpadronamientoSinceQuestion(language: ChatLanguage): string {
-  if (language === 'es') return '¿Desde cuándo estás empadronado?'
-  if (language === 'en') return 'Since when have you been registered (empadronado)?'
-  if (language === 'fr') return 'Depuis quand êtes-vous empadronado ?'
-  return 'Desde quando você está empadronado?'
+  if (language === 'es') return '¿Desde cuándo estás empadronado?\n\nSolo la fecha DD/MM/AAAA'
+  if (language === 'en') return 'Since when are you registered (empadronado)?\n\nOnly the date DD/MM/YYYY'
+  if (language === 'fr') return 'Depuis quand êtes-vous empadronado ?\n\nUniquement la date JJ/MM/AAAA'
+  return 'Desde quando está empadronado?\n\nsomente a data DD/MM/AAAA'
 }
 
 export function getEmpadronamientoCityQuestion(language: ChatLanguage): string {
