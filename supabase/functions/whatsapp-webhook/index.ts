@@ -2141,7 +2141,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           key: 'preHandoff', label: 'PRÉ-HANDOFF + HANDOFF (BPMN-3)',
           done: preHandoffDone && handoffDone,
           instruction:
-            'Envie EXATAMENTE 4 frases curtas, NESTA ORDEM, separadas pelo delimitador "|||" (4 bolhas em UMA resposta): (1) "Perfeito. Já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." (3) "Vou encaminhar suas informações para um especialista analisar com mais profundidade." (4) "Estou à disposição para ajudar se precisa! Vou te encaminhar para um atendente." NÃO faça novas perguntas. NÃO insira "modo tira-dúvidas" ANTES dessas 4 mensagens.',
+            'Envie EXATAMENTE 3 frases curtas, NESTA ORDEM, separadas pelo delimitador "|||" (3 bolhas em UMA resposta): (1) "Perfeito, já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." (3) "Vou encaminhar suas informações para um especialista analisar com mais profundidade." NÃO faça novas perguntas. NÃO insira "modo tira-dúvidas" ANTES dessas 3 mensagens.',
         })
 
         // GUARD anti-handoff prematuro: só consideramos cadastro concluído se os dados
