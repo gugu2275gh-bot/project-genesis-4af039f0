@@ -108,7 +108,7 @@ export type PromptTemplates = {
 const TEMPLATES: Record<ChatLanguage, PromptTemplates> = {
   'pt-BR': {
     askName: 'Antes de tudo, como é seu nome completo?',
-    thanksThenAskEmail: 'Obrigado. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?',
+    thanksThenAskEmail: 'Obrigado, Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?',
     interestQuestion: 'Me conta com calma: o que você busca hoje? Pode ser nacionalidade, residência, estudos, arraigo ou algum documento específico.',
     servicesCatalog: 'Trabalhamos com cidadania espanhola, nômade digital, residências, NIE, TIE, homologação de estudos, antecedentes, reagrupação e outros processos.',
     oneMomentPlease: 'Ótima pergunta, já te explico em seguida.',
