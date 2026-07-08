@@ -419,10 +419,10 @@ export function getOutsideSpainNextQuestion(
 
   if (!askedIdade) return getOutsideSpainAgeQuestion(language)
   if (!askedEuropaEffective) {
-    if (language === 'es') return '¿Estuviste en Europa en los últimos 6 meses?'
-    if (language === 'en') return 'Have you been in Europe in the last 6 months?'
-    if (language === 'fr') return 'Êtes-vous allé en Europe au cours des 6 derniers mois ?'
-    return 'Você esteve na Europa nos últimos 6 meses?'
+    if (language === 'es') return '¿Estuviste en Europa en los últimos 6 meses? (sí o no)'
+    if (language === 'en') return 'Have you been in Europe in the last 6 months? (yes or no)'
+    if (language === 'fr') return 'Êtes-vous allé en Europe au cours des 6 derniers mois ? (oui ou non)'
+    return 'você esteve na Europa nos últimos 6 meses? (sim ou não)'
   }
   if (!askedFamiliar) {
     if (language === 'es') return '¿Tienes algún familiar europeo o residente legal en España?'
