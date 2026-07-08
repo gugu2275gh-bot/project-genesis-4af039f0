@@ -100,7 +100,7 @@ const STEPS: Record<StepCode, StepDef> = {
       hasValidEmail(raw)
         ? { valid: true, value: raw.trim().toLowerCase() }
         : { valid: false, reason: 'invalid_email' },
-    next: ALWAYS('INTEREST'),
+    next: ALWAYS('LOCATION'),
   },
 
   INTEREST: {
