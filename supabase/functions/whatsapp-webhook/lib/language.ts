@@ -112,7 +112,7 @@ const TEMPLATES: Record<ChatLanguage, PromptTemplates> = {
     interestQuestion: 'Me conta com calma: o que você busca hoje? Pode ser nacionalidade, residência, estudos, arraigo ou algum documento específico.',
     servicesCatalog: 'Trabalhamos com cidadania espanhola, nômade digital, residências, NIE, TIE, homologação de estudos, antecedentes, reagrupação e outros processos.',
     oneMomentPlease: 'Ótima pergunta, já te explico em seguida.',
-    askLocationSpain: 'Você está na Espanha?',
+    askLocationSpain: 'Você está na Espanha? Responda apenas *SIM* ou *NÃO*.',
     openingLine1: 'Olá 😊 Tudo bem? Obrigado por falar com a CB Asesoría. Vou te ajudar a entender seus caminhos legais aqui na Espanha.',
     openingLine2: 'Vou te fazer algumas perguntas rápidas só para entender seu caso e te direcionar para o especialista certo, pode ser?',
     outsideIntro: 'Perfeito. Vou te fazer perguntas rápidas só para entender melhor seu cenário.',
