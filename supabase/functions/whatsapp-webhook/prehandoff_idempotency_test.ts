@@ -26,7 +26,7 @@ Deno.test('preHandoffSent=true + só H1 (pt-BR): vira sufixo pós-handoff', () =
 })
 
 Deno.test('preHandoffSent=true + KB + H1 colado (pt-BR): mantém só KB', () => {
-  const hybrid = 'O visado de estudante exige matrícula em escola homologada.\n\nPerfeito. Já consigo ter uma visão inicial do seu caso.'
+  const hybrid = 'O visado de estudante exige matrícula em escola homologada.\n\nPerfeito, já consigo ter uma visão inicial do seu caso.'
   const out = stripLockedSentinel(stripRepeatedPreHandoff(hybrid, 'pt-BR', { preHandoffSent: true }))
   assert(/visado de estudante/i.test(out))
   assert(!/vis[ãa]o inicial/i.test(out), `got: ${out}`)
