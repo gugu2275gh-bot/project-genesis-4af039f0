@@ -25,6 +25,10 @@ export const NAME_REFUSAL_PATTERNS: RegExp[] = [
   /\b(no\s+tengo|sin\s+nombre|prefiero\s+no|no\s+quiero\s+(decir|dar|informar))\b/i, // es
   /\b(i\s+(do\s*n'?t|don'?t)\s+(have|want|wanna)|without\s+a?\s*name|i\s+have\s+no\s+name|prefer\s+not)\b/i, // en
   /\b(je\s+n['’]?ai\s+pas|sans\s+nom|je\s+(ne\s+)?(veux|souhaite)\s+pas)\b/i, // fr
+  // "Não entendo / no entiendo / I don't understand / je ne comprends pas"
+  /\b(n[ãa]o\s+(entendo|entendi|compreendo|percebo)|no\s+(entiendo|comprendo|s[eé])|i\s+(do\s*n'?t|don'?t|cannot|can'?t)\s+understand|je\s+(ne\s+)?comprends\s+pas)\b/i,
+  // Pedidos de troca de idioma ("en español", "em português", "in english", "en français")
+  /\b(en\s+(espa[ñn]ol|ingl[eé]s|franc[eé]s|portugu[eé]s)|em\s+(portugu[eê]s|espanhol|ingl[eê]s|franc[eê]s)|in\s+(english|spanish|portuguese|french)|en\s+fran[çc]ais)\b/i,
 ]
 
 // Verbos em 1ª pessoa indicam frase, não nome próprio.
