@@ -666,10 +666,9 @@ export function getInsideSpainNextQuestion(
   const askedCidade = !!opts.empadronadoCity
     || /\b(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)\b/i.test(transcript)
 
-  // B2 — data de entrada (com B1 intro só na 1ª vez)
+  // B2 — data de entrada (sem intro extra; mensagem literal do cliente)
   if (!askedEntryDate) {
-    const entryQ = getInsideSpainEntryDateQuestion(language)
-    return b1IntroSent ? entryQ : `${t.insideIntro}\n\n${entryQ}`
+    return getInsideSpainEntryDateQuestion(language)
   }
   // B3 — empadronado?
   if (!askedEmpadronado) return getEmpadronadoQuestion(language)
