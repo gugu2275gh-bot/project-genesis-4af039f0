@@ -45,7 +45,7 @@ Deno.test('preHandoffSent=true + EN bloco completo: vira sufixo EN', () => {
 })
 
 Deno.test('preHandoffSent=true + FR bloco completo: vira sufixo FR', () => {
-  const fr = 'Parfait. Je peux déjà avoir une première vision de votre cas.\n\nChez CB, nous analysons chaque cas individuellement.\n\nJe vais transmettre vos informations à un spécialiste.'
+  const fr = 'Parfait, je peux déjà avoir une première vision de votre cas.\n\nChez CB, nous analysons chaque cas individuellement.\n\nJe vais transmettre vos informations à un spécialiste.'
   const out = stripLockedSentinel(stripRepeatedPreHandoff(fr, 'fr', { preHandoffSent: true }))
   assert(/un de nos sp[ée]cialistes/i.test(out), `got: ${out}`)
 })
