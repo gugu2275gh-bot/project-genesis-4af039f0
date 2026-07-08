@@ -482,10 +482,10 @@ export function getEmailReaskQuestion(language: ChatLanguage): string {
 }
 
 export function getEmailQuestion(language: ChatLanguage): string {
-  if (language === 'es') return 'Gracias. ¿Cuál es el mejor email para enviarte orientaciones y dar seguimiento a tu caso?'
-  if (language === 'en') return 'Thank you. What is the best email to send you guidance and follow up on your case?'
-  if (language === 'fr') return 'Merci. Quel est le meilleur e-mail pour vous envoyer des orientations et suivre votre dossier ?'
-  return 'Obrigado. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?'
+  if (language === 'es') return '¿Cuál es el mejor email para enviarte orientaciones y dar seguimiento a tu caso?'
+  if (language === 'en') return 'What is the best email to send you guidance and follow up on your case?'
+  if (language === 'fr') return 'Quel est le meilleur e-mail pour vous envoyer des orientations et suivre votre dossier ?'
+  return 'Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?'
 }
 
 export function getFullNameReaskQuestion(language: ChatLanguage): string {
