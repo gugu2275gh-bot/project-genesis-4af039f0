@@ -1,6 +1,6 @@
 // @ts-nocheck
 // Wave 3b step 6: response overrides (skip name, reask email, advance flow, loop)
-import { type ChatLanguage } from './language.ts'
+import { type ChatLanguage, normalizeForLanguageChecks } from './language.ts'
 import { extractLastQuestion, extractTextBeforeLastQuestion, areQuestionsEquivalent } from './text-utils.ts'
 import {
   isQuestionAboutFullName,
@@ -511,6 +511,26 @@ export function forceReaskFullNameIfSingleWord(
   return aiResponse
 }
 
+const THANKS_PREFIXES: Record<ChatLanguage, string[]> = {
+  'pt-BR': ['obrigado', 'obrigada', 'agradeço', 'grato', 'grata', 'valeu'],
+  'es': ['gracias', 'agradezco', 'agradecido', 'agradecida'],
+  'en': ['thank', 'thanks', 'appreciate'],
+  'fr': ['merci', 'remercie', 'remerciements'],
+}
+
+function hasThanksPrefix(text: string, language: ChatLanguage): boolean {
+  const normalized = normalizeForLanguageChecks(text || '').toLowerCase()
+  const prefixes = THANKS_PREFIXES[language] || THANKS_PREFIXES['pt-BR']
+  return prefixes.some((p) => normalized.startsWith(p) || normalized.includes(` ${p}`))
+}
+
+function addThanksPrefix(text: string, language: ChatLanguage): string {
+  if (language === 'es') return `Gracias. ${text}`
+  if (language === 'en') return `Thank you. ${text}`
+  if (language === 'fr') return `Merci. ${text}`
+  return `Obrigado. ${text}`
+}
+
 export function forceSkipFullNameIfAlreadyKnown(
   aiResponse: string,
   language: ChatLanguage,
@@ -525,7 +545,15 @@ export function forceSkipFullNameIfAlreadyKnown(
   // Sem replacement: nome e email já conhecidos. NÃO devolva aiResponse (manteria a pergunta).
   // Devolva o preamble; se vazio, devolva string vazia para o caller disparar retry.
   if (!replacement) return preamble
-  return preamble ? `${preamble}\n${replacement}` : replacement
+  const hasThanksInPreamble = hasThanksPrefix(preamble, language)
+  const hasThanksInReplacement = hasThanksPrefix(replacement, language)
+  const cleanReplacement = hasThanksInReplacement && hasThanksInPreamble
+    ? replacement.replace(/^[^.!?]+[.!?]\s*/, '')
+    : replacement
+  const finalReplacement = hasThanksInPreamble || hasThanksInReplacement
+    ? cleanReplacement
+    : addThanksPrefix(cleanReplacement, language)
+  return preamble ? `${preamble}\n${finalReplacement}` : finalReplacement
 }
 
 export function forceReaskEmailIfMissing(
