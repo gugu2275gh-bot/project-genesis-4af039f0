@@ -3088,7 +3088,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                     .from('whatsapp_templates')
                     .select('content_sid, status, language, is_active')
                     .eq('automation_type', 'onboarding_m7_localizacao')
-                    .eq('language', detectedChatLanguage)
+                    .eq('language', detectedChatLanguage === 'pt-BR' ? 'pt_BR' : detectedChatLanguage)
                     .eq('status', 'approved')
                     .eq('is_active', true)
                     .maybeSingle()
