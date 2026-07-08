@@ -47,9 +47,9 @@ const B2_CANONICAL = SPAIN_ONLY_TRIGGER
 
 const LANGS = ['pt-BR', 'es', 'en', 'fr'] as const
 
-// IA "errou" perguntando data de entrada para cliente OUTSIDE → deve voltar para A1+A2
+// A1 preâmbulo foi removido do fluxo fora-da-Espanha; age question deve ser emitida sem preâmbulo em ambos os casos.
 for (const lang of LANGS) {
-  Deno.test(`A1 preâmbulo presente quando a1_scenario_sent=false (${lang})`, () => {
+  Deno.test(`A1 preâmbulo NUNCA presente após resposta negativa de localização (${lang})`, () => {
     const out = forceCorrectBlockForLocation(SPAIN_ONLY_TRIGGER[lang], lang, {
       locationKnown: 'outside',
       entryDateConfirmed: null,
@@ -59,11 +59,11 @@ for (const lang of LANGS) {
       outsideProgress: { a1_scenario_sent: false },
     } as any)
     const clean = stripLockedSentinel(out)
-    assertStringIncludes(clean, A1_PREAMBLE[lang])
     assertStringIncludes(clean, A2_CANONICAL[lang])
+    assert(!clean.includes(A1_PREAMBLE[lang]), `A1 preâmbulo não deve mais aparecer (${lang}): ${clean}`)
   })
 
-  Deno.test(`A1 preâmbulo OMITIDO quando a1_scenario_sent=true (${lang})`, () => {
+  Deno.test(`A2 age question emitida sem preâmbulo quando a1_scenario_sent=true (${lang})`, () => {
     const out = forceCorrectBlockForLocation(SPAIN_ONLY_TRIGGER[lang], lang, {
       locationKnown: 'outside',
       entryDateConfirmed: null,
@@ -74,7 +74,7 @@ for (const lang of LANGS) {
     } as any)
     const clean = stripLockedSentinel(out)
     assertStringIncludes(clean, A2_CANONICAL[lang])
-    assert(!clean.includes(A1_PREAMBLE[lang]), `A1 preâmbulo não pode reaparecer (${lang}): ${clean}`)
+    assert(!clean.includes(A1_PREAMBLE[lang]), `A1 preâmbulo não deve aparecer (${lang}): ${clean}`)
   })
 }
 
