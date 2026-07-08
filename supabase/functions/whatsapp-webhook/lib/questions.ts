@@ -542,10 +542,18 @@ export function classifyYesNo(text: string): YesNoClassification {
 
   // Frases evasivas/ambíguas → sempre ambíguo
   const ambiguousPhrases = [
-    /\b(nao sei|n[ãa]o sei|no se|no s[ée]|dont know|don't know|do not know|ne sais pas|sais pas|talvez|maybe|perhaps|peut etre|depende|depends|quem sabe|pode ser|as vezes|sou de|eu sou de|soy de|je suis de|moro em|vivo em|vivo na|moro na|estou em|estoy en|je suis en)\b/i,
+    /\b(nao sei|n[ãa]o sei|no se|no s[ée]|dont know|don't know|do not know|ne sais pas|sais pas)\b/i,
+    /\b(talvez|maybe|perhaps|peut[ -]?etre|peut[ -]?être)\b/i,
+    /\b(depende|depends|quem sabe|quien sabe)\b/i,
+    /\b(sou de l[aá]|soy de all[aá]|je suis de l[aà])\b/i,
   ]
   for (const re of ambiguousPhrases) {
     if (re.test(raw)) return 'ambiguous'
+  }
+
+  // "Pode ser" isolado pode ser afirmativo informal; só é ambíguo se não houver contexto de localização
+  if (/\b(pode ser|puede ser)\b/i.test(raw) && !/\b(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|valencia|sevilla|m[áa]laga|malaga|bilbao|alicante|zaragoza|murcia|palma|granada)\b/i.test(raw)) {
+    return 'ambiguous'
   }
 
   // Correspondência EXATA de respostas curtas afirmativas
