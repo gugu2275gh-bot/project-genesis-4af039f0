@@ -2905,7 +2905,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             }
 
 
-            // BPMN-3 MODO PÓS-HANDOFF: se H1-H4 já foram enviados, anexa o sufixo
+            // BPMN-3 MODO PÓS-HANDOFF: se H1-H3 já foram enviados, anexa o sufixo
             // localizado de "aguarde um especialista" ao final da resposta (uma única bolha).
             const wasHandoffSentBefore = !!funnelStateLive.handoff_sent
             if (wasHandoffSentBefore) {
