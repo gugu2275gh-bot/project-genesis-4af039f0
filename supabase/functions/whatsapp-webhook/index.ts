@@ -2224,7 +2224,14 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               return vn === msgNorm || (vn.length >= 5 && (vn.includes(msgNorm) || msgNorm.includes(vn)))
             })
             const nameAlreadyConfirmed = !!(funnelStateLive as any)?.name_confirmed
-            const silentlyIgnore = isRepeatOfConfirmed || (nameAlreadyConfirmed && looksLikeName)
+            // Se o Turn Orchestrator decidiu re-perguntar (reask_current) OU
+            // avançar (advance) para a etapa atual, NÃO silenciamos — precisamos
+            // que o bot responda (re-pergunte). O guard de repetição só vale
+            // quando a mensagem é um eco espontâneo, não uma resposta que o
+            // orquestrador já classificou como precisando de re-ask.
+            const orchestratorHandled = orchestratorDecision &&
+              (orchestratorDecision.action.kind === 'reask_current' || orchestratorDecision.action.kind === 'advance')
+            const silentlyIgnore = !orchestratorHandled && (isRepeatOfConfirmed || (nameAlreadyConfirmed && looksLikeName))
 
             if (silentlyIgnore) {
               console.log(`[REPETITION_GUARD] silenced echo of confirmed data: "${rawCustomerMessage.slice(0, 80)}"`)
