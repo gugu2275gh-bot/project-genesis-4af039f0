@@ -2554,14 +2554,8 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         aiResponse = stripRepeatedOpener(aiResponse, detectedChatLanguage, blockFlags)
         // Anti-repetição global: se IA repetiu pergunta canônica já feita, força próxima pendente.
         aiResponse = preventRepeatedCanonicalQuestion(aiResponse, detectedChatLanguage, blockFlags)
-        // BPMN v2: Msg5 + Msg6 na MESMA rodada — anexa Msg6 quando IA emite Msg5 sozinha.
-        aiResponse = ensureServicesAttachedToInterest(aiResponse, detectedChatLanguage, allAssistant)
-        // D1 Bizagi (fallback): garante "serviços atendidos" caso interesse já confirmado e Msg6 nunca enviada.
-        aiResponse = forceServicesMessageAfterInterest(aiResponse, detectedChatLanguage, {
-          interestKnown: !serviceMissing,
-          locationKnown: !!funnelStateLive.location_known,
-          assistantTranscript: allAssistant,
-        })
+        // M5/M6 removidos: sem anexação de catálogo nem force-services.
+
 
         // ===== HARD-LOCK FINAL: pré-handoff determinístico =====
         // Durante o gate, substitui o texto da IA pela próxima pergunta canônica
