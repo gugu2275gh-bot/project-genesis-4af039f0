@@ -248,12 +248,26 @@ export default function LLMSettings() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2 flex-wrap">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={handleImportFile}
+        />
+        <Button variant="outline" onClick={handleExport}>
+          <Download className="h-4 w-4 mr-2" /> Exportar configuração
+        </Button>
+        <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+          <Upload className="h-4 w-4 mr-2" /> Importar configuração
+        </Button>
         <Button onClick={() => saveMutation.mutate(draft)} disabled={saveMutation.isPending}>
           {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
           Salvar
         </Button>
       </div>
+
     </div>
   );
 }
