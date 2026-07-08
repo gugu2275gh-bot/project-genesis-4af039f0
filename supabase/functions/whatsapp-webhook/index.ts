@@ -2036,16 +2036,13 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             `Agradeça brevemente o nome e pergunte APENAS o melhor e-mail. Envie EXATAMENTE esta frase, JÁ no idioma travado da conversa, sem traduzir nem alterar: "${t.thanksThenAskEmail}". NÃO faça outras perguntas nem responda dúvidas factuais agora.`,
         })
 
-        // Etapa 4 — Interesse (Msg5 + Msg6) — só conclui quando interest_confirmed for capturado de fato
-        const interesseAsked = sentAny(/me conta com calma.*o que voc[êe] busca|cu[eé]ntame con calma.*qu[eé] buscas|tell me.*what are you looking for/i)
-        const catalogSent = sentAny(/trabalhamos com cidadania.*n[óo]made digital|trabajamos con (la )?ciudadan[ií]a.*n[óo]mada digital|we work with (spanish )?citizenship.*digital nomad/i)
-        const interesseDone = !serviceMissing
-        steps.push({
-          key: 'interesse', label: 'INTERESSE / SERVIÇO',
-          done: interesseDone,
-          instruction:
-            `BPMN v2: envie Msg5 e Msg6 na MESMA rodada como DUAS bolhas separadas por "|||" (ambas JÁ no idioma travado, NÃO traduza nem altere): "${t.interestQuestion}|||${t.servicesCatalog}". A resposta do cliente deve ser uma das opções de Msg5; se vier algo fora, peça para escolher uma das opções (sem reenviar Msg5+Msg6). NÃO consulte a Base de Conhecimento.`,
-        })
+        // Etapa 4 — Interesse (M5/M6) REMOVIDA do onboarding. O fluxo pula
+        // direto de e-mail para localização. `catalogSent` mantido como
+        // constante fixa `false` só para compatibilidade dos call sites
+        // legados que ainda o passam para helpers (getNextScriptedQuestion).
+        const catalogSent = false
+
+
 
         // Etapa 5 — Localização (Msg7) — exige a pergunta exata "Espanha OU outro país"
         const localizacaoAsked = sentAny(/hoje voc[êe] j[áa] est[áa] na espanha/i)
