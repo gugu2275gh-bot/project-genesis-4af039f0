@@ -1134,10 +1134,10 @@ export function preventRepeatedCanonicalQuestion(
       // Pergunta já foi feita. Pega próxima canônica.
       console.warn(`[ANTI_REPEAT] pergunta canônica ${a.name} já feita — substituindo por próxima pendente`)
       // Reusa enforceBlockCompletion injetando "fake H1" para forçar próxima pergunta.
-      const fakeH1 = language === 'es' ? 'Perfecto. Ya puedo tener una visión inicial de tu caso.'
-        : language === 'en' ? 'Perfect. I can already get an initial view of your case.'
-        : language === 'fr' ? 'Parfait. Je peux déjà avoir une première vision de votre cas.'
-        : 'Perfeito. Já consigo ter uma visão inicial do seu caso.'
+      const fakeH1 = language === 'es' ? 'Perfecto, ya puedo tener una visión inicial de tu caso.'
+        : language === 'en' ? 'Perfect, I can already get an initial view of your case.'
+        : language === 'fr' ? 'Parfait, je peux déjà avoir une première vision de votre cas.'
+        : 'Perfeito, já consigo ter uma visão inicial do seu caso.'
       const replacement = enforceBlockCompletion(fakeH1, language, flags)
       // Se enforceBlockCompletion devolveu o próprio fakeH1 (i.e., bloco completo), libera resposta original.
       if (replacement === fakeH1) return aiResponse
