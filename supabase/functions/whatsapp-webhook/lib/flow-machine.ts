@@ -287,7 +287,7 @@ export function resolveCurrentStep(state: FunnelState): StepCode {
   if (state.pre_handoff_sent) return 'HANDOFF'
   if (!state.name_confirmed) return state.step === 'abertura' ? 'ABERTURA' : 'NAME'
   if (!state.email_confirmed) return 'EMAIL'
-  if (!state.interest_confirmed) return 'INTEREST'
+  // INTEREST desativado: onboarding pula direto de EMAIL → LOCATION.
   if (!state.location_known) return 'LOCATION'
   if (state.location_known === 'spain') {
     if (!state.entry_date_confirmed) return 'INSIDE_ENTRY_DATE'
