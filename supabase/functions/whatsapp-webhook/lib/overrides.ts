@@ -1,6 +1,6 @@
 // @ts-nocheck
 // Wave 3b step 6: response overrides (skip name, reask email, advance flow, loop)
-import { type ChatLanguage } from './language.ts'
+import { type ChatLanguage, normalizeForLanguageChecks } from './language.ts'
 import { extractLastQuestion, extractTextBeforeLastQuestion, areQuestionsEquivalent } from './text-utils.ts'
 import {
   isQuestionAboutFullName,
