@@ -60,17 +60,16 @@ Deno.test('D1: forceServicesMessageAfterInterest no-op when location already kno
 
 // ---------- D2 ----------
 
-Deno.test('D2: getOutsideSpainAgeQuestion separates A1 from A2 with blank line (PT)', () => {
+Deno.test('D2: getOutsideSpainAgeQuestion returns age question only (PT)', () => {
   const q = getOutsideSpainAgeQuestion('pt-BR')
-  assertStringIncludes(q, 'fora da Espanha')
   assertStringIncludes(q, 'Qual sua idade?')
-  assert(q.includes('\n\n'), 'A1 and A2 should be separated by blank line')
+  assert(!q.includes('fora da Espanha'), 'A1 preamble should not be present')
 })
 
-Deno.test('D2: getOutsideSpainAgeQuestion separates blocks in all 4 languages', () => {
+Deno.test('D2: getOutsideSpainAgeQuestion returns age question only in all 4 languages', () => {
   for (const lang of ['pt-BR', 'es', 'en', 'fr'] as const) {
     const q = getOutsideSpainAgeQuestion(lang)
-    assert(q.includes('\n\n'), `lang ${lang} must include blank line separator`)
+    assert(!q.includes('\n\n'), `lang ${lang} should not include blank line separator`)
   }
 })
 
