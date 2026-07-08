@@ -3,7 +3,7 @@ import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.t
 import { stripRepeatedPreHandoff, stripLockedSentinel } from './lib/overrides.ts'
 
 const FULL_BLOCK_ES =
-  'Perfecto. Ya puedo tener una visión inicial de tu caso.\n\nEn CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.\n\nVoy a remitir tu información a un especialista para que la analice con más profundidad.'
+  'Perfecto, ya puedo tener una visión inicial de tu caso.\n\nEn CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.\n\nVoy a remitir tu información a un especialista para que la analice con más profundidad.'
 
 Deno.test('preHandoffSent=false: passa intacto', () => {
   const out = stripRepeatedPreHandoff(FULL_BLOCK_ES, 'es', { preHandoffSent: false })
