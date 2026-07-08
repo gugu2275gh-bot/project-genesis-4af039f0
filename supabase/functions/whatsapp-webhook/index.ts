@@ -3066,55 +3066,8 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               })
 
             }
-            // Detect M7 (localização) canonical text across languages, to send quick-reply template
-            const m7Texts: Record<string, string> = {}
-            for (const lg of ['pt-BR','es','en','fr'] as const) {
-              try { m7Texts[lg] = getPromptTemplates(lg as any).askLocationSpain } catch {}
-            }
-            const normalize = (s: string) => (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ')
-            const isM7Part = (txt: string) => {
-              const n = normalize(txt)
-              return Object.values(m7Texts).some(t => n === normalize(t))
-            }
-
             for (let i = 0; i < parts.length; i++) {
               const part = parts[i]
-
-              // Se este part é a M7 canônica, tenta enviar via template quick-reply (ContentSid)
-              let sentAsTemplate = false
-              if (isM7Part(part)) {
-                try {
-                  const { data: tpl } = await supabase
-                    .from('whatsapp_templates')
-                    .select('content_sid, status, language, is_active')
-                    .eq('automation_type', 'onboarding_m7_localizacao')
-                    .eq('language', detectedChatLanguage === 'pt-BR' ? 'pt_BR' : detectedChatLanguage)
-                    .eq('status', 'approved')
-                    .eq('is_active', true)
-                    .maybeSingle()
-                  if (tpl?.content_sid) {
-                    await sendTwilioContentTemplate(phoneNumber, tpl.content_sid)
-                    sentAsTemplate = true
-                    await supabase.from('mensagens_cliente').insert({
-                      id_lead: lead.id, phone_id: parseInt(phoneNumber),
-                      mensagem_IA: part, origem: 'IA',
-                    })
-                    await supabase.from('interactions').insert({
-                      lead_id: lead.id, contact_id: contact.id,
-                      channel: 'WHATSAPP', direction: 'OUTBOUND',
-                      content: part, origin_bot: true,
-                    })
-                    console.log('[M7_QUICKREPLY] enviado via template', tpl.content_sid)
-                  }
-                } catch (qerr) {
-                  console.warn('[M7_QUICKREPLY] falha ao enviar template, fallback texto:', qerr instanceof Error ? qerr.message : qerr)
-                }
-              }
-
-              if (sentAsTemplate) {
-                if (i < parts.length - 1) await new Promise(r => setTimeout(r, 350))
-                continue
-              }
 
               const sendRes = await sendOutgoingIdempotent(supabase, {
                 phone: phoneNumber, leadId: lead.id, body: part,
