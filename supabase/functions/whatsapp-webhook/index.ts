@@ -2127,7 +2127,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         })
 
         // Etapa 7 — Pré-Handoff (H1 + H2) — APÓS isso a KB é liberada
-        // BPMN-3: Etapa 7 — PRÉ-HANDOFF + HANDOFF combinados (H1|||H2|||H3|||H4 numa rodada)
+        // BPMN-3: Etapa 7 — PRÉ-HANDOFF + HANDOFF combinados (H1|||H2|||H3 numa rodada)
         const preHandoffSentFlag = !!funnelStateLive.pre_handoff_sent
         const handoffSentFlag = !!funnelStateLive.handoff_sent
         const preHandoffDoneByRegex = sentAny(/vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case/i)
