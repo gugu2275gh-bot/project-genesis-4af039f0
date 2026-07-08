@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import {
   Brain, Save, KeyRound, ExternalLink, Plus, Trash2, ArrowUp, ArrowDown,
-  CheckCircle2, XCircle, Loader2, Activity, RefreshCw,
+  CheckCircle2, XCircle, Loader2, Activity, RefreshCw, Download, Upload,
 } from 'lucide-react';
 
 type Provider = 'gemini' | 'openai';
@@ -79,6 +79,54 @@ export default function LLMSettings() {
     },
     onError: (e: any) => toast({ title: 'Erro ao salvar', description: e.message, variant: 'destructive' }),
   });
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = () => {
+    if (!draft) return;
+    const snapshot = {
+      version: 1,
+      exported_at: new Date().toISOString(),
+      gemini_enabled: draft.gemini_enabled,
+      openai_enabled: draft.openai_enabled,
+      cascade: draft.cascade,
+    };
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    a.href = url;
+    a.download = `llm-config-${ts}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({ title: 'Configuração exportada', description: 'Arquivo .json salvo. Guarde-o para reverter depois.' });
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !draft) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (typeof parsed.gemini_enabled !== 'boolean' || typeof parsed.openai_enabled !== 'boolean' || !Array.isArray(parsed.cascade)) {
+        throw new Error('Formato inválido: campos obrigatórios ausentes.');
+      }
+      const cascade: CascadeItem[] = parsed.cascade.map((c: any) => {
+        if ((c.provider !== 'gemini' && c.provider !== 'openai') || typeof c.model !== 'string' || typeof c.enabled !== 'boolean') {
+          throw new Error('Item de cascata inválido.');
+        }
+        return { provider: c.provider, model: c.model, enabled: c.enabled };
+      });
+      setDraft({ ...draft, gemini_enabled: parsed.gemini_enabled, openai_enabled: parsed.openai_enabled, cascade });
+      toast({ title: 'Configuração importada', description: 'Revise os valores e clique em Salvar para aplicar.' });
+    } catch (err: any) {
+      toast({ title: 'Erro ao importar', description: err.message, variant: 'destructive' });
+    }
+  };
+
 
   const handleTest = async (item: CascadeItem) => {
     const key = `${item.provider}/${item.model}`;
@@ -248,12 +296,26 @@ export default function LLMSettings() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2 flex-wrap">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={handleImportFile}
+        />
+        <Button variant="outline" onClick={handleExport}>
+          <Download className="h-4 w-4 mr-2" /> Exportar configuração
+        </Button>
+        <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+          <Upload className="h-4 w-4 mr-2" /> Importar configuração
+        </Button>
         <Button onClick={() => saveMutation.mutate(draft)} disabled={saveMutation.isPending}>
           {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
           Salvar
         </Button>
       </div>
+
     </div>
   );
 }
