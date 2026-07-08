@@ -1184,10 +1184,10 @@ function nextPendingCanonical(
     return 'Perfeito. Antes de mais nada, qual é o seu nome completo?'
   }
   if (!flags.emailKnown) return getEmailQuestion(language)
-  const fakeH1 = language === 'es' ? 'Perfecto. Ya puedo tener una visión inicial de tu caso.'
-    : language === 'en' ? 'Perfect. I can already get an initial view of your case.'
-    : language === 'fr' ? 'Parfait. Je peux déjà avoir une première vision de votre cas.'
-    : 'Perfeito. Já consigo ter uma visão inicial do seu caso.'
+  const fakeH1 = language === 'es' ? 'Perfecto, ya puedo tener una visión inicial de tu caso.'
+    : language === 'en' ? 'Perfect, I can already get an initial view of your case.'
+    : language === 'fr' ? 'Parfait, je peux déjà avoir une première vision de votre cas.'
+    : 'Perfeito, já consigo ter uma visão inicial do seu caso.'
   const replacement = enforceBlockCompletion(fakeH1, language, flags as any)
   if (replacement === fakeH1) {
     if (language === 'es') return 'Perfecto, sigamos.'
