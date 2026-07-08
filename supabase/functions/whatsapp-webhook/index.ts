@@ -2482,6 +2482,38 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           }
         }
 
+        // REASK determinístico: se o Turn Orchestrator disse `reask_current`,
+        // NUNCA passamos pelo LLM. Apenas repetimos LITERALMENTE a pergunta
+        // canônica da etapa atual — sem "obrigado", sem "vamos finalizar",
+        // sem qualquer texto adicional. O cliente respondeu algo inválido
+        // (ex.: repetiu o nome no passo do e-mail); insistimos na mesma
+        // pergunta até obter resposta válida.
+        if (!aiResponse && orchestratorDecision?.action.kind === 'reask_current' && nextStep) {
+          try {
+            const scriptedReask = getNextScriptedQuestion(nextStep.key as any, detectedChatLanguage, {
+              userInSpain,
+              userOutsideSpain,
+              assistantTranscript: allAssistant,
+              entryDateConfirmed: funnelStateLive.entry_date_confirmed,
+              locationKnown: funnelStateLive.location_known,
+              empadronadoConfirmed: funnelStateLive.empadronado_confirmed,
+              empadronadoCity: funnelStateLive.empadronado_city,
+              empadronadoSinceConfirmed: (funnelStateLive as any).empadronamiento_since,
+              preHandoffSent: !!funnelStateLive.pre_handoff_sent,
+              handoffSent: !!funnelStateLive.handoff_sent,
+              outsideProgress: (funnelStateLive.outside_spain_progress || {}) as any,
+              catalogSent,
+            })
+            if (scriptedReask && scriptedReask.trim().length > 0) {
+              aiResponse = scriptedReask
+              console.log('[REASK_SHORTCIRCUIT] step=' + nextStep.key + ' lang=' + detectedChatLanguage + ' — repetindo pergunta canônica sem chit-chat')
+            }
+          } catch (rErr) {
+            console.warn('[REASK_SHORTCIRCUIT] non-blocking error:', rErr instanceof Error ? rErr.message : rErr)
+          }
+        }
+
+
         if (aiResponse) {
           // already produced by OFFTOPIC short-circuit
         } else if (isFirstInteraction && !isReturningClient) {
