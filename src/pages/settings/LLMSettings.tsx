@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import {
   Brain, Save, KeyRound, ExternalLink, Plus, Trash2, ArrowUp, ArrowDown,
-  CheckCircle2, XCircle, Loader2, Activity, RefreshCw,
+  CheckCircle2, XCircle, Loader2, Activity, RefreshCw, Download, Upload,
 } from 'lucide-react';
+import { useRef } from 'react';
 
 type Provider = 'gemini' | 'openai';
 interface CascadeItem { provider: Provider; model: string; enabled: boolean; }
