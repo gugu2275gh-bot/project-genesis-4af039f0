@@ -132,6 +132,18 @@ Deno.test('forceSkipFullNameIfAlreadyKnown: swaps name question for email when m
   assertStringIncludes(result, getEmailQuestion('pt-BR'))
 })
 
+Deno.test('forceSkipFullNameIfAlreadyKnown: avoids duplicated thanks when preamble already thanks', () => {
+  const result = forceSkipFullNameIfAlreadyKnown(
+    'Obrigado.\nQual é o seu nome completo?',
+    'pt-BR',
+    true,
+    true,
+  )
+  const matches = (result.match(/Obrigado/g) || []).length
+  assertEquals(matches, 1)
+  assertStringIncludes(result, 'Qual é o melhor e-mail')
+})
+
 Deno.test('forceSkipFullNameIfAlreadyKnown: drops question entirely when email also known', () => {
   const result = forceSkipFullNameIfAlreadyKnown(
     'Prazer!\nQual é o seu nome completo?',
