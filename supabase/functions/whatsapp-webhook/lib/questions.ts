@@ -584,9 +584,6 @@ export function classifyYesNo(text: string): YesNoClassification {
       || otherCountry.test(raw))
   if (isNegative) return 'no'
 
-  // "outro país" sozinho é claramente fora
-  if (otherCountry.test(raw)) return 'no'
-
   // Afirmativas com contexto de localização
   const locationAffirmative = /\b(estou|estoy|moro|vivo|fico|trabalho|trabajo|living|live)\s+(em|en|in|na|no|nos|a|de)\s+(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|val[éeèê]ncia|sevilla|m[áa]laga|malaga|bilbao|alicante|zaragoza|murcia|palma|granada)\b/i
   const inSpain = /\b(j[áa] estou|ya estoy|estou (na |em )?espanha|estou na espa[ñn]a|estoy en espa[ñn]a|i'?m in spain|aqui na espanha|aqu[ií] en espa[ñn]a|je suis en espagne|oui en espagne|s[ií] en espa[ñn]a|yes,? i am in spain|yes in spain)\b/i.test(raw)
