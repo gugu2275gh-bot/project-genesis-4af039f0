@@ -120,7 +120,7 @@ const TEMPLATES: Record<ChatLanguage, PromptTemplates> = {
   },
   'es': {
     askName: 'Antes de nada, ¿cuál es tu nombre completo?',
-    thanksThenAskEmail: 'Gracias. ¿Cuál es el mejor e-mail para enviarte orientaciones y acompañar tu caso?',
+    thanksThenAskEmail: 'Gracias, ¿cuál es el mejor e-mail para enviarte orientaciones y acompañar tu caso?',
     interestQuestion: 'Cuéntame con calma: ¿qué buscas hoy? Puede ser nacionalidad, residencia, estudios, arraigo o algún documento específico.',
     servicesCatalog: 'Trabajamos con ciudadanía española, nómada digital, residencias, NIE, TIE, homologación de estudios, antecedentes, reagrupación y otros procesos.',
     oneMomentPlease: 'Buena pregunta, ya te lo explico enseguida.',
