@@ -83,6 +83,35 @@ Deno.test('PRE_HANDOFF/INSIDE_ENTRY_DATE: pass_through (delegado a handler legad
   assertEquals(d.current_step, 'INSIDE_ENTRY_DATE')
 })
 
+Deno.test('EMAIL: cliente repete o nome → reask (não parqueia, não avança)', () => {
+  const s = { ...stateAtName, step: 'email', name_confirmed: true }
+  const ctx = buildConversationContext(s, contact, 'pt-BR')
+  const d = decideTurn(ctx, 'gustavo braga')
+  assertEquals(d.action.kind, 'reask_current')
+  assertEquals(d.current_step, 'EMAIL')
+  assertEquals(d.next_step, 'EMAIL')
+  assertEquals((d.state_patch as any).pending_questions, undefined)
+  assertEquals(d.state_patch.email_confirmed, undefined)
+})
+
+Deno.test('EMAIL: texto curto sem @ ("João Silva") → reask, não parqueia', () => {
+  const s = { ...stateAtName, step: 'email', name_confirmed: true }
+  const ctx = buildConversationContext(s, contact, 'pt-BR')
+  const d = decideTurn(ctx, 'João Silva')
+  assertEquals(d.action.kind, 'reask_current')
+  assertEquals(d.next_step, 'EMAIL')
+})
+
+Deno.test('EMAIL: pergunta factual ("o que é NIE?") → parqueia como off-topic', () => {
+  const s = { ...stateAtName, step: 'email', name_confirmed: true }
+  const ctx = buildConversationContext(s, contact, 'pt-BR')
+  const d = decideTurn(ctx, 'o que é NIE?')
+  assertEquals(d.action.kind, 'park_offtopic')
+  assertEquals(d.next_step, 'EMAIL')
+})
+
+
+
 Deno.test('Determinismo: mesma mensagem + mesmo estado → mesma decisão (idempotente)', () => {
   const ctx1 = buildConversationContext(stateAtName, contact, 'pt-BR')
   const ctx2 = buildConversationContext(stateAtName, contact, 'pt-BR')
