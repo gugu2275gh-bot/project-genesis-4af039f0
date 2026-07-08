@@ -314,15 +314,15 @@ export function isServicesOfferedMessage(text: string): boolean {
 // H1 ||| H2  — texto literal do diagrama
 export function getPreHandoffSummaryMessage(language: ChatLanguage): string {
   if (language === 'es') {
-    return 'Perfecto. Ya puedo tener una visión inicial de tu caso.|||En CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
+    return 'Perfecto, ya puedo tener una visión inicial de tu caso.|||En CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
   }
   if (language === 'en') {
-    return 'Perfect. I can already get an initial view of your case.|||At CB we analyze each case individually, always looking for the safest path within the law.'
+    return 'Perfect, I can already get an initial view of your case.|||At CB we analyze each case individually, always looking for the safest path within the law.'
   }
   if (language === 'fr') {
-    return 'Parfait. Je peux déjà avoir une première vision de votre cas.|||Chez CB, nous analysons chaque cas individuellement, en cherchant toujours la voie la plus sûre et conforme à la loi.'
+    return 'Parfait, je peux déjà avoir une première vision de votre cas.|||Chez CB, nous analysons chaque cas individuellement, en cherchant toujours la voie la plus sûre et conforme à la loi.'
   }
-  return 'Perfeito. Já consigo ter uma visão inicial do seu caso.|||Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
+  return 'Perfeito, já consigo ter uma visão inicial do seu caso.|||Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
 }
 
 // H3 — texto literal do diagrama (única bolha; H4 removida na v2)

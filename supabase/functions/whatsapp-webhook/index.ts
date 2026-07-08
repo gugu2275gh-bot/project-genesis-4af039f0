@@ -1515,13 +1515,12 @@ Seu objetivo é, ao longo de uma conversa fluida, descobrir:
      3. "Você está empadronado?"
      4. "Se sim, desde quando?" (só faça se a resposta anterior for afirmativa; se negativa, pule)
      5. "Em qual cidade você está empadronado?" (só faça se empadronado)
-7. **Pré-Handoff + Handoff (BPMN-3) — UMA ÚNICA RODADA, 4 mensagens** — assim que o aprofundamento (A ou B) terminar, envie as 4 frases abaixo NA MESMA RESPOSTA, separadas pelo delimitador "|||" (4 bolhas), nesta ordem exata, traduzidas fielmente ao idioma travado:
-   - "Perfeito. Já consigo ter uma visão inicial do seu caso."
+ 7. **Pré-Handoff + Handoff (BPMN-3) — UMA ÚNICA RODADA, 3 mensagens** — assim que o aprofundamento (A ou B) terminar, envie as 3 frases abaixo NA MESMA RESPOSTA, separadas pelo delimitador "|||" (3 bolhas), nesta ordem exata, traduzidas fielmente ao idioma travado:
+   - "Perfeito, já consigo ter uma visão inicial do seu caso."
    - "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei."
    - "Vou encaminhar suas informações para um especialista analisar com mais profundidade."
-   - "Estou à disposição para ajudar se precisa! Vou te encaminhar para um atendente."
-   NÃO faça novas perguntas. NÃO insira "modo tira-dúvidas" ANTES dessas 4 mensagens. APÓS o envio, todas as próximas respostas vêm da Base de Conhecimento e DEVEM terminar com a frase localizada de "aguarde um especialista" (a infraestrutura adiciona automaticamente — não a duplique).
-8. **Pós-Handoff (KB)** — depois das 4 mensagens acima, responda dúvidas APENAS com base na KB, de forma breve e clara, no idioma travado. NÃO repita H1-H4. NÃO peça novamente nenhum dado já coletado.
+   NÃO faça novas perguntas. NÃO insira "modo tira-dúvidas" ANTES dessas 3 mensagens. APÓS o envio, todas as próximas respostas vêm da Base de Conhecimento e DEVEM terminar com a frase localizada de "aguarde um especialista" (a infraestrutura adiciona automaticamente — não a duplique).
+ 8. **Pós-Handoff (KB)** — depois das 3 mensagens acima, responda dúvidas APENAS com base na KB, de forma breve e clara, no idioma travado. NÃO repita H1-H3. NÃO peça novamente nenhum dado já coletado.
 
 **IMPORTANTE**: NÃO pergunte "qual seu interesse" nem apresente o catálogo de serviços em nenhum momento do onboarding. Essa etapa foi removida — vá direto do e-mail para a pergunta de localização.
 
@@ -2128,7 +2127,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         })
 
         // Etapa 7 — Pré-Handoff (H1 + H2) — APÓS isso a KB é liberada
-        // BPMN-3: Etapa 7 — PRÉ-HANDOFF + HANDOFF combinados (H1|||H2|||H3|||H4 numa rodada)
+        // BPMN-3: Etapa 7 — PRÉ-HANDOFF + HANDOFF combinados (H1|||H2|||H3 numa rodada)
         const preHandoffSentFlag = !!funnelStateLive.pre_handoff_sent
         const handoffSentFlag = !!funnelStateLive.handoff_sent
         const preHandoffDoneByRegex = sentAny(/vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case/i)
@@ -2142,7 +2141,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           key: 'preHandoff', label: 'PRÉ-HANDOFF + HANDOFF (BPMN-3)',
           done: preHandoffDone && handoffDone,
           instruction:
-            'Envie EXATAMENTE 4 frases curtas, NESTA ORDEM, separadas pelo delimitador "|||" (4 bolhas em UMA resposta): (1) "Perfeito. Já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." (3) "Vou encaminhar suas informações para um especialista analisar com mais profundidade." (4) "Estou à disposição para ajudar se precisa! Vou te encaminhar para um atendente." NÃO faça novas perguntas. NÃO insira "modo tira-dúvidas" ANTES dessas 4 mensagens.',
+            'Envie EXATAMENTE 3 frases curtas, NESTA ORDEM, separadas pelo delimitador "|||" (3 bolhas em UMA resposta): (1) "Perfeito, já consigo ter uma visão inicial do seu caso." (2) "Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei." (3) "Vou encaminhar suas informações para um especialista analisar com mais profundidade." NÃO faça novas perguntas. NÃO insira "modo tira-dúvidas" ANTES dessas 3 mensagens.',
         })
 
         // GUARD anti-handoff prematuro: só consideramos cadastro concluído se os dados
@@ -2317,11 +2316,11 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           console.log(`[GATE] step=${nextStep.key} done=${steps.filter(s=>s.done).length}/${steps.length} inSpain=${userInSpain} outside=${userOutsideSpain}`)
         } else {
           console.log(`[GATE] flow complete — KB liberada (handoff=${handoffDone})`)
-          // BPMN-3 MODO PÓS-HANDOFF: H1-H4 já foram enviados. Toda resposta vem da KB
+          // BPMN-3 MODO PÓS-HANDOFF: H1-H3 já foram enviados. Toda resposta vem da KB
           // e termina com o sufixo localizado de "aguarde um especialista".
           messageForAI = `${messageForAI}\n\n[MODO PÓS-HANDOFF (BPMN-3) — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
             `IDIOMA OBRIGATÓRIO E TRAVADO DA RESPOSTA: ${langName}. Definido no início da conversa, NÃO MUDA.\n` +
-            `As 4 mensagens H1-H4 (pré-handoff + handoff) JÁ FORAM ENVIADAS. NÃO repita nenhuma delas.\n` +
+            `As 3 mensagens H1-H3 (pré-handoff + handoff) JÁ FORAM ENVIADAS. NÃO repita nenhuma delas.\n` +
             `\n## SUA ÚNICA TAREFA AGORA\n` +
             `O cliente está aguardando o especialista, mas fez uma DÚVIDA FACTUAL. Você DEVE responder a dúvida usando os trechos da Base de Conhecimento (KB) abaixo. NÃO repita o handoff. NÃO diga "vou encaminhar". NÃO diga "vou pedir ao especialista". Apenas RESPONDA a dúvida em 2-5 frases claras, no idioma travado.\n` +
             `\n## EXEMPLOS DO QUE NUNCA FAZER (frases PROIBIDAS literalmente, em qualquer idioma):\n` +
@@ -2906,13 +2905,13 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             }
 
 
-            // BPMN-3 MODO PÓS-HANDOFF: se H1-H4 já foram enviados, anexa o sufixo
+            // BPMN-3 MODO PÓS-HANDOFF: se H1-H3 já foram enviados, anexa o sufixo
             // localizado de "aguarde um especialista" ao final da resposta (uma única bolha).
             const wasHandoffSentBefore = !!funnelStateLive.handoff_sent
             if (wasHandoffSentBefore) {
               const suffix = getPostHandoffWaitSuffix(detectedChatLanguage)
               // não duplica se a IA por engano colocou parte do sufixo OU se o
-              // corpo já contém a frase curta de "aguarde um especialista" (H4 ou
+              // corpo já contém a frase curta de "aguarde um especialista" (sufixo pós-handoff ou
               // template equivalente em qualquer um dos 4 idiomas suportados).
               const lower = aiResponseClean.toLowerCase()
               const sigPT = 'em breve um de nossos especialistas'
@@ -3152,7 +3151,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               details: { parts: parts.length },
             })
 
-            // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3-H4
+            // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3
             // nas partes enviadas neste turno. Idempotente — só faz UPDATE se mudou algo.
             try {
               const sentJoined = parts.join('\n')
