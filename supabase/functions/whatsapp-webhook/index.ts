@@ -2478,9 +2478,9 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         } else if (!isReturningClient && !nameMissing && emailMissing && (lastWasNameQ || userJustAnsweredName)) {
           aiResponse = tt.thanksThenAskEmail
           console.log('[CANONICAL_SHORTCIRCUIT] msg4 askEmail em', detectedChatLanguage)
-        } else if (!isReturningClient && !nameMissing && !emailMissing && serviceMissing && !catalogSent && lastWasEmailQ) {
-          aiResponse = `${tt.interestQuestion}|||${tt.servicesCatalog}`
-          console.log('[CANONICAL_SHORTCIRCUIT] msg5+msg6 interesse+catalogo em', detectedChatLanguage)
+        } else if (!isReturningClient && !nameMissing && !emailMissing && !funnelStateLive.location_known && lastWasEmailQ) {
+          aiResponse = tt.askLocationSpain
+          console.log('[CANONICAL_SHORTCIRCUIT] msg7 askLocationSpain em', detectedChatLanguage)
         } else {
           try {
             aiResponse = await generateAIResponse(
