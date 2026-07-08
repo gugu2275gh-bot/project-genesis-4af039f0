@@ -960,7 +960,7 @@ export function forceCorrectBlockForLocation(
  * qualquer preâmbulo (separado por \n e não por |||), descarta tudo antes do H1.
  * Garante que H1|||H2|||H3 saiam sem frases inventadas pelo LLM coladas antes.
  */
-const PREHANDOFF_H1_RE = /Perfeito\. Já consigo ter uma visão inicial do seu caso\.|Perfecto\. Ya puedo tener una visión inicial de tu caso\.|Perfect\. I can already get an initial view of your case\.|Parfait\. Je peux déjà avoir une première vision de votre cas\./i
+const PREHANDOFF_H1_RE = /Perfeito, já consigo ter uma visão inicial do seu caso\.|Perfecto, ya puedo tener una visión inicial de tu caso\.|Perfect, I can already get an initial view of your case\.|Parfait, je peux déjà avoir une première vision de votre cas\./i
 
 export function stripPreambleBeforePreHandoff(text: string): string {
   if (!text) return text
