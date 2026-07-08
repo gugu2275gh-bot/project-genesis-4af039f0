@@ -114,7 +114,7 @@ const TEMPLATES: Record<ChatLanguage, PromptTemplates> = {
     oneMomentPlease: 'Ótima pergunta, já te explico em seguida.',
     askLocationSpain: 'Você está na Espanha? Responda apenas *SIM* ou *NÃO*.',
     openingLine1: 'Olá 😊 Tudo bem? Obrigado por falar com a CB Asesoría. Vou te ajudar a entender seus caminhos legais aqui na Espanha.',
-    openingLine2: 'Vou te fazer algumas perguntas rápidas só para entender seu caso e te direcionar para o especialista certo, pode ser?',
+    openingLine2: 'Vou te fazer algumas perguntas rápidas só para entender seu caso e te direcionar para o especialista certo, antes de tudo, como é seu nome completo?',
     outsideIntro: 'Perfeito. Vou te fazer perguntas rápidas só para entender melhor seu cenário.',
     insideIntro: 'Perfeito. Agora preciso entender como está sua situação aqui.',
   },
