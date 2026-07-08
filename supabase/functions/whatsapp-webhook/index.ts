@@ -162,15 +162,19 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       else if (mimetype?.startsWith('video')) type = 'video'
       else type = 'document'
     }
+    // Quick-reply / button responses (Twilio sends Body=title + ButtonPayload if configured)
+    const buttonPayload = (payload as any).ButtonPayload || (payload as any).ButtonText || undefined
+    const bodyText = payload.Body || (buttonPayload ? String(buttonPayload) : '')
     return {
       from: phone,
-      body: payload.Body || '',
+      body: bodyText,
       messageId: payload.MessageSid,
       type: numMedia > 0 ? type : 'text',
       name: payload.ProfileName,
       mediaUrl,
       mimetype,
-    }
+      buttonPayload: buttonPayload || undefined,
+    } as any
   }
   // Meta/Cloud API format
   if (payload.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
