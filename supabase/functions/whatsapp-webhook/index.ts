@@ -2911,7 +2911,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             if (wasHandoffSentBefore) {
               const suffix = getPostHandoffWaitSuffix(detectedChatLanguage)
               // não duplica se a IA por engano colocou parte do sufixo OU se o
-              // corpo já contém a frase curta de "aguarde um especialista" (H4 ou
+              // corpo já contém a frase curta de "aguarde um especialista" (sufixo pós-handoff ou
               // template equivalente em qualquer um dos 4 idiomas suportados).
               const lower = aiResponseClean.toLowerCase()
               const sigPT = 'em breve um de nossos especialistas'
