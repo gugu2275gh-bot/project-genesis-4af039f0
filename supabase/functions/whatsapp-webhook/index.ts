@@ -1826,38 +1826,10 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           && (!leadInterest?.service_interest
             || ['SEM_SERVICO', 'OUTRO', ''].includes(String(leadInterest.service_interest).toUpperCase()))
 
-        // Wave 7: capturar interesse a partir de resposta livre à pergunta INTERESSE.
-        // Sem isto, o cadastro fica "eternamente aberto" e a KB nunca é liberada.
-        // Wave 7.1: torna a captura PERMISSIVA — qualquer mensagem do cliente que case
-        // com palavra-chave de serviço (residencia, nacionalidade, estudos, etc.) é
-        // capturada enquanto serviceMissing=true, independente da última pergunta do bot.
-        // Isto garante recuperação retroativa se o turno em que o cliente respondeu
-        // o interesse não capturou (ex.: deploy propagou no meio da conversa).
-        try {
-          // Só capturamos interesse a partir de mensagem livre quando a ÚLTIMA
-          // pergunta do bot foi sobre interesse / catálogo. Isso evita atribuir
-          // serviço quando o cliente faz uma pergunta factual no meio de outra
-          // etapa (ex.: "O quê é TIE" durante a etapa de e-mail).
-          const lastQ = String(lastAssistantQuestion || '')
-          const lastWasInterestQuestion = !!lastQ && (
-            isQuestionAboutInterest(lastQ)
-            || /(se encaixa em algum|encaja en alguno|fits any of these|tu caso encaja|seu caso se encaixa)/i.test(lastQ)
-          )
-          if (serviceMissing && rawCustomerMessage && lastWasInterestQuestion) {
-            const detectedInterest = extractInterestFromMessage(rawCustomerMessage)
-            if (detectedInterest) {
-              await supabase
-                .from('leads')
-                .update({ service_interest: detectedInterest, interest_confirmed: true, updated_at: new Date().toISOString() })
-                .eq('id', lead.id)
-              leadInterest = { ...(leadInterest || {}), service_interest: detectedInterest }
-              serviceMissing = false
-              console.log(`[INTEREST_CAPTURE] "${rawCustomerMessage}" -> ${detectedInterest}`)
-            }
-          }
-        } catch (capErr) {
-          console.warn('[INTEREST_CAPTURE] non-blocking error:', capErr instanceof Error ? capErr.message : capErr)
-        }
+        // M5/M6 (interesse/catálogo) removidos do onboarding — o fluxo pula
+        // direto de e-mail para localização. Nenhuma captura de interesse aqui.
+
+
 
 
         // Wave 6 (anti-repetição em divergência): sincronizar IMEDIATAMENTE o funil
