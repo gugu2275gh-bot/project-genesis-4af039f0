@@ -569,7 +569,7 @@ export function classifyYesNo(text: string): YesNoClassification {
   if (refusalRe.test(raw)) return 'ambiguous'
 
   // Negativas com contexto de localização
-  const locationNegative = /\b(estou|estoy|moro|vivo|fico|trabalho|trabajo|living|live)\s+(em|en|in|na|no|nos|a|de)\s+(brasil|brazil|portugal|argentina|m[ée]xico|mexico|colombia|chile|uruguai|uruguay|venezuela|paraguai|paraguay|estados unidos|eua|usa|outro pa[ií]s|en otro pa[ií]s|em outro pa[ií]s|other country|autre pays)\b/i
+  const locationNegative = /\b(estou|estoy|moro|vivo|fico|trabalho|trabajo|living|live|i am|i'm|je suis|eu estou|yo estoy)\s+(em|en|in|na|no|nos|a|de)\s+(brasil|brazil|portugal|argentina|m[ée]xico|mexico|colombia|chile|uruguai|uruguay|venezuela|paraguai|paraguay|estados unidos|eua|usa|outro pa[ií]s|en otro pa[ií]s|em outro pa[ií]s|other country|autre pays)\b/i
   const outsideSpain = /\b(fora da espanha|fora de espanha|fora da espa[ñn]a|fora de espa[ñn]a|estou fora|estoy fuera|outside spain|pas en espagne|no estoy en espa[ñn]a|não estou na espanha|não estou em espanha|não estou na espa[ñn]a)\b/i
   const otherCountry = /\b(sou de outro pa[ií]s|soy de otro pa[ií]s|outro pa[ií]s|otro pa[ií]s|other country|autre pays)\b/i
 
@@ -585,13 +585,19 @@ export function classifyYesNo(text: string): YesNoClassification {
   if (isNegative) return 'no'
 
   // Afirmativas com contexto de localização
-  const locationAffirmative = /\b(estou|estoy|moro|vivo|fico|trabalho|trabajo|living|live)\s+(em|en|in|na|no|nos|a|de)\s+(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|val[éeèê]ncia|sevilla|m[áa]laga|malaga|bilbao|alicante|zaragoza|murcia|palma|granada)\b/i
+  const locationAffirmative = /\b(estou|estoy|moro|vivo|fico|trabalho|trabajo|living|live|i am|i'm|je suis|eu estou|yo estoy)\s+(em|en|in|na|no|nos|a|de)\s+(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|val[éeèê]ncia|sevilla|m[áa]laga|malaga|bilbao|alicante|zaragoza|murcia|palma|granada)\b/i
   const inSpain = /\b(j[áa] estou|ya estoy|estou (na |em )?espanha|estou na espa[ñn]a|estoy en espa[ñn]a|i'?m in spain|aqui na espanha|aqu[ií] en espa[ñn]a|je suis en espagne|oui en espagne|s[ií] en espa[ñn]a|yes,? i am in spain|yes in spain)\b/i.test(raw)
+  const yesWithCity = /\b(sim|si|s[ií]|yes|oui|claro|exacto|exactamente|exactly|correto|certo|positivo|sure|ok|okay|vale),?\s+(em|en|in|na|a|de)\s+(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|val[éeèê]ncia|sevilla|m[áa]laga|malaga|bilbao|alicante|zaragoza|murcia|palma|granada)\b/i.test(raw)
   const isAffirmative = inSpain
     || locationAffirmative.test(raw)
+    || yesWithCity
     || (/\b(sim|si|s[ií]|yes|oui|claro|exacto|exactamente|exactly|correto|certo|positivo|sure|ok|okay|vale|dale|manda|vai|vamos|fala|pronto|adelante|go ahead|all[ée]z)\b/i.test(raw)
       && /\b(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|val[éeèê]ncia|sevilla|m[áa]laga|malaga|bilbao|alicante|zaragoza|murcia|palma|granada)\b/i.test(raw))
   if (isAffirmative) return 'yes'
+
+  // País mencionado sozinho (sem Espanha) → fora
+  const countryAlone = /^(brasil|brazil|portugal|argentina|m[ée]xico|mexico|colombia|chile|uruguai|uruguay|venezuela|paraguai|paraguay|estados unidos|eua|usa|autre pays|other country)$/i
+  if (countryAlone.test(normalized)) return 'no'
 
   return 'ambiguous'
 }
