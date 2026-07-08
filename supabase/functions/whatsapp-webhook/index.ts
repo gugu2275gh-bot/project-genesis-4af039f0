@@ -360,8 +360,8 @@ import {
   forceCorrectBlockForLocation,
   enforceBlockCompletion,
   stripCrossBranchQuestion,
-  forceServicesMessageAfterInterest,
-  ensureServicesAttachedToInterest,
+  // forceServicesMessageAfterInterest / ensureServicesAttachedToInterest: removidos com M5/M6.
+
   computeDeterministicFunnelPatch,
   extractOutsideProgressPatch,
   extractEmpadronadoSincePatch,
