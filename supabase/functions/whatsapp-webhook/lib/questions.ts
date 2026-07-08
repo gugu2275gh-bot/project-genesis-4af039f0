@@ -263,10 +263,10 @@ export function getEmpadronamientoSinceQuestion(language: ChatLanguage): string 
 }
 
 export function getEmpadronamientoCityQuestion(language: ChatLanguage): string {
-  if (language === 'es') return 'Perfecto. ¿En qué ciudad estás empadronado?'
-  if (language === 'en') return 'Got it. In which city are you registered (empadronado)?'
-  if (language === 'fr') return 'D’accord. Dans quelle ville êtes-vous empadronado ?'
-  return 'Perfeito. Em qual cidade você está empadronado?'
+  if (language === 'es') return '¿En qué ciudad fuiste empadronado?'
+  if (language === 'en') return 'In which city were you registered (empadronado)?'
+  if (language === 'fr') return 'Dans quelle ville avez-vous été empadronado ?'
+  return 'Em qual cidade você foi empadronado?'
 }
 
 export function getInvalidSpanishCityReprompt(language: ChatLanguage): string {
