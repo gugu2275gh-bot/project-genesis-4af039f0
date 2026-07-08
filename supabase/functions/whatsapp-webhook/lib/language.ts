@@ -144,7 +144,7 @@ const TEMPLATES: Record<ChatLanguage, PromptTemplates> = {
   },
   'fr': {
     askName: 'Tout d’abord, quel est votre nom complet ?',
-    thanksThenAskEmail: 'Merci. Quel est le meilleur e-mail pour vous envoyer des orientations et suivre votre dossier ?',
+    thanksThenAskEmail: 'Merci, quel est le meilleur e-mail pour vous envoyer des orientations et suivre votre dossier ?',
     interestQuestion: 'Racontez-moi calmement : que recherchez-vous aujourd’hui ? Cela peut être la nationalité, la résidence, des études, l’arraigo ou un document spécifique.',
     servicesCatalog: 'Nous travaillons avec la nationalité espagnole, le nomade numérique, les résidences, le NIE, le TIE, l’homologation d’études, les antécédents, le regroupement familial et d’autres procédures.',
     oneMomentPlease: 'Très bonne question, je vous explique tout de suite.',
