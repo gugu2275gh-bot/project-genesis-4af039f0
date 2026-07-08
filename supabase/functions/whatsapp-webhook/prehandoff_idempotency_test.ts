@@ -18,7 +18,7 @@ Deno.test('preHandoffSent=true + bloco completo (es): substitui pelo sufixo pós
 
 Deno.test('preHandoffSent=true + só H1 (pt-BR): vira sufixo pós-handoff', () => {
   const out = stripLockedSentinel(stripRepeatedPreHandoff(
-    'Perfeito. Já consigo ter uma visão inicial do seu caso.',
+    'Perfeito, já consigo ter uma visão inicial do seu caso.',
     'pt-BR',
     { preHandoffSent: true },
   ))
