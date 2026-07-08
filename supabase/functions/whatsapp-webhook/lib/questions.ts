@@ -399,10 +399,25 @@ export function getOutsideSpainNextQuestion(
 ): string {
   const op = options?.outsideProgress || {}
   const askedIdade = !!op.a2_age || /\b(qual sua idade|cu[áa]ntos a[ñn]os|how old)\b/i.test(assistantTranscript)
-  const askedEuropa = !!op.a3_europe_6m || /\beuropa nos [úu]ltimos 6 meses|europa en los [úu]ltimos 6 meses|europe in the last 6 months\b/i.test(assistantTranscript)
-  const askedFamiliar = !!op.a4_eu_family || /\bfamiliar (europeu|europeo)|family member.*(eu|spain)\b/i.test(assistantTranscript)
-  const askedRemoto = !!op.a5_remote || /\b(trabalha remoto|trabajas? remoto|work remotely)\b/i.test(assistantTranscript)
-  const askedFormacao = !!op.a6_higher_ed || /\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree)\b/i.test(assistantTranscript)
+  // A3–A6 avançam SOMENTE quando temos a resposta válida capturada (sim/não).
+  // Se a pergunta foi feita mas o cliente respondeu algo inválido (ex.: "cachorro"),
+  // repetimos a mesma pergunta com prefixo de reask em vez de pular para a próxima.
+  const answeredEuropa = !!op.a3_europe_6m
+  const answeredFamiliar = !!op.a4_eu_family
+  const answeredRemoto = !!op.a5_remote
+  const answeredFormacao = !!op.a6_higher_ed
+
+  const askedEuropaInTranscript = /\beuropa nos [úu]ltimos 6 meses|europa en los [úu]ltimos 6 meses|europe in the last 6 months\b/i.test(assistantTranscript)
+  const askedFamiliarInTranscript = /\bfamiliar (europeu|europeo)|family member.*(eu|spain)\b/i.test(assistantTranscript)
+  const askedRemotoInTranscript = /\b(trabalha remoto|trabajas? remoto|work remotely)\b/i.test(assistantTranscript)
+  const askedFormacaoInTranscript = /\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree)\b/i.test(assistantTranscript)
+
+  const reaskPrefix = (lang: ChatLanguage): string => {
+    if (lang === 'es') return 'Por favor, responde solo con *sí* o *no*. '
+    if (lang === 'en') return 'Please answer only with *yes* or *no*. '
+    if (lang === 'fr') return 'Merci de répondre uniquement par *oui* ou *non*. '
+    return 'Por favor, responda apenas com *sim* ou *não*. '
+  }
 
   // Pular A3 quando já temos a informação implícita: cliente está na Espanha
   // OU informou data de entrada nos últimos 180 dias.
@@ -415,33 +430,37 @@ export function getOutsideSpainNextQuestion(
     return days >= 0 && days <= 180
   })()
   const skipEuropa = options?.locationKnown === 'spain' || entryDateInLast6Months
-  const askedEuropaEffective = askedEuropa || skipEuropa
 
   if (!askedIdade) return getOutsideSpainAgeQuestion(language)
-  if (!askedEuropaEffective) {
-    if (language === 'es') return '¿Estuviste en Europa en los últimos 6 meses? (sí o no)'
-    if (language === 'en') return 'Have you been in Europe in the last 6 months? (yes or no)'
-    if (language === 'fr') return 'Êtes-vous allé en Europe au cours des 6 derniers mois ? (oui ou non)'
-    return 'você esteve na Europa nos últimos 6 meses? (sim ou não)'
+  if (!skipEuropa && !answeredEuropa) {
+    const prefix = askedEuropaInTranscript ? reaskPrefix(language) : ''
+    if (language === 'es') return prefix + '¿Estuviste en Europa en los últimos 6 meses? (sí o no)'
+    if (language === 'en') return prefix + 'Have you been in Europe in the last 6 months? (yes or no)'
+    if (language === 'fr') return prefix + 'Êtes-vous allé en Europe au cours des 6 derniers mois ? (oui ou non)'
+    return prefix + 'você esteve na Europa nos últimos 6 meses? (sim ou não)'
   }
-  if (!askedFamiliar) {
-    if (language === 'es') return '¿Tienes algún familiar europeo o residente legal en España? (sí o no)'
-    if (language === 'en') return 'Do you have a European family member or a legal resident in Spain? (yes or no)'
-    if (language === 'fr') return 'Avez-vous un membre de votre famille européen ou résident légal en Espagne ? (oui ou non)'
-    return 'possui familiar europeu ou residente legal na espanha? (sim ou não)'
+  if (!answeredFamiliar) {
+    const prefix = askedFamiliarInTranscript ? reaskPrefix(language) : ''
+    if (language === 'es') return prefix + '¿Tienes algún familiar europeo o residente legal en España? (sí o no)'
+    if (language === 'en') return prefix + 'Do you have a European family member or a legal resident in Spain? (yes or no)'
+    if (language === 'fr') return prefix + 'Avez-vous un membre de votre famille européen ou résident légal en Espagne ? (oui ou non)'
+    return prefix + 'possui familiar europeu ou residente legal na espanha? (sim ou não)'
   }
-  if (!askedRemoto) {
-    if (language === 'es') return '¿Trabajas de forma remota? (sí o no)'
-    if (language === 'en') return 'Do you work remotely? (yes or no)'
-    if (language === 'fr') return 'Travaillez-vous à distance ? (oui ou non)'
-    return 'você trabalha remoto? (sim ou não)'
+  if (!answeredRemoto) {
+    const prefix = askedRemotoInTranscript ? reaskPrefix(language) : ''
+    if (language === 'es') return prefix + '¿Trabajas de forma remota? (sí o no)'
+    if (language === 'en') return prefix + 'Do you work remotely? (yes or no)'
+    if (language === 'fr') return prefix + 'Travaillez-vous à distance ? (oui ou non)'
+    return prefix + 'você trabalha remoto? (sim ou não)'
   }
-  if (!askedFormacao) {
-    if (language === 'es') return '¿Tienes formación superior? (sí o no)'
-    if (language === 'en') return 'Do you have higher education? (yes or no)'
-    if (language === 'fr') return 'Avez-vous une formation supérieure ? (oui ou non)'
-    return 'Você possui formação superior? (sim ou não)'
+  if (!answeredFormacao) {
+    const prefix = askedFormacaoInTranscript ? reaskPrefix(language) : ''
+    if (language === 'es') return prefix + '¿Tienes formación superior? (sí o no)'
+    if (language === 'en') return prefix + 'Do you have higher education? (yes or no)'
+    if (language === 'fr') return prefix + 'Avez-vous une formation supérieure ? (oui ou non)'
+    return prefix + 'Você possui formação superior? (sim ou não)'
   }
+
 
   // D3 Bizagi: pré-handoff em 2 mensagens (summary ||| transfer). Idempotência via transcript.
   const payload = buildPreHandoffPayload(language, assistantTranscript || '')
