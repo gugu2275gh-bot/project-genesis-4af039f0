@@ -1081,9 +1081,12 @@ export function enforceBlockCompletion(
     const allAnswered = !!op.a2_age && !!op.a3_europe_6m && !!op.a4_eu_family && !!op.a5_remote && !!op.a6_higher_ed
     if (allAnswered) return aiResponse
     // Caso contrário, devolve a próxima pergunta canônica do ramo A.
+    // IMPORTANTE: repassar outsideProgress para respeitar respostas já dadas —
+    // sem isso, o fallback sempre volta para A3 europa (bug do caso Gustavo).
     const next = getOutsideSpainNextQuestion(language, transcript, {
       entryDateConfirmed: flags.entryDateConfirmed || null,
       locationKnown: flags.locationKnown,
+      outsideProgress: op as any,
     })
     if (PREHANDOFF_H1_RE.test(next)) {
       // transcript diz "completo" mas flags não — não bloqueamos para evitar loop.
