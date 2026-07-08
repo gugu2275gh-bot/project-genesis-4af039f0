@@ -1781,14 +1781,15 @@ function escapeRegex(s: string): string {
 export function stripDuplicateShortOpeners(text: string, language: string): string {
   if (!text || typeof text !== 'string') return text
   const openers = SHORT_OPENERS_BY_LANG[language] || SHORT_OPENERS_BY_LANG['pt-BR']
-  // Pattern: word + "." (case-insensitive) repeated immediately
   const alt = openers.map(escapeRegex).join('|')
-  // Colapsa "X. X." dentro da mesma bolha (com qualquer espaço/quebra entre).
-  const dupSameRe = new RegExp(`\\b(${alt})\\.\\s+\\1\\.`, 'gi')
+  // Colapsa "X<punct> X<punct>" repetidas dentro da mesma bolha — aceita QUALQUER
+  // pontuação (. , ; ! ?) entre elas ou nenhuma, para pegar casos como
+  // "Obrigado. Obrigado, Obrigado. ..." ou "Gracias, Gracias. ...".
+  const dupSameRe = new RegExp(`\\b(${alt})[.,;!?]?\\s+(?=(?:${alt})\\b)`, 'gi')
   const collapseInside = (s: string): string => {
     let prev = s
-    for (let i = 0; i < 3; i++) {
-      const next = prev.replace(dupSameRe, (_m, w) => `${w}.`)
+    for (let i = 0; i < 5; i++) {
+      const next = prev.replace(dupSameRe, '')
       if (next === prev) break
       prev = next
     }
@@ -1800,21 +1801,36 @@ export function stripDuplicateShortOpeners(text: string, language: string): stri
   for (let i = 0; i < bubbles.length; i++) {
     bubbles[i] = collapseInside(bubbles[i])
   }
-  // Passo 2: se uma bolha é APENAS um opener curto "X." e a próxima começa com "X. ...",
-  // remove a bolha redundante.
-  const onlyOpenerRe = new RegExp(`^\\s*(${alt})\\.\\s*$`, 'i')
+  // Passo 2: se uma bolha é APENAS um opener curto (com qq pontuação) e a próxima
+  // começa com o mesmo opener, remove a bolha redundante.
+  const onlyOpenerRe = new RegExp(`^\\s*(${alt})[.,;!?]?\\s*$`, 'i')
   const startsWithOpenerOf = (s: string, opener: string): boolean =>
-    new RegExp(`^\\s*${escapeRegex(opener)}\\.`, 'i').test(s)
+    new RegExp(`^\\s*${escapeRegex(opener)}\\b`, 'i').test(s)
   const out: string[] = []
   for (let i = 0; i < bubbles.length; i++) {
     const cur = bubbles[i]
     const m = cur.match(onlyOpenerRe)
     const next = bubbles[i + 1]
     if (m && next && startsWithOpenerOf(next, m[1])) {
-      // drop the standalone opener bubble
       continue
     }
     out.push(cur)
+  }
+  // Passo 3: colapsa cauda repetida de frase (ex.: "... seu caso? seu caso?")
+  // Pega o último trecho após o penúltimo espaço-de-frase e, se estiver repetido
+  // logo em seguida, remove a duplicata final.
+  const dedupTail = (s: string): string => {
+    // repete "frase ? frase ?" (mesmo texto, com ou sem pontuação final)
+    return s.replace(/([^.?!\n]{6,}?)([?!.])\s+\1\2?\s*$/i, '$1$2')
+  }
+  for (let i = 0; i < out.length; i++) {
+    let prev = out[i]
+    for (let j = 0; j < 3; j++) {
+      const next = dedupTail(prev)
+      if (next === prev) break
+      prev = next
+    }
+    out[i] = prev
   }
   return out.map((b) => b.trim()).filter(Boolean).join('|||')
 }

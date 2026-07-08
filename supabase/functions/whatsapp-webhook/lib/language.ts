@@ -108,7 +108,7 @@ export type PromptTemplates = {
 const TEMPLATES: Record<ChatLanguage, PromptTemplates> = {
   'pt-BR': {
     askName: 'Antes de tudo, como é seu nome completo?',
-    thanksThenAskEmail: 'Obrigado, Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?',
+    thanksThenAskEmail: 'Obrigado. Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?',
     interestQuestion: 'Me conta com calma: o que você busca hoje? Pode ser nacionalidade, residência, estudos, arraigo ou algum documento específico.',
     servicesCatalog: 'Trabalhamos com cidadania espanhola, nômade digital, residências, NIE, TIE, homologação de estudos, antecedentes, reagrupação e outros processos.',
     oneMomentPlease: 'Ótima pergunta, já te explico em seguida.',
@@ -120,7 +120,7 @@ const TEMPLATES: Record<ChatLanguage, PromptTemplates> = {
   },
   'es': {
     askName: 'Antes de nada, ¿cuál es tu nombre completo?',
-    thanksThenAskEmail: 'Gracias, ¿cuál es el mejor e-mail para enviarte orientaciones y acompañar tu caso?',
+    thanksThenAskEmail: 'Gracias. ¿Cuál es el mejor e-mail para enviarte orientaciones y acompañar tu caso?',
     interestQuestion: 'Cuéntame con calma: ¿qué buscas hoy? Puede ser nacionalidad, residencia, estudios, arraigo o algún documento específico.',
     servicesCatalog: 'Trabajamos con ciudadanía española, nómada digital, residencias, NIE, TIE, homologación de estudios, antecedentes, reagrupación y otros procesos.',
     oneMomentPlease: 'Buena pregunta, ya te lo explico enseguida.',
@@ -132,7 +132,7 @@ const TEMPLATES: Record<ChatLanguage, PromptTemplates> = {
   },
   'en': {
     askName: 'First of all, what is your full name?',
-    thanksThenAskEmail: 'Thank you, what is the best e-mail so we can send you guidance and follow up on your case?',
+    thanksThenAskEmail: 'Thank you. What is the best e-mail so we can send you guidance and follow up on your case?',
     interestQuestion: 'Tell me calmly: what are you looking for today? It can be citizenship, residency, studies, arraigo or a specific document.',
     servicesCatalog: 'We work with Spanish citizenship, digital nomad, residencies, NIE, TIE, education recognition, background checks, family reunification and other processes.',
     oneMomentPlease: 'Great question, I will explain in a moment.',
@@ -144,7 +144,7 @@ const TEMPLATES: Record<ChatLanguage, PromptTemplates> = {
   },
   'fr': {
     askName: 'Tout d’abord, quel est votre nom complet ?',
-    thanksThenAskEmail: 'Merci, quel est le meilleur e-mail pour vous envoyer des orientations et suivre votre dossier ?',
+    thanksThenAskEmail: 'Merci. Quel est le meilleur e-mail pour vous envoyer des orientations et suivre votre dossier ?',
     interestQuestion: 'Racontez-moi calmement : que recherchez-vous aujourd’hui ? Cela peut être la nationalité, la résidence, des études, l’arraigo ou un document spécifique.',
     servicesCatalog: 'Nous travaillons avec la nationalité espagnole, le nomade numérique, les résidences, le NIE, le TIE, l’homologation d’études, les antécédents, le regroupement familial et d’autres procédures.',
     oneMomentPlease: 'Très bonne question, je vous explique tout de suite.',
