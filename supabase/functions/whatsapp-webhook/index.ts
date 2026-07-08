@@ -3151,7 +3151,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               details: { parts: parts.length },
             })
 
-            // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3-H4
+            // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3
             // nas partes enviadas neste turno. Idempotente — só faz UPDATE se mudou algo.
             try {
               const sentJoined = parts.join('\n')
