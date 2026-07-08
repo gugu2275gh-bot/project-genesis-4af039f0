@@ -8,7 +8,7 @@ export function detectChatLanguageOrNull(text: string): ChatLanguage | null {
 
   // Strong Spanish signals (must run BEFORE Portuguese to avoid false positives like
   // "española" matching \bola\b because ñ is not a JS word-character).
-  if (/[¿¡ñ]/.test(sample) || /\b(hola|gracias|nombre|correo|quiero|necesito|estoy|espa[nñ]ola?|puedes|puede|ayuda|cu[aá]l|gustar[ií]a|me gusta|en mi|mi nacionalidad|por favor)\b/u.test(sample)) {
+  if (/[¿¡ñ]/.test(sample) || /\b(hola|hol[aá]|buen(?:os|as)?\s+(?:d[ií]as?|tardes?|noches?)|buen\s+d[ií]a|gracias|nombre|correo|quiero|necesito|estoy|espa[nñ]ola?|puedes|puede|ayuda|cu[aá]l|gustar[ií]a|me gusta|en mi|mi nacionalidad|por favor|entiendo|no\s+entiendo|en\s+espa[nñ]ol)\b/u.test(sample)) {
     return 'es'
   }
 
