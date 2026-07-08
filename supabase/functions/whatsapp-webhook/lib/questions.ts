@@ -522,27 +522,57 @@ export type YesNoClassification = 'yes' | 'no' | 'ambiguous'
 
 /**
  * Classifica a resposta do cliente à pergunta "Está na Espanha?" em yes/no/ambíguo.
- * Estrito: qualquer coisa que não seja claramente um sim ou não vira 'ambiguous'.
+ * Modo rigoroso: ignora frases longas e respostas evasivas; aceita apenas palavras-chave
+ * claras de SIM/NÃO ou menção explícita a localização na/fora da Espanha.
  */
 export function classifyYesNo(text: string): YesNoClassification {
-  const ans = String(text || '').toLowerCase().trim()
-  if (!ans) return 'ambiguous'
+  const raw = String(text || '').trim()
+  if (!raw) return 'ambiguous'
 
-  // Recusas e respostas evasivas → ambíguo (precisa re-perguntar firme)
+  const normalized = raw
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  // Tokens simples da mensagem (ignora palavras muito curtas/comuns sozinhas)
+  const words = normalized.split(' ').filter(w => w.length > 0)
+
+  // Frases evasivas/ambíguas → sempre ambíguo
+  const ambiguousPhrases = [
+    /\b(nao sei|n[ãa]o sei|no se|no s[ée]|dont know|don't know|do not know|ne sais pas|sais pas|talvez|maybe|perhaps|peut etre|depende|depends|quem sabe|pode ser|as vezes|sou de|eu sou de|soy de|je suis de|moro em|vivo em|vivo na|moro na|estou em|estoy en|je suis en)\b/i,
+  ]
+  for (const re of ambiguousPhrases) {
+    if (re.test(raw)) return 'ambiguous'
+  }
+
+  // Correspondência EXATA de respostas curtas afirmativas
+  const yesExact = /^(sim|si|s[ií]|yes|yep|yeah|yea|y|oui|claro|exacto|exactamente|exactly|correto|certo|positivo|sure|ok|okay|vale|dale|manda|vai|vamos|fala|pronto|adelante|go ahead|all[ée]z)(\s*[.!?])?$/i
+  if (yesExact.test(raw)) return 'yes'
+
+  // Correspondência EXATA de respostas curtas negativas
+  const noExact = /^(n[ãa]o|no|nope|nah|n|non|negativo|jamais|nunca|never)(\s*[.!?])?$/i
+  if (noExact.test(raw)) return 'no'
+
+  // Recusas explícitas
   const refusalRe = /(n[ãa]o quero (responder|dizer|falar|informar)|prefiro n[ãa]o|prefer not|don'?t want to (answer|say)|no quiero (responder|decir)|prefiero no|je (ne )?(veux|pr[ée]f[èe]re) pas)/i
-  if (refusalRe.test(ans)) return 'ambiguous'
+  if (refusalRe.test(raw)) return 'ambiguous'
 
-  // Negativa pura tem prioridade
-  const isNegative = /^\s*(n[ãa]o|no|nope|nah|non)\b/i.test(ans)
-    || /\b(ainda n[ãa]o|todav[ií]a no|not yet|pas encore)\b/i.test(ans)
-    || /\b(n[ãa]o (estou|moro|vivo)|no (estoy|vivo)|i'?m not|not in spain|je ne suis pas)\b/i.test(ans)
-    || /\b(brasil|brazil|portugal|argentina|m[ée]xico|mexico|colombia|chile|uruguai|uruguay|venezuela|paraguai|paraguay|estados unidos|eua|usa|fora|outro pa[ií]s|en otro pa[ií]s|em outro pa[ií]s|other country)\b/i.test(ans)
+  // Negativas com contexto de localização
+  const isNegative = /\b(n[ãa]o|no|not|non|ne)\b/i.test(raw)
+    && (/\b(ainda n[ãa]o|todav[ií]a no|not yet|pas encore)\b/i.test(raw)
+      || /\b(n[ãa]o (estou|moro|vivo|trabalho)|no (estoy|vivo|trabajo)|i'?m not|not in spain|je ne suis pas|pas en espagne)\b/i.test(raw)
+      || /\b(brasil|brazil|portugal|argentina|m[ée]xico|mexico|colombia|chile|uruguai|uruguay|venezuela|paraguai|paraguay|estados unidos|eua|usa|fora|outro pa[ií]s|en otro pa[ií]s|em outro pa[ií]s|other country|autre pays)\b/i.test(raw))
   if (isNegative) return 'no'
 
-  const isAffirmative = /^\s*(sim|si|s[ií]|yes|yep|yeah|claro|exato|exactamente|exactly|oui|ouais)(?=[^a-z]|$)/i.test(ans)
-    || /\b(j[áa] estou|ya estoy|estou (na |em )?espanha|estoy en espa[ñn]a|i'?m in spain|aqui na espanha|aqu[ií] en espa[ñn]a|je suis en espagne)\b/i.test(ans)
-    || /\b(estou|estoy|moro|vivo|living|live here)\b/i.test(ans)
-    || /\b(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|valencia|sevilla|m[áa]laga|bilbao|alicante|zaragoza|murcia|palma|granada)\b/i.test(ans)
+  // Afirmativas com contexto de localização
+  const isAffirmative = /\b(j[áa] estou|ya estoy|estou (na |em )?espanha|estoy en espa[ñn]a|i'?m in spain|aqui na espanha|aqu[ií] en espa[ñn]a|je suis en espagne|oui en espagne|s[ií] en espa[ñn]a)\b/i.test(raw)
+    || /\b(estou em|estoy en|moro em|vivo em|moro na|vivo na|living in|live here|trabajo en|trabalho em|trabalho na|trabajo en)\b/i.test(raw)
+      && /\b(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|valencia|sevilla|m[áa]laga|bilbao|alicante|zaragoza|murcia|palma|granada)\b/i.test(raw)
+    || /\b(sim|si|s[ií]|yes|oui|claro|exacto|exactamente|exactly|correto|certo|positivo|sure|ok|okay|vale|dale|manda|vai|vamos|fala|pronto|adelante|go ahead|all[ée]z)\b/i.test(raw)
+      && /\b(espanha|espa[ñn]a|spain|espagne|madrid|barcelona|valencia|sevilla|m[áa]laga|bilbao|alicante|zaragoza|murcia|palma|granada)\b/i.test(raw)
   if (isAffirmative) return 'yes'
 
   return 'ambiguous'
