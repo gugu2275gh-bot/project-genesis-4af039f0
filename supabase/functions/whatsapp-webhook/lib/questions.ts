@@ -625,10 +625,10 @@ export function countAlphaWords(text: string): number {
 // ============================================================================
 
 function getInsideSpainEntryDateQuestion(language: ChatLanguage): string {
-  if (language === 'es') return '¿Cuál fue la fecha exacta de tu entrada en España?'
-  if (language === 'en') return 'What was the exact date you entered Spain?'
-  if (language === 'fr') return "Quelle a été la date exacte de votre entrée en Espagne ?"
-  return 'Qual foi a data exata da sua entrada na Espanha?'
+  if (language === 'es') return '¿Cuál fue la fecha exacta de entrada en España? Solo la fecha DD/MM/AAAA'
+  if (language === 'en') return 'What was the exact date of entry into Spain? Only the date DD/MM/YYYY'
+  if (language === 'fr') return "Quelle a été la date exacte d'entrée en Espagne ? Uniquement la date JJ/MM/AAAA"
+  return 'Qual foi a data exata de entrada na espanha? somente a data DD/MM/AAAA'
 }
 
 /**
@@ -666,10 +666,9 @@ export function getInsideSpainNextQuestion(
   const askedCidade = !!opts.empadronadoCity
     || /\b(em qual cidade|en qu[eé] ciudad|in which city|dans quelle ville)\b/i.test(transcript)
 
-  // B2 — data de entrada (com B1 intro só na 1ª vez)
+  // B2 — data de entrada (sem intro extra; mensagem literal do cliente)
   if (!askedEntryDate) {
-    const entryQ = getInsideSpainEntryDateQuestion(language)
-    return b1IntroSent ? entryQ : `${t.insideIntro}\n\n${entryQ}`
+    return getInsideSpainEntryDateQuestion(language)
   }
   // B3 — empadronado?
   if (!askedEmpadronado) return getEmpadronadoQuestion(language)
