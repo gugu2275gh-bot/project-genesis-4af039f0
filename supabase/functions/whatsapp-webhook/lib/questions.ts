@@ -425,10 +425,10 @@ export function getOutsideSpainNextQuestion(
     return 'você esteve na Europa nos últimos 6 meses? (sim ou não)'
   }
   if (!askedFamiliar) {
-    if (language === 'es') return '¿Tienes algún familiar europeo o residente legal en España?'
-    if (language === 'en') return 'Do you have a European family member or a legal resident in Spain?'
-    if (language === 'fr') return 'Avez-vous un membre de votre famille européen ou résident légal en Espagne ?'
-    return 'Possui familiar europeu ou residente legal na Espanha?'
+    if (language === 'es') return '¿Tienes algún familiar europeo o residente legal en España? (sí o no)'
+    if (language === 'en') return 'Do you have a European family member or a legal resident in Spain? (yes or no)'
+    if (language === 'fr') return 'Avez-vous un membre de votre famille européen ou résident légal en Espagne ? (oui ou non)'
+    return 'possui familiar europeu ou residente legal na espanha? (sim ou não)'
   }
   if (!askedRemoto) {
     if (language === 'es') return '¿Trabajas de forma remota?'
