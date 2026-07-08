@@ -2639,11 +2639,8 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = stripRepeatedOpener(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = preventRepeatedCanonicalQuestion(aiResponse, detectedChatLanguage, blockFlags)
-            aiResponse = forceServicesMessageAfterInterest(aiResponse, detectedChatLanguage, {
-              interestKnown: !serviceMissing,
-              locationKnown: !!funnelStateLive.location_known,
-              assistantTranscript: allAssistant,
-            })
+            // M5/M6 removidos: sem force-services aqui.
+
           } catch (retryError) {
             console.error('Anti-repeat retry failed:', retryError instanceof Error ? retryError.message : retryError)
           }
