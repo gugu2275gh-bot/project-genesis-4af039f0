@@ -70,48 +70,6 @@ export async function sendWhatsAppMessage(phone: string, message: string): Promi
 }
 
 /**
- * Envia uma mensagem via Twilio Content Template (ex: quick reply buttons).
- * Requer um ContentSid já aprovado no Twilio/Meta.
- */
-export async function sendTwilioContentTemplate(
-  phone: string,
-  contentSid: string,
-  contentVariables?: Record<string, string>,
-): Promise<void> {
-  const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio'
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
-  const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY')
-  if (!LOVABLE_API_KEY || !TWILIO_API_KEY) {
-    throw new Error('Twilio Gateway not configured')
-  }
-  const TWILIO_FROM_NUMBER = 'whatsapp:+34654378464'
-  const body: Record<string, string> = {
-    To: `whatsapp:+${phone}`,
-    From: TWILIO_FROM_NUMBER,
-    ContentSid: contentSid,
-  }
-  if (contentVariables && Object.keys(contentVariables).length > 0) {
-    body.ContentVariables = JSON.stringify(contentVariables)
-  }
-  console.log('Sending Twilio Content Template:', { phone, contentSid })
-  const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'X-Connection-Api-Key': TWILIO_API_KEY,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams(body),
-  })
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error('Twilio Gateway template send error:', errorText)
-    throw new Error(`Twilio API error: ${response.status}`)
-  }
-  console.log('Template sent successfully via Twilio:', contentSid)
-}
-
-/**
  * Normaliza texto para comparação de duplicidade:
  * - lowercase, remove acentos, colapsa espaços, strip pontuação repetida.
  */
