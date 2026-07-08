@@ -1954,8 +1954,12 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         }
         const ans = locationAnswer.toLowerCase().trim()
         const yesNoVerdict = classifyYesNo(ans)
-        let userOutsideSpain = yesNoVerdict === 'no'
-        let userInSpain = yesNoVerdict === 'yes'
+        // Seed flags a partir do estado persistido — evita que, em turnos
+        // subsequentes (quando a mensagem atual não é sim/não), as flags fiquem
+        // ambas false e o fallback scripted retorne vazio, travando a conversa.
+        const persistedLoc = funnelStateLive.location_known
+        let userOutsideSpain = yesNoVerdict === 'no' || persistedLoc === 'outside'
+        let userInSpain = yesNoVerdict === 'yes' || persistedLoc === 'spain'
 
         // Reforço turn-a-turn: se a ÚLTIMA pergunta do bot foi a de localização e o
         // cliente acabou de responder sim/não, grava location_known imediatamente
