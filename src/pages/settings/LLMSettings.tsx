@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +13,6 @@ import {
   Brain, Save, KeyRound, ExternalLink, Plus, Trash2, ArrowUp, ArrowDown,
   CheckCircle2, XCircle, Loader2, Activity, RefreshCw, Download, Upload,
 } from 'lucide-react';
-import { useRef } from 'react';
 
 type Provider = 'gemini' | 'openai';
 interface CascadeItem { provider: Provider; model: string; enabled: boolean; }
