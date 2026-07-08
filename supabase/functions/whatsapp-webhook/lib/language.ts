@@ -132,7 +132,7 @@ const TEMPLATES: Record<ChatLanguage, PromptTemplates> = {
   },
   'en': {
     askName: 'First of all, what is your full name?',
-    thanksThenAskEmail: 'Thank you. What is the best e-mail so we can send you guidance and follow up on your case?',
+    thanksThenAskEmail: 'Thank you, what is the best e-mail so we can send you guidance and follow up on your case?',
     interestQuestion: 'Tell me calmly: what are you looking for today? It can be citizenship, residency, studies, arraigo or a specific document.',
     servicesCatalog: 'We work with Spanish citizenship, digital nomad, residencies, NIE, TIE, education recognition, background checks, family reunification and other processes.',
     oneMomentPlease: 'Great question, I will explain in a moment.',
