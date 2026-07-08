@@ -177,9 +177,14 @@ const STEPS: Record<StepCode, StepDef> = {
         return { valid: true, value: 'spain' }
       }
 
-      // 6) Fallback: assume outside (mais seguro — evita pedir dados INSIDE
-      //    para quem não está no país).
-      return { valid: true, value: 'outside' }
+      // 6) Fallback: se a resposta parece um pedido de serviço (arraigo,
+      //    nacionalidade, residência, NIE/TIE, homologação, reagrupação,
+      //    estudos/curso, autorização de regresso) OU qualquer outra frase
+      //    que não bate com SIM/NÃO nem com país, NÃO adivinhamos "outside".
+      //    Rejeita como inválido para que a pergunta SIM/NÃO seja repetida.
+      //    Isso evita saltar a etapa quando o cliente responde algo
+      //    completamente diferente ("quero tirar arraigo", "preciso do NIE").
+      return { valid: false, reason: 'unclear_location' }
     },
 
     next: (_state, value) =>
