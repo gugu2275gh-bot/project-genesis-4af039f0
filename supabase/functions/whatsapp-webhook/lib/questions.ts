@@ -431,10 +431,10 @@ export function getOutsideSpainNextQuestion(
     return 'possui familiar europeu ou residente legal na espanha? (sim ou não)'
   }
   if (!askedRemoto) {
-    if (language === 'es') return '¿Trabajas de forma remota?'
-    if (language === 'en') return 'Do you work remotely?'
-    if (language === 'fr') return 'Travaillez-vous à distance ?'
-    return 'Você trabalha remoto?'
+    if (language === 'es') return '¿Trabajas de forma remota? (sí o no)'
+    if (language === 'en') return 'Do you work remotely? (yes or no)'
+    if (language === 'fr') return 'Travaillez-vous à distance ? (oui ou non)'
+    return 'você trabalha remoto? (sim ou não)'
   }
   if (!askedFormacao) {
     if (language === 'es') return '¿Tienes formación superior?'
