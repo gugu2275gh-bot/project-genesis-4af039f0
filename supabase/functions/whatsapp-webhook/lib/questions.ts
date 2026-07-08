@@ -437,10 +437,10 @@ export function getOutsideSpainNextQuestion(
     return 'você trabalha remoto? (sim ou não)'
   }
   if (!askedFormacao) {
-    if (language === 'es') return '¿Tienes formación superior?'
-    if (language === 'en') return 'Do you have higher education?'
-    if (language === 'fr') return 'Avez-vous une formation supérieure ?'
-    return 'Você possui formação superior?'
+    if (language === 'es') return '¿Tienes formación superior? (sí o no)'
+    if (language === 'en') return 'Do you have higher education? (yes or no)'
+    if (language === 'fr') return 'Avez-vous une formation supérieure ? (oui ou non)'
+    return 'Você possui formação superior? (sim ou não)'
   }
 
   // D3 Bizagi: pré-handoff em 2 mensagens (summary ||| transfer). Idempotência via transcript.
