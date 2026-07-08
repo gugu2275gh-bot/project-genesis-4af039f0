@@ -44,7 +44,7 @@ Deno.test('BPMN v2 H3: getHandoffTransferMessage retorna 1 bolha (sem H4) em PT/
 Deno.test('BPMN v2 PT-BR: H1/H2/H3 batem com o texto literal do diagrama', () => {
   const [h1, h2] = getPreHandoffSummaryMessage('pt-BR').split('|||').map(s => s.trim())
   const h3 = getHandoffTransferMessage('pt-BR').trim()
-  assertEquals(h1, 'Perfeito. Já consigo ter uma visão inicial do seu caso.')
+  assertEquals(h1, 'Perfeito, já consigo ter uma visão inicial do seu caso.')
   assertEquals(h2, 'Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.')
   assertEquals(h3, 'Vou encaminhar suas informações para um especialista analisar com mais profundidade.')
 })
