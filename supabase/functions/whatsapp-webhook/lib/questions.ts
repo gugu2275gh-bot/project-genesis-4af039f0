@@ -572,6 +572,10 @@ export function classifyYesNo(text: string): YesNoClassification {
   const locationNegative = /\b(estou|estoy|moro|vivo|fico|trabalho|trabajo|living|live)\s+(em|en|in|na|no|nos|a|de)\s+(brasil|brazil|portugal|argentina|m[ée]xico|mexico|colombia|chile|uruguai|uruguay|venezuela|paraguai|paraguay|estados unidos|eua|usa|outro pa[ií]s|en otro pa[ií]s|em outro pa[ií]s|other country|autre pays)\b/i
   const outsideSpain = /\b(fora da espanha|fora de espanha|fora da espa[ñn]a|fora de espa[ñn]a|estou fora|estoy fuera|outside spain|pas en espagne|no estoy en espa[ñn]a|não estou na espanha|não estou em espanha|não estou na espa[ñn]a)\b/i
   const otherCountry = /\b(sou de outro pa[ií]s|soy de otro pa[ií]s|outro pa[ií]s|otro pa[ií]s|other country|autre pays)\b/i
+
+  // "fora"/"outro país" sem negação explícita ainda é claramente fora
+  if (outsideSpain.test(raw) || otherCountry.test(raw)) return 'no'
+
   const isNegative = /\b(n[ãa]o|no|not|non|ne)\b/i.test(raw)
     && (/\b(ainda n[ãa]o|todav[ií]a no|not yet|pas encore)\b/i.test(raw)
       || /\b(n[ãa]o (estou|moro|vivo|trabalho)|no (estoy|vivo|trabajo)|i'?m not|not in spain|je ne suis pas|pas en espagne)\b/i.test(raw)
