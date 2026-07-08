@@ -33,15 +33,15 @@ Deno.test('OUTSIDE A6 (formação): pergunta literal SEM insideIntro (bug do scr
   assert(!out.includes('como está sua situação aqui'))
 })
 
-Deno.test('OUTSIDE A2 (idade): preâmbulo "Entendido. Então seguimos pelo seu cenário fora da Espanha"', () => {
+Deno.test('OUTSIDE A2 (idade): pergunta literal "Qual sua idade?" sem preâmbulo A1', () => {
   const out = getNextScriptedQuestion('aprofundamento', 'pt-BR', {
     userInSpain: false,
     userOutsideSpain: true,
     assistantTranscript: '',
     locationKnown: 'outside',
   })
-  assertStringIncludes(out, 'fora da Espanha')
-  assertStringIncludes(out, 'idade')
+  assertStringIncludes(out, 'Qual sua idade?')
+  assert(!out.includes('fora da Espanha'), 'NUNCA deve emitir A1 preâmbulo no bloco fora')
 })
 
 // ---------- Bloco INSIDE (B1-B5) ----------
