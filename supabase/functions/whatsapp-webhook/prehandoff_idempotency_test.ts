@@ -33,7 +33,7 @@ Deno.test('preHandoffSent=true + KB + H1 colado (pt-BR): mantém só KB', () => 
 })
 
 Deno.test('preHandoffSent=true + bolhas |||: filtra cada bolha', () => {
-  const payload = `Perfecto. Ya puedo tener una visión inicial de tu caso.|||En CB analizamos cada caso de forma individual.|||Voy a remitir tu información a un especialista.`
+  const payload = `Perfecto, ya puedo tener una visión inicial de tu caso.|||En CB analizamos cada caso de forma individual.|||Voy a remitir tu información a un especialista.`
   const out = stripLockedSentinel(stripRepeatedPreHandoff(payload, 'es', { preHandoffSent: true }))
   assert(/en breve uno de nuestros especialistas/i.test(out))
 })
