@@ -2316,11 +2316,11 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           console.log(`[GATE] step=${nextStep.key} done=${steps.filter(s=>s.done).length}/${steps.length} inSpain=${userInSpain} outside=${userOutsideSpain}`)
         } else {
           console.log(`[GATE] flow complete — KB liberada (handoff=${handoffDone})`)
-          // BPMN-3 MODO PÓS-HANDOFF: H1-H4 já foram enviados. Toda resposta vem da KB
+          // BPMN-3 MODO PÓS-HANDOFF: H1-H3 já foram enviados. Toda resposta vem da KB
           // e termina com o sufixo localizado de "aguarde um especialista".
           messageForAI = `${messageForAI}\n\n[MODO PÓS-HANDOFF (BPMN-3) — INSTRUÇÃO INTERNA, NÃO REPITA AO CLIENTE]\n` +
             `IDIOMA OBRIGATÓRIO E TRAVADO DA RESPOSTA: ${langName}. Definido no início da conversa, NÃO MUDA.\n` +
-            `As 4 mensagens H1-H4 (pré-handoff + handoff) JÁ FORAM ENVIADAS. NÃO repita nenhuma delas.\n` +
+            `As 3 mensagens H1-H3 (pré-handoff + handoff) JÁ FORAM ENVIADAS. NÃO repita nenhuma delas.\n` +
             `\n## SUA ÚNICA TAREFA AGORA\n` +
             `O cliente está aguardando o especialista, mas fez uma DÚVIDA FACTUAL. Você DEVE responder a dúvida usando os trechos da Base de Conhecimento (KB) abaixo. NÃO repita o handoff. NÃO diga "vou encaminhar". NÃO diga "vou pedir ao especialista". Apenas RESPONDA a dúvida em 2-5 frases claras, no idioma travado.\n` +
             `\n## EXEMPLOS DO QUE NUNCA FAZER (frases PROIBIDAS literalmente, em qualquer idioma):\n` +
