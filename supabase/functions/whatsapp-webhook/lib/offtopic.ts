@@ -190,9 +190,19 @@ function looksLikeStepAttempt(text: string, step: CadastroStepKey | null | undef
       if (words.length < 1 || words.length > 4) return false
       return words.every((w) => /^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'\-]{0,29}$/.test(w))
     }
-    case 'email':
-      // Só considera tentativa de e-mail se tiver `@`.
-      return /@/.test(s)
+    case 'email': {
+      // Tentativa de e-mail se tiver `@`, OU se o cliente repetiu o nome /
+      // enviou um texto curto sem sinais de pergunta/pedido — nesses casos
+      // devemos re-perguntar o e-mail em vez de parquear como off-topic.
+      if (/@/.test(s)) return true
+      if (QUESTION_HINT_RE.test(s) || REQUEST_HINT_RE.test(s)) return false
+      const words = s.split(/\s+/).filter(Boolean)
+      if (words.length >= 1 && words.length <= 6 && s.length <= 60 &&
+          words.every((w) => /^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'\-\.]{0,29}$/.test(w))) {
+        return true
+      }
+      return false
+    }
     case 'localizacao':
       // Menção a país/cidade conhecidos, mesmo em frase composta
       // ("Estou em España", "Estou no Brasil ainda").
