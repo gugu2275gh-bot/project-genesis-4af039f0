@@ -599,11 +599,15 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           if (uploadError) {
             console.error('Storage upload error:', uploadError)
           } else {
-            const { data: publicUrlData } = supabase.storage
+            const { data: signedUrlData, error: signedErr } = await supabase.storage
               .from('whatsapp-media')
-              .getPublicUrl(filePath)
-            storedMediaUrl = publicUrlData.publicUrl
-            console.log('Media stored at:', storedMediaUrl, '(source:', downloadSource, ')')
+              .createSignedUrl(filePath, 60 * 60 * 24 * 365)
+            if (signedErr || !signedUrlData?.signedUrl) {
+              console.error('Signed URL error:', signedErr)
+            } else {
+              storedMediaUrl = signedUrlData.signedUrl
+              console.log('Media stored at (signed):', storedMediaUrl, '(source:', downloadSource, ')')
+            }
           }
         } else if (!storedMediaUrl) {
           console.warn('Could not download media from any source')
