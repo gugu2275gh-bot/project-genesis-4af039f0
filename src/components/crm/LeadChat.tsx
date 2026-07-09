@@ -277,11 +277,13 @@ export function LeadChat({ leadId, contactPhone, contactId, contactName }: LeadC
 
         if (uploadError) throw uploadError;
 
-        const { data: publicUrlData } = supabase.storage
+        const { data: signedUrlData, error: signedErr } = await supabase.storage
           .from('whatsapp-media')
-          .getPublicUrl(filePath);
+          .createSignedUrl(filePath, 60 * 60 * 24 * 365);
 
-        mediaUrl = publicUrlData.publicUrl;
+        if (signedErr || !signedUrlData?.signedUrl) throw signedErr ?? new Error('Failed to create signed URL');
+
+        mediaUrl = signedUrlData.signedUrl;
         mediaMimetype = attachedFile.type;
         mediaFilename = attachedFile.name;
         
