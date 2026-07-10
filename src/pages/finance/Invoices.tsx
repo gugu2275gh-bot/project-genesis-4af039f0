@@ -40,6 +40,15 @@ import { ptBR } from 'date-fns/locale';
 import { downloadInvoice } from '@/lib/generate-invoice';
 import { supabase } from '@/integrations/supabase/client';
 
+// Parses an amount string that may be in JS format ("2500.00") or EU format ("2.500,00").
+// If a comma exists, treat as EU: strip thousand dots, comma is decimal.
+// Otherwise, treat dot as decimal separator (JS toFixed output).
+function parseAmount(raw: string): number {
+  const s = raw.trim();
+  if (s.includes(',')) return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+  return parseFloat(s);
+}
+
 async function handleDownloadInvoice(inv: Invoice) {
   const issueDate = format(new Date(inv.issued_at), 'dd/MM/yyyy');
   const yearStr = format(new Date(inv.issued_at), 'yyyy');
