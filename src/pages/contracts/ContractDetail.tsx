@@ -1289,6 +1289,11 @@ export default function ContractDetail() {
                     account = paymentAccounts.find((a: any) => a.id === transferPayment.payment_account_id);
                   }
                 }
+                // Final fallback: se o método é TRANSFERENCIA mas nenhuma conta foi vinculada, usa a primeira conta ativa disponível
+                const isTransfer = pm === 'TRANSFERENCIA' || contractPayments?.some((p: any) => p.payment_method === 'TRANSFERENCIA');
+                if (!account && isTransfer && paymentAccounts.length > 0) {
+                  account = paymentAccounts[0];
+                }
                 if (!account) return undefined;
                 return { bankName: account.bank_name, accountName: account.account_name, accountDetails: account.account_details } as BankAccountData;
               })()}
