@@ -1268,7 +1268,7 @@ export default function ContractDetail() {
               date={contract.created_at ? new Date(contract.created_at) : undefined}
               serviceDescription={contract.scope_summary || undefined}
               paymentConditions={formData.installment_conditions || contract.installment_conditions || undefined}
-              paymentMethod={(contract as any).payment_method || undefined}
+              paymentMethod={(contract as any).payment_method || (contractPayments?.find((p: any) => p.payment_method === 'TRANSFERENCIA') ? 'TRANSFERENCIA' : (contractPayments?.[0] as any)?.payment_method) || undefined}
               currency={contract.currency || 'EUR'}
               phone={contract.opportunities?.leads?.contacts?.phone?.toString() || undefined}
               email={(contract.opportunities?.leads?.contacts as any)?.email || undefined}
