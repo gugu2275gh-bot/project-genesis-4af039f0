@@ -29,7 +29,8 @@ import {
   Ban,
   Download,
   Receipt,
-  Euro
+  Euro,
+  Trash2
 } from 'lucide-react';
 import { useInvoices, Invoice, InvoiceInsert } from '@/hooks/useInvoices';
 import { useContracts } from '@/hooks/useContracts';
