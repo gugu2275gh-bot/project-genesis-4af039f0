@@ -421,6 +421,13 @@ export default function Invoices() {
               </Button>
             </>
           )}
+          <EditExtrasDialog
+            invoice={item}
+            isSaving={updateInvoice.isPending}
+            onSave={(extras) =>
+              updateInvoice.mutate({ id: item.id, additional_costs: Object.keys(extras).length ? extras : null })
+            }
+          />
           <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); handleDownloadInvoice(item); }}>
             <Download className="h-4 w-4" />
           </Button>
