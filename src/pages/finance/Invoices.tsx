@@ -662,7 +662,7 @@ export default function Invoices() {
                 <div className="space-y-2">
                   <Label>Taxa IVA (%)</Label>
                   <Select 
-                    value={String(formData.vat_rate)} 
+                    value={String(vatRate)} 
                     onValueChange={(v) => setFormData({ ...formData, vat_rate: parseFloat(v) })}
                   >
                     <SelectTrigger>
@@ -670,7 +670,7 @@ export default function Invoices() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="0.21">21% (Padrão)</SelectItem>
-                      <SelectItem value="0.10">10% (Reduzido)</SelectItem>
+                      <SelectItem value="0.1">10% (Reduzido)</SelectItem>
                       <SelectItem value="0.04">4% (Super-reduzido)</SelectItem>
                       <SelectItem value="0">0% (Isento)</SelectItem>
                     </SelectContent>
