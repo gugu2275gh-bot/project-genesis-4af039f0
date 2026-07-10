@@ -38,6 +38,7 @@ import { useContacts } from '@/hooks/useContacts';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { downloadInvoice } from '@/lib/generate-invoice';
+import { supabase } from '@/integrations/supabase/client';
 
 function handleDownloadInvoice(inv: Invoice) {
   const issueDate = format(new Date(inv.issued_at), 'dd/MM/yyyy');
