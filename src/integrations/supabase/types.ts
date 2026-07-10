@@ -125,11 +125,15 @@ export type Database = {
           created_at: string | null
           created_by_user_id: string | null
           description: string | null
+          due_date: string | null
           id: string
           invoice_number: string | null
           is_invoiced: boolean | null
           payment_account: string | null
           payment_account_detail: string | null
+          payment_confirmed_date: string | null
+          payment_date: string | null
+          payment_method: string | null
           reference_date: string | null
           related_commission_id: string | null
           related_contract_id: string | null
@@ -144,11 +148,15 @@ export type Database = {
           created_at?: string | null
           created_by_user_id?: string | null
           description?: string | null
+          due_date?: string | null
           id?: string
           invoice_number?: string | null
           is_invoiced?: boolean | null
           payment_account?: string | null
           payment_account_detail?: string | null
+          payment_confirmed_date?: string | null
+          payment_date?: string | null
+          payment_method?: string | null
           reference_date?: string | null
           related_commission_id?: string | null
           related_contract_id?: string | null
@@ -163,11 +171,15 @@ export type Database = {
           created_at?: string | null
           created_by_user_id?: string | null
           description?: string | null
+          due_date?: string | null
           id?: string
           invoice_number?: string | null
           is_invoiced?: boolean | null
           payment_account?: string | null
           payment_account_detail?: string | null
+          payment_confirmed_date?: string | null
+          payment_date?: string | null
+          payment_method?: string | null
           reference_date?: string | null
           related_commission_id?: string | null
           related_contract_id?: string | null
