@@ -236,13 +236,14 @@ export function usePayments() {
       // 3. Get opportunity with lead/contact info for client name
       const { data: opportunity } = await supabase
         .from('opportunities')
-        .select('*, leads (*, contacts (*))')
+        .select('*, leads (*, contacts (*), service_types (name))')
         .eq('id', payment.opportunity_id)
         .single();
 
       if (opportunity?.leads?.contacts?.full_name) {
         clientName = opportunity.leads.contacts.full_name;
       }
+
 
       // 4. Check if payment has a linked contract
       if (contractId) {
