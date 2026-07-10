@@ -358,7 +358,7 @@ export default function Invoices() {
             const m = lines[i].match(/^\s{2,}(.+?):\s*\+?\s*€\s*([\d.,]+)/);
             if (!m) break;
             const desc = m[1].trim();
-            const amt = parseFloat(m[2].replace(/\./g, '').replace(',', '.'));
+            const amt = parseAmount(m[2]);
             if (desc && !isNaN(amt) && amt > 0) parsed.push({ description: desc, amount: amt });
           }
         }
