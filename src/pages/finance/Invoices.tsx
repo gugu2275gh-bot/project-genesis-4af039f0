@@ -199,12 +199,22 @@ export default function Invoices() {
   };
 
   const handleSubmit = () => {
-    createInvoice.mutate(formData, {
+    const cleanExtras = extraFees.filter((e) => e.description.trim() && e.amount > 0);
+    const additional_costs = cleanExtras.reduce((acc, e) => {
+      acc[e.description.trim()] = e.amount;
+      return acc;
+    }, {} as Record<string, number>);
+    const payload: InvoiceInsert = {
+      ...formData,
+      ...(Object.keys(additional_costs).length ? { additional_costs } : {}),
+    };
+    createInvoice.mutate(payload, {
       onSuccess: () => {
         setIsDialogOpen(false);
         setSelectedClientId('');
         setSelectedContractId('');
         setSelectedServiceId('');
+        setExtraFees([]);
         setFormData({
           client_name: '',
           service_description: '',
