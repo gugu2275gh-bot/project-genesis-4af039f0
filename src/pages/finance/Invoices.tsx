@@ -40,6 +40,15 @@ import { ptBR } from 'date-fns/locale';
 import { downloadInvoice } from '@/lib/generate-invoice';
 import { supabase } from '@/integrations/supabase/client';
 
+// Parses an amount string that may be in JS format ("2500.00") or EU format ("2.500,00").
+// If a comma exists, treat as EU: strip thousand dots, comma is decimal.
+// Otherwise, treat dot as decimal separator (JS toFixed output).
+function parseAmount(raw: string): number {
+  const s = raw.trim();
+  if (s.includes(',')) return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+  return parseFloat(s);
+}
+
 async function handleDownloadInvoice(inv: Invoice) {
   const issueDate = format(new Date(inv.issued_at), 'dd/MM/yyyy');
   const yearStr = format(new Date(inv.issued_at), 'yyyy');
@@ -81,7 +90,7 @@ async function handleDownloadInvoice(inv: Invoice) {
           const m = lines[i].match(/^\s{2,}(.+?):\s*\+?\s*€\s*([\d.,]+)/);
           if (!m) break;
           const desc = m[1].trim();
-          const amt = parseFloat(m[2].replace(/\./g, '').replace(',', '.'));
+          const amt = parseAmount(m[2]);
           if (desc && !isNaN(amt) && amt > 0) extras[desc] = amt;
         }
       }
@@ -349,7 +358,7 @@ export default function Invoices() {
             const m = lines[i].match(/^\s{2,}(.+?):\s*\+?\s*€\s*([\d.,]+)/);
             if (!m) break;
             const desc = m[1].trim();
-            const amt = parseFloat(m[2].replace(/\./g, '').replace(',', '.'));
+            const amt = parseAmount(m[2]);
             if (desc && !isNaN(amt) && amt > 0) parsed.push({ description: desc, amount: amt });
           }
         }
@@ -397,7 +406,8 @@ export default function Invoices() {
   };
 
   const extrasTotal = extraFees.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-  const calculatedVat = formData.amount_without_vat * (formData.vat_rate || 0.21);
+  const vatRate = formData.vat_rate ?? 0.21;
+  const calculatedVat = formData.amount_without_vat * vatRate;
   const calculatedTotal = formData.amount_without_vat + calculatedVat + extrasTotal;
 
   const columns: Column<Invoice>[] = [
@@ -652,7 +662,7 @@ export default function Invoices() {
                 <div className="space-y-2">
                   <Label>Taxa IVA (%)</Label>
                   <Select 
-                    value={String(formData.vat_rate)} 
+                    value={String(vatRate)} 
                     onValueChange={(v) => setFormData({ ...formData, vat_rate: parseFloat(v) })}
                   >
                     <SelectTrigger>
@@ -660,7 +670,7 @@ export default function Invoices() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="0.21">21% (Padrão)</SelectItem>
-                      <SelectItem value="0.10">10% (Reduzido)</SelectItem>
+                      <SelectItem value="0.1">10% (Reduzido)</SelectItem>
                       <SelectItem value="0.04">4% (Super-reduzido)</SelectItem>
                       <SelectItem value="0">0% (Isento)</SelectItem>
                     </SelectContent>
