@@ -69,7 +69,8 @@ export function usePayments() {
             *,
             leads (
               *,
-              contacts (*)
+              contacts (*),
+              service_types (id, name)
             )
           ),
           contracts (*)
