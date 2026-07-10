@@ -432,6 +432,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               discount_type: form.discount_type || null,
               discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
               beneficiary_contact_id: beneficiaryIdToUse,
+              payment_account_id: form.payment_account_id || null,
             }));
             const { error: payError } = await supabase.from('payments').insert(paymentInserts);
             if (payError) {
@@ -453,6 +454,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
               beneficiary_contact_id: beneficiaryIdToUse,
               due_date: form.due_date || null,
+              payment_account_id: form.payment_account_id || null,
             });
             if (payError) {
               console.error('Error creating payment:', payError);
@@ -490,6 +492,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               discount_type: form.discount_type || null,
               discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
               beneficiary_contact_id: beneficiaryIdToUse,
+              payment_account_id: form.payment_account_id || null,
             }));
             const { error: payError } = await supabase.from('payments').insert(paymentInserts);
             if (payError) {
@@ -511,6 +514,7 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
               discount_value: form.discount_value ? parseFloat(form.discount_value) : 0,
               beneficiary_contact_id: beneficiaryIdToUse,
               due_date: form.due_date || null,
+              payment_account_id: form.payment_account_id || null,
             });
             if (payError) {
               console.error('Error creating payment:', payError);
