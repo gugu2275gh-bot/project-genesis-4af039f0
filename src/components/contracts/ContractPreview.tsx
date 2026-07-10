@@ -107,6 +107,8 @@ export function ContractPreview({
       await onSaveEdits({
         contractNumber: editedContractNumber,
         installmentConditions: editedPaymentConditions,
+        clientName: editedName,
+        documentNumber: editedDocument,
         date: editedDate || undefined,
       });
       setIsEditing(false);
