@@ -112,6 +112,7 @@ export default function Invoices() {
     amount_without_vat: 0,
     vat_rate: 0.21,
   });
+  const [extraFees, setExtraFees] = useState<{ description: string; amount: number }[]>([]);
 
   // Source clients from contacts table (so all registered clients appear, even without contracts)
   const clientsMap = new Map<string, { id: string; name: string; document?: string | null; address?: string | null }>();
