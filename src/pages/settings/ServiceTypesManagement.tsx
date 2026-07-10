@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -158,22 +158,31 @@ export default function ServiceTypesManagement() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="sector">Setor</Label>
-                  <Select
-                    value={formData.sector_id || ''}
-                    onValueChange={(value) => setFormData({ ...formData, sector_id: value || null })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um setor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sectors?.map((sector) => (
-                        <SelectItem key={sector.id} value={sector.id}>
+                  <Label>Setor</Label>
+                  <div className="grid grid-cols-2 gap-3 border rounded-md p-3">
+                    {sectors?.map((sector) => (
+                      <div key={sector.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`sector-${sector.id}`}
+                          checked={formData.sector_id === sector.id}
+                          onCheckedChange={(checked) =>
+                            setFormData({ ...formData, sector_id: checked ? sector.id : null })
+                          }
+                        />
+                        <Label
+                          htmlFor={`sector-${sector.id}`}
+                          className="text-sm font-normal cursor-pointer"
+                        >
                           {sector.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                        </Label>
+                      </div>
+                    ))}
+                    {sectors?.length === 0 && (
+                      <span className="text-sm text-muted-foreground col-span-2">
+                        Nenhum setor cadastrado
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="description">Descrição</Label>
