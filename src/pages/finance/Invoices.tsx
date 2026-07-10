@@ -881,7 +881,7 @@ function InvoicesTable({ invoices, columns }: { invoices: Invoice[]; columns: Co
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Faturas Emitidas</CardTitle>
+        <CardTitle>Faturas</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
