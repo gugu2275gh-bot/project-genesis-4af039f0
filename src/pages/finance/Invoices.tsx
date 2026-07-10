@@ -381,7 +381,7 @@ export default function Invoices() {
                   <SelectContent>
                     {clientContracts.map((contract) => (
                       <SelectItem key={contract.id} value={contract.id}>
-                        {contract.contract_number ? `Nº ${contract.contract_number} - ` : ''}€{contract.total_fee?.toFixed(2) || '0.00'}
+                        {contract.contract_number ? `Nº ${contract.contract_number} - ` : ''}€{contractEffectiveTotal(contract).toFixed(2)}
                       </SelectItem>
                     ))}
                   </SelectContent>
