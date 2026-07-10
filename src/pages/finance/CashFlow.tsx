@@ -34,12 +34,17 @@ import {
 import { useCashFlow, CashFlowEntry, CashFlowInsert } from '@/hooks/useCashFlow';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
-const PAYMENT_ACCOUNTS = [
-  { value: 'BRUCKSCHEN_ES', label: 'Bruckschen (Espanha)' },
-  { value: 'PIX_BR', label: 'PIX (Brasil)' },
-  { value: 'PAYPAL', label: 'PayPal' },
+const PAYMENT_METHODS = [
+  { value: 'PIX', label: 'PIX' },
+  { value: 'TRANSFERENCIA', label: 'Transferência' },
+  { value: 'CARTAO_CREDITO', label: 'Cartão de Crédito' },
+  { value: 'CARTAO_DEBITO', label: 'Cartão de Débito' },
+  { value: 'BOLETO', label: 'Boleto' },
   { value: 'DINHEIRO', label: 'Dinheiro' },
+  { value: 'PAYPAL', label: 'PayPal' },
   { value: 'OUTRO', label: 'Outro' },
 ];
 
