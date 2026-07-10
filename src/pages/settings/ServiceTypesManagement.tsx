@@ -115,6 +115,38 @@ export default function ServiceTypesManagement() {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
+                  <Label htmlFor="name">Nome</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      setFormData((prev) => {
+                        const autoCode = name
+                          .normalize('NFD')
+                          .replace(/[\u0300-\u036f]/g, '')
+                          .toUpperCase()
+                          .replace(/[^A-Z0-9]+/g, '_')
+                          .replace(/^_+|_+$/g, '');
+                        // Only auto-fill code when creating (not editing) and user hasn't customized it
+                        const shouldSyncCode =
+                          !editingType &&
+                          (prev.code === '' ||
+                            prev.code ===
+                              prev.name
+                                .normalize('NFD')
+                                .replace(/[\u0300-\u036f]/g, '')
+                                .toUpperCase()
+                                .replace(/[^A-Z0-9]+/g, '_')
+                                .replace(/^_+|_+$/g, ''));
+                        return { ...prev, name, code: shouldSyncCode ? autoCode : prev.code };
+                      });
+                    }}
+                    placeholder="Visto de Estudante"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="code">Código</Label>
                   <Input
                     id="code"
@@ -124,16 +156,7 @@ export default function ServiceTypesManagement() {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Visto de Estudante"
-                    required
-                  />
-                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="sector">Setor</Label>
                   <Select
