@@ -26,6 +26,32 @@ export interface ReceiptPaymentData {
   } | null;
 }
 
+const SERVICE_INTEREST_LABELS: Record<string, string> = {
+  VISTO_ESTUDANTE: 'Visto de Estudante',
+  VISTO_TRABALHO: 'Visto de Trabalho',
+  REAGRUPAMENTO: 'Reagrupamento Familiar',
+  RENOVACAO_RESIDENCIA: 'Renovação de Residência',
+  NACIONALIDADE_RESIDENCIA: 'Nacionalidade por Residência',
+  NACIONALIDADE_CASAMENTO: 'Nacionalidade por Casamento',
+  RESIDENCIA_PARENTE_COMUNITARIO: 'Residência por Parente Comunitário',
+  OUTRO: 'Outro',
+  SEM_SERVICO: 'Sem Serviço',
+};
+
+function buildReceiptDescription(payment: ReceiptPaymentData): string {
+  const serviceCode = payment.contracts?.service_type;
+  const serviceLabel = (serviceCode && SERVICE_INTEREST_LABELS[serviceCode]) || 'Serviço de Assessoria';
+  const scope = payment.contracts?.scope_summary?.trim();
+  let description = serviceLabel;
+  if (scope && scope.toLowerCase() !== serviceLabel.toLowerCase()) {
+    description += ` - ${scope}`;
+  }
+  if (payment.installment_number) {
+    return `Parcela ${payment.installment_number} - ${description}`;
+  }
+  return description;
+}
+
 export function useReceipts() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -36,7 +62,7 @@ export function useReceipts() {
       const receiptNumber = generateReceiptNumber();
       const clientName = payment.opportunities?.leads?.contacts?.full_name || 'Cliente';
       const clientDocument = payment.opportunities?.leads?.contacts?.document_number || undefined;
-      
+
       // Generate PDF blob
       const receiptBlob = generateReceipt({
         receiptNumber,
@@ -45,22 +71,20 @@ export function useReceipts() {
         amount: payment.amount,
         currency: payment.currency || 'EUR',
         paymentMethod: getPaymentMethodLabel(payment.payment_method),
-        paymentDate: payment.paid_at 
-          ? new Date(payment.paid_at).toLocaleDateString('pt-BR') 
+        paymentDate: payment.paid_at
+          ? new Date(payment.paid_at).toLocaleDateString('pt-BR')
           : new Date().toLocaleDateString('pt-BR'),
         transactionId: payment.transaction_id || undefined,
-        description: payment.installment_number 
-          ? `Parcela ${payment.installment_number} - ${payment.contracts?.scope_summary || 'Serviço de Assessoria'}`
-          : payment.contracts?.scope_summary || 'Serviço de Assessoria',
+        description: buildReceiptDescription(payment),
       });
 
       // Upload to storage
       const filePath = `receipts/${payment.id}/${receiptNumber}.pdf`;
       const { error: uploadError } = await supabase.storage
         .from('client-documents')
-        .upload(filePath, receiptBlob, { 
+        .upload(filePath, receiptBlob, {
           contentType: 'application/pdf',
-          upsert: true 
+          upsert: true,
         });
 
       if (uploadError) {
