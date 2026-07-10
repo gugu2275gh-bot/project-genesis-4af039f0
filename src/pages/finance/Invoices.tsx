@@ -327,10 +327,14 @@ export default function Invoices() {
     setSelectedServiceId('');
     const contract = contracts.find((c) => c.id === contractId);
     if (contract) {
+      const total = contractEffectiveTotal(contract);
+      const rate = formData.vat_rate ?? 0.21;
+      // Total do contrato inclui IVA — base = total / (1 + IVA)
+      const base = rate > 0 ? total / (1 + rate) : total;
       setFormData((f) => ({
         ...f,
         contract_id: contractId,
-        amount_without_vat: contractEffectiveTotal(contract),
+        amount_without_vat: Math.round(base * 100) / 100,
         service_description: '',
       }));
     }
@@ -593,14 +597,14 @@ export default function Invoices() {
 
               {contractServices.length > 0 && (
                 <div className="space-y-2">
-                  <Label>Serviço</Label>
+                  <Label>Serviço *</Label>
                   <Select
                     value={selectedServiceId}
                     onValueChange={handleServiceSelect}
                     disabled={!selectedContractId}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione um serviço (opcional)" />
+                      <SelectValue placeholder="Selecione o serviço a faturar" />
                     </SelectTrigger>
                     <SelectContent>
                       {contractServices.map((s) => (
@@ -608,6 +612,9 @@ export default function Invoices() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Faturas são emitidas por serviço. O valor base é calculado a partir do total do contrato sem IVA.
+                  </p>
                 </div>
               )}
 
@@ -665,7 +672,17 @@ export default function Invoices() {
                   <Label>Taxa IVA (%)</Label>
                   <Select 
                     value={String(vatRate)} 
-                    onValueChange={(v) => setFormData({ ...formData, vat_rate: parseFloat(v) })}
+                    onValueChange={(v) => {
+                      const newRate = parseFloat(v);
+                      const contract = contracts.find((c) => c.id === selectedContractId);
+                      if (contract) {
+                        const total = contractEffectiveTotal(contract);
+                        const base = newRate > 0 ? total / (1 + newRate) : total;
+                        setFormData({ ...formData, vat_rate: newRate, amount_without_vat: Math.round(base * 100) / 100 });
+                      } else {
+                        setFormData({ ...formData, vat_rate: newRate });
+                      }
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue />
