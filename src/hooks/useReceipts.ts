@@ -41,11 +41,13 @@ const SERVICE_INTEREST_LABELS: Record<string, string> = {
 };
 
 function buildReceiptDescription(payment: ReceiptPaymentData): string {
+  const lead = payment.opportunities?.leads;
+  const serviceName = lead?.service_types?.name || lead?.service_interest;
   const serviceCode = payment.contracts?.service_type;
   const serviceLabel = (serviceCode && SERVICE_INTEREST_LABELS[serviceCode]) || 'Serviço de Assessoria';
+  let description = serviceName || serviceLabel;
   const scope = payment.contracts?.scope_summary?.trim();
-  let description = serviceLabel;
-  if (scope && scope.toLowerCase() !== serviceLabel.toLowerCase()) {
+  if (scope && scope.toLowerCase() !== description.toLowerCase()) {
     description += ` - ${scope}`;
   }
   if (payment.installment_number) {
