@@ -190,6 +190,7 @@ export default function Invoices() {
     invoices, 
     isLoading, 
     createInvoice, 
+    updateInvoice,
     markAsSent,
     cancelInvoice,
     issuedInvoices,
@@ -197,6 +198,7 @@ export default function Invoices() {
     totalIssued,
     totalSent,
   } = useInvoices();
+
   const { contracts } = useContracts();
   const { contacts } = useContacts();
   
