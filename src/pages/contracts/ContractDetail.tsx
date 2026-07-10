@@ -1274,10 +1274,21 @@ export default function ContractDetail() {
               email={(contract.opportunities?.leads?.contacts as any)?.email || undefined}
               address={(contract.opportunities?.leads?.contacts as any)?.address || undefined}
               bankAccount={(() => {
+                if (!paymentAccounts) return undefined;
                 const pm = (contract as any).payment_method;
                 const pa = (contract as any).payment_account;
-                if (pm !== 'TRANSFERENCIA' || !pa || !paymentAccounts) return undefined;
-                const account = paymentAccounts.find((a: any) => a.country === pa || a.id === pa);
+                // First try contract-level fields
+                let account: any = undefined;
+                if (pm === 'TRANSFERENCIA' && pa) {
+                  account = paymentAccounts.find((a: any) => a.country === pa || a.id === pa);
+                }
+                // Fallback: derive from payments (payment_account_id stored per installment)
+                if (!account && contractPayments && contractPayments.length > 0) {
+                  const transferPayment: any = contractPayments.find((p: any) => p.payment_method === 'TRANSFERENCIA' && p.payment_account_id);
+                  if (transferPayment) {
+                    account = paymentAccounts.find((a: any) => a.id === transferPayment.payment_account_id);
+                  }
+                }
                 if (!account) return undefined;
                 return { bankName: account.bank_name, accountName: account.account_name, accountDetails: account.account_details } as BankAccountData;
               })()}
