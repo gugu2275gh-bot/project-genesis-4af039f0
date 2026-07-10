@@ -323,7 +323,7 @@ export default function Invoices() {
         service_description: '',
       }));
     }
-    // Auto-preencher taxas cadastradas no contrato
+    // Auto-preencher taxas: primeiro contract_costs, depois "Outros Custos" do acordo de pagamento
     const { data: costs } = await supabase
       .from('contract_costs')
       .select('description, amount')
@@ -331,7 +331,30 @@ export default function Invoices() {
     if (costs && costs.length > 0) {
       setExtraFees(costs.map((c) => ({ description: c.description, amount: Number(c.amount) || 0 })));
     } else {
-      setExtraFees([]);
+      // Fallback: parse contact's payment_notes
+      const { data: ct } = await supabase
+        .from('contracts')
+        .select('opportunities:opportunity_id(leads:lead_id(contacts:contact_id(payment_notes)))')
+        .eq('id', contractId)
+        .single();
+      const notes: string | undefined = (ct as any)?.opportunities?.leads?.contacts?.payment_notes;
+      const parsed: { description: string; amount: number }[] = [];
+      if (notes) {
+        const blocks = notes.split(/\n---\n\n?/);
+        const lastBlock = blocks[blocks.length - 1] || '';
+        const lines = lastBlock.split('\n');
+        const outIdx = lines.findIndex((l) => /^Outros Custos:/i.test(l.trim()));
+        if (outIdx >= 0) {
+          for (let i = outIdx + 1; i < lines.length; i++) {
+            const m = lines[i].match(/^\s{2,}(.+?):\s*\+?\s*€\s*([\d.,]+)/);
+            if (!m) break;
+            const desc = m[1].trim();
+            const amt = parseFloat(m[2].replace(/\./g, '').replace(',', '.'));
+            if (desc && !isNaN(amt) && amt > 0) parsed.push({ description: desc, amount: amt });
+          }
+        }
+      }
+      setExtraFees(parsed);
     }
   };
 
