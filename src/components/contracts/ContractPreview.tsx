@@ -12,6 +12,8 @@ import { getContractSections, generateContractDocument, generateContractWord, ty
 export interface ContractPreviewEditData {
   contractNumber: string;
   installmentConditions: string;
+  clientName: string;
+  documentNumber: string;
   date?: string;
 }
 
