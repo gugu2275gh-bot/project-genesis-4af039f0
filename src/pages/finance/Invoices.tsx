@@ -406,7 +406,8 @@ export default function Invoices() {
   };
 
   const extrasTotal = extraFees.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-  const calculatedVat = formData.amount_without_vat * (formData.vat_rate || 0.21);
+  const vatRate = formData.vat_rate ?? 0.21;
+  const calculatedVat = formData.amount_without_vat * vatRate;
   const calculatedTotal = formData.amount_without_vat + calculatedVat + extrasTotal;
 
   const columns: Column<Invoice>[] = [
