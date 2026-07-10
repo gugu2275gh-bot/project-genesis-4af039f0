@@ -23,7 +23,7 @@ export function useServiceSectors(includeInactive = false) {
       let query = supabase
         .from('service_sectors')
         .select('*')
-        .order('display_order', { ascending: true, nullsFirst: false });
+        .order('name', { ascending: true });
       
       if (!includeInactive) {
         query = query.eq('is_active', true);
