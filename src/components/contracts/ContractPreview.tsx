@@ -12,6 +12,8 @@ import { getContractSections, generateContractDocument, generateContractWord, ty
 export interface ContractPreviewEditData {
   contractNumber: string;
   installmentConditions: string;
+  clientName: string;
+  documentNumber: string;
   date?: string;
 }
 
@@ -105,6 +107,8 @@ export function ContractPreview({
       await onSaveEdits({
         contractNumber: editedContractNumber,
         installmentConditions: editedPaymentConditions,
+        clientName: editedName,
+        documentNumber: editedDocument,
         date: editedDate || undefined,
       });
       setIsEditing(false);
@@ -233,16 +237,21 @@ export function ContractPreview({
         {isEditing && (
           <div className="mb-6 p-4 border border-border rounded-lg bg-muted/50 space-y-4">
             <p className="text-sm font-medium text-foreground">Campos editáveis:</p>
-            <p className="text-xs text-muted-foreground">
-              Nome do cliente, nº do documento e valores vêm do cadastro do contato e das parcelas de pagamento — edite-os nas respectivas telas para refletir aqui.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Nome do Cliente</Label>
+                <Input value={editedName} onChange={(e) => setEditedName(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Nº Documento</Label>
+                <Input value={editedDocument} onChange={(e) => setEditedDocument(e.target.value)} className="mt-1" />
+              </div>
               <div>
                 <Label className="text-xs text-muted-foreground">Nº Contrato</Label>
                 <Input value={editedContractNumber} onChange={(e) => setEditedContractNumber(e.target.value)} className="mt-1" />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Data (somente visualização)</Label>
+                <Label className="text-xs text-muted-foreground">Data</Label>
                 <Input type="date" value={editedDate} onChange={(e) => setEditedDate(e.target.value)} className="mt-1" />
               </div>
             </div>
