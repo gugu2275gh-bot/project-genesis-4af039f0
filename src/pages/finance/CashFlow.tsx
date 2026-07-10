@@ -81,30 +81,59 @@ export default function CashFlow() {
     byCategory,
   } = useCashFlow(startDate, endDate);
   
+  const { data: paymentAccounts = [] } = useQuery({
+    queryKey: ['payment-accounts-active'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payment_accounts')
+        .select('id, account_name, bank_name, country')
+        .eq('is_active', true)
+        .order('account_name');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const accountLabel = (id: string | null | undefined) => {
+    if (!id) return '-';
+    const acc = paymentAccounts.find(a => a.id === id);
+    if (acc) return `${acc.account_name}${acc.bank_name ? ` — ${acc.bank_name}` : ''}`;
+    return id;
+  };
+
+  const methodLabel = (v: string | null | undefined) =>
+    PAYMENT_METHODS.find(m => m.value === v)?.label || v || '-';
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [formData, setFormData] = useState<CashFlowInsert>({
+  const emptyForm: CashFlowInsert = {
     type: 'ENTRADA',
     category: '',
     amount: 0,
     description: '',
+    payment_method: '',
     payment_account: '',
     payment_account_detail: '',
     reference_date: format(today, 'yyyy-MM-dd'),
-  });
+    due_date: '',
+    payment_date: '',
+    payment_confirmed_date: '',
+  };
+  const [formData, setFormData] = useState<CashFlowInsert>(emptyForm);
 
   const handleSubmit = () => {
-    createEntry.mutate(formData, {
+    // strip empty date/string fields to send null instead of empty
+    const payload: CashFlowInsert = {
+      ...formData,
+      due_date: formData.due_date || undefined,
+      payment_date: formData.payment_date || undefined,
+      payment_confirmed_date: formData.payment_confirmed_date || undefined,
+      payment_method: formData.payment_method || undefined,
+      payment_account: formData.payment_account || undefined,
+    };
+    createEntry.mutate(payload, {
       onSuccess: () => {
         setIsDialogOpen(false);
-        setFormData({
-          type: 'ENTRADA',
-          category: '',
-          amount: 0,
-          description: '',
-          payment_account: '',
-          payment_account_detail: '',
-          reference_date: format(today, 'yyyy-MM-dd'),
-        });
+        setFormData(emptyForm);
       },
     });
   };
@@ -112,7 +141,7 @@ export default function CashFlow() {
   const columns: Column<CashFlowEntry>[] = [
     {
       key: 'reference_date',
-      header: 'Data',
+      header: 'Data Ref.',
       cell: (item) => format(new Date(item.reference_date), 'dd/MM/yyyy', { locale: ptBR }),
     },
     {
@@ -146,29 +175,33 @@ export default function CashFlow() {
       cell: (item) => item.description || '-',
     },
     {
-      key: 'payment_account',
-      header: 'Método de Pagamento',
-      cell: (item) => {
-        const account = PAYMENT_ACCOUNTS.find(a => a.value === item.payment_account);
-        const label = account?.label || item.payment_account || '-';
-        if (item.payment_account_detail) {
-          return `${label} (${item.payment_account_detail})`;
-        }
-        return label;
-      },
+      key: 'due_date',
+      header: 'Vencimento',
+      cell: (item) => item.due_date ? format(new Date(item.due_date), 'dd/MM/yyyy') : '-',
     },
     {
-      key: 'is_invoiced',
-      header: 'Faturado',
-      cell: (item) => (
-        item.type === 'ENTRADA' ? (
-          item.is_invoiced 
-            ? <Badge className="bg-success text-success-foreground">{item.invoice_number}</Badge>
-            : <Badge variant="secondary">{item.invoice_number || 'Não'}</Badge>
-        ) : (
-          <span className="text-muted-foreground">-</span>
-        )
-      ),
+      key: 'payment_date',
+      header: 'Data Pagamento',
+      cell: (item) => item.payment_date ? format(new Date(item.payment_date), 'dd/MM/yyyy') : '-',
+    },
+    {
+      key: 'payment_confirmed_date',
+      header: 'Confirmação',
+      cell: (item) => item.payment_confirmed_date ? format(new Date(item.payment_confirmed_date), 'dd/MM/yyyy') : '-',
+    },
+    {
+      key: 'payment_method',
+      header: 'Método',
+      cell: (item) => methodLabel(item.payment_method),
+    },
+    {
+      key: 'payment_account',
+      header: 'Conta',
+      cell: (item) => {
+        const label = accountLabel(item.payment_account);
+        if (item.payment_account_detail) return `${label} (${item.payment_account_detail})`;
+        return label;
+      },
     },
     {
       key: 'amount',
