@@ -164,6 +164,13 @@ export default function Invoices() {
     }));
   };
 
+  const contractEffectiveTotal = (contract: typeof contracts[number] | undefined) => {
+    if (!contract) return 0;
+    if (contract.total_fee && contract.total_fee > 0) return contract.total_fee;
+    const paymentsSum = (contract.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    return paymentsSum;
+  };
+
   const handleContractSelect = (contractId: string) => {
     setSelectedContractId(contractId);
     setSelectedServiceId('');
@@ -172,7 +179,7 @@ export default function Invoices() {
       setFormData((f) => ({
         ...f,
         contract_id: contractId,
-        amount_without_vat: contract.total_fee || 0,
+        amount_without_vat: contractEffectiveTotal(contract),
         service_description: '',
       }));
     }
@@ -374,7 +381,7 @@ export default function Invoices() {
                   <SelectContent>
                     {clientContracts.map((contract) => (
                       <SelectItem key={contract.id} value={contract.id}>
-                        {contract.contract_number ? `Nº ${contract.contract_number} - ` : ''}€{contract.total_fee?.toFixed(2) || '0.00'}
+                        {contract.contract_number ? `Nº ${contract.contract_number} - ` : ''}€{contractEffectiveTotal(contract).toFixed(2)}
                       </SelectItem>
                     ))}
                   </SelectContent>
