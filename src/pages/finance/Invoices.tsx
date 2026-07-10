@@ -327,10 +327,14 @@ export default function Invoices() {
     setSelectedServiceId('');
     const contract = contracts.find((c) => c.id === contractId);
     if (contract) {
+      const total = contractEffectiveTotal(contract);
+      const rate = formData.vat_rate ?? 0.21;
+      // Total do contrato inclui IVA — base = total / (1 + IVA)
+      const base = rate > 0 ? total / (1 + rate) : total;
       setFormData((f) => ({
         ...f,
         contract_id: contractId,
-        amount_without_vat: contractEffectiveTotal(contract),
+        amount_without_vat: Math.round(base * 100) / 100,
         service_description: '',
       }));
     }
