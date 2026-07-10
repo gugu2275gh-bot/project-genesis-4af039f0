@@ -50,8 +50,7 @@ async function handleDownloadInvoice(inv: Invoice) {
     ? inv.client_address.split(/\n|,\s*/).filter(Boolean)
     : [];
   let extras = (inv.additional_costs || {}) as Record<string, number>;
-  // Fallback: if invoice has no additional_costs but is linked to a contract,
-  // pull the taxes registered in the contract's costs.
+  // Fallback 1: taxes registered in the contract's costs
   if (Object.keys(extras).length === 0 && inv.contract_id) {
     const { data: costs } = await supabase
       .from('contract_costs')
@@ -62,6 +61,30 @@ async function handleDownloadInvoice(inv: Invoice) {
         acc[c.description] = Number(c.amount) || 0;
         return acc;
       }, {} as Record<string, number>);
+    }
+  }
+  // Fallback 2: parse "Outros Custos" from contact's payment_notes (Payment Agreement Dialog)
+  if (Object.keys(extras).length === 0 && inv.contract_id) {
+    const { data: contract } = await supabase
+      .from('contracts')
+      .select('opportunities:opportunity_id(leads:lead_id(contacts:contact_id(payment_notes)))')
+      .eq('id', inv.contract_id)
+      .single();
+    const notes: string | undefined = (contract as any)?.opportunities?.leads?.contacts?.payment_notes;
+    if (notes) {
+      const blocks = notes.split(/\n---\n\n?/);
+      const lastBlock = blocks[blocks.length - 1] || '';
+      const lines = lastBlock.split('\n');
+      const outIdx = lines.findIndex((l) => /^Outros Custos:/i.test(l.trim()));
+      if (outIdx >= 0) {
+        for (let i = outIdx + 1; i < lines.length; i++) {
+          const m = lines[i].match(/^\s{2,}(.+?):\s*\+?\s*€\s*([\d.,]+)/);
+          if (!m) break;
+          const desc = m[1].trim();
+          const amt = parseFloat(m[2].replace(/\./g, '').replace(',', '.'));
+          if (desc && !isNaN(amt) && amt > 0) extras[desc] = amt;
+        }
+      }
     }
   }
   const extraItems = Object.entries(extras).map(([desc, amt]) => ({
