@@ -35,7 +35,7 @@ export function useServiceTypes(includeInactive = false) {
           *,
           service_sectors (id, name, code)
         `)
-        .order('display_order', { ascending: true, nullsFirst: false });
+        .order('name', { ascending: true });
       
       if (!includeInactive) {
         query = query.eq('is_active', true);
