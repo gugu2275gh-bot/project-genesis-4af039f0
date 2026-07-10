@@ -40,7 +40,7 @@ import { ptBR } from 'date-fns/locale';
 import { downloadInvoice } from '@/lib/generate-invoice';
 import { supabase } from '@/integrations/supabase/client';
 
-function handleDownloadInvoice(inv: Invoice) {
+async function handleDownloadInvoice(inv: Invoice) {
   const issueDate = format(new Date(inv.issued_at), 'dd/MM/yyyy');
   const yearStr = format(new Date(inv.issued_at), 'yyyy');
   const numOnly = inv.invoice_number.includes('-')
@@ -49,7 +49,21 @@ function handleDownloadInvoice(inv: Invoice) {
   const addressLines = inv.client_address
     ? inv.client_address.split(/\n|,\s*/).filter(Boolean)
     : [];
-  const extras = (inv.additional_costs || {}) as Record<string, number>;
+  let extras = (inv.additional_costs || {}) as Record<string, number>;
+  // Fallback: if invoice has no additional_costs but is linked to a contract,
+  // pull the taxes registered in the contract's costs.
+  if (Object.keys(extras).length === 0 && inv.contract_id) {
+    const { data: costs } = await supabase
+      .from('contract_costs')
+      .select('description, amount')
+      .eq('contract_id', inv.contract_id);
+    if (costs && costs.length > 0) {
+      extras = costs.reduce((acc, c) => {
+        acc[c.description] = Number(c.amount) || 0;
+        return acc;
+      }, {} as Record<string, number>);
+    }
+  }
   const extraItems = Object.entries(extras).map(([desc, amt]) => ({
     date: issueDate,
     description: desc,
