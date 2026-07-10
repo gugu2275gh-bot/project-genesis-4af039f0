@@ -672,7 +672,17 @@ export default function Invoices() {
                   <Label>Taxa IVA (%)</Label>
                   <Select 
                     value={String(vatRate)} 
-                    onValueChange={(v) => setFormData({ ...formData, vat_rate: parseFloat(v) })}
+                    onValueChange={(v) => {
+                      const newRate = parseFloat(v);
+                      const contract = contracts.find((c) => c.id === selectedContractId);
+                      if (contract) {
+                        const total = contractEffectiveTotal(contract);
+                        const base = newRate > 0 ? total / (1 + newRate) : total;
+                        setFormData({ ...formData, vat_rate: newRate, amount_without_vat: Math.round(base * 100) / 100 });
+                      } else {
+                        setFormData({ ...formData, vat_rate: newRate });
+                      }
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue />
