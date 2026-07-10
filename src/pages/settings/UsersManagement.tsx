@@ -627,10 +627,32 @@ export default function UsersManagement() {
                         <Input
                           id="password"
                           type="password"
-                          placeholder="Mínimo 6 caracteres"
+                          placeholder="Mínimo 12 caracteres"
                           value={createUserForm.password}
                           onChange={(e) => setCreateUserForm(prev => ({ ...prev, password: e.target.value }))}
                         />
+                        {(() => {
+                          const pw = createUserForm.password;
+                          const rules = [
+                            { ok: pw.length >= 12, label: 'Pelo menos 12 caracteres' },
+                            { ok: /[a-z]/.test(pw), label: 'Uma letra minúscula' },
+                            { ok: /[A-Z]/.test(pw), label: 'Uma letra maiúscula' },
+                            { ok: /[0-9]/.test(pw), label: 'Um número' },
+                            { ok: /[^A-Za-z0-9]/.test(pw), label: 'Um caractere especial' },
+                          ];
+                          return (
+                            <ul className="text-xs space-y-1 mt-1">
+                              {rules.map((r) => (
+                                <li
+                                  key={r.label}
+                                  className={r.ok ? 'text-green-600' : 'text-muted-foreground'}
+                                >
+                                  {r.ok ? '✓' : '○'} {r.label}
+                                </li>
+                              ))}
+                            </ul>
+                          );
+                        })()}
                       </div>
                       <div className="space-y-2">
                         <Label>Tipo de Usuário *</Label>
