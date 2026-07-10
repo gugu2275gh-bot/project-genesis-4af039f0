@@ -1313,6 +1313,22 @@ export default function ContractDetail() {
                   contract_number: editData.contractNumber,
                   installment_conditions: editData.installmentConditions,
                 });
+                const contactId = (contract.opportunities?.leads?.contacts as any)?.id;
+                if (contactId && (editData.clientName || editData.documentNumber)) {
+                  const { error: contactErr } = await supabase
+                    .from('contacts')
+                    .update({
+                      full_name: editData.clientName,
+                      document_number: editData.documentNumber,
+                    })
+                    .eq('id', contactId);
+                  if (contactErr) {
+                    toast({ title: 'Erro ao salvar contato', description: contactErr.message, variant: 'destructive' });
+                    return;
+                  }
+                  await queryClient.invalidateQueries({ queryKey: ['contracts'] });
+                  await queryClient.invalidateQueries({ queryKey: ['contacts'] });
+                }
                 toast({ title: 'Alterações salvas', description: 'As edições da pré-visualização foram salvas com sucesso.' });
               }}
             />
