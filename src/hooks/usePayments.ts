@@ -176,7 +176,26 @@ export function usePayments() {
   const confirmPayment = useMutation({
     mutationFn: async ({ id, transactionId, paidAt }: { id: string; transactionId?: string; paidAt?: string }) => {
       const paidAtDate = paidAt || new Date().toISOString();
-      
+
+      // 0. Pré-validação: buscar o pagamento atual para verificar payment_account_id
+      const { data: currentPayment, error: fetchError } = await supabase
+        .from('payments')
+        .select('id, payment_method, payment_account_id, opportunity_id, contract_id')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Se o método requer conta bancária (TRANSFERENCIA) e nenhuma conta foi vinculada,
+      // bloqueia a confirmação para evitar decisão errada sobre emissão de fatura.
+      if (currentPayment?.payment_method === 'TRANSFERENCIA' && !currentPayment?.payment_account_id) {
+        throw new Error(
+          'Este pagamento é por Transferência mas não tem conta bancária vinculada. ' +
+          'Edite o acordo de pagamento e selecione a conta antes de confirmar — ' +
+          'sem ela não é possível determinar se deve gerar fatura automática.'
+        );
+      }
+
       // 1. Update payment to CONFIRMADO
       const { data: payment, error: paymentError } = await supabase
         .from('payments')
