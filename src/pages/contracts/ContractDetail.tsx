@@ -96,27 +96,27 @@ export default function ContractDetail() {
     enabled: allLinkedContactIds.length > 0,
   });
 
-  // Fetch all opportunity IDs for ALL leads of the contacts linked to this contract
-  // (titular + beneficiaries), so payments from any service of those contacts appear here.
+  // Fetch opportunity IDs ONLY for the leads directly linked to THIS contract via contract_leads.
+  // This ensures we do not surface payments/services from other contracts of the same contact.
+  const contractLeadIds = useMemo(() => {
+    if (!contractLeadLinks) return [] as string[];
+    return contractLeadLinks
+      .map((cl: any) => cl.lead_id)
+      .filter((x: string | undefined): x is string => !!x);
+  }, [contractLeadLinks]);
+
   const { data: linkedOpportunityIds } = useQuery({
-    queryKey: ['contract-linked-opportunities', id, allLinkedContactIds],
+    queryKey: ['contract-linked-opportunities', id, contractLeadIds],
     queryFn: async () => {
-      if (allLinkedContactIds.length === 0) return [];
-      const { data: contactLeads, error: leadsError } = await supabase
-        .from('leads')
-        .select('id')
-        .in('contact_id', allLinkedContactIds);
-      if (leadsError) throw leadsError;
-      const leadIds = (contactLeads || []).map(l => l.id);
-      if (leadIds.length === 0) return [];
+      if (contractLeadIds.length === 0) return [];
       const { data, error } = await supabase
         .from('opportunities')
         .select('id')
-        .in('lead_id', leadIds);
+        .in('lead_id', contractLeadIds);
       if (error) throw error;
       return data?.map(o => o.id) || [];
     },
-    enabled: allLinkedContactIds.length > 0,
+    enabled: contractLeadIds.length > 0,
   });
 
   const { data: contractPayments } = useQuery({
