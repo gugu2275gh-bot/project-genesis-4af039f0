@@ -48,7 +48,7 @@ function handleDownloadInvoice(inv: Invoice) {
   const addressLines = inv.client_address
     ? inv.client_address.split(/\n|,\s*/).filter(Boolean)
     : [];
-  const extras = inv.additional_costs || {};
+  const extras = (inv.additional_costs || {}) as Record<string, number>;
   const extraItems = Object.entries(extras).map(([desc, amt]) => ({
     date: issueDate,
     description: desc,
@@ -79,6 +79,104 @@ function handleDownloadInvoice(inv: Invoice) {
     vatAmount: inv.vat_amount,
     totalLiquido: inv.total_amount + pagosDelegados,
   });
+}
+
+function EditExtrasDialog({
+  invoice,
+  onSave,
+  isSaving,
+}: {
+  invoice: Invoice;
+  onSave: (extras: Record<string, number>) => void;
+  isSaving: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const initial = Object.entries((invoice.additional_costs || {}) as Record<string, number>).map(
+    ([description, amount]) => ({ description, amount: Number(amount) || 0 })
+  );
+  const [rows, setRows] = useState<{ description: string; amount: number }[]>(
+    initial.length ? initial : [{ description: '', amount: 0 }]
+  );
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (v) setRows(initial.length ? initial : [{ description: '', amount: 0 }]);
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button size="sm" variant="ghost" onClick={(e) => e.stopPropagation()} title="Editar taxas">
+          <Euro className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent onClick={(e) => e.stopPropagation()}>
+        <DialogHeader>
+          <DialogTitle>Editar taxas — {invoice.invoice_number}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 pt-2">
+          {rows.map((r, idx) => (
+            <div key={idx} className="grid grid-cols-[1fr_140px_auto] gap-2 items-center">
+              <Input
+                placeholder="Descrição (ex: Tasa 790)"
+                value={r.description}
+                onChange={(e) => {
+                  const next = [...rows];
+                  next[idx] = { ...next[idx], description: e.target.value };
+                  setRows(next);
+                }}
+              />
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Valor (€)"
+                value={r.amount || ''}
+                onChange={(e) => {
+                  const next = [...rows];
+                  next[idx] = { ...next[idx], amount: parseFloat(e.target.value) || 0 };
+                  setRows(next);
+                }}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setRows(rows.filter((_, i) => i !== idx))}
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setRows([...rows, { description: '', amount: 0 }])}
+          >
+            <Plus className="h-4 w-4 mr-1" /> Adicionar taxa
+          </Button>
+          <div className="flex justify-end gap-2 pt-3">
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={isSaving}
+              onClick={() => {
+                const clean = rows.filter((r) => r.description.trim() && r.amount > 0);
+                const extras = clean.reduce((acc, r) => {
+                  acc[r.description.trim()] = r.amount;
+                  return acc;
+                }, {} as Record<string, number>);
+                onSave(extras);
+                setOpen(false);
+              }}
+            >
+              Salvar
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 const STATUS_BADGES = {
