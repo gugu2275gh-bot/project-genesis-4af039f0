@@ -414,9 +414,26 @@ export function usePayments() {
           const vatAmount = amountWithoutVat * vatRate;
           const totalAmount = amountWithoutVat + vatAmount;
 
-          // Obter tipo de serviço para descrição
-          const serviceType = opportunity?.leads?.service_interest || 'assessoria';
-          
+          // Obter nome do(s) serviço(s) do contrato para descrição da fatura
+          let serviceLabel = (opportunity?.leads as any)?.service_types?.name
+            || opportunity?.leads?.service_interest
+            || 'assessoria';
+          if (contractId) {
+            const { data: cLeads } = await supabase
+              .from('contract_leads')
+              .select('leads:lead_id(service_interest, service_types:service_type_id(name))')
+              .eq('contract_id', contractId);
+            const names = new Set<string>();
+            const mainName = (opportunity?.leads as any)?.service_types?.name
+              || opportunity?.leads?.service_interest;
+            if (mainName) names.add(mainName);
+            (cLeads || []).forEach((cl: any) => {
+              const n = cl.leads?.service_types?.name || cl.leads?.service_interest;
+              if (n) names.add(n);
+            });
+            if (names.size > 0) serviceLabel = Array.from(names).join(', ');
+          }
+
           const { data: newInvoice } = await supabase.from('invoices').insert({
             invoice_number: invoiceNumber,
             payment_id: payment.id,
@@ -424,7 +441,7 @@ export function usePayments() {
             client_name: clientName,
             client_document: opportunity?.leads?.contacts?.document_number || null,
             client_address: opportunity?.leads?.contacts?.address || null,
-            service_description: `Serviços de ${serviceType}${installmentInfo}`,
+            service_description: `Serviços de assessoria - ${serviceLabel}${installmentInfo}`,
             amount_without_vat: Math.round(amountWithoutVat * 100) / 100,
             vat_rate: vatRate,
             vat_amount: Math.round(vatAmount * 100) / 100,
@@ -432,6 +449,7 @@ export function usePayments() {
             status: 'EMITIDA',
             created_by_user_id: user?.id,
           }).select().single();
+
 
           // Atualizar Cash Flow com referência à fatura
           if (newInvoice && cashFlowEntryId) {
