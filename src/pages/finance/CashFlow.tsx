@@ -119,11 +119,13 @@ export default function CashFlow() {
     payment_confirmed_date: '',
   };
   const [formData, setFormData] = useState<CashFlowInsert>(emptyForm);
+  const [amountInput, setAmountInput] = useState('');
 
   const handleSubmit = () => {
     // strip empty date/string fields to send null instead of empty
     const payload: CashFlowInsert = {
       ...formData,
+      amount: amountInput ? parseFloat(amountInput.replace(',', '.')) : 0,
       due_date: formData.due_date || undefined,
       payment_date: formData.payment_date || undefined,
       payment_confirmed_date: formData.payment_confirmed_date || undefined,
@@ -134,6 +136,7 @@ export default function CashFlow() {
       onSuccess: () => {
         setIsDialogOpen(false);
         setFormData(emptyForm);
+        setAmountInput('');
       },
     });
   };
@@ -351,8 +354,9 @@ export default function CashFlow() {
                   <Input
                     type="number"
                     step="0.01"
-                    value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
+                    value={amountInput}
+                    onChange={(e) => setAmountInput(e.target.value)}
+                    placeholder="0,00"
                   />
                 </div>
 
