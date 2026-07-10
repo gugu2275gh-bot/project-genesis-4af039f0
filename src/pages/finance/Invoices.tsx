@@ -597,14 +597,14 @@ export default function Invoices() {
 
               {contractServices.length > 0 && (
                 <div className="space-y-2">
-                  <Label>Serviço</Label>
+                  <Label>Serviço *</Label>
                   <Select
                     value={selectedServiceId}
                     onValueChange={handleServiceSelect}
                     disabled={!selectedContractId}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione um serviço (opcional)" />
+                      <SelectValue placeholder="Selecione o serviço a faturar" />
                     </SelectTrigger>
                     <SelectContent>
                       {contractServices.map((s) => (
@@ -612,6 +612,9 @@ export default function Invoices() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Faturas são emitidas por serviço. O valor base é calculado a partir do total do contrato sem IVA.
+                  </p>
                 </div>
               )}
 
