@@ -497,6 +497,59 @@ export default function Invoices() {
                 </div>
               </div>
 
+              <div className="space-y-2 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <Label>Taxas adicionais</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setExtraFees([...extraFees, { description: '', amount: 0 }])}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Adicionar taxa
+                  </Button>
+                </div>
+                {extraFees.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    As taxas aparecerão como linhas abaixo do serviço na fatura.
+                  </p>
+                )}
+                {extraFees.map((fee, idx) => (
+                  <div key={idx} className="grid grid-cols-[1fr_140px_auto] gap-2 items-center">
+                    <Input
+                      placeholder="Descrição da taxa (ex: Tasa 790)"
+                      value={fee.description}
+                      onChange={(e) => {
+                        const next = [...extraFees];
+                        next[idx] = { ...next[idx], description: e.target.value };
+                        setExtraFees(next);
+                      }}
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="Valor (€)"
+                      value={fee.amount || ''}
+                      onChange={(e) => {
+                        const next = [...extraFees];
+                        next[idx] = { ...next[idx], amount: parseFloat(e.target.value) || 0 };
+                        setExtraFees(next);
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setExtraFees(extraFees.filter((_, i) => i !== idx))}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+
+
               <div className="bg-primary/10 p-4 rounded-md flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Euro className="h-5 w-5 text-primary" />
