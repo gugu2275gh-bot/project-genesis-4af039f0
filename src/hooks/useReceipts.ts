@@ -18,6 +18,8 @@ export interface ReceiptPaymentData {
         full_name: string;
         document_number?: string | null;
       } | null;
+      service_types: { id: string; name: string } | null;
+      service_interest: string | null;
     };
   };
   contracts?: {
