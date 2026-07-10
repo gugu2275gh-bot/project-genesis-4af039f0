@@ -12,6 +12,10 @@ export interface CashFlowEntry {
   amount: number;
   payment_account: string | null;
   payment_account_detail: string | null;
+  payment_method: string | null;
+  due_date: string | null;
+  payment_date: string | null;
+  payment_confirmed_date: string | null;
   related_contract_id: string | null;
   related_payment_id: string | null;
   related_commission_id: string | null;
@@ -31,6 +35,10 @@ export interface CashFlowInsert {
   amount: number;
   payment_account?: string;
   payment_account_detail?: string;
+  payment_method?: string;
+  due_date?: string;
+  payment_date?: string;
+  payment_confirmed_date?: string;
   related_contract_id?: string;
   related_payment_id?: string;
   reference_date?: string;
