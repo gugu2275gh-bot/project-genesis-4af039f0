@@ -344,33 +344,26 @@ export function usePayments() {
         .maybeSingle();
 
       if (!existingCashFlowEntry) {
-        // Mapear método de pagamento para conta
-        const accountMap: Record<string, string> = {
-          'TRANSFERENCIA': 'BRUCKSCHEN_ES',
-          'PIX': 'PIX_BR',
-          'PAYPAL': 'PAYPAL',
-          'CARTAO': 'BRUCKSCHEN_ES',
-          'DINHEIRO': 'DINHEIRO',
-          'OUTRO': 'OUTRO',
-        };
-        const paymentAccount = accountMap[payment.payment_method || 'OUTRO'] || 'OUTRO';
-
         // Construir descrição com nome do cliente e número da parcela
-        const installmentInfo = payment.installment_number 
-          ? ` - Parcela ${payment.installment_number}` 
+        const installmentInfo = payment.installment_number
+          ? ` - Parcela ${payment.installment_number}`
           : '';
         const description = `Pagamento ${clientName}${installmentInfo}`;
 
         // Usar a data do pagamento para reference_date (apenas a data, sem hora)
         const referenceDate = paidAtDate.split('T')[0];
 
-        // Inserir entrada no Cash Flow e capturar o ID
+        // Inserir entrada no Cash Flow puxando os dados diretamente do pagamento
         const { data: cashFlowEntry } = await supabase.from('cash_flow').insert({
           type: 'ENTRADA',
           category: 'SERVICOS',
           description,
           amount: payment.amount,
-          payment_account: paymentAccount,
+          payment_method: payment.payment_method || null,
+          payment_account: (payment as any).payment_account_id || null,
+          due_date: payment.due_date || null,
+          payment_date: referenceDate,
+          payment_confirmed_date: referenceDate,
           related_payment_id: payment.id,
           related_contract_id: contractId || null,
           reference_date: referenceDate,
