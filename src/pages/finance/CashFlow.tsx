@@ -358,17 +358,17 @@ export default function CashFlow() {
 
                 <div className="space-y-2">
                   <Label>Método de Pagamento</Label>
-                  <Select 
-                    value={formData.payment_account || ''} 
-                    onValueChange={(v) => setFormData({ ...formData, payment_account: v })}
+                  <Select
+                    value={formData.payment_method || ''}
+                    onValueChange={(v) => setFormData({ ...formData, payment_method: v })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
-                    {PAYMENT_ACCOUNTS.map((acc) => (
-                        <SelectItem key={acc.value} value={acc.value}>
-                          {acc.label}
+                      {PAYMENT_METHODS.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>
+                          {m.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -376,12 +376,58 @@ export default function CashFlow() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Data de Vencimento</Label>
+                  <Input
+                    type="date"
+                    value={formData.due_date || ''}
+                    onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Data de Pagamento</Label>
+                  <Input
+                    type="date"
+                    value={formData.payment_date || ''}
+                    onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Data de Confirmação</Label>
+                  <Input
+                    type="date"
+                    value={formData.payment_confirmed_date || ''}
+                    onChange={(e) => setFormData({ ...formData, payment_confirmed_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label>Conta de Pagamento</Label>
+                <Label>Conta</Label>
+                <Select
+                  value={formData.payment_account || ''}
+                  onValueChange={(v) => setFormData({ ...formData, payment_account: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a conta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {paymentAccounts.map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id}>
+                        {acc.account_name}{acc.bank_name ? ` — ${acc.bank_name}` : ''}{acc.country ? ` (${acc.country})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Detalhe da Conta (opcional)</Label>
                 <Input
                   value={formData.payment_account_detail || ''}
                   onChange={(e) => setFormData({ ...formData, payment_account_detail: e.target.value })}
-                  placeholder="Ex: Banco do Brasil, Conta 12345-6"
+                  placeholder="Ex: Conta 12345-6"
                 />
               </div>
 
