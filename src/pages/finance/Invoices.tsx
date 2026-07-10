@@ -38,6 +38,7 @@ import { useContacts } from '@/hooks/useContacts';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { downloadInvoice } from '@/lib/generate-invoice';
+import { supabase } from '@/integrations/supabase/client';
 
 function handleDownloadInvoice(inv: Invoice) {
   const issueDate = format(new Date(inv.issued_at), 'dd/MM/yyyy');
@@ -273,7 +274,7 @@ export default function Invoices() {
     return paymentsSum;
   };
 
-  const handleContractSelect = (contractId: string) => {
+  const handleContractSelect = async (contractId: string) => {
     setSelectedContractId(contractId);
     setSelectedServiceId('');
     const contract = contracts.find((c) => c.id === contractId);
@@ -284,6 +285,16 @@ export default function Invoices() {
         amount_without_vat: contractEffectiveTotal(contract),
         service_description: '',
       }));
+    }
+    // Auto-preencher taxas cadastradas no contrato
+    const { data: costs } = await supabase
+      .from('contract_costs')
+      .select('description, amount')
+      .eq('contract_id', contractId);
+    if (costs && costs.length > 0) {
+      setExtraFees(costs.map((c) => ({ description: c.description, amount: Number(c.amount) || 0 })));
+    } else {
+      setExtraFees([]);
     }
   };
 
