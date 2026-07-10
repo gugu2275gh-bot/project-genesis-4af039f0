@@ -125,6 +125,7 @@ export default function CashFlow() {
     // strip empty date/string fields to send null instead of empty
     const payload: CashFlowInsert = {
       ...formData,
+      amount: amountInput ? parseFloat(amountInput.replace(',', '.')) : 0,
       due_date: formData.due_date || undefined,
       payment_date: formData.payment_date || undefined,
       payment_confirmed_date: formData.payment_confirmed_date || undefined,
@@ -135,6 +136,7 @@ export default function CashFlow() {
       onSuccess: () => {
         setIsDialogOpen(false);
         setFormData(emptyForm);
+        setAmountInput('');
       },
     });
   };
