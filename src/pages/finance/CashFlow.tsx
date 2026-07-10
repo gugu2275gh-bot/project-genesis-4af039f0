@@ -119,6 +119,7 @@ export default function CashFlow() {
     payment_confirmed_date: '',
   };
   const [formData, setFormData] = useState<CashFlowInsert>(emptyForm);
+  const [amountInput, setAmountInput] = useState('');
 
   const handleSubmit = () => {
     // strip empty date/string fields to send null instead of empty
