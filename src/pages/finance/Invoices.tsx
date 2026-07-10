@@ -103,6 +103,8 @@ async function handleDownloadInvoice(inv: Invoice) {
     amount: Number(amt) || 0,
   }));
   const pagosDelegados = Object.values(extras).reduce((s, v) => s + (Number(v) || 0), 0);
+  // Total do PDF = serviço + IVA (sobre serviço) + taxas (taxas não entram no IVA)
+  const totalLiquido = inv.amount_without_vat + inv.vat_amount + pagosDelegados;
   downloadInvoice({
     invoiceNumber: numOnly,
     year: yearStr,
@@ -124,7 +126,7 @@ async function handleDownloadInvoice(inv: Invoice) {
     vatBase: inv.amount_without_vat,
     vatRate: inv.vat_rate,
     vatAmount: inv.vat_amount,
-    totalLiquido: inv.total_amount + pagosDelegados,
+    totalLiquido,
   });
 }
 
