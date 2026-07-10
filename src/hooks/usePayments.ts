@@ -41,6 +41,8 @@ export type PaymentWithOpportunity = Payment & {
   opportunities: Tables<'opportunities'> & {
     leads: Tables<'leads'> & {
       contacts: Tables<'contacts'> | null;
+      service_types: { id: string; name: string } | null;
+      service_interest: string | null;
     };
   };
   contracts?: Tables<'contracts'> | null;
