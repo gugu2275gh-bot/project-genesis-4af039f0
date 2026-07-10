@@ -29,7 +29,8 @@ import {
   Ban,
   Download,
   Receipt,
-  Euro
+  Euro,
+  Trash2
 } from 'lucide-react';
 import { useInvoices, Invoice, InvoiceInsert } from '@/hooks/useInvoices';
 import { useContracts } from '@/hooks/useContracts';
@@ -111,6 +112,7 @@ export default function Invoices() {
     amount_without_vat: 0,
     vat_rate: 0.21,
   });
+  const [extraFees, setExtraFees] = useState<{ description: string; amount: number }[]>([]);
 
   // Source clients from contacts table (so all registered clients appear, even without contracts)
   const clientsMap = new Map<string, { id: string; name: string; document?: string | null; address?: string | null }>();
@@ -197,12 +199,22 @@ export default function Invoices() {
   };
 
   const handleSubmit = () => {
-    createInvoice.mutate(formData, {
+    const cleanExtras = extraFees.filter((e) => e.description.trim() && e.amount > 0);
+    const additional_costs = cleanExtras.reduce((acc, e) => {
+      acc[e.description.trim()] = e.amount;
+      return acc;
+    }, {} as Record<string, number>);
+    const payload: InvoiceInsert = {
+      ...formData,
+      ...(Object.keys(additional_costs).length ? { additional_costs } : {}),
+    };
+    createInvoice.mutate(payload, {
       onSuccess: () => {
         setIsDialogOpen(false);
         setSelectedClientId('');
         setSelectedContractId('');
         setSelectedServiceId('');
+        setExtraFees([]);
         setFormData({
           client_name: '',
           service_description: '',
@@ -213,8 +225,9 @@ export default function Invoices() {
     });
   };
 
+  const extrasTotal = extraFees.reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const calculatedVat = formData.amount_without_vat * (formData.vat_rate || 0.21);
-  const calculatedTotal = formData.amount_without_vat + calculatedVat;
+  const calculatedTotal = formData.amount_without_vat + calculatedVat + extrasTotal;
 
   const columns: Column<Invoice>[] = [
     {
@@ -483,6 +496,59 @@ export default function Invoices() {
                   </div>
                 </div>
               </div>
+
+              <div className="space-y-2 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <Label>Taxas adicionais</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setExtraFees([...extraFees, { description: '', amount: 0 }])}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Adicionar taxa
+                  </Button>
+                </div>
+                {extraFees.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    As taxas aparecerão como linhas abaixo do serviço na fatura.
+                  </p>
+                )}
+                {extraFees.map((fee, idx) => (
+                  <div key={idx} className="grid grid-cols-[1fr_140px_auto] gap-2 items-center">
+                    <Input
+                      placeholder="Descrição da taxa (ex: Tasa 790)"
+                      value={fee.description}
+                      onChange={(e) => {
+                        const next = [...extraFees];
+                        next[idx] = { ...next[idx], description: e.target.value };
+                        setExtraFees(next);
+                      }}
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="Valor (€)"
+                      value={fee.amount || ''}
+                      onChange={(e) => {
+                        const next = [...extraFees];
+                        next[idx] = { ...next[idx], amount: parseFloat(e.target.value) || 0 };
+                        setExtraFees(next);
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setExtraFees(extraFees.filter((_, i) => i !== idx))}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+
 
               <div className="bg-primary/10 p-4 rounded-md flex items-center justify-between">
                 <div className="flex items-center gap-2">
