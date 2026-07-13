@@ -2178,7 +2178,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             }
           }
         } else if ((preHandoffDone || handoffDone) && !hasMinimumDataForHandoff) {
-          console.warn('[FUNNEL] handoff_anchor_without_data — ignorando âncoras, mantendo gate ativo', JSON.stringify({
+          console.warn('[FUNNEL] handoff_anchor_without_data — ignorando âncoras, forçando reabertura do funil', JSON.stringify({
             leadId: lead.id,
             name_confirmed: !!funnelStateLive.name_confirmed,
             email_confirmed: !!funnelStateLive.email_confirmed,
@@ -2186,6 +2186,12 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             location_known: funnelStateLive.location_known,
             preHandoffDone, handoffDone,
           }))
+          // Desmarca etapas de pré-handoff/handoff para forçar o funil a voltar
+          // e capturar dados faltantes (tipicamente `interesse`), evitando loop
+          // no aprofundamento com IA reperguntando dados já preenchidos.
+          for (const s of steps) {
+            if (s.key === 'preHandoff') s.done = false
+          }
         }
 
         // Próxima etapa pendente
