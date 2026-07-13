@@ -35,6 +35,11 @@ export function extractInterestFromMessage(raw: string): string | null {
   // (tem prioridade sobre casamento genérico, pois indica claramente régimen comunitario)
   if (/(pareja\s+de\s+hecho|uni[aã]o\s+est[aá]vel|uni[oó]n\s+de\s+hecho|civil\s+partnership|pacs)/.test(t)) return 'RESIDENCIA_PARENTE_COMUNITARIO'
   if (/(namorad[oa]|noiv[oa]|novi[oa]|c[oô]njuge|fiance|boyfriend|girlfriend|petit[e]?\s+ami[e]?)\s+(espanhol|espanhola|espanol|espanola|espagnol|espagnole|spanish|comunitari[oa]|europe[uo]|european)/.test(t)) return 'RESIDENCIA_PARENTE_COMUNITARIO'
+  // Residencia No Lucrativa — cobre "visa/visado no lucrativo(a)", "não lucrativa",
+  // "non-lucrative", "aposentado/pensionista", "vivo de pensão/renda/rendimentos"
+  if (/(no\s*[-\s]?lucrativ[oa]|n[aã]o\s*[-\s]?lucrativ[oa]|non[-\s]?lucrative|non\s*lucratif)/.test(t)) return 'OUTRO'
+  if (/(aposentad|jubilad|pensionist|retired|retraite|retrait[ée])/.test(t)) return 'OUTRO'
+  if (/(vivo\s+de\s+(pens[aã]o|pensi[óo]n|renda|rendimento|renta|rentas)|tenho\s+(uma\s+)?pens[aã]o|tengo\s+(una\s+)?pensi[óo]n|i\s+have\s+a\s+pension|je\s+per[çc]ois\s+une\s+(pension|retraite))/.test(t)) return 'OUTRO'
   // Casamento tem prioridade sobre nacionalidade genérica
   if (/(casamento|matrimonio|conyug|esposa|esposo|marriage|spouse)/.test(t)) return 'NACIONALIDADE_CASAMENTO'
   if (/(nacionalidad|cidadania|ciudadan|citizenship|passaporte espanhol|passaporte espanol)/.test(t)) return 'NACIONALIDADE_RESIDENCIA'
