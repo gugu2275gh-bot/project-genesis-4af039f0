@@ -129,3 +129,45 @@ Deno.test('LLM não decide próxima etapa: next_step é função pura de (state,
   // Sem rede, sem LLM, sem banco — decisão calculada localmente.
   assertEquals(d.next_step, 'INSIDE_ENTRY_DATE')
 })
+
+// ============================================================
+// GUARD FREE MODE — handoff_sent / step='livre'
+// ============================================================
+const stateHandoffDone: any = {
+  lead_id: 'L1',
+  step: 'livre',
+  name_confirmed: true, email_confirmed: true,
+  interest_confirmed: 'RESIDENCIA_PARENTE_COMUNITARIO',
+  location_known: 'spain',
+  entry_date_confirmed: '2024-09-10',
+  empadronado_confirmed: true, empadronado_city: 'barcelona',
+  handoff_sent: true, pre_handoff_sent: true,
+  outside_spain_progress: {}, pending_questions: [],
+  last_step_change: '', updated_at: '',
+  answers: {},
+}
+
+Deno.test('FREE_MODE: handoff_sent + pergunta off-topic → free_mode+parked, NÃO reabre etapa', () => {
+  const ctx = buildConversationContext(stateHandoffDone, contact, 'pt-BR')
+  const d = decideTurn(ctx, 'Que tipo de documento eu preciso?')
+  assertEquals(d.action.kind, 'free_mode')
+  assertEquals((d.action as any).reason, 'handoff_sent')
+  assert((d.action as any).parked)
+  assert((d.state_patch.pending_questions as any[]).length === 1)
+})
+
+Deno.test('FREE_MODE: handoff_sent + fala solta → free_mode sem park, sem reabrir etapa', () => {
+  const ctx = buildConversationContext(stateHandoffDone, contact, 'pt-BR')
+  const d = decideTurn(ctx, 'Ok obrigado')
+  assertEquals(d.action.kind, 'free_mode')
+  assertEquals(d.state_patch.pending_questions, undefined)
+})
+
+Deno.test('FREE_MODE: step="livre" sem handoff_sent também trava reabertura', () => {
+  const s = { ...stateHandoffDone, handoff_sent: false, pre_handoff_sent: false }
+  const ctx = buildConversationContext(s, contact, 'pt-BR')
+  const d = decideTurn(ctx, 'Estou irregular, quero solicitar um arraigo')
+  assertEquals(d.action.kind, 'free_mode')
+  assertEquals((d.action as any).reason, 'step_livre')
+})
+
