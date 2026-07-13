@@ -2138,8 +2138,14 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           && sentAny(/cada caso de forma individual|each case individually|caminho mais seguro/i)
         const handoffDoneByRegex = sentAny(/encaminhar suas informa[çc][õo]es|remitir tu informaci[óo]n|forward your information|transmettre vos informations/i)
           && sentAny(/encaminhar para um atendente|derivar a un agente|forward you to an agent|vous transf[ée]rer [àa] un agent/i)
-        const preHandoffDone = preHandoffSentFlag || preHandoffDoneByRegex
-        const handoffDone = handoffSentFlag || handoffDoneByRegex
+        const preHandoffDoneRaw = preHandoffSentFlag || preHandoffDoneByRegex
+        const handoffDoneRaw = handoffSentFlag || handoffDoneByRegex
+        // GUARD: se as âncoras foram emitidas sem dados mínimos (interesse não capturado),
+        // NÃO consideramos as etapas concluídas — o funil precisa voltar e capturar o
+        // que falta (evita loop em aprofundamento com IA reperguntando dados já dados).
+        // Só validamos aqui após conhecermos hasMinimumDataForHandoff (calculado abaixo).
+        const preHandoffDone = preHandoffDoneRaw
+        const handoffDone = handoffDoneRaw
 
         steps.push({
           key: 'preHandoff', label: 'PRÉ-HANDOFF + HANDOFF (BPMN-3)',
@@ -2172,7 +2178,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             }
           }
         } else if ((preHandoffDone || handoffDone) && !hasMinimumDataForHandoff) {
-          console.warn('[FUNNEL] handoff_anchor_without_data — ignorando âncoras, mantendo gate ativo', JSON.stringify({
+          console.warn('[FUNNEL] handoff_anchor_without_data — ignorando âncoras, forçando reabertura do funil', JSON.stringify({
             leadId: lead.id,
             name_confirmed: !!funnelStateLive.name_confirmed,
             email_confirmed: !!funnelStateLive.email_confirmed,
@@ -2180,6 +2186,12 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             location_known: funnelStateLive.location_known,
             preHandoffDone, handoffDone,
           }))
+          // Desmarca etapas de pré-handoff/handoff para forçar o funil a voltar
+          // e capturar dados faltantes (tipicamente `interesse`), evitando loop
+          // no aprofundamento com IA reperguntando dados já preenchidos.
+          for (const s of steps) {
+            if (s.key === 'preHandoff') s.done = false
+          }
         }
 
         // Próxima etapa pendente
@@ -3170,21 +3182,26 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               details: { parts: parts.length },
             })
 
-            // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3
-            // nas partes enviadas neste turno. Idempotente — só faz UPDATE se mudou algo.
+            // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3.
+            // Combina o que foi enviado NESTE turno com o transcript histórico do assistente
+            // — assim, se as âncoras foram emitidas em um turno anterior (quando faltava
+            // dado mínimo) e o dado foi capturado agora, os flags persistem retroativamente.
             try {
               const sentJoined = parts.join('\n')
-              const newPreSent = hasMinimumDataForHandoff && !funnelStateLive.pre_handoff_sent && preHandoffSummarySent(sentJoined)
-              const newHandSent = hasMinimumDataForHandoff && !funnelStateLive.handoff_sent && handoffTransferSent(sentJoined)
+              const combinedTranscript = `${allAssistant}\n${sentJoined}`
+              const anchorPreSeen = preHandoffSummarySent(combinedTranscript)
+              const anchorHandSeen = handoffTransferSent(combinedTranscript)
+              const newPreSent = hasMinimumDataForHandoff && !funnelStateLive.pre_handoff_sent && anchorPreSeen
+              const newHandSent = hasMinimumDataForHandoff && !funnelStateLive.handoff_sent && anchorHandSeen
               if (newPreSent || newHandSent) {
                 const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
                 if (newPreSent) patch.pre_handoff_sent = true
                 if (newHandSent) patch.handoff_sent = true
                 await supabase.from('lead_funnel_state').update(patch).eq('lead_id', lead.id)
                 funnelStateLive = { ...funnelStateLive, ...patch } as typeof funnelStateLive
-                console.log('[BPMN-3] flags persisted:', JSON.stringify(patch))
-              } else if (!hasMinimumDataForHandoff && (preHandoffSummarySent(sentJoined) || handoffTransferSent(sentJoined))) {
-                console.warn('[BPMN-3] flag persist skipped — anchor sent without minimum data')
+                console.log('[BPMN-3] flags persisted (retroactive-aware):', JSON.stringify(patch))
+              } else if (!hasMinimumDataForHandoff && (anchorPreSeen || anchorHandSeen)) {
+                console.warn('[BPMN-3] flag persist skipped — anchors present but minimum data missing (interest?)')
               }
             } catch (flagErr) {
               console.warn('[BPMN-3] flag persist non-blocking error:', flagErr instanceof Error ? flagErr.message : flagErr)
