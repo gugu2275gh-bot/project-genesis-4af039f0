@@ -2138,8 +2138,14 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           && sentAny(/cada caso de forma individual|each case individually|caminho mais seguro/i)
         const handoffDoneByRegex = sentAny(/encaminhar suas informa[çc][õo]es|remitir tu informaci[óo]n|forward your information|transmettre vos informations/i)
           && sentAny(/encaminhar para um atendente|derivar a un agente|forward you to an agent|vous transf[ée]rer [àa] un agent/i)
-        const preHandoffDone = preHandoffSentFlag || preHandoffDoneByRegex
-        const handoffDone = handoffSentFlag || handoffDoneByRegex
+        const preHandoffDoneRaw = preHandoffSentFlag || preHandoffDoneByRegex
+        const handoffDoneRaw = handoffSentFlag || handoffDoneByRegex
+        // GUARD: se as âncoras foram emitidas sem dados mínimos (interesse não capturado),
+        // NÃO consideramos as etapas concluídas — o funil precisa voltar e capturar o
+        // que falta (evita loop em aprofundamento com IA reperguntando dados já dados).
+        // Só validamos aqui após conhecermos hasMinimumDataForHandoff (calculado abaixo).
+        const preHandoffDone = preHandoffDoneRaw
+        const handoffDone = handoffDoneRaw
 
         steps.push({
           key: 'preHandoff', label: 'PRÉ-HANDOFF + HANDOFF (BPMN-3)',
