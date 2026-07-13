@@ -2028,7 +2028,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           key: 'abertura', label: 'ABERTURA',
           done: aberturaDone,
           instruction:
-            'Envie a ABERTURA exatamente em duas frases curtas: (1) "Olá! 😊 Tudo bem? Sou a assistente virtual da CB Asesoria. É um prazer falar com você! Vou te ajudar a entender quais são os caminhos legais disponíveis para a sua situação aqui na Espanha." (2) "Vou te fazer algumas perguntas rápidas só para entender seu caso e te direcionar para o especialista certo, pode ser?". NÃO faça nenhuma outra pergunta agora',
+            `Envie a ABERTURA COMPLETA em DUAS mensagens curtas, EXATAMENTE nesta ordem e SEM alterar/traduzir (o idioma já está travado): (1) "${t.openingLine1}" (2) "${t.openingLine2}". A frase (2) JÁ contém a pergunta do nome — NÃO adicione outra pergunta, NÃO peça e-mail, NÃO peça localização agora. Envie AS DUAS frases juntas nesta mesma resposta.`,
         })
 
 
