@@ -31,6 +31,10 @@ export function extractInterestFromMessage(raw: string): string | null {
     .toLowerCase()
     .trim()
   if (!t) return null
+  // Pareja de hecho / cônjuge / namorado(a) com cidadão comunitário → família comunitária
+  // (tem prioridade sobre casamento genérico, pois indica claramente régimen comunitario)
+  if (/(pareja\s+de\s+hecho|uni[aã]o\s+est[aá]vel|uni[oó]n\s+de\s+hecho|civil\s+partnership|pacs)/.test(t)) return 'RESIDENCIA_PARENTE_COMUNITARIO'
+  if (/(namorad[oa]|noiv[oa]|novi[oa]|c[oô]njuge|fiance|boyfriend|girlfriend|petit[e]?\s+ami[e]?)\s+(espanhol|espanhola|espanol|espanola|espagnol|espagnole|spanish|comunitari[oa]|europe[uo]|european)/.test(t)) return 'RESIDENCIA_PARENTE_COMUNITARIO'
   // Casamento tem prioridade sobre nacionalidade genérica
   if (/(casamento|matrimonio|conyug|esposa|esposo|marriage|spouse)/.test(t)) return 'NACIONALIDADE_CASAMENTO'
   if (/(nacionalidad|cidadania|ciudadan|citizenship|passaporte espanhol|passaporte espanol)/.test(t)) return 'NACIONALIDADE_RESIDENCIA'
