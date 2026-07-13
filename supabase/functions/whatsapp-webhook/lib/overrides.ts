@@ -137,6 +137,19 @@ export function computeDeterministicFunnelPatch(
   if (prevHasEntryDateQ) {
     const parsed = parseEntryDateFromText(msg)
     if (parsed && !parsed.isFuture) patch.entry_date_confirmed = parsed.iso
+    else {
+      // Fallback aproximado: "hace/há/about N (años|anos|years|ans)", incluindo
+      // "más/mais de N", "aproximadamente N", "unos N", "cerca de N". Também aceita
+      // "no me acuerdo / não lembro / don't remember" (sem N) → assume 6 anos.
+      const approx = parseApproximateYearsAgo(msg)
+      if (approx !== null) {
+        const d = new Date()
+        d.setUTCFullYear(d.getUTCFullYear() - approx)
+        const iso = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+        patch.entry_date_confirmed = iso
+        console.log('[ENTRY_DATE_APPROX] anos aproximados capturados:', approx, '→', iso)
+      }
+    }
   }
 
   // Empadronado yes/no
