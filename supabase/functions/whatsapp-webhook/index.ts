@@ -2015,13 +2015,14 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         const aberturaSignals = sentAny(/\b(obrigad[oa] por (falar|escrever|entrar|contat)|gracias por (hablar|escribir|contact)|thank(?:s| you)? for (reaching|contacting|writing))\b/i)
           && sentAny(/\b(perguntas? r[áa]pidas?|preguntas r[áa]pidas|quick questions?|entender (seu|tu|your) caso|direcionar|derivar|direct you)\b/i)
         const aberturaStateSent = !!((funnelStateLive.outside_spain_progress || {}) as any).opener_sent
-        const aberturaAutoDone =
-          isReturningClient
-          || aberturaStateSent
-          || !!funnelStateLive.name_confirmed
-          || !!funnelStateLive.email_confirmed
-          || !!funnelStateLive.interest_confirmed
-          || !!funnelStateLive.location_known
+        // Auto-done SOMENTE quando há evidência de que a abertura já foi enviada
+        // em turno anterior. NÃO usamos name/email/interest/location isolados como
+        // sinal — na 1ª mensagem o cliente pode já mencionar o serviço desejado
+        // (ex.: "quero dar entrada na nacionalidade"), o que preenche interest_confirmed
+        // via extractInterestFromMessage. Isso NÃO significa que a saudação foi
+        // enviada — antes exigia todos os campos, agora exigimos evidência real
+        // (opener_sent flag OU regex nas mensagens já enviadas) — bug Rose Carla.
+        const aberturaAutoDone = isReturningClient || aberturaStateSent
         const aberturaDone = aberturaSignals || aberturaAutoDone
         steps.push({
           key: 'abertura', label: 'ABERTURA',

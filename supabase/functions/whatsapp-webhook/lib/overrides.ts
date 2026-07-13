@@ -57,6 +57,33 @@ export const stripLockedSentinel = (s: string): string => (s || '').replaceAll(L
 export const lock = (s: string): string => `${LOCKED_SENTINEL}${s}`
 
 /**
+ * Extrai duração aproximada em ANOS de expressões como:
+ * - "hace más de 6 años", "hace unos 3 años", "hace 10 años"
+ * - "há mais de 6 anos", "faz uns 3 anos", "há 10 anos"
+ * - "more than 6 years ago", "about 3 years ago", "10 years ago"
+ * - "il y a plus de 6 ans", "il y a environ 3 ans"
+ * Também aceita "no me acuerdo / não lembro / don't remember" (sem N) → 6 anos.
+ * Retorna o número de anos (>=1) ou null quando não há sinal.
+ */
+export function parseApproximateYearsAgo(text: string): number | null {
+  if (!text) return null
+  const n = normalizeForLanguageChecks(text)
+  if (!n) return null
+  // 1) "N anos/años/years/ans" com opcional "mais/más/more/plus", "unos/uns/about/environ", "aproximadamente/cerca de"
+  const re = /\b(?:hace|ha|h[áa]|faz|il\s+y\s+a|about|around|approximately|cerca\s+de|aproximadamente)?\s*(?:m[aá]is|m[aá]s|more|plus)?\s*(?:de\s+)?(?:un[os]?\s+)?(\d{1,2})\s+(?:a[nñ]os?|years?|ans)\b(?:\s+(?:ago|atr[áa]s))?/i
+  const m = n.match(re)
+  if (m) {
+    const y = parseInt(m[1], 10)
+    if (!Number.isNaN(y) && y >= 1 && y <= 80) return y
+  }
+  // 2) "no me acuerdo / não lembro / don't remember / je ne me souviens" sem número
+  const dontRemember = /(no me acuerdo|no recuerdo|nao lembro|n[ãa]o (me )?lembro|dont remember|do not remember|i dont know|no me acuerdo la fecha|je ne (m['e]?en )?me souviens|je ne sais plus)/i.test(n)
+  if (dontRemember) return 6
+  return null
+}
+
+
+/**
  * Calcula um patch determinístico do funil baseado em (previousQuestion, currentMessage).
  * Roda ANTES da chamada à IA — garante que interesse/localização/cidade já confirmados
  * sejam refletidos no estado mesmo que a extração best-effort tenha falhado.
@@ -137,6 +164,19 @@ export function computeDeterministicFunnelPatch(
   if (prevHasEntryDateQ) {
     const parsed = parseEntryDateFromText(msg)
     if (parsed && !parsed.isFuture) patch.entry_date_confirmed = parsed.iso
+    else {
+      // Fallback aproximado: "hace/há/about N (años|anos|years|ans)", incluindo
+      // "más/mais de N", "aproximadamente N", "unos N", "cerca de N". Também aceita
+      // "no me acuerdo / não lembro / don't remember" (sem N) → assume 6 anos.
+      const approx = parseApproximateYearsAgo(msg)
+      if (approx !== null) {
+        const d = new Date()
+        d.setUTCFullYear(d.getUTCFullYear() - approx)
+        const iso = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+        patch.entry_date_confirmed = iso
+        console.log('[ENTRY_DATE_APPROX] anos aproximados capturados:', approx, '→', iso)
+      }
+    }
   }
 
   // Empadronado yes/no
@@ -1684,10 +1724,10 @@ type CanonicalQuestionKey =
 
 const CANONICAL_BY_LANG: Record<CanonicalQuestionKey, Record<ChatLanguage, string>> = {
   askLocationSpain: {
-    'pt-BR': 'Você está na Espanha?',
-    'es': '¿Estás en España?',
-    'en': 'Are you in Spain?',
-    'fr': 'Êtes-vous en Espagne ?',
+    'pt-BR': 'Hoje você já está na Espanha? Aceite somente *sim* ou *não*.',
+    'es': '¿Hoy ya estás en España? Acepta solo *sí* o *no*.',
+    'en': 'Are you already in Spain today? Please reply only *yes* or *no*.',
+    'fr': 'Êtes-vous déjà en Espagne aujourd’hui ? Répondez uniquement *oui* ou *non*.',
   },
   insideIntroPlusEntryDate: {
     'pt-BR': 'Perfeito. Agora preciso entender como está sua situação aqui.\n\nQual foi a data exata da sua entrada na Espanha? Por favor, envie no formato DD/MM/AAAA (exemplo: 22/05/2025).',
@@ -1735,10 +1775,13 @@ const CANON_DETECTORS: Array<{ key: CanonicalQuestionKey; re: RegExp; matchLang?
   { key: 'insideIntroPlusEntryDate', re: /ahora necesito entender (c[óo]mo )?est[áa] tu situaci[óo]n aqu[ií][\s\S]{0,200}cu[áa]l fue la fecha exacta de tu entrada en espa[ñn]a/i },
   { key: 'insideIntroPlusEntryDate', re: /now i need to understand your situation here[\s\S]{0,200}what was the exact date you entered spain/i },
   // localização
-  { key: 'askLocationSpain', re: /\bvoc[êe] est[áa] na espanha\s*\??/i },
-  { key: 'askLocationSpain', re: /\best[áa]s en espa[ñn]a\s*\??/i },
-  { key: 'askLocationSpain', re: /\bare you in spain\s*\??/i },
-  { key: 'askLocationSpain', re: /\b[êe]tes[- ]vous en espagne\s*\??/i },
+  // localização — consome opcionalmente prefixos "Gracias./Obrigado./..." + "¿?/¿" e
+  // preâmbulos "hoy ya"/"hoje já" + o clarificador "aceite/acepta/please reply..."
+  // para evitar duplo "¿" e sobras (bug Rose Carla).
+  { key: 'askLocationSpain', re: /(?:(?:gracias|obrigad[oa]|thanks?|merci)[\s.,!]+)?¿?\s*(?:hoje\s+voc[êe]\s+j[áa]\s+|hoje\s+j[áa]\s+)?est[áa]\s+na\s+espanha\s*\??(?:\s*[.,!]?\s*aceite\s+somente\s+\*?s[ií]m?\*?\s*ou\s+\*?n[ãa]o\*?\s*[.,!]?)?/i },
+  { key: 'askLocationSpain', re: /(?:(?:gracias|obrigad[oa]|thanks?|merci)[\s.,!]+)?¿?\s*(?:hoy\s+ya\s+)?est[áa]s\s+en\s+espa[ñn]a\s*\??(?:\s*[.,!]?\s*acepta\s+s[oó]lo\s+\*?s[ií]\*?\s*o\s+\*?no\*?\s*[.,!]?)?/i },
+  { key: 'askLocationSpain', re: /(?:(?:thanks?|thank you|got it|okay)[\s.,!]+)?(?:are you\s+)?(?:already\s+)?in spain(?:\s+today)?\s*\??(?:\s*[.,!]?\s*please reply only\s+\*?yes\*?\s*or\s+\*?no\*?\s*[.,!]?)?/i },
+  { key: 'askLocationSpain', re: /(?:(?:merci)[\s.,!]+)?[êe]tes[- ]vous\s+(?:d[ée]j[àa]\s+)?en espagne(?:\s+aujourd'?hui)?\s*\??(?:\s*[.,!]?\s*r[ée]pondez uniquement\s+\*?oui\*?\s*ou\s+\*?non\*?\s*[.,!]?)?/i },
   // empadronado
   { key: 'empadronado', re: /voc[êe] est[áa] empadronad[oa]\??/i },
   { key: 'empadronado', re: /est[áa]s empadronad[oa]\??/i },
