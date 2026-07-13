@@ -53,6 +53,45 @@ export function decideTurn(
   const current_step = ctx.current_step
   const def = getStepDef(current_step)
 
+  // ============================================================
+  // GUARD FREE MODE — quando o handoff já foi enviado ou o funil
+  // marcou `step='livre'`, NUNCA reabrir etapas do cadastro. Nesse
+  // regime o bot só responde (KB/humano) e parqueia off-topics; ele
+  // não valida, não avança e não re-pergunta campos do funil.
+  // ============================================================
+  const inFreeMode = !!(ctx.state?.handoff_sent) || ctx.state?.step === 'livre'
+  if (inFreeMode) {
+    const reason: 'handoff_sent' | 'step_livre' = ctx.state?.handoff_sent ? 'handoff_sent' : 'step_livre'
+    const offtopic = classifyOffTopic(rawMessage, '', {
+      collectionGateActive: false,
+      currentStep: undefined,
+    })
+    if (offtopic) {
+      return {
+        current_step,
+        next_step: current_step,
+        action: {
+          kind: 'free_mode',
+          reason,
+          parked: { question_text: rawMessage, offtopic_kind: offtopic.kind },
+        },
+        state_patch: {
+          pending_questions: [
+            ...(ctx.pending_questions || []),
+            { text: rawMessage, ts: new Date().toISOString(), kind: offtopic.kind },
+          ] as any,
+        },
+      }
+    }
+    return {
+      current_step,
+      next_step: current_step,
+      action: { kind: 'free_mode', reason },
+      state_patch: {},
+    }
+  }
+
+
   // Etapas legadas (Inside/Outside aprofundamento, handoff) continuam sendo
   // tratadas pelo pipeline existente — pass_through sinaliza isso.
   if (def.answerType === 'free' || (def.ask(ctx.language) === '' && current_step !== 'ABERTURA')) {
