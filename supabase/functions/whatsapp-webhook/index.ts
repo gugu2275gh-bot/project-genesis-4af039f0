@@ -3192,17 +3192,65 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               const combinedTranscript = `${allAssistant}\n${sentJoined}`
               const anchorPreSeen = preHandoffSummarySent(combinedTranscript)
               const anchorHandSeen = handoffTransferSent(combinedTranscript)
-              const newPreSent = hasMinimumDataForHandoff && !funnelStateLive.pre_handoff_sent && anchorPreSeen
-              const newHandSent = hasMinimumDataForHandoff && !funnelStateLive.handoff_sent && anchorHandSeen
+              // (A) Persistir flags SEMPRE que as âncoras H1-H3 foram emitidas,
+              // mesmo sem dados mínimos completos — evita loop de reemissão.
+              // Dados faltantes são sinalizados via notificação (C).
+              const newPreSent = !funnelStateLive.pre_handoff_sent && anchorPreSeen
+              const newHandSent = !funnelStateLive.handoff_sent && anchorHandSeen
               if (newPreSent || newHandSent) {
                 const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
                 if (newPreSent) patch.pre_handoff_sent = true
-                if (newHandSent) patch.handoff_sent = true
+                if (newHandSent) {
+                  patch.handoff_sent = true
+                  patch.step = 'livre'
+                  patch.last_human_handoff_at = new Date().toISOString()
+                }
                 await supabase.from('lead_funnel_state').update(patch).eq('lead_id', lead.id)
                 funnelStateLive = { ...funnelStateLive, ...patch } as typeof funnelStateLive
-                console.log('[BPMN-3] flags persisted (retroactive-aware):', JSON.stringify(patch))
-              } else if (!hasMinimumDataForHandoff && (anchorPreSeen || anchorHandSeen)) {
-                console.warn('[BPMN-3] flag persist skipped — anchors present but minimum data missing (interest?)')
+                console.log('[BPMN-3] flags persisted:', JSON.stringify(patch))
+
+                // (C) Escalonamento: notificar atendimento quando handoff é emitido.
+                if (newHandSent) {
+                  try {
+                    const dataGaps: string[] = []
+                    if (!funnelStateLive.name_confirmed) dataGaps.push('nome')
+                    if (!funnelStateLive.email_confirmed) dataGaps.push('e-mail')
+                    if (!funnelStateLive.interest_confirmed) dataGaps.push('interesse')
+                    if (!funnelStateLive.location_known) dataGaps.push('localização')
+                    const gapsSuffix = dataGaps.length > 0
+                      ? ` ⚠️ Dados incompletos: ${dataGaps.join(', ')}.`
+                      : ''
+                    const title = dataGaps.length > 0
+                      ? 'Handoff WhatsApp com dados incompletos'
+                      : 'Handoff WhatsApp — cliente aguardando especialista'
+                    const contactName = contact?.full_name || phoneNumber
+                    const notifMsg = `${contactName} concluiu o pré-atendimento e aguarda um especialista.${gapsSuffix}`
+
+                    const recipients: string[] = []
+                    if (lead.assigned_to_user_id) {
+                      recipients.push(lead.assigned_to_user_id)
+                    } else {
+                      const { data: attRoles } = await supabase
+                        .from('user_roles')
+                        .select('user_id')
+                        .in('role', ['ATENCAO_CLIENTE', 'ATENDENTE_WHATSAPP'])
+                      for (const r of attRoles || []) {
+                        if (r?.user_id && !recipients.includes(r.user_id)) recipients.push(r.user_id)
+                      }
+                    }
+                    for (const uid of recipients) {
+                      await supabase.from('notifications').insert({
+                        user_id: uid,
+                        title,
+                        message: notifMsg,
+                        type: 'whatsapp_handoff',
+                      })
+                    }
+                    console.log(`[HANDOFF_NOTIF] enviada para ${recipients.length} destinatário(s). gaps=${dataGaps.join('|') || 'none'}`)
+                  } catch (notifErr) {
+                    console.warn('[HANDOFF_NOTIF] non-blocking error:', notifErr instanceof Error ? notifErr.message : notifErr)
+                  }
+                }
               }
             } catch (flagErr) {
               console.warn('[BPMN-3] flag persist non-blocking error:', flagErr instanceof Error ? flagErr.message : flagErr)
