@@ -3182,21 +3182,26 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               details: { parts: parts.length },
             })
 
-            // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3
-            // nas partes enviadas neste turno. Idempotente — só faz UPDATE se mudou algo.
+            // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3.
+            // Combina o que foi enviado NESTE turno com o transcript histórico do assistente
+            // — assim, se as âncoras foram emitidas em um turno anterior (quando faltava
+            // dado mínimo) e o dado foi capturado agora, os flags persistem retroativamente.
             try {
               const sentJoined = parts.join('\n')
-              const newPreSent = hasMinimumDataForHandoff && !funnelStateLive.pre_handoff_sent && preHandoffSummarySent(sentJoined)
-              const newHandSent = hasMinimumDataForHandoff && !funnelStateLive.handoff_sent && handoffTransferSent(sentJoined)
+              const combinedTranscript = `${allAssistant}\n${sentJoined}`
+              const anchorPreSeen = preHandoffSummarySent(combinedTranscript)
+              const anchorHandSeen = handoffTransferSent(combinedTranscript)
+              const newPreSent = hasMinimumDataForHandoff && !funnelStateLive.pre_handoff_sent && anchorPreSeen
+              const newHandSent = hasMinimumDataForHandoff && !funnelStateLive.handoff_sent && anchorHandSeen
               if (newPreSent || newHandSent) {
                 const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
                 if (newPreSent) patch.pre_handoff_sent = true
                 if (newHandSent) patch.handoff_sent = true
                 await supabase.from('lead_funnel_state').update(patch).eq('lead_id', lead.id)
                 funnelStateLive = { ...funnelStateLive, ...patch } as typeof funnelStateLive
-                console.log('[BPMN-3] flags persisted:', JSON.stringify(patch))
-              } else if (!hasMinimumDataForHandoff && (preHandoffSummarySent(sentJoined) || handoffTransferSent(sentJoined))) {
-                console.warn('[BPMN-3] flag persist skipped — anchor sent without minimum data')
+                console.log('[BPMN-3] flags persisted (retroactive-aware):', JSON.stringify(patch))
+              } else if (!hasMinimumDataForHandoff && (anchorPreSeen || anchorHandSeen)) {
+                console.warn('[BPMN-3] flag persist skipped — anchors present but minimum data missing (interest?)')
               }
             } catch (flagErr) {
               console.warn('[BPMN-3] flag persist non-blocking error:', flagErr instanceof Error ? flagErr.message : flagErr)
