@@ -786,25 +786,21 @@ export function getShortAck(
 
   const isYesNoLike = /^(sim|s[ií]|yes|yep|yeah|claro|exato|oui|ouais|n[ãa]o|no|nope|nah|non)\b/.test(ans)
     || /^\d{1,4}$/.test(ans) // idade
-  const ackYesNo: Record<string, string> = {
-    'pt-BR': 'Certo.',
-    'es': 'Perfecto.',
-    'en': 'Got it.',
-    'fr': "D'accord.",
-  }
   const ackText: Record<string, string> = {
     'pt-BR': 'Obrigado.',
     'es': 'Gracias.',
     'en': 'Thank you.',
     'fr': 'Merci.',
   }
-  if (isYesNoLike) return ackYesNo[language] || ackYesNo['pt-BR']
-  // Após nome/e-mail/texto livre → agradece
+  // Após sim/não/idade → sem ack (evita repetição de "Certo." / "Perfecto." / etc).
+  if (isYesNoLike) return ''
+  // Após nome/e-mail/texto livre → agradece.
   if (isQuestionAboutFullName(prevAssistantQuestion) || isQuestionAboutEmail(prevAssistantQuestion)) {
     return ackText[language] || ackText['pt-BR']
   }
-  return ackYesNo[language] || ackYesNo['pt-BR']
+  return ''
 }
+
 
 /**
  * Detector CONSERVADOR de residência atual na Espanha declarada espontaneamente.
