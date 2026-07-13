@@ -66,7 +66,7 @@ Deno.test('opener: detecta via transcript (sem flag explícita) — greeting já
 
 // PT-BR / ES / FR — greeting + opener_sent + nameKnown=false → Msg3 nome
 const GREETING_BY_LANG: Record<typeof LANGS[number], string> = {
-  'pt-BR': 'Olá 😊 Tudo bem? Obrigado por falar com a CB Asesoría.',
+  'pt-BR': 'Olá! 😊 Tudo bem? Sou a assistente virtual da CB Asesoria. É um prazer falar com você!',
   'es': 'Hola 😊 ¿Cómo estás? Gracias por hablar con CB Asesoría.',
   'en': GREETING_EN,
   'fr': 'Bonjour 😊 Merci de nous contacter chez CB Asesoría.',

@@ -2027,7 +2027,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           key: 'abertura', label: 'ABERTURA',
           done: aberturaDone,
           instruction:
-            'Envie a ABERTURA exatamente em duas frases curtas: (1) "Olá 😊 Tudo bem? Obrigado por falar com a CB Asesoría. Vou te ajudar a entender seus caminhos legais aqui na Espanha." (2) "Vou te fazer algumas perguntas rápidas só para entender seu caso e te direcionar para o especialista certo, pode ser?". NÃO faça nenhuma outra pergunta agora.',
+            'Envie a ABERTURA exatamente em duas frases curtas: (1) "Olá! 😊 Tudo bem? Sou a assistente virtual da CB Asesoria. É um prazer falar com você! Vou te ajudar a entender quais são os caminhos legais disponíveis para a sua situação aqui na Espanha." (2) "Vou te fazer algumas perguntas rápidas só para entender seu caso e te direcionar para o especialista certo, pode ser?". NÃO faça nenhuma outra pergunta agora',
         })
 
 

@@ -113,7 +113,7 @@ const TEMPLATES: Record<ChatLanguage, PromptTemplates> = {
     servicesCatalog: 'Trabalhamos com cidadania espanhola, nômade digital, residências, NIE, TIE, homologação de estudos, antecedentes, reagrupação e outros processos.',
     oneMomentPlease: 'Ótima pergunta, já te explico em seguida.',
     askLocationSpain: 'Hoje você já está na Espanha? Aceite somente *sim* ou *não*.',
-    openingLine1: 'Olá 😊 Tudo bem? Obrigado por falar com a CB Asesoría. Vou te ajudar a entender seus caminhos legais aqui na Espanha.',
+    openingLine1: 'Olá! 😊 Tudo bem? Sou a assistente virtual da CB Asesoria. É um prazer falar com você! Vou te ajudar a entender quais são os caminhos legais disponíveis para a sua situação aqui na Espanha.',
     openingLine2: 'Vou te fazer algumas perguntas rápidas só para entender seu caso e te direcionar para o especialista certo, antes de tudo, como é seu nome completo?',
     outsideIntro: 'Perfeito. Vou te fazer perguntas rápidas só para entender melhor seu cenário.',
     insideIntro: 'Perfeito. Agora preciso entender como está sua situação aqui.',

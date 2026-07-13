@@ -1184,7 +1184,7 @@ export function preventRepeatedCanonicalQuestion(
 
 /** Greeting tokens (Msg1) — agradecimento por contato em 4 línguas. */
 const OPENER_GREETING_RE =
-  /\b(obrigad[oa] por (falar|escrever|entrar|contat)|gracias por (hablar|escribir|contact)|thank(s)? you for (reaching|contacting|writing)|merci de (nous|m'avoir) contact)/i
+  /\b(obrigad[oa] por (falar|escrever|entrar|contat)|prazer (em )?falar|gracias por (hablar|escribir|contact)|thank(s)? you for (reaching|contacting|writing)|merci de (nous|m'avoir) contact)/i
 
 /** Consent question (Msg2) — "perguntas rápidas … pode ser/is that okay/can we proceed". */
 const OPENER_CONSENT_RE =
