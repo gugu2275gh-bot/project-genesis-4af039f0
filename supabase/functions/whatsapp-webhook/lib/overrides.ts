@@ -1735,10 +1735,13 @@ const CANON_DETECTORS: Array<{ key: CanonicalQuestionKey; re: RegExp; matchLang?
   { key: 'insideIntroPlusEntryDate', re: /ahora necesito entender (c[óo]mo )?est[áa] tu situaci[óo]n aqu[ií][\s\S]{0,200}cu[áa]l fue la fecha exacta de tu entrada en espa[ñn]a/i },
   { key: 'insideIntroPlusEntryDate', re: /now i need to understand your situation here[\s\S]{0,200}what was the exact date you entered spain/i },
   // localização
-  { key: 'askLocationSpain', re: /\bvoc[êe] est[áa] na espanha\s*\??/i },
-  { key: 'askLocationSpain', re: /\best[áa]s en espa[ñn]a\s*\??/i },
-  { key: 'askLocationSpain', re: /\bare you in spain\s*\??/i },
-  { key: 'askLocationSpain', re: /\b[êe]tes[- ]vous en espagne\s*\??/i },
+  // localização — consome opcionalmente prefixos "Gracias./Obrigado./..." + "¿?/¿" e
+  // preâmbulos "hoy ya"/"hoje já" + o clarificador "aceite/acepta/please reply..."
+  // para evitar duplo "¿" e sobras (bug Rose Carla).
+  { key: 'askLocationSpain', re: /(?:(?:gracias|obrigad[oa]|thanks?|merci)[\s.,!]+)?¿?\s*(?:hoje\s+voc[êe]\s+j[áa]\s+|hoje\s+j[áa]\s+)?est[áa]\s+na\s+espanha\s*\??(?:\s*[.,!]?\s*aceite\s+somente\s+\*?s[ií]m?\*?\s*ou\s+\*?n[ãa]o\*?\s*[.,!]?)?/i },
+  { key: 'askLocationSpain', re: /(?:(?:gracias|obrigad[oa]|thanks?|merci)[\s.,!]+)?¿?\s*(?:hoy\s+ya\s+)?est[áa]s\s+en\s+espa[ñn]a\s*\??(?:\s*[.,!]?\s*acepta\s+s[oó]lo\s+\*?s[ií]\*?\s*o\s+\*?no\*?\s*[.,!]?)?/i },
+  { key: 'askLocationSpain', re: /(?:(?:thanks?|thank you|got it|okay)[\s.,!]+)?(?:are you\s+)?(?:already\s+)?in spain(?:\s+today)?\s*\??(?:\s*[.,!]?\s*please reply only\s+\*?yes\*?\s*or\s+\*?no\*?\s*[.,!]?)?/i },
+  { key: 'askLocationSpain', re: /(?:(?:merci)[\s.,!]+)?[êe]tes[- ]vous\s+(?:d[ée]j[àa]\s+)?en espagne(?:\s+aujourd'?hui)?\s*\??(?:\s*[.,!]?\s*r[ée]pondez uniquement\s+\*?oui\*?\s*ou\s+\*?non\*?\s*[.,!]?)?/i },
   // empadronado
   { key: 'empadronado', re: /voc[êe] est[áa] empadronad[oa]\??/i },
   { key: 'empadronado', re: /est[áa]s empadronad[oa]\??/i },
