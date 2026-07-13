@@ -57,6 +57,33 @@ export const stripLockedSentinel = (s: string): string => (s || '').replaceAll(L
 export const lock = (s: string): string => `${LOCKED_SENTINEL}${s}`
 
 /**
+ * Extrai duração aproximada em ANOS de expressões como:
+ * - "hace más de 6 años", "hace unos 3 años", "hace 10 años"
+ * - "há mais de 6 anos", "faz uns 3 anos", "há 10 anos"
+ * - "more than 6 years ago", "about 3 years ago", "10 years ago"
+ * - "il y a plus de 6 ans", "il y a environ 3 ans"
+ * Também aceita "no me acuerdo / não lembro / don't remember" (sem N) → 6 anos.
+ * Retorna o número de anos (>=1) ou null quando não há sinal.
+ */
+export function parseApproximateYearsAgo(text: string): number | null {
+  if (!text) return null
+  const n = normalizeForLanguageChecks(text)
+  if (!n) return null
+  // 1) "N anos/años/years/ans" com opcional "mais/más/more/plus", "unos/uns/about/environ", "aproximadamente/cerca de"
+  const re = /\b(?:hace|ha|h[áa]|faz|il\s+y\s+a|about|around|approximately|cerca\s+de|aproximadamente)?\s*(?:m[aá]is|m[aá]s|more|plus)?\s*(?:de\s+)?(?:un[os]?\s+)?(\d{1,2})\s+(?:a[nñ]os?|years?|ans)\b(?:\s+(?:ago|atr[áa]s))?/i
+  const m = n.match(re)
+  if (m) {
+    const y = parseInt(m[1], 10)
+    if (!Number.isNaN(y) && y >= 1 && y <= 80) return y
+  }
+  // 2) "no me acuerdo / não lembro / don't remember / je ne me souviens" sem número
+  const dontRemember = /(no me acuerdo|no recuerdo|nao lembro|n[ãa]o (me )?lembro|dont remember|do not remember|i dont know|no me acuerdo la fecha|je ne (m['e]?en )?me souviens|je ne sais plus)/i.test(n)
+  if (dontRemember) return 6
+  return null
+}
+
+
+/**
  * Calcula um patch determinístico do funil baseado em (previousQuestion, currentMessage).
  * Roda ANTES da chamada à IA — garante que interesse/localização/cidade já confirmados
  * sejam refletidos no estado mesmo que a extração best-effort tenha falhado.
