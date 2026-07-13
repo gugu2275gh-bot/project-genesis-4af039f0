@@ -62,23 +62,28 @@ export function decideTurn(
   const inFreeMode = !!(ctx.state?.handoff_sent) || ctx.state?.step === 'livre'
   if (inFreeMode) {
     const reason: 'handoff_sent' | 'step_livre' = ctx.state?.handoff_sent ? 'handoff_sent' : 'step_livre'
-    const offtopic = classifyOffTopic(rawMessage, '', {
-      collectionGateActive: false,
-      currentStep: undefined,
-    })
-    if (offtopic) {
+    // Em free_mode não há pergunta canônica corrente → classifyOffTopic (que
+    // exige gate ativo) não se aplica. Usamos heurística local para detectar
+    // pergunta/pedido do cliente e parquear para o operador humano.
+    const trimmed = (rawMessage || '').trim()
+    const looksLikeQuestion = /\?/.test(trimmed)
+      || /^(que|qué|o que|como|cómo|cuándo|quando|onde|dónde|donde|quanto|cuánto|quem|quién|por que|por qué|porque|what|when|where|how|why|which|who|quel|quelle|comment|où|quand|combien|pourquoi)\b/i.test(trimmed)
+    const looksLikeRequest = /^(quero|queria|gostaria|preciso|necesito|quiero|quería|me gustaría|i (want|need|would like)|je (veux|voudrais|ai besoin))\b/i.test(trimmed)
+    const shouldPark = trimmed.length > 0 && (looksLikeQuestion || looksLikeRequest)
+    if (shouldPark) {
+      const kind: 'question' | 'request' = looksLikeQuestion ? 'question' : 'request'
       return {
         current_step,
         next_step: current_step,
         action: {
           kind: 'free_mode',
           reason,
-          parked: { question_text: rawMessage, offtopic_kind: offtopic.kind },
+          parked: { question_text: rawMessage, offtopic_kind: kind },
         },
         state_patch: {
           pending_questions: [
             ...(ctx.pending_questions || []),
-            { text: rawMessage, ts: new Date().toISOString(), kind: offtopic.kind },
+            { text: rawMessage, ts: new Date().toISOString(), kind },
           ] as any,
         },
       }
@@ -90,6 +95,7 @@ export function decideTurn(
       state_patch: {},
     }
   }
+
 
 
   // Etapas legadas (Inside/Outside aprofundamento, handoff) continuam sendo
