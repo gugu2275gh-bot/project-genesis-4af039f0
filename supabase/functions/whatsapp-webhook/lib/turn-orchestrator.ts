@@ -32,6 +32,7 @@ export type TurnAction =
   | { kind: 'reask_current'; step: StepCode; reason: string }
   | { kind: 'advance'; from: StepCode; to: StepCode; value: unknown }
   | { kind: 'pass_through'; step: StepCode } // etapa delegada a handler legado
+  | { kind: 'free_mode'; reason: 'handoff_sent' | 'step_livre'; parked?: { question_text: string; offtopic_kind: 'question' | 'request' } }
 
 export interface TurnDecision {
   current_step: StepCode
