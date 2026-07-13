@@ -2183,9 +2183,24 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         }
 
         // Próxima etapa pendente
-        const nextStep = steps.find(s => !s.done)
+        const nextStepRaw = steps.find(s => !s.done)
+        // GUARD FREE MODE: se o orquestrador declarou free_mode (handoff_sent ou
+        // step='livre'), o gate NÃO reativa — mesmo que algum campo do funil
+        // pareça "não feito", não reabrimos etapas depois do handoff.
+        const orchestratorFreeMode = orchestratorDecision?.action.kind === 'free_mode'
+          || !!funnelStateLive.handoff_sent
+          || funnelStateLive.step === 'livre'
+        const nextStep = orchestratorFreeMode ? undefined : nextStepRaw
         const flowComplete = !nextStep // todas as 7 primeiras etapas concluídas → KB liberada
         const collectionGateActive = !flowComplete
+        if (orchestratorFreeMode) {
+          console.log('[ORCHESTRATOR_FREE_MODE] gate disabled', JSON.stringify({
+            handoff_sent: !!funnelStateLive.handoff_sent,
+            step: funnelStateLive.step,
+            decision: orchestratorDecision?.action.kind,
+          }))
+        }
+
 
         // ---------- Wave 9: fila de off-topics (parking) ----------
         // Durante o pré-handoff, qualquer mensagem que não seja resposta válida à

@@ -32,6 +32,7 @@ export type TurnAction =
   | { kind: 'reask_current'; step: StepCode; reason: string }
   | { kind: 'advance'; from: StepCode; to: StepCode; value: unknown }
   | { kind: 'pass_through'; step: StepCode } // etapa delegada a handler legado
+  | { kind: 'free_mode'; reason: 'handoff_sent' | 'step_livre'; parked?: { question_text: string; offtopic_kind: 'question' | 'request' } }
 
 export interface TurnDecision {
   current_step: StepCode
@@ -51,6 +52,51 @@ export function decideTurn(
 ): TurnDecision {
   const current_step = ctx.current_step
   const def = getStepDef(current_step)
+
+  // ============================================================
+  // GUARD FREE MODE — quando o handoff já foi enviado ou o funil
+  // marcou `step='livre'`, NUNCA reabrir etapas do cadastro. Nesse
+  // regime o bot só responde (KB/humano) e parqueia off-topics; ele
+  // não valida, não avança e não re-pergunta campos do funil.
+  // ============================================================
+  const inFreeMode = !!(ctx.state?.handoff_sent) || ctx.state?.step === 'livre'
+  if (inFreeMode) {
+    const reason: 'handoff_sent' | 'step_livre' = ctx.state?.handoff_sent ? 'handoff_sent' : 'step_livre'
+    // Em free_mode não há pergunta canônica corrente → classifyOffTopic (que
+    // exige gate ativo) não se aplica. Usamos heurística local para detectar
+    // pergunta/pedido do cliente e parquear para o operador humano.
+    const trimmed = (rawMessage || '').trim()
+    const looksLikeQuestion = /\?/.test(trimmed)
+      || /^(que|qué|o que|como|cómo|cuándo|quando|onde|dónde|donde|quanto|cuánto|quem|quién|por que|por qué|porque|what|when|where|how|why|which|who|quel|quelle|comment|où|quand|combien|pourquoi)\b/i.test(trimmed)
+    const looksLikeRequest = /^(quero|queria|gostaria|preciso|necesito|quiero|quería|me gustaría|i (want|need|would like)|je (veux|voudrais|ai besoin))\b/i.test(trimmed)
+    const shouldPark = trimmed.length > 0 && (looksLikeQuestion || looksLikeRequest)
+    if (shouldPark) {
+      const kind: 'question' | 'request' = looksLikeQuestion ? 'question' : 'request'
+      return {
+        current_step,
+        next_step: current_step,
+        action: {
+          kind: 'free_mode',
+          reason,
+          parked: { question_text: rawMessage, offtopic_kind: kind },
+        },
+        state_patch: {
+          pending_questions: [
+            ...(ctx.pending_questions || []),
+            { text: rawMessage, ts: new Date().toISOString(), kind },
+          ] as any,
+        },
+      }
+    }
+    return {
+      current_step,
+      next_step: current_step,
+      action: { kind: 'free_mode', reason },
+      state_patch: {},
+    }
+  }
+
+
 
   // Etapas legadas (Inside/Outside aprofundamento, handoff) continuam sendo
   // tratadas pelo pipeline existente — pass_through sinaliza isso.
