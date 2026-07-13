@@ -2012,8 +2012,8 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         // (name/email/interest/location), consideramos a abertura concluída
         // mesmo que o regex de consent (Msg2) não tenha casado no transcript.
         // Isso evita reabrir a abertura depois que o cliente já avançou (bug Gustavo).
-        const aberturaSignals = sentAny(/\b(obrigad[oa] por (falar|escrever|entrar|contat)|gracias por (hablar|escribir|contact)|thank(?:s| you)? for (reaching|contacting|writing))\b/i)
-          && sentAny(/\b(perguntas? r[áa]pidas?|preguntas r[áa]pidas|quick questions?|entender (seu|tu|your) caso|direcionar|derivar|direct you)\b/i)
+        const aberturaSignals = sentAny(/\b(assistente virtual|asistente virtual|virtual assistant|assistante virtuelle)\b/i)
+          && sentAny(/\b(perguntas? r[áa]pidas?|preguntas r[áa]pidas|quick questions?|questions rapides)\b/i)
         const aberturaStateSent = !!((funnelStateLive.outside_spain_progress || {}) as any).opener_sent
         // Auto-done SOMENTE quando há evidência de que a abertura já foi enviada
         // em turno anterior. NÃO usamos name/email/interest/location isolados como
@@ -2028,7 +2028,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           key: 'abertura', label: 'ABERTURA',
           done: aberturaDone,
           instruction:
-            'Envie a ABERTURA exatamente em duas frases curtas: (1) "Olá! 😊 Tudo bem? Sou a assistente virtual da CB Asesoria. É um prazer falar com você! Vou te ajudar a entender quais são os caminhos legais disponíveis para a sua situação aqui na Espanha." (2) "Vou te fazer algumas perguntas rápidas só para entender seu caso e te direcionar para o especialista certo, pode ser?". NÃO faça nenhuma outra pergunta agora',
+            `Envie a ABERTURA COMPLETA em DUAS mensagens curtas, EXATAMENTE nesta ordem e SEM alterar/traduzir (o idioma já está travado): (1) "${t.openingLine1}" (2) "${t.openingLine2}". A frase (2) JÁ contém a pergunta do nome — NÃO adicione outra pergunta, NÃO peça e-mail, NÃO peça localização agora. Envie AS DUAS frases juntas nesta mesma resposta.`,
         })
 
 
