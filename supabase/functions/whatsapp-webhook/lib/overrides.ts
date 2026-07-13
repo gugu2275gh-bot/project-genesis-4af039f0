@@ -450,6 +450,23 @@ export function stripAlreadySentCanonicalBlocks(
       console.log('[DEDUP] dropping chunk re-asking a question already asked recently')
       continue
     }
+    // Fragmento órfão de clarificação (ex.: "(somente sim ou não)",
+    // "(only yes or no)", "Solo la fecha DD/MM/AAAA", "somente a data DD/MM/AAAA").
+    // Só faz sentido quando acompanhado da pergunta correspondente; se a
+    // pergunta foi descartada (dedup) e sobrou apenas o clarificador, corta.
+    const isOrphanClarifier = (() => {
+      const t = p.trim()
+      // Parentético curto isolado
+      if (/^[\(\[（【][^)\]）】]{1,60}[\)\]）】][.\s]*$/.test(t)) return true
+      // "somente/solo/only/uniquement ... (sim|no|sí|yes|oui|data|fecha|date)"
+      if (/^\s*(somente|apenas|s[oó]|solo|solamente|only|just|uniquement|seulement)\b[^?!\n]{0,80}$/i.test(t)
+          && !/\?/.test(t)) return true
+      return false
+    })()
+    if (isOrphanClarifier) {
+      console.log('[DEDUP] dropping orphan clarifier fragment:', p)
+      continue
+    }
     kept.push(p)
   }
 
