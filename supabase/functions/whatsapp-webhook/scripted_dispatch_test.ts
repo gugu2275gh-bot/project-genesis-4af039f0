@@ -160,25 +160,26 @@ Deno.test('Dispatcher aprofundamento sem localização confirmada: string vazia'
 
 // ---------- getShortAck ----------
 
-Deno.test('getShortAck: "Não" PT → "Certo."', () => {
-  assertEquals(getShortAck('pt-BR', 'Você trabalha remoto?', 'Não'), 'Certo.')
+Deno.test('getShortAck: "Não" PT → sem ack (evita repetição)', () => {
+  assertEquals(getShortAck('pt-BR', 'Você trabalha remoto?', 'Não'), '')
 })
 
-Deno.test('getShortAck: "Sí" ES → "Perfecto."', () => {
-  assertEquals(getShortAck('es', '¿Trabajas de forma remota?', 'Sí'), 'Perfecto.')
+Deno.test('getShortAck: "Sí" ES → sem ack', () => {
+  assertEquals(getShortAck('es', '¿Trabajas de forma remota?', 'Sí'), '')
 })
 
-Deno.test('getShortAck: "Yes" EN → "Got it."', () => {
-  assertEquals(getShortAck('en', 'Do you work remotely?', 'Yes'), 'Got it.')
+Deno.test('getShortAck: "Yes" EN → sem ack', () => {
+  assertEquals(getShortAck('en', 'Do you work remotely?', 'Yes'), '')
 })
 
-Deno.test('getShortAck: "Oui" FR → "D\'accord."', () => {
-  assertEquals(getShortAck('fr', 'Travaillez-vous à distance ?', 'Oui'), "D'accord.")
+Deno.test('getShortAck: "Oui" FR → sem ack', () => {
+  assertEquals(getShortAck('fr', 'Travaillez-vous à distance ?', 'Oui'), '')
 })
 
-Deno.test('getShortAck: idade numérica → "Certo."', () => {
-  assertEquals(getShortAck('pt-BR', 'Qual sua idade?', '32'), 'Certo.')
+Deno.test('getShortAck: idade numérica → sem ack', () => {
+  assertEquals(getShortAck('pt-BR', 'Qual sua idade?', '32'), '')
 })
+
 
 Deno.test('getShortAck: após nome completo → "Obrigado."', () => {
   assertEquals(getShortAck('pt-BR', 'Antes de tudo, como é seu nome completo?', 'Roberto Silva'), 'Obrigado.')
