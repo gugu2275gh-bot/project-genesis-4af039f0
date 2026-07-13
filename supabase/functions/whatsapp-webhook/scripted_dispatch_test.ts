@@ -111,7 +111,7 @@ Deno.test('Dispatcher abertura: 2 bolhas (openingLine1|||openingLine2)', () => {
   })
   const parts = out.split('|||')
   assertEquals(parts.length, 2)
-  assertStringIncludes(parts[0], 'CB Asesoría')
+  assertStringIncludes(parts[0], 'CB Asesoria')
 })
 
 Deno.test('Dispatcher nome: t.askName literal', () => {
