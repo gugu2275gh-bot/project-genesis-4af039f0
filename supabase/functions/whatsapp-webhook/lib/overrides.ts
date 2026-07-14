@@ -1544,8 +1544,17 @@ export function enforceCanonicalPreHandoff(
     const isLiteralH2 = PREHANDOFF_H2_RE.test(bubble)
     const isLiteralH3 = PREHANDOFF_H3_RE.test(bubble)
 
-    // H3 paraphrase (não literal) → substitui pelo canônico literal
-    if (!isLiteralH3 && PARA_H3_RE.test(bubble) && !flags.handoffSent) {
+    // H3 paraphrase (não literal) → substitui pelo canônico literal.
+    // GUARD: NÃO substituir se a bolha também contém uma pergunta canônica
+    // anterior (nome/e-mail/localização) — evita falso positivo na ABERTURA
+    // Msg2 ("...te direcionar para o especialista certo. Antes de tudo, qual
+    // é seu nome completo?"), onde "direcionar/especialista" bate no PARA_H3_RE
+    // mas o objetivo é pedir o nome, não fazer handoff.
+    const bubbleHasEarlierCanonicalQuestion =
+      /\b(nome completo|nombre completo|full name|nom complet)\b/i.test(bubble)
+      || /\b(qual|cu[áa]l|which|what|quel)\b[^?]{0,40}\b(e[- ]?mail|correo|email)\b/i.test(bubble)
+      || /(j[áa] est[áa] na espanha|ya est[áa]s en espa[ñn]a|already in spain|d[ée]j[àa] en espagne)/i.test(bubble)
+    if (!isLiteralH3 && PARA_H3_RE.test(bubble) && !flags.handoffSent && !bubbleHasEarlierCanonicalQuestion) {
       out.push(canonH3)
       didReplaceH3 = true
       continue
