@@ -34,6 +34,7 @@ import {
   Users,
   ShieldCheck,
   XCircle,
+  Search,
 } from 'lucide-react';
 import { useCommissions, CommissionWithContract, CommissionInsert, COMMISSION_STATUS_LABELS, CommissionStatus } from '@/hooks/useCommissions';
 import { useContracts } from '@/hooks/useContracts';
@@ -182,6 +183,13 @@ export default function Commissions() {
     reference_period: '',
     paid_at: null,
   });
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const normalize = (v?: string | null) => (v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const matchesSearch = (name: string) => normalize(name).includes(normalize(searchQuery));
+  const filteredCommissions = commissions.filter((c) => matchesSearch(c.collaborator_name));
+  const filteredPendingApproval = pendingApproval.filter((c) => matchesSearch(c.collaborator_name));
+  const filteredApproved = approved.filter((c) => matchesSearch(c.collaborator_name));
 
   const selectedService = eligibleServices.find(
     (s) => `${s.contract_id}:${s.opportunity_id}` === selectedServiceKey,
@@ -696,26 +704,38 @@ export default function Commissions() {
         </Card>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="all">
-        <TabsList>
-          <TabsTrigger value="all">Todas ({commissions.length})</TabsTrigger>
-          <TabsTrigger value="pending-approval">Pendentes ({pendingApproval.length})</TabsTrigger>
-          <TabsTrigger value="approved">Aprovadas ({approved.length})</TabsTrigger>
-        </TabsList>
+      {/* Search + Tabs */}
+      <div className="space-y-4">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Pesquisar por nome do colaborador..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
 
-        <TabsContent value="all" className="mt-4">
-          <DataTable columns={columns} data={commissions} emptyMessage="Nenhuma comissão registrada" />
-        </TabsContent>
+        <Tabs defaultValue="all">
+          <TabsList>
+            <TabsTrigger value="all">Todas ({filteredCommissions.length})</TabsTrigger>
+            <TabsTrigger value="pending-approval">Pendentes ({filteredPendingApproval.length})</TabsTrigger>
+            <TabsTrigger value="approved">Aprovadas ({filteredApproved.length})</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="pending-approval" className="mt-4">
-          <DataTable columns={columns} data={pendingApproval} emptyMessage="Nenhuma comissão pendente de aprovação" />
-        </TabsContent>
+          <TabsContent value="all" className="mt-4">
+            <DataTable columns={columns} data={filteredCommissions} emptyMessage="Nenhuma comissão registrada" />
+          </TabsContent>
 
-        <TabsContent value="approved" className="mt-4">
-          <DataTable columns={columns} data={approved} emptyMessage="Nenhuma comissão aprovada" />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="pending-approval" className="mt-4">
+            <DataTable columns={columns} data={filteredPendingApproval} emptyMessage="Nenhuma comissão pendente de aprovação" />
+          </TabsContent>
+
+          <TabsContent value="approved" className="mt-4">
+            <DataTable columns={columns} data={filteredApproved} emptyMessage="Nenhuma comissão aprovada" />
+          </TabsContent>
+        </Tabs>
+      </div>
 
 
       {/* Pay Dialog */}
