@@ -1281,8 +1281,12 @@ export function ContractGroupsSection({
           });
         }
         if (p.discount_value && Number(p.discount_value) > 0) {
-          const discLabel = p.discount_type === 'PERCENTUAL' ? ` (${p.discount_value}%)` : '';
-          block += `Desconto: - ${symbol} ${Number(p.discount_value).toFixed(2)}${discLabel}\n`;
+          const isPercentDisc = p.discount_type === 'PERCENTUAL';
+          const discLabel = isPercentDisc ? ` (${p.discount_value}%)` : '';
+          const grossAmt = Number(p.gross_amount || p.amount || 0);
+          const discountVal = Number(p.discount_value);
+          const discountMoney = isPercentDisc ? grossAmt * discountVal / 100 : discountVal;
+          block += `Desconto: - ${symbol} ${discountMoney.toFixed(2)}${discLabel}\n`;
         }
         const dueStr = p.due_date ? format(new Date(p.due_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : null;
         block += `Total Final: ${symbol} ${Number(p.amount).toFixed(2)}${dueStr ? ` — Venc: ${dueStr}` : ''}\n`;
