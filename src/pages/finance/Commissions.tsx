@@ -34,6 +34,7 @@ import {
   Users,
   ShieldCheck,
   XCircle,
+  Search,
 } from 'lucide-react';
 import { useCommissions, CommissionWithContract, CommissionInsert, COMMISSION_STATUS_LABELS, CommissionStatus } from '@/hooks/useCommissions';
 import { useContracts } from '@/hooks/useContracts';
