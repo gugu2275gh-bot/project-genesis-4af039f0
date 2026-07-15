@@ -392,7 +392,7 @@ export default function ContractDetail() {
       const discountValue = pickField('discount_value');
       if (discountValue > 0) {
         const dType = first.discount_type || groupPayments.find((p: any) => p.discount_type)?.discount_type;
-        const isPercent = dType === 'PERCENTAGE' || dType === 'PERCENT';
+        const isPercent = dType === 'PERCENTAGE' || dType === 'PERCENT' || dType === 'PERCENTUAL';
         const discountMoney = isPercent ? Number(grossAmount) * discountValue / 100 : discountValue;
         const formattedDiscount = formatMoney(discountMoney);
         if (formattedDiscount) {
