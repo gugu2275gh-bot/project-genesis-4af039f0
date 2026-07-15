@@ -396,8 +396,8 @@ export default function ContractDetail() {
         const discountMoney = isPercent ? Number(grossAmount) * discountValue / 100 : discountValue;
         const formattedDiscount = formatMoney(discountMoney);
         if (formattedDiscount) {
-          const label = isPercent ? `Desconto (${discountValue}%): - ` : 'Desconto: - ';
-          lines.push(`${label}${formattedDiscount}`);
+          const suffix = isPercent ? ` (${discountValue}%)` : '';
+          lines.push(`Desconto: - ${formattedDiscount}${suffix}`);
         }
       }
 
