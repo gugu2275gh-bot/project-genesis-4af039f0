@@ -727,22 +727,28 @@ function sectionsHonorarios(data: ContractData): ContractSection[] {
     }
   }
 
-  // Bank details (only for TRANSFERENCIA)
-  if (data.paymentMethod === 'TRANSFERENCIA' && data.bankAccount) {
-    sections.push({ type: 'empty', text: '' });
-    sections.push({ type: 'paragraph', text: 'Datos bancarios para transferencia:', bold: true });
-    if (data.bankAccount.bankName) {
-      sections.push({ type: 'paragraph', text: `Banco: ${data.bankAccount.bankName}` });
-    }
-    if (data.bankAccount.accountName) {
-      sections.push({ type: 'paragraph', text: `Titular: ${data.bankAccount.accountName}` });
-    }
-    if (data.bankAccount.accountDetails) {
-      sections.push({ type: 'paragraph', text: `IBAN / Datos: ${data.bankAccount.accountDetails}` });
-    }
+  sections.push({ type: 'empty', text: '' });
+  return sections;
+}
+
+function sectionsBankAccount(data: ContractData): ContractSection[] {
+  if (!data.bankAccount) return [];
+
+  const sections: ContractSection[] = [
+    { type: 'empty', text: '' },
+    { type: 'heading', text: 'DATOS PARA PAGO:' },
+  ];
+
+  if (data.bankAccount.bankName) {
+    sections.push({ type: 'paragraph', text: `Banco ${data.bankAccount.bankName}` });
+  }
+  if (data.bankAccount.accountName) {
+    sections.push({ type: 'paragraph', text: data.bankAccount.accountName });
+  }
+  if (data.bankAccount.accountDetails) {
+    sections.push({ type: 'paragraph', text: `IBAN: ${data.bankAccount.accountDetails}` });
   }
 
-  sections.push({ type: 'empty', text: '' });
   return sections;
 }
 
