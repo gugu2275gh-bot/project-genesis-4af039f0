@@ -560,14 +560,6 @@ function buildNacionalidad(data: ContractData, dateStr: string): Paragraph[] {
 // TEMPLATE: DOCUMENTOS
 // =====================================================
 function buildDocumentos(data: ContractData, dateStr: string): Paragraph[] {
-  const bankSection: Paragraph[] = [];
-  if (data.bankAccount) {
-    bankSection.push(heading('DATOS PARA PAGO:'));
-    if (data.bankAccount.bankName) bankSection.push(para(`Banco ${data.bankAccount.bankName}`));
-    if (data.bankAccount.accountName) bankSection.push(para(data.bankAccount.accountName));
-    if (data.bankAccount.accountDetails) bankSection.push(para(`IBAN: ${data.bankAccount.accountDetails}`));
-  }
-
   return [
     ...contractHeader(data.contractNumber, dateStr),
     ...contractParties(data.clientName, data.documentType || '', data.documentNumber),
@@ -578,7 +570,7 @@ function buildDocumentos(data: ContractData, dateStr: string): Paragraph[] {
     para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.'),
 
     ...buildHonorariosSection(data),
-    ...bankSection,
+    ...buildBankAccountSection(data),
     heading('2.1. Los honorarios no incluyen:'),
     numbered('1', 'Tasas administrativas, notariales, judiciales, traducciones juradas (traducción al inglés), ni otros gastos derivados de gestiones ante terceros.'),
     para('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
