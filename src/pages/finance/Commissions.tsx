@@ -184,6 +184,13 @@ export default function Commissions() {
     paid_at: null,
   });
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const normalize = (v?: string | null) => (v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const matchesSearch = (name: string) => normalize(name).includes(normalize(searchQuery));
+  const filteredCommissions = commissions.filter((c) => matchesSearch(c.collaborator_name));
+  const filteredPendingApproval = pendingApproval.filter((c) => matchesSearch(c.collaborator_name));
+  const filteredApproved = approved.filter((c) => matchesSearch(c.collaborator_name));
+
   const selectedService = eligibleServices.find(
     (s) => `${s.contract_id}:${s.opportunity_id}` === selectedServiceKey,
   );
