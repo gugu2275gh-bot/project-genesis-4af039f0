@@ -146,16 +146,18 @@ export default function ServiceTypesManagement() {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="code">Código</Label>
-                  <Input
-                    id="code"
-                    value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '') })}
-                    placeholder="VISTO_ESTUDANTE"
-                    required
-                  />
-                </div>
+                {editingType && (
+                  <div className="space-y-2">
+                    <Label htmlFor="code">Código</Label>
+                    <Input
+                      id="code"
+                      value={formData.code}
+                      onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '') })}
+                      placeholder="VISTO_ESTUDANTE"
+                      required
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label>Setor</Label>
