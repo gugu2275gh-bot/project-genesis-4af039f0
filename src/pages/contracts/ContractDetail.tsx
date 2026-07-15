@@ -389,12 +389,14 @@ export default function ContractDetail() {
         }
       }
 
-      const discountAmount = pickField('discount_value');
-      if (discountAmount > 0) {
-        const formattedDiscount = formatMoney(discountAmount);
+      const discountValue = pickField('discount_value');
+      if (discountValue > 0) {
+        const dType = first.discount_type || groupPayments.find((p: any) => p.discount_type)?.discount_type;
+        const isPercent = dType === 'PERCENTAGE' || dType === 'PERCENT';
+        const discountMoney = isPercent ? Number(grossAmount) * discountValue / 100 : discountValue;
+        const formattedDiscount = formatMoney(discountMoney);
         if (formattedDiscount) {
-          const dType = first.discount_type || groupPayments.find((p: any) => p.discount_type)?.discount_type;
-          const label = dType === 'PERCENTAGE' || dType === 'PERCENT' ? `Desconto (${discountAmount}%): - ` : 'Desconto: - ';
+          const label = isPercent ? `Desconto (${discountValue}%): - ` : 'Desconto: - ';
           lines.push(`${label}${formattedDiscount}`);
         }
       }
