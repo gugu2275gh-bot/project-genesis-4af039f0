@@ -236,25 +236,29 @@ function buildHonorariosSection(data: ContractData): Paragraph[] {
     }
   }
 
-  // Bank details (only for TRANSFERENCIA)
-  if (data.paymentMethod === 'TRANSFERENCIA' && data.bankAccount) {
-    sections.push(emptyLine());
-    sections.push(para('Datos bancarios para transferencia:', { bold: true }));
-    if (data.bankAccount.bankName) {
-      sections.push(para(`Banco: ${data.bankAccount.bankName}`));
-    }
-    if (data.bankAccount.accountName) {
-      sections.push(para(`Titular: ${data.bankAccount.accountName}`));
-    }
-    if (data.bankAccount.accountDetails) {
-      sections.push(para(`IBAN / Datos: ${data.bankAccount.accountDetails}`));
-    }
-  }
-
   sections.push(emptyLine());
-  
+
   return sections;
 }
+
+function buildBankAccountSection(data: ContractData): Paragraph[] {
+  if (!data.bankAccount) return [];
+
+  const sections: Paragraph[] = [emptyLine(), heading('DATOS PARA PAGO:')];
+
+  if (data.bankAccount.bankName) {
+    sections.push(para(`Banco ${data.bankAccount.bankName}`));
+  }
+  if (data.bankAccount.accountName) {
+    sections.push(para(data.bankAccount.accountName));
+  }
+  if (data.bankAccount.accountDetails) {
+    sections.push(para(`IBAN: ${data.bankAccount.accountDetails}`));
+  }
+
+  return sections;
+}
+
 
 function commonClause_Tercera(): Paragraph[] {
   return [
@@ -464,6 +468,7 @@ function buildRegularizacionExtraordinaria(data: ContractData, dateStr: string):
     para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.'),
 
     ...buildHonorariosSection(data),
+    ...buildBankAccountSection(data),
     para('2.1. Los honorarios no incluyen:', { bold: true }),
     bullet('Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.'),
     bullet('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
@@ -517,6 +522,7 @@ function buildNacionalidad(data: ContractData, dateStr: string): Paragraph[] {
     para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.'),
 
     ...buildHonorariosSection(data),
+    ...buildBankAccountSection(data),
     para('2.1. Los honorarios no incluyen:', { bold: true }),
     bullet('Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.'),
     bullet('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
@@ -554,14 +560,6 @@ function buildNacionalidad(data: ContractData, dateStr: string): Paragraph[] {
 // TEMPLATE: DOCUMENTOS
 // =====================================================
 function buildDocumentos(data: ContractData, dateStr: string): Paragraph[] {
-  const bankSection: Paragraph[] = [];
-  if (data.bankAccount) {
-    bankSection.push(heading('DATOS PARA PAGO:'));
-    if (data.bankAccount.bankName) bankSection.push(para(`Banco ${data.bankAccount.bankName}`));
-    if (data.bankAccount.accountName) bankSection.push(para(data.bankAccount.accountName));
-    if (data.bankAccount.accountDetails) bankSection.push(para(`IBAN: ${data.bankAccount.accountDetails}`));
-  }
-
   return [
     ...contractHeader(data.contractNumber, dateStr),
     ...contractParties(data.clientName, data.documentType || '', data.documentNumber),
@@ -572,7 +570,7 @@ function buildDocumentos(data: ContractData, dateStr: string): Paragraph[] {
     para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.'),
 
     ...buildHonorariosSection(data),
-    ...bankSection,
+    ...buildBankAccountSection(data),
     heading('2.1. Los honorarios no incluyen:'),
     numbered('1', 'Tasas administrativas, notariales, judiciales, traducciones juradas (traducción al inglés), ni otros gastos derivados de gestiones ante terceros.'),
     para('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
@@ -727,22 +725,28 @@ function sectionsHonorarios(data: ContractData): ContractSection[] {
     }
   }
 
-  // Bank details (only for TRANSFERENCIA)
-  if (data.paymentMethod === 'TRANSFERENCIA' && data.bankAccount) {
-    sections.push({ type: 'empty', text: '' });
-    sections.push({ type: 'paragraph', text: 'Datos bancarios para transferencia:', bold: true });
-    if (data.bankAccount.bankName) {
-      sections.push({ type: 'paragraph', text: `Banco: ${data.bankAccount.bankName}` });
-    }
-    if (data.bankAccount.accountName) {
-      sections.push({ type: 'paragraph', text: `Titular: ${data.bankAccount.accountName}` });
-    }
-    if (data.bankAccount.accountDetails) {
-      sections.push({ type: 'paragraph', text: `IBAN / Datos: ${data.bankAccount.accountDetails}` });
-    }
+  sections.push({ type: 'empty', text: '' });
+  return sections;
+}
+
+function sectionsBankAccount(data: ContractData): ContractSection[] {
+  if (!data.bankAccount) return [];
+
+  const sections: ContractSection[] = [
+    { type: 'empty', text: '' },
+    { type: 'heading', text: 'DATOS PARA PAGO:' },
+  ];
+
+  if (data.bankAccount.bankName) {
+    sections.push({ type: 'paragraph', text: `Banco ${data.bankAccount.bankName}` });
+  }
+  if (data.bankAccount.accountName) {
+    sections.push({ type: 'paragraph', text: data.bankAccount.accountName });
+  }
+  if (data.bankAccount.accountDetails) {
+    sections.push({ type: 'paragraph', text: `IBAN: ${data.bankAccount.accountDetails}` });
   }
 
-  sections.push({ type: 'empty', text: '' });
   return sections;
 }
 
@@ -967,6 +971,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         { type: 'paragraph', text: data.serviceDescription || 'TRAMITACIÓN DE LA SOLICITUD DE REGULARIZACIÓN EXCEPCIONAL ÚNICA.', bold: true },
         { type: 'paragraph', text: 'Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.' },
         ...honorarios,
+        ...sectionsBankAccount(data),
         { type: 'paragraph', text: '2.1. Los honorarios no incluyen:', bold: true },
         { type: 'bullet', text: 'Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.' },
         { type: 'bullet', text: 'Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).' },
@@ -1000,6 +1005,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         { type: 'paragraph', text: data.serviceDescription || 'TRAMITACIÓN TELEMÁTICA DE LA SOLICITUD DE LA NACIONALIDAD ESPAÑOLA POR RESIDENCIA.', bold: true },
         { type: 'paragraph', text: 'Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.' },
         ...honorarios,
+        ...sectionsBankAccount(data),
         { type: 'paragraph', text: '2.1. Los honorarios no incluyen:', bold: true },
         { type: 'bullet', text: 'Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.' },
         { type: 'bullet', text: 'Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).' },
@@ -1030,13 +1036,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         { type: 'paragraph', text: data.serviceDescription || 'TRAMITACIÓN DE LA SOLICITUD DEL CERTIFICADO / DOCUMENTO SOLICITADO.', bold: true },
         { type: 'paragraph', text: 'Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.' },
         ...honorarios,
-        // Bank details with "DATOS PARA PAGO:" heading
-        ...(data.bankAccount ? [
-          { type: 'heading' as const, text: 'DATOS PARA PAGO:' },
-          ...(data.bankAccount.bankName ? [{ type: 'paragraph' as const, text: `Banco ${data.bankAccount.bankName}` }] : []),
-          ...(data.bankAccount.accountName ? [{ type: 'paragraph' as const, text: data.bankAccount.accountName }] : []),
-          ...(data.bankAccount.accountDetails ? [{ type: 'paragraph' as const, text: `IBAN: ${data.bankAccount.accountDetails}` }] : []),
-        ] : []),
+        ...sectionsBankAccount(data),
         { type: 'heading', text: '2.1. Los honorarios no incluyen:' },
         { type: 'numbered', text: '1. Tasas administrativas, notariales, judiciales, traducciones juradas (traducción al inglés), ni otros gastos derivados de gestiones ante terceros.' },
         { type: 'paragraph', text: 'Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).' },
