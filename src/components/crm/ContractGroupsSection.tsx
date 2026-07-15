@@ -1281,8 +1281,12 @@ export function ContractGroupsSection({
           });
         }
         if (p.discount_value && Number(p.discount_value) > 0) {
-          const discLabel = p.discount_type === 'PERCENTUAL' ? ` (${p.discount_value}%)` : '';
-          block += `Desconto: - ${symbol} ${Number(p.discount_value).toFixed(2)}${discLabel}\n`;
+          const isPercentDisc = p.discount_type === 'PERCENTUAL';
+          const discLabel = isPercentDisc ? ` (${p.discount_value}%)` : '';
+          const grossAmt = Number(p.gross_amount || p.amount || 0);
+          const discountVal = Number(p.discount_value);
+          const discountMoney = isPercentDisc ? grossAmt * discountVal / 100 : discountVal;
+          block += `Desconto: - ${symbol} ${discountMoney.toFixed(2)}${discLabel}\n`;
         }
         const dueStr = p.due_date ? format(new Date(p.due_date + 'T12:00:00'), 'dd/MM/yyyy', { locale: ptBR }) : null;
         block += `Total Final: ${symbol} ${Number(p.amount).toFixed(2)}${dueStr ? ` — Venc: ${dueStr}` : ''}\n`;
@@ -1311,6 +1315,8 @@ export function ContractGroupsSection({
           ? (Number(first?.vat_amount || 0) || leadPayments.reduce((sum: number, p: any) => sum + Number(p.vat_amount || 0), 0))
           : 0;
         const discountTotal = Number(first?.discount_value || 0);
+        const isPercentTotal = first?.discount_type === 'PERCENTUAL';
+        const discountMoneyTotal = isPercentTotal && grossTotal > 0 ? grossTotal * discountTotal / 100 : discountTotal;
         if (grossTotal > 0) {
           block += `Valor do Serviço: ${symbol} ${grossTotal.toFixed(2)}\n`;
         }
@@ -1324,8 +1330,8 @@ export function ContractGroupsSection({
           });
         }
         if (discountTotal > 0) {
-          const discLabel = first?.discount_type === 'PERCENTUAL' ? ` (${first?.discount_value}%)` : '';
-          block += `Desconto: - ${symbol} ${discountTotal.toFixed(2)}${discLabel}\n`;
+          const discLabel = isPercentTotal ? ` (${first?.discount_value}%)` : '';
+          block += `Desconto: - ${symbol} ${discountMoneyTotal.toFixed(2)}${discLabel}\n`;
         }
         block += `Total Final: ${symbol} ${total.toFixed(2)}\n`;
         block += `Parcelas: ${leadPayments.length}x\n`;
