@@ -468,6 +468,7 @@ function buildRegularizacionExtraordinaria(data: ContractData, dateStr: string):
     para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.'),
 
     ...buildHonorariosSection(data),
+    ...buildBankAccountSection(data),
     para('2.1. Los honorarios no incluyen:', { bold: true }),
     bullet('Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.'),
     bullet('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
@@ -521,6 +522,7 @@ function buildNacionalidad(data: ContractData, dateStr: string): Paragraph[] {
     para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.'),
 
     ...buildHonorariosSection(data),
+    ...buildBankAccountSection(data),
     para('2.1. Los honorarios no incluyen:', { bold: true }),
     bullet('Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.'),
     bullet('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
