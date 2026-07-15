@@ -236,25 +236,29 @@ function buildHonorariosSection(data: ContractData): Paragraph[] {
     }
   }
 
-  // Bank details (only for TRANSFERENCIA)
-  if (data.paymentMethod === 'TRANSFERENCIA' && data.bankAccount) {
-    sections.push(emptyLine());
-    sections.push(para('Datos bancarios para transferencia:', { bold: true }));
-    if (data.bankAccount.bankName) {
-      sections.push(para(`Banco: ${data.bankAccount.bankName}`));
-    }
-    if (data.bankAccount.accountName) {
-      sections.push(para(`Titular: ${data.bankAccount.accountName}`));
-    }
-    if (data.bankAccount.accountDetails) {
-      sections.push(para(`IBAN / Datos: ${data.bankAccount.accountDetails}`));
-    }
-  }
-
   sections.push(emptyLine());
-  
+
   return sections;
 }
+
+function buildBankAccountSection(data: ContractData): Paragraph[] {
+  if (!data.bankAccount) return [];
+
+  const sections: Paragraph[] = [emptyLine(), heading('DATOS PARA PAGO:')];
+
+  if (data.bankAccount.bankName) {
+    sections.push(para(`Banco ${data.bankAccount.bankName}`));
+  }
+  if (data.bankAccount.accountName) {
+    sections.push(para(data.bankAccount.accountName));
+  }
+  if (data.bankAccount.accountDetails) {
+    sections.push(para(`IBAN: ${data.bankAccount.accountDetails}`));
+  }
+
+  return sections;
+}
+
 
 function commonClause_Tercera(): Paragraph[] {
   return [
