@@ -547,7 +547,6 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     await updateContact.mutateAsync({
       id: leadOwnerContactId,
       payment_notes: existingNotes + separator + titularSummary,
-      referral_name: referralName || null,
     } as any);
 
     queryClient.invalidateQueries({ queryKey: ['leads'] });
