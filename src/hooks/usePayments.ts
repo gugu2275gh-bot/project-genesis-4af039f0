@@ -408,9 +408,14 @@ export function usePayments() {
           // Gerar fatura automática para contas oficiais
           invoiceNumber = await getNextInvoiceNumber();
           
-          // Cálculo do IVA (21%): valor do pagamento é a BASE sem IVA
-          const amountWithoutVat = payment.amount;
-          const vatRate = 0.21;
+          // O valor do pagamento (payment.amount) já inclui IVA quando apply_vat=true.
+          // Derivamos a base (sem IVA) desta parcela a partir da taxa aplicada no pagamento.
+          const applyVat = (payment as any).apply_vat === true;
+          const storedRate = Number((payment as any).vat_rate) || 0;
+          const vatRate = applyVat ? (storedRate > 0 ? storedRate : 0.21) : 0;
+          const amountWithoutVat = applyVat
+            ? payment.amount / (1 + vatRate)
+            : payment.amount;
           const vatAmount = amountWithoutVat * vatRate;
           const totalAmount = amountWithoutVat + vatAmount;
 
