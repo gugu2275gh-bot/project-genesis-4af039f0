@@ -511,9 +511,12 @@ export default function Invoices() {
     {
       key: 'total_amount',
       header: 'Total',
-      cell: (item) => (
-        <span className="font-semibold">€{item.total_amount.toFixed(2)}</span>
-      ),
+      cell: (item) => {
+        const extras = Object.values((item.additional_costs || {}) as Record<string, number>)
+          .reduce((s, v) => s + (Number(v) || 0), 0);
+        const total = Number(item.total_amount || 0) + extras;
+        return <span className="font-semibold">€{total.toFixed(2)}</span>;
+      },
     },
     {
       key: 'status',
