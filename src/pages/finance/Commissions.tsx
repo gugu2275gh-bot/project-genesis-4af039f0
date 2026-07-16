@@ -108,14 +108,14 @@ export default function Commissions() {
             // buscar oportunidade do lead
             const { data: oppRow } = await supabase
               .from('opportunities')
-              .select('id, total_amount, leads(id, service_interest, service_types(name), contacts(full_name, referral_name))')
+              .select('id, total_amount, leads(id, service_interest, referral_name, service_types(name), contacts(full_name, referral_name))')
               .eq('lead_id', cl.leads.id)
               .maybeSingle();
             if (oppRow) opps.push({ id: oppRow.id, total_amount: oppRow.total_amount, lead: (oppRow as any).leads });
           }
         }
         for (const o of opps) {
-          const referral = o.lead?.contacts?.referral_name?.trim() || '';
+          const referral = (o.lead?.referral_name?.trim() || o.lead?.contacts?.referral_name?.trim() || '');
           // Base da comissão = valor do serviço COM desconto e SEM IVA.
           // Obtido a partir de qualquer pagamento da oportunidade: gross_amount - discount.
           const { data: pmt } = await supabase
