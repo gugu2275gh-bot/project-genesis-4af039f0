@@ -126,13 +126,12 @@ export function useCommissions() {
       
       if (error) throw error;
 
-      // Mostrar apenas comissões cujo serviço (oportunidade) já teve ao menos um pagamento confirmado,
-      // ou cujo contrato (quando não houver oportunidade vinculada) teve algum pagamento confirmado.
+      // Mostrar comissões quando o contrato já teve pagamento confirmado.
+      // Em contratos com múltiplos serviços, pode existir uma única parcela do contrato
+      // vinculada à oportunidade principal; ainda assim todas as comissões CAPTADOR
+      // dos serviços desse contrato devem aparecer.
       const filtered = (data || []).filter((c: any) => {
         const payments = c.contracts?.payments || [];
-        if (c.opportunity_id) {
-          return payments.some((p: any) => p.status === 'CONFIRMADO' && p.opportunity_id === c.opportunity_id);
-        }
         return payments.some((p: any) => p.status === 'CONFIRMADO');
       });
 
