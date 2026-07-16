@@ -267,9 +267,11 @@ export default function PaymentsList() {
       header: 'Parcela',
       cell: (payment) => {
         if (!payment.installment_number) return '-';
-        // Get total installments from contract
-        const total = payments.filter(p => 
-          p.contract_id === payment.contract_id
+        // Total de parcelas por serviço (oportunidade), não por contrato,
+        // pois um contrato pode ter múltiplos serviços com planos diferentes.
+        const total = payments.filter(p =>
+          p.opportunity_id && p.opportunity_id === payment.opportunity_id &&
+          p.status !== 'ESTORNADO'
         ).length;
         return (
           <span className="font-medium">
