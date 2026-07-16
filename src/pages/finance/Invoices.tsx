@@ -379,8 +379,8 @@ export default function Invoices() {
       } else {
         netTotal = contractEffectiveTotal(contract);
       }
-      // Total (após desconto) inclui IVA — base = total / (1 + IVA)
-      const base = rate > 0 ? netTotal / (1 + rate) : netTotal;
+      // Honorários concluídos são a base sem IVA; o IVA é somado somente no final.
+      const base = netTotal;
       setFormData((f) => ({
         ...f,
         contract_id: contractId,
