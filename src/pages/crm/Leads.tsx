@@ -253,10 +253,11 @@ export default function Leads() {
         service_interest: resolvedServiceInterest as any,
         service_type_id: resolvedServiceTypeId,
         status: 'NOVO',
+        referral_name: newLead.origin_channel === 'INDICACAO' ? newLead.referral_name : undefined,
         notes: resolvedServiceInterest === 'OUTRO' && newLead.service_interest_other
           ? `Serviço: ${newLead.service_interest_other}`
           : undefined,
-      });
+      } as any);
       setIsDialogOpen(false);
       navigate(`/crm/leads/${createdLead.id}`);
       return;
