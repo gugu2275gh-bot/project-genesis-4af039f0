@@ -1,0 +1,2 @@
+ALTER TABLE public.expense_categories DROP CONSTRAINT expense_categories_type_check;
+ALTER TABLE public.expense_categories ADD CONSTRAINT expense_categories_type_check CHECK (type IN ('FIXA','VARIAVEL','OUTROS'));

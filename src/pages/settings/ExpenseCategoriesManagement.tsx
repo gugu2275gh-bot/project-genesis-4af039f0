@@ -16,7 +16,7 @@ import { Plus, Pencil, Trash2 } from 'lucide-react';
 interface ExpenseCategory {
   id: string;
   name: string;
-  type: 'FIXA' | 'VARIAVEL';
+  type: 'FIXA' | 'VARIAVEL' | 'OUTROS';
   flow: 'ENTRADA' | 'SAIDA';
   description: string | null;
   is_active: boolean;
@@ -27,7 +27,7 @@ export default function ExpenseCategoriesManagement() {
   const qc = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseCategory | null>(null);
-  const [form, setForm] = useState({ name: '', type: 'FIXA' as 'FIXA' | 'VARIAVEL', flow: 'SAIDA' as 'ENTRADA' | 'SAIDA', description: '', is_active: true });
+  const [form, setForm] = useState({ name: '', type: 'FIXA' as 'FIXA' | 'VARIAVEL' | 'OUTROS', flow: 'SAIDA' as 'ENTRADA' | 'SAIDA', description: '', is_active: true });
 
   const { data: categories = [], isLoading } = useQuery({
     queryKey: ['expense-categories-all'],
@@ -128,11 +128,12 @@ export default function ExpenseCategoriesManagement() {
               </div>
               <div>
                 <Label>Tipo *</Label>
-                <Select value={form.type} onValueChange={(v: 'FIXA' | 'VARIAVEL') => setForm({ ...form, type: v })}>
+                <Select value={form.type} onValueChange={(v: 'FIXA' | 'VARIAVEL' | 'OUTROS') => setForm({ ...form, type: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="FIXA">Fixa</SelectItem>
                     <SelectItem value="VARIAVEL">Variável</SelectItem>
+                    <SelectItem value="OUTROS">Outros</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -168,7 +169,7 @@ export default function ExpenseCategoriesManagement() {
                     {c.flow === 'ENTRADA' ? 'Entrada' : 'Saída'}
                   </Badge>
                   <Badge variant={c.type === 'FIXA' ? 'secondary' : 'outline'}>
-                    {c.type === 'FIXA' ? 'Fixa' : 'Variável'}
+                    {c.type === 'FIXA' ? 'Fixa' : c.type === 'VARIAVEL' ? 'Variável' : 'Outros'}
                   </Badge>
                   <div>
                     <div className="font-medium">{c.name} {!c.is_active && <span className="text-xs text-muted-foreground">(inativa)</span>}</div>
