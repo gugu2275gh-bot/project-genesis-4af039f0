@@ -1623,6 +1623,7 @@ export type Database = {
           interest_confirmed: boolean | null
           is_special_case: boolean | null
           notes: string | null
+          referral_name: string | null
           service_interest:
             | Database["public"]["Enums"]["service_interest"]
             | null
@@ -1642,6 +1643,7 @@ export type Database = {
           interest_confirmed?: boolean | null
           is_special_case?: boolean | null
           notes?: string | null
+          referral_name?: string | null
           service_interest?:
             | Database["public"]["Enums"]["service_interest"]
             | null
@@ -1661,6 +1663,7 @@ export type Database = {
           interest_confirmed?: boolean | null
           is_special_case?: boolean | null
           notes?: string | null
+          referral_name?: string | null
           service_interest?:
             | Database["public"]["Enums"]["service_interest"]
             | null
