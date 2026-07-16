@@ -49,6 +49,28 @@ function parseAmount(raw: string): number {
   return parseFloat(s);
 }
 
+function parsePaymentNotesExtras(notes?: string): Record<string, number> {
+  const extras: Record<string, number> = {};
+  if (!notes) return extras;
+
+  const blocks = notes.split(/\n---\n\n?/);
+  const lastBlock = blocks[blocks.length - 1] || '';
+  const lines = lastBlock.split('\n');
+  const outIdx = lines.findIndex((l) => /^Outros Custos:/i.test(l.trim()));
+
+  if (outIdx >= 0) {
+    for (let i = outIdx + 1; i < lines.length; i++) {
+      const m = lines[i].match(/^\s{2,}(.+?):\s*\+?\s*€\s*([\d.,]+)/);
+      if (!m) break;
+      const desc = m[1].trim();
+      const amt = parseAmount(m[2]);
+      if (desc && !isNaN(amt) && amt > 0) extras[desc] = amt;
+    }
+  }
+
+  return extras;
+}
+
 async function handleDownloadInvoice(inv: Invoice) {
   const issueDate = format(new Date(inv.issued_at), 'dd/MM/yyyy');
   const yearStr = format(new Date(inv.issued_at), 'yyyy');
@@ -113,21 +135,7 @@ async function handleDownloadInvoice(inv: Invoice) {
       .eq('id', inv.contract_id)
       .single();
     const notes: string | undefined = (contract as any)?.opportunities?.leads?.contacts?.payment_notes;
-    if (notes) {
-      const blocks = notes.split(/\n---\n\n?/);
-      const lastBlock = blocks[blocks.length - 1] || '';
-      const lines = lastBlock.split('\n');
-      const outIdx = lines.findIndex((l) => /^Outros Custos:/i.test(l.trim()));
-      if (outIdx >= 0) {
-        for (let i = outIdx + 1; i < lines.length; i++) {
-          const m = lines[i].match(/^\s{2,}(.+?):\s*\+?\s*€\s*([\d.,]+)/);
-          if (!m) break;
-          const desc = m[1].trim();
-          const amt = parseAmount(m[2]);
-          if (desc && !isNaN(amt) && amt > 0) extras[desc] = amt;
-        }
-      }
-    }
+    extras = parsePaymentNotesExtras(notes);
   }
   const extraItems = Object.entries(extras).map(([desc, amt]) => ({
     date: issueDate,
@@ -298,6 +306,7 @@ export default function Invoices() {
   });
   const [extraFees, setExtraFees] = useState<{ description: string; amount: number }[]>([]);
   const [contractExtrasMap, setContractExtrasMap] = useState<Record<string, number>>({});
+  const [paymentNotesExtrasMap, setPaymentNotesExtrasMap] = useState<Record<string, number>>({});
 
   // Fallback: fetch contract_costs for invoices missing additional_costs (mirrors PDF logic)
   useEffect(() => {
@@ -313,6 +322,7 @@ export default function Invoices() {
     );
     if (contractIds.length === 0) {
       setContractExtrasMap({});
+      setPaymentNotesExtrasMap({});
       return;
     }
     (async () => {
@@ -325,6 +335,25 @@ export default function Invoices() {
         map[c.contract_id] = (map[c.contract_id] || 0) + (Number(c.amount) || 0);
       });
       setContractExtrasMap(map);
+
+      const missingContractIds = contractIds.filter((id) => !map[id]);
+      if (missingContractIds.length === 0) {
+        setPaymentNotesExtrasMap({});
+        return;
+      }
+
+      const { data: contractsData } = await supabase
+        .from('contracts')
+        .select('id, opportunities:opportunity_id(leads:lead_id(contacts:contact_id(payment_notes)))')
+        .in('id', missingContractIds);
+      const notesMap: Record<string, number> = {};
+      (contractsData || []).forEach((contract: any) => {
+        const notes: string | undefined = contract?.opportunities?.leads?.contacts?.payment_notes;
+        const extras = parsePaymentNotesExtras(notes);
+        const total = Object.values(extras).reduce((s, v) => s + (Number(v) || 0), 0);
+        if (total > 0) notesMap[contract.id] = total;
+      });
+      setPaymentNotesExtrasMap(notesMap);
     })();
   }, [invoices]);
 
@@ -333,6 +362,7 @@ export default function Invoices() {
     const own = Object.values(ac).reduce((s, v) => s + (Number(v) || 0), 0);
     if (own > 0) return own;
     if (inv.contract_id && contractExtrasMap[inv.contract_id]) return contractExtrasMap[inv.contract_id];
+    if (inv.contract_id && paymentNotesExtrasMap[inv.contract_id]) return paymentNotesExtrasMap[inv.contract_id];
     return 0;
   };
 
@@ -441,22 +471,10 @@ export default function Invoices() {
         .eq('id', contractId)
         .single();
       const notes: string | undefined = (ct as any)?.opportunities?.leads?.contacts?.payment_notes;
-      const parsed: { description: string; amount: number }[] = [];
-      if (notes) {
-        const blocks = notes.split(/\n---\n\n?/);
-        const lastBlock = blocks[blocks.length - 1] || '';
-        const lines = lastBlock.split('\n');
-        const outIdx = lines.findIndex((l) => /^Outros Custos:/i.test(l.trim()));
-        if (outIdx >= 0) {
-          for (let i = outIdx + 1; i < lines.length; i++) {
-            const m = lines[i].match(/^\s{2,}(.+?):\s*\+?\s*€\s*([\d.,]+)/);
-            if (!m) break;
-            const desc = m[1].trim();
-            const amt = parseAmount(m[2]);
-            if (desc && !isNaN(amt) && amt > 0) parsed.push({ description: desc, amount: amt });
-          }
-        }
-      }
+      const parsed = Object.entries(parsePaymentNotesExtras(notes)).map(([description, amount]) => ({
+        description,
+        amount,
+      }));
       setExtraFees(parsed);
     }
   };
