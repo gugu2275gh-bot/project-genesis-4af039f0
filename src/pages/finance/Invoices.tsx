@@ -160,6 +160,8 @@ async function handleDownloadInvoice(inv: Invoice) {
     vatRate: inv.vat_rate,
     vatAmount: inv.vat_amount,
     totalLiquido,
+    bankName,
+    iban,
   });
 }
 
