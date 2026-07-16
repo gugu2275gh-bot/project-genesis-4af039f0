@@ -1062,22 +1062,56 @@ export default function PaymentsList() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {[...group.items].sort((a: any, b: any) => {
-                            const ai = a.installment_number ?? 9999;
-                            const bi = b.installment_number ?? 9999;
-                            if (ai !== bi) return ai - bi;
-                            const ad = a.due_date || '';
-                            const bd = b.due_date || '';
-                            return ad.localeCompare(bd);
-                          }).map((p) => (
-                            <TableRow key={p.id} className={getRowClassName(p)}>
-                              {columns.map((col) => (
-                                <TableCell key={col.key} className={col.className}>
-                                  {col.cell ? col.cell(p) : (p as any)[col.key]}
-                                </TableCell>
-                              ))}
-                            </TableRow>
-                          ))}
+                          {(() => {
+                            // Subagrupa por serviço (opportunity_id) para não misturar
+                            // parcelas de planos diferentes dentro do mesmo contrato.
+                            const byOpp = new Map<string, { name: string; items: typeof group.items }>();
+                            group.items.forEach((p: any) => {
+                              const oid = p.opportunity_id || 'sem-servico';
+                              const name =
+                                p.opportunities?.leads?.service_types?.name ||
+                                (p as any).opportunities?.title ||
+                                p.opportunities?.leads?.service_interest ||
+                                'Serviço';
+                              if (!byOpp.has(oid)) byOpp.set(oid, { name, items: [] as any });
+                              byOpp.get(oid)!.items.push(p);
+                            });
+                            const subgroups = Array.from(byOpp.entries()).map(([oid, g]) => ({
+                              oid,
+                              name: g.name,
+                              items: [...g.items].sort((a: any, b: any) => {
+                                const ai = a.installment_number ?? 9999;
+                                const bi = b.installment_number ?? 9999;
+                                if (ai !== bi) return ai - bi;
+                                return (a.due_date || '').localeCompare(b.due_date || '');
+                              }),
+                            }));
+                            const showServiceHeader = subgroups.length > 1;
+                            return subgroups.flatMap((sg) => {
+                              const rows: JSX.Element[] = [];
+                              if (showServiceHeader) {
+                                rows.push(
+                                  <TableRow key={`hdr-${sg.oid}`} className="bg-muted/40 hover:bg-muted/40">
+                                    <TableCell colSpan={columns.length} className="py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                      {sg.name} · {sg.items.length} parcela(s)
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              }
+                              sg.items.forEach((p: any) => {
+                                rows.push(
+                                  <TableRow key={p.id} className={getRowClassName(p)}>
+                                    {columns.map((col) => (
+                                      <TableCell key={col.key} className={col.className}>
+                                        {col.cell ? col.cell(p) : (p as any)[col.key]}
+                                      </TableCell>
+                                    ))}
+                                  </TableRow>
+                                );
+                              });
+                              return rows;
+                            });
+                          })()}
                         </TableBody>
                       </Table>
                     </div>
