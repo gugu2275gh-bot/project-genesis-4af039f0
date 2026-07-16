@@ -331,11 +331,23 @@ export default function CashFlow() {
               {(formData.category === 'OUTROS') && (
                 <div className="space-y-2">
                   <Label>Detalhe da categoria *</Label>
-                  <Input
+                  <Select
                     value={formData.subcategory || ''}
-                    onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
-                    placeholder="Especifique a categoria"
-                  />
+                    onValueChange={(v) => setFormData({ ...formData, subcategory: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories
+                        .filter(c => (c as any).type === 'OUTROS')
+                        .map((cat) => (
+                          <SelectItem key={cat.id} value={cat.name}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
