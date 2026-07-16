@@ -297,6 +297,44 @@ export default function Invoices() {
     vat_rate: 0.21,
   });
   const [extraFees, setExtraFees] = useState<{ description: string; amount: number }[]>([]);
+  const [contractExtrasMap, setContractExtrasMap] = useState<Record<string, number>>({});
+
+  // Fallback: fetch contract_costs for invoices missing additional_costs (mirrors PDF logic)
+  useEffect(() => {
+    const contractIds = Array.from(
+      new Set(
+        (invoices || [])
+          .filter((i) => {
+            const ac = (i.additional_costs || {}) as Record<string, number>;
+            return i.contract_id && Object.keys(ac).length === 0;
+          })
+          .map((i) => i.contract_id as string)
+      )
+    );
+    if (contractIds.length === 0) {
+      setContractExtrasMap({});
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from('contract_costs')
+        .select('contract_id, amount')
+        .in('contract_id', contractIds);
+      const map: Record<string, number> = {};
+      (data || []).forEach((c: any) => {
+        map[c.contract_id] = (map[c.contract_id] || 0) + (Number(c.amount) || 0);
+      });
+      setContractExtrasMap(map);
+    })();
+  }, [invoices]);
+
+  const getInvoiceExtras = (inv: Invoice): number => {
+    const ac = (inv.additional_costs || {}) as Record<string, number>;
+    const own = Object.values(ac).reduce((s, v) => s + (Number(v) || 0), 0);
+    if (own > 0) return own;
+    if (inv.contract_id && contractExtrasMap[inv.contract_id]) return contractExtrasMap[inv.contract_id];
+    return 0;
+  };
 
   // Source clients from contacts table (so all registered clients appear, even without contracts)
   const clientsMap = new Map<string, { id: string; name: string; document?: string | null; address?: string | null }>();
