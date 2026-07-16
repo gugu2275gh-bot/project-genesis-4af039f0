@@ -20,8 +20,6 @@ import { ptBR } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ContractCostsSection } from '@/components/contracts/ContractCostsSection';
-import { ContractNotesSection } from '@/components/contracts/ContractNotesSection';
 import { supabase } from '@/integrations/supabase/client';
 import { useBeneficiaries } from '@/hooks/useBeneficiaries';
 import { BeneficiaryData, BankAccountData, PaymentData } from '@/lib/generate-contract';
@@ -1350,15 +1348,6 @@ export default function ContractDetail() {
         </Card>
       </div>
 
-      {/* Costs Section - Available for all statuses except CANCELADO */}
-      <ContractCostsSection 
-        contractId={contract.id}
-        canEdit={contract.status !== 'CANCELADO'}
-        currency={contract.currency || 'EUR'}
-      />
-
-      {/* Notes Section - Histórico de Acordos */}
-      <ContractNotesSection contractId={contract.id} />
 
       {/* Histórico unificado (contrato + log de pagamentos) — estrito a este contrato */}
       <ContractHistoryPanel
