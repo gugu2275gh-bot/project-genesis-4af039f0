@@ -126,16 +126,29 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       setReferralName('');
       return;
     }
-    const targetId = (isBeneficiary && selectedTitularId) ? selectedTitularId : contactId;
-    if (!targetId) return;
-    supabase
-      .from('contacts')
-      .select('referral_name')
-      .eq('id', targetId)
-      .maybeSingle()
-      .then(({ data }) => {
-        setReferralName(data?.referral_name || '');
-      });
+    // Prefer per-service referral from the lead; fall back to contact-level for legacy records.
+    const load = async () => {
+      if (initialData?.leadId) {
+        const { data: leadData } = await supabase
+          .from('leads')
+          .select('referral_name')
+          .eq('id', initialData.leadId)
+          .maybeSingle();
+        if (leadData && (leadData as any).referral_name) {
+          setReferralName((leadData as any).referral_name || '');
+          return;
+        }
+      }
+      const targetId = (isBeneficiary && selectedTitularId) ? selectedTitularId : contactId;
+      if (!targetId) return;
+      const { data } = await supabase
+        .from('contacts')
+        .select('referral_name')
+        .eq('id', targetId)
+        .maybeSingle();
+      setReferralName(data?.referral_name || '');
+    };
+    load();
   }, [open, contactId, selectedTitularId, isBeneficiary, initialData]);
 
   // Pre-fill form when dialog opens with initialData
@@ -340,13 +353,17 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
         service_type_id: selectedServiceTypeId,
         service_interest: 'OUTRO' as any,
         status: 'NOVO',
-      }).select('id').single();
+        referral_name: referralName?.trim() || null,
+      } as any).select('id').single();
       if (leadError) {
         console.error('Error creating lead for service:', leadError);
         toast({ title: 'Erro ao criar serviço', description: leadError.message, variant: 'destructive' });
         return;
       }
       leadId = newLead.id;
+    } else if (leadId) {
+      // Update per-service referral on the existing lead (edit flow)
+      await supabase.from('leads').update({ referral_name: referralName?.trim() || null } as any).eq('id', leadId);
     }
 
     if (!leadId) {
@@ -543,7 +560,6 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
     await updateContact.mutateAsync({
       id: leadOwnerContactId,
       payment_notes: existingNotes + separator + titularSummary,
-      referral_name: referralName || null,
     } as any);
 
     queryClient.invalidateQueries({ queryKey: ['leads'] });
