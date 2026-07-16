@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.auto_create_invoice_on_payment_confirmed() FROM anon, public;
