@@ -126,16 +126,29 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       setReferralName('');
       return;
     }
-    const targetId = (isBeneficiary && selectedTitularId) ? selectedTitularId : contactId;
-    if (!targetId) return;
-    supabase
-      .from('contacts')
-      .select('referral_name')
-      .eq('id', targetId)
-      .maybeSingle()
-      .then(({ data }) => {
-        setReferralName(data?.referral_name || '');
-      });
+    // Prefer per-service referral from the lead; fall back to contact-level for legacy records.
+    const load = async () => {
+      if (initialData?.leadId) {
+        const { data: leadData } = await supabase
+          .from('leads')
+          .select('referral_name')
+          .eq('id', initialData.leadId)
+          .maybeSingle();
+        if (leadData && (leadData as any).referral_name) {
+          setReferralName((leadData as any).referral_name || '');
+          return;
+        }
+      }
+      const targetId = (isBeneficiary && selectedTitularId) ? selectedTitularId : contactId;
+      if (!targetId) return;
+      const { data } = await supabase
+        .from('contacts')
+        .select('referral_name')
+        .eq('id', targetId)
+        .maybeSingle();
+      setReferralName(data?.referral_name || '');
+    };
+    load();
   }, [open, contactId, selectedTitularId, isBeneficiary, initialData]);
 
   // Pre-fill form when dialog opens with initialData
