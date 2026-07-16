@@ -362,10 +362,25 @@ export default function Invoices() {
     setSelectedServiceId('');
     const contract = contracts.find((c) => c.id === contractId);
     if (contract) {
-      const total = contractEffectiveTotal(contract);
       const rate = formData.vat_rate ?? 0.21;
-      // Total do contrato inclui IVA — base = total / (1 + IVA)
-      const base = rate > 0 ? total / (1 + rate) : total;
+      // Fetch payments to compute net honorarios: gross - discount
+      const { data: pays } = await supabase
+        .from('payments')
+        .select('amount, gross_amount, discount_value, discount_type')
+        .eq('contract_id', contractId);
+      let netTotal = 0;
+      if (pays && pays.length > 0) {
+        const first: any = pays[0];
+        const grossTotal = pays.reduce((s, p: any) => s + (Number(p.gross_amount) || Number(p.amount) || 0), 0);
+        const discountVal = Number(first?.discount_value || 0);
+        const isPercent = first?.discount_type === 'PERCENTUAL';
+        const discountMoney = isPercent && grossTotal > 0 ? grossTotal * discountVal / 100 : discountVal;
+        netTotal = Math.max(0, grossTotal - discountMoney);
+      } else {
+        netTotal = contractEffectiveTotal(contract);
+      }
+      // Total (após desconto) inclui IVA — base = total / (1 + IVA)
+      const base = rate > 0 ? netTotal / (1 + rate) : netTotal;
       setFormData((f) => ({
         ...f,
         contract_id: contractId,
