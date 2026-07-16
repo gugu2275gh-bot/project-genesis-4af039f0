@@ -233,6 +233,11 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
       toast({ title: 'Selecione o titular do contrato', variant: 'destructive' });
       return;
     }
+    // Validate bank account when payment method is TRANSFERENCIA
+    if (form.payment_method === 'TRANSFERENCIA' && !form.payment_account_id) {
+      toast({ title: 'Selecione a conta bancária para a transferência', variant: 'destructive' });
+      return;
+    }
     savingRef.current = true;
     setIsSaving(true);
     try {
