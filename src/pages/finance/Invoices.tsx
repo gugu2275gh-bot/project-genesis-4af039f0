@@ -550,10 +550,9 @@ export default function Invoices() {
       key: 'total_amount',
       header: 'Total',
       cell: (item) => {
-        const extras = Object.values((item.additional_costs || {}) as Record<string, number>)
-          .reduce((s, v) => s + (Number(v) || 0), 0);
+        const extras = getInvoiceExtras(item);
         // Importe líquido da fatura = base + IVA + taxas adicionais
-        const total = item.amount_without_vat + item.vat_amount + extras;
+        const total = Number(item.amount_without_vat) + Number(item.vat_amount) + extras;
         return <span className="font-semibold">€{total.toFixed(2)}</span>;
       },
     },
