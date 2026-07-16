@@ -340,13 +340,17 @@ export function PaymentAgreementDialog({ open, onOpenChange, contactId, contactN
         service_type_id: selectedServiceTypeId,
         service_interest: 'OUTRO' as any,
         status: 'NOVO',
-      }).select('id').single();
+        referral_name: referralName?.trim() || null,
+      } as any).select('id').single();
       if (leadError) {
         console.error('Error creating lead for service:', leadError);
         toast({ title: 'Erro ao criar serviço', description: leadError.message, variant: 'destructive' });
         return;
       }
       leadId = newLead.id;
+    } else if (leadId) {
+      // Update per-service referral on the existing lead (edit flow)
+      await supabase.from('leads').update({ referral_name: referralName?.trim() || null } as any).eq('id', leadId);
     }
 
     if (!leadId) {
