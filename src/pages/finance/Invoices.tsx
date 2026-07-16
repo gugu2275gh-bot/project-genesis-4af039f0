@@ -514,7 +514,8 @@ export default function Invoices() {
       cell: (item) => {
         const extras = Object.values((item.additional_costs || {}) as Record<string, number>)
           .reduce((s, v) => s + (Number(v) || 0), 0);
-        const total = Number(item.total_amount || 0) + extras;
+        // Importe líquido da fatura = base + IVA + taxas adicionais
+        const total = item.amount_without_vat + item.vat_amount + extras;
         return <span className="font-semibold">€{total.toFixed(2)}</span>;
       },
     },
