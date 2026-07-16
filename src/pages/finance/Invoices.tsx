@@ -55,6 +55,39 @@ async function handleDownloadInvoice(inv: Invoice) {
   const numOnly = inv.invoice_number.includes('-')
     ? inv.invoice_number.split('-').slice(1).join('-')
     : inv.invoice_number;
+
+  // Resolve bank account from the linked payment (or first payment of the contract)
+  let bankName: string | undefined;
+  let iban: string | undefined;
+  let paymentAccountId: string | null = null;
+  if (inv.payment_id) {
+    const { data: pay } = await supabase
+      .from('payments')
+      .select('payment_account_id')
+      .eq('id', inv.payment_id)
+      .maybeSingle();
+    paymentAccountId = (pay as any)?.payment_account_id || null;
+  }
+  if (!paymentAccountId && inv.contract_id) {
+    const { data: pays } = await supabase
+      .from('payments')
+      .select('payment_account_id')
+      .eq('contract_id', inv.contract_id)
+      .not('payment_account_id', 'is', null)
+      .limit(1);
+    paymentAccountId = (pays && pays[0] as any)?.payment_account_id || null;
+  }
+  if (paymentAccountId) {
+    const { data: acc } = await supabase
+      .from('payment_accounts')
+      .select('bank_name, account_name, account_details')
+      .eq('id', paymentAccountId)
+      .maybeSingle();
+    if (acc) {
+      bankName = (acc as any).bank_name || (acc as any).account_name || undefined;
+      iban = (acc as any).account_details || undefined;
+    }
+  }
   const addressLines = inv.client_address
     ? inv.client_address.split(/\n|,\s*/).filter(Boolean)
     : [];
@@ -127,6 +160,8 @@ async function handleDownloadInvoice(inv: Invoice) {
     vatRate: inv.vat_rate,
     vatAmount: inv.vat_amount,
     totalLiquido,
+    bankName,
+    iban,
   });
 }
 
