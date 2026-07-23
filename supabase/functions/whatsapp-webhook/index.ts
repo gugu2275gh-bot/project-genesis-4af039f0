@@ -2436,7 +2436,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             console.log('[KB-STRICT] No KB match found — sending standard fallback message')
             try {
               const kbRes = await sendOutgoingIdempotent(supabase, {
-                phone: phoneNumber, leadId: lead.id, body: kbStrictFallback,
+                phone: phoneNumber, leadId: lead.id, body: kbStrictFallback, language: detectedChatLanguage,
               })
               if (kbRes.sent) {
                 await supabase.from('mensagens_cliente').insert({
