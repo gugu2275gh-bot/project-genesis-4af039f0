@@ -987,7 +987,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         ...header, ...parties,
         { type: 'heading', text: 'PRIMERA. Objeto del Contrato' },
         { type: 'paragraph', text: 'El presente documento tiene por objeto reservar y anticipar la prestación de servicios profesionales relacionados con el futuro trámite de Regularización Excepcional Única, actualmente pendiente de aprobación legislativa y, por tanto, no disponible ni garantizado en la normativa vigente.' },
-        { type: 'paragraph', text: data.serviceDescription || 'TRAMITACIÓN DE LA SOLICITUD DE REGULARIZACIÓN EXCEPCIONAL ÚNICA.', bold: true },
+        ...(data.serviceDescription ? [{ type: 'paragraph' as const, text: data.serviceDescription, bold: true }] : []),
         { type: 'paragraph', text: 'Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA.' },
         ...honorarios,
         ...sectionsBankAccount(data),
