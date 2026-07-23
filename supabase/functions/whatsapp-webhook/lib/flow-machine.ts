@@ -88,7 +88,8 @@ const STEPS: Record<StepCode, StepDef> = {
         ? { valid: true, value: raw.trim() }
         : { valid: false, reason: 'not_a_full_name' }
     },
-    next: (state) => (state.email_confirmed ? 'LOCATION' : 'EMAIL'),
+    // EMAIL removido do onboarding: pula direto de NAME → LOCATION.
+    next: ALWAYS('LOCATION'),
   },
 
   EMAIL: {
