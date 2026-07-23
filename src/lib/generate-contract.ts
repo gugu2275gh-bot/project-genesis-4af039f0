@@ -1118,6 +1118,32 @@ export async function generateContractDocument(data: ContractData): Promise<void
     }
   };
 
+export async function generateContractDocument(data: ContractData): Promise<void> {
+  const sections = getContractSections(data);
+
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 18;
+  const maxWidth = pageWidth - margin * 2;
+  const topMargin = 32; // deixa espaço para a logo
+  const bottomMargin = 22; // deixa espaço para a faixa
+  let y = topMargin;
+  const lineHeight = 5.5;
+
+  // Preload brand assets
+  const [logoData, bandData] = await Promise.all([
+    loadImageAsDataURL(headerLogoImage),
+    loadImageAsDataURL(footerBandImage),
+  ]);
+
+  const checkPage = (needed: number) => {
+    if (y + needed > pageHeight - bottomMargin) {
+      doc.addPage();
+      y = topMargin;
+    }
+  };
+
   for (const section of sections) {
     switch (section.type) {
       case 'heading':
@@ -1184,16 +1210,24 @@ export async function generateContractDocument(data: ContractData): Promise<void
     }
   }
 
-  // Footer on each page
+  // Header (logo) + Footer (banda vermelha) em todas as páginas
   const totalPages = doc.getNumberOfPages();
+  // Logo header: ~2069x650 (aspect ~3.18). Largura 45mm -> altura ~14mm.
+  const logoW = 45;
+  const logoH = 14;
+  const logoX = (pageWidth - logoW) / 2;
+  const logoY = 8;
+  // Banda vermelha: 2640x216 (aspect ~12.2). Largura total da página -> altura ~7mm.
+  const bandW = pageWidth;
+  const bandH = pageWidth * (216 / 2640);
+  const bandY = pageHeight - bandH - 4;
+
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'italic');
-    doc.setTextColor(136, 136, 136);
-    doc.text('Sus trámites en buenas manos.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
-    doc.setTextColor(0, 0, 0);
+    doc.addImage(logoData, 'PNG', logoX, logoY, logoW, logoH);
+    doc.addImage(bandData, 'PNG', 0, bandY, bandW, bandH);
   }
+
 
   const templateName = data.template === 'REGULARIZACION_EXTRAORDINARIA'
     ? 'Regularizacion_Extraordinaria'
