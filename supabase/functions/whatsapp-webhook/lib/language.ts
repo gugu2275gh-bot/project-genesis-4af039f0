@@ -136,7 +136,7 @@ const TEMPLATES: Record<ChatLanguage, PromptTemplates> = {
     interestQuestion: 'Tell me calmly: what are you looking for today? It can be citizenship, residency, studies, arraigo or a specific document.',
     servicesCatalog: 'We work with Spanish citizenship, digital nomad, residencies, NIE, TIE, education recognition, background checks, family reunification and other processes.',
     oneMomentPlease: 'Great question, I will explain in a moment.',
-    askLocationSpain: 'Are you already in Spain today? Please reply only *yes* or *no*.',
+    askLocationSpain: 'Are you already in Spain today?',
     openingLine1: 'Hello! 😊 How are you? I am the virtual assistant of CB Asesoría. It is a pleasure to talk to you! I will help you understand the legal paths available for your situation here in Spain.',
     openingLine2: 'I will ask you a few quick questions just to understand your case and direct you to the right specialist. First of all, what is your full name?',
     outsideIntro: 'Perfect. I will ask you quick questions just to better understand your situation.',
