@@ -67,12 +67,21 @@ const YESNO_QUESTION_PATTERNS: RegExp[] = [
  * atual (que deve ser enviada como Quick Reply). Falso para perguntas abertas.
  * Extrai a última pergunta do texto (se houver várias linhas) antes de checar.
  */
+// Perguntas abertas (data, cidade, etc.) que NÃO devem virar quick reply,
+// mesmo contendo tokens como "empadronado". Ex.: "Desde quando…", "Em qual cidade…".
+const OPEN_QUESTION_PATTERNS: RegExp[] = [
+  /(desde quando|desde cuando|since when|depuis quand)/i,
+  /(em qual cidade|en que ciudad|in which city|dans quelle ville)/i,
+  /(qual (a )?data|que fecha|what date|quelle date)/i,
+]
+
 export function isBinaryYesNoQuestion(text: string): boolean {
   if (!text) return false
   // Precisa terminar em pergunta
   if (!/\?/.test(text)) return false
   const normalized = normalizeForLanguageChecks(text)
   if (!normalized) return false
+  if (OPEN_QUESTION_PATTERNS.some((re) => re.test(normalized))) return false
   return YESNO_QUESTION_PATTERNS.some((re) => re.test(normalized))
 }
 
