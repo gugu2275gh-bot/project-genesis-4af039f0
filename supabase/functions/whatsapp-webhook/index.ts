@@ -162,9 +162,18 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       else if (mimetype?.startsWith('video')) type = 'video'
       else type = 'document'
     }
-    // Quick-reply / button responses (Twilio sends Body=title + ButtonPayload if configured)
+    // Quick-reply / button responses (Twilio envia Body=título + ButtonPayload=id).
+    // Priorizamos o ButtonPayload (identificador estável YES/NO) sobre o texto do
+    // botão — assim a máquina de estados recebe um token determinístico
+    // independentemente do idioma do rótulo exibido ao cliente.
     const buttonPayload = (payload as any).ButtonPayload || (payload as any).ButtonText || undefined
-    const bodyText = payload.Body || (buttonPayload ? String(buttonPayload) : '')
+    let bodyText = payload.Body || ''
+    if (buttonPayload) {
+      const p = String(buttonPayload).trim().toUpperCase()
+      if (p === 'YES') bodyText = 'sim'
+      else if (p === 'NO') bodyText = 'no'
+      else if (!bodyText) bodyText = String(buttonPayload)
+    }
     return {
       from: phone,
       body: bodyText,
@@ -2436,7 +2445,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             console.log('[KB-STRICT] No KB match found — sending standard fallback message')
             try {
               const kbRes = await sendOutgoingIdempotent(supabase, {
-                phone: phoneNumber, leadId: lead.id, body: kbStrictFallback,
+                phone: phoneNumber, leadId: lead.id, body: kbStrictFallback, language: detectedChatLanguage,
               })
               if (kbRes.sent) {
                 await supabase.from('mensagens_cliente').insert({
@@ -3140,7 +3149,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               const part = parts[i]
 
               const sendRes = await sendOutgoingIdempotent(supabase, {
-                phone: phoneNumber, leadId: lead.id, body: part,
+                phone: phoneNumber, leadId: lead.id, body: part, language: detectedChatLanguage,
               })
               if (!sendRes.sent) {
                 console.log(`[SEND_DEDUP] skipped part ${i + 1}/${parts.length} —`, sendRes.reason)
