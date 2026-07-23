@@ -537,7 +537,7 @@ function buildNacionalidad(data: ContractData, dateStr: string): Paragraph[] {
 
     heading('PRIMERA. Objeto del Contrato'),
     para('El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA, consistentes en:'),
-    para(data.serviceDescription || 'TRAMITACIÓN TELEMÁTICA DE LA SOLICITUD DE LA NACIONALIDAD ESPAÑOLA POR RESIDENCIA.', { bold: true }),
+    ...(data.serviceDescription ? [para(data.serviceDescription, { bold: true })] : []),
     para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA.'),
 
     ...buildHonorariosSection(data),
