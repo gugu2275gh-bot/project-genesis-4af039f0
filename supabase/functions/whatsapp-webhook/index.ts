@@ -162,9 +162,18 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       else if (mimetype?.startsWith('video')) type = 'video'
       else type = 'document'
     }
-    // Quick-reply / button responses (Twilio sends Body=title + ButtonPayload if configured)
+    // Quick-reply / button responses (Twilio envia Body=título + ButtonPayload=id).
+    // Priorizamos o ButtonPayload (identificador estável YES/NO) sobre o texto do
+    // botão — assim a máquina de estados recebe um token determinístico
+    // independentemente do idioma do rótulo exibido ao cliente.
     const buttonPayload = (payload as any).ButtonPayload || (payload as any).ButtonText || undefined
-    const bodyText = payload.Body || (buttonPayload ? String(buttonPayload) : '')
+    let bodyText = payload.Body || ''
+    if (buttonPayload) {
+      const p = String(buttonPayload).trim().toUpperCase()
+      if (p === 'YES') bodyText = 'sim'
+      else if (p === 'NO') bodyText = 'no'
+      else if (!bodyText) bodyText = String(buttonPayload)
+    }
     return {
       from: phone,
       body: bodyText,
