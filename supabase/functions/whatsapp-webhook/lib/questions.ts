@@ -249,10 +249,10 @@ export function isQuestionAboutEmpadronamientoCity(question: string): boolean {
 }
 
 export function getEmpadronadoQuestion(language: ChatLanguage): string {
-  if (language === 'es') return '¿Estás empadronado?\n\n(solo sí o no)'
-  if (language === 'en') return 'Are you registered (empadronado)?\n\n(only yes or no)'
-  if (language === 'fr') return 'Êtes-vous empadronado ?\n\n(uniquement oui ou non)'
-  return 'você está empadronado?\n\n(somente sim ou não)'
+  if (language === 'es') return '¿Estás empadronado?'
+  if (language === 'en') return 'Are you registered (empadronado)?'
+  if (language === 'fr') return 'Êtes-vous empadronado ?'
+  return 'você está empadronado?'
 }
 
 export function getEmpadronamientoSinceQuestion(language: ChatLanguage): string {
