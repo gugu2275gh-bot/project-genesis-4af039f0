@@ -1,6 +1,7 @@
 // @ts-nocheck
 // Wave 3b step 7: Twilio gateway + media placeholder
 import type { ChatLanguage } from './language.ts'
+import { isBinaryYesNoQuestion, sendYesNoQuickReply } from './quick-reply.ts'
 
 export function getMediaPlaceholder(mediaType: string, language: ChatLanguage): string {
   const mediaNames: Record<ChatLanguage, Record<string, string>> = {
