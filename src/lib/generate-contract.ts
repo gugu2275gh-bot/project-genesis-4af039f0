@@ -483,7 +483,7 @@ function buildRegularizacionExtraordinaria(data: ContractData, dateStr: string):
 
     heading('PRIMERA. Objeto del Contrato'),
     para('El presente documento tiene por objeto reservar y anticipar la prestación de servicios profesionales relacionados con el futuro trámite de Regularización Excepcional Única, actualmente pendiente de aprobación legislativa y, por tanto, no disponible ni garantizado en la normativa vigente.'),
-    para(data.serviceDescription || 'TRAMITACIÓN DE LA SOLICITUD DE REGULARIZACIÓN EXCEPCIONAL ÚNICA.', { bold: true }),
+    ...(data.serviceDescription ? [para(data.serviceDescription, { bold: true })] : []),
     para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA.'),
 
     ...buildHonorariosSection(data),
