@@ -2606,7 +2606,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           assistantTranscript: allAssistant,
           outsideProgress: outsideProgressLive,
           nameKnown: !nameMissing,
-          emailKnown: !emailMissing,
+          emailKnown: true,
         }
         aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, false)
         aiResponse = forceReaskFullNameIfSingleWord(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !nameMissing)
@@ -2681,7 +2681,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               detectedChatLanguage,
             )
             aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
-            aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, { nameKnown: !nameMissing, emailKnown: !emailMissing, interestKnown: !serviceMissing, locationKnown: !!funnelStateLive.location_known })
+            aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, { nameKnown: !nameMissing, emailKnown: true, interestKnown: !serviceMissing, locationKnown: !!funnelStateLive.location_known })
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
             aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
@@ -2709,7 +2709,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, allAssistant)
             aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
             aiResponse = forceAdvanceFromEmpadronadoQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
-            aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, { nameKnown: !nameMissing, emailKnown: !emailMissing, interestKnown: !serviceMissing, locationKnown: !!funnelStateLive.location_known })
+            aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, { nameKnown: !nameMissing, emailKnown: true, interestKnown: !serviceMissing, locationKnown: !!funnelStateLive.location_known })
             aiResponse = sanitizeLocationQuestion(aiResponse, detectedChatLanguage)
             aiResponse = forceCorrectBlockForLocation(aiResponse, detectedChatLanguage, blockFlags)
             aiResponse = enforceBlockCompletion(aiResponse, detectedChatLanguage, blockFlags)
@@ -2867,7 +2867,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                 detectedChatLanguage,
                 {
                   nameKnown: !nameMissing,
-                  emailKnown: !emailMissing,
+                  emailKnown: true,
                   interestKnown: !serviceMissing,
                   locationKnown: !!funnelStateLive.location_known,
                 },
