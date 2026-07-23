@@ -3140,7 +3140,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               const part = parts[i]
 
               const sendRes = await sendOutgoingIdempotent(supabase, {
-                phone: phoneNumber, leadId: lead.id, body: part,
+                phone: phoneNumber, leadId: lead.id, body: part, language: detectedChatLanguage,
               })
               if (!sendRes.sent) {
                 console.log(`[SEND_DEDUP] skipped part ${i + 1}/${parts.length} —`, sendRes.reason)
