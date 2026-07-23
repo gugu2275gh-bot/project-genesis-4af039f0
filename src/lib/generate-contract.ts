@@ -1258,14 +1258,47 @@ export async function generateContractWord(data: ContractData): Promise<void> {
     }
   }
 
+  // Carrega assets da marca para header/footer
+  const [logoBuffer, bandBuffer] = await Promise.all([
+    loadImageAsArrayBuffer(headerLogoImage),
+    loadImageAsArrayBuffer(footerBandImage),
+  ]);
+
+  const headerParagraph = new Paragraph({
+    alignment: AlignmentType.CENTER,
+    children: [
+      new ImageRun({
+        type: 'png',
+        data: logoBuffer,
+        transformation: { width: 170, height: 53 },
+      }),
+    ],
+  });
+
+  const footerBandParagraph = new Paragraph({
+    alignment: AlignmentType.CENTER,
+    children: [
+      new ImageRun({
+        type: 'png',
+        data: bandBuffer,
+        transformation: { width: 520, height: 42 },
+      }),
+    ],
+  });
+
   const doc = new Document({
     sections: [{
-      properties: {},
-      headers: { default: new Header({ children: [] }) },
-      footers: { default: footerParagraph() },
+      properties: {
+        page: {
+          margin: { top: 2000, right: 1200, bottom: 1400, left: 1200, header: 400, footer: 200 },
+        },
+      },
+      headers: { default: new Header({ children: [headerParagraph] }) },
+      footers: { default: new Footer({ children: [footerBandParagraph] }) },
       children: paragraphs,
     }],
   });
+
 
   const blob = await Packer.toBlob(doc);
 
