@@ -1101,22 +1101,6 @@ export function getContractSections(data: ContractData): ContractSection[] {
   }
 }
 
-export async function generateContractDocument(data: ContractData): Promise<void> {
-  const sections = getContractSections(data);
-  
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 14;
-  const maxWidth = pageWidth - margin * 2;
-  let y = 20;
-  const lineHeight = 5.5;
-
-  const checkPage = (needed: number) => {
-    if (y + needed > doc.internal.pageSize.getHeight() - 20) {
-      doc.addPage();
-      y = 20;
-    }
-  };
 
 export async function generateContractDocument(data: ContractData): Promise<void> {
   const sections = getContractSections(data);
