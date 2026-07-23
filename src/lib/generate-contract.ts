@@ -602,7 +602,7 @@ function buildDocumentos(data: ContractData, dateStr: string): Paragraph[] {
     para('CB ASESORÍA podrá suspender temporalmente la prestación de los servicios contratados hasta que se regularice el pago, sin que ello genere derecho a indemnización o reclamación alguna por parte del CLIENTE.'),
 
     // Clauses 3-5 with numeric headings
-    heading('3. Obligaciones del Cliente'),
+    heading('TERCERA. Obligaciones del Cliente'),
     para('El CLIENTE se compromete a:'),
     numbered('1', 'Proporcionar a CB ASESORÍA información veraz, completa y actualizada.'),
     numbered('2', 'Entregar en plazo la documentación exigida para el trámite, para que el trámite sea protocolado en la plataforma correspondiente.'),
@@ -610,7 +610,7 @@ function buildDocumentos(data: ContractData, dateStr: string): Paragraph[] {
     numbered('4', 'Comparecer a las citas necesarias para la tramitación del servicio contratado, previamente programadas por CB ASESORÍA ante organismos oficiales (administración pública, notaría, registros civiles, etc.).'),
     para('La incomparecencia injustificada podrá dar lugar al cobro de honorarios adicionales por reprogramación o nueva gestión.'),
 
-    heading('4. Obligaciones de CB ASESORÍA (EL PRESTADOR)'),
+    heading('CUARTA. Obligaciones de CB ASESORÍA (EL PRESTADOR)'),
     para('CB ASESORÍA se compromete a:'),
     numbered('1', 'Prestar los servicios contratados con la debida diligencia profesional y conforme a la legislación vigente.'),
     numbered('2', 'Ejecutar los servicios a través de su equipo técnico y jurídico, no vinculado a una persona específica.'),
@@ -619,7 +619,7 @@ function buildDocumentos(data: ContractData, dateStr: string): Paragraph[] {
     numbered('5', 'Utilizar los datos personales únicamente para los fines descritos en este contrato.'),
     numbered('6', 'Facilitar al CLIENTE, si lo solicita, copia de los documentos generados.'),
 
-    heading('5. Inicio del Procedimiento'),
+    heading('QUINTA. Inicio del Procedimiento'),
     para('CB ASESORÍA dispondrá de un plazo máximo de 48 horas hábiles tras la confirmación del pago para contactar con EL CLIENTE e iniciar la gestión.'),
     para('El cómputo excluye fines de semana y días festivos. En caso de no contacto en plazo, el CLIENTE podrá comunicarse mediante los canales oficiales para información.'),
     para('Condición para protocolar el trámite: solo se presentará en la plataforma correspondiente, cuando se haya recibido el pago completo de los honorarios y toda la documentación requerida.'),
@@ -1067,14 +1067,14 @@ export function getContractSections(data: ContractData): ContractSection[] {
         { type: 'bullet', text: 'b) Además, el CLIENTE deberá abonar una multa contractual equivalente al 5% del importe total adeudado en concepto de penalización por mora, sin necesidad de requerimiento previo.' },
         { type: 'paragraph', text: 'CB ASESORÍA podrá suspender temporalmente la prestación de los servicios contratados hasta que se regularice el pago, sin que ello genere derecho a indemnización o reclamación alguna por parte del CLIENTE.' },
         // Clauses 3-5 with numeric headings
-        { type: 'heading', text: '3. Obligaciones del Cliente' },
+        { type: 'heading', text: 'TERCERA. Obligaciones del Cliente' },
         { type: 'paragraph', text: 'El CLIENTE se compromete a:' },
         { type: 'numbered', text: '1. Proporcionar a CB ASESORÍA información veraz, completa y actualizada.' },
         { type: 'numbered', text: '2. Entregar en plazo la documentación exigida para el trámite, para que el trámite sea protocolado en la plataforma correspondiente.' },
         { type: 'numbered', text: '3. Abonar los honorarios conforme a lo estipulado, para que el trámite sea protocolado en la plataforma correspondiente.' },
         { type: 'numbered', text: '4. Comparecer a las citas necesarias para la tramitación del servicio contratado, previamente programadas por CB ASESORÍA ante organismos oficiales (administración pública, notaría, registros civiles, etc.).' },
         { type: 'paragraph', text: 'La incomparecencia injustificada podrá dar lugar al cobro de honorarios adicionales por reprogramación o nueva gestión.' },
-        { type: 'heading', text: '4. Obligaciones de CB ASESORÍA (EL PRESTADOR)' },
+        { type: 'heading', text: 'CUARTA. Obligaciones de CB ASESORÍA (EL PRESTADOR)' },
         { type: 'paragraph', text: 'CB ASESORÍA se compromete a:' },
         { type: 'numbered', text: '1. Prestar los servicios contratados con la debida diligencia profesional y conforme a la legislación vigente.' },
         { type: 'numbered', text: '2. Ejecutar los servicios a través de su equipo técnico y jurídico, no vinculado a una persona específica.' },
@@ -1082,7 +1082,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         { type: 'numbered', text: '4. Guardar confidencialidad sobre toda la información recibida, incluso tras la finalización de la relación contractual.' },
         { type: 'numbered', text: '5. Utilizar los datos personales únicamente para los fines descritos en este contrato.' },
         { type: 'numbered', text: '6. Facilitar al CLIENTE, si lo solicita, copia de los documentos generados.' },
-        { type: 'heading', text: '5. Inicio del Procedimiento' },
+        { type: 'heading', text: 'QUINTA. Inicio del Procedimiento' },
         { type: 'paragraph', text: 'CB ASESORÍA dispondrá de un plazo máximo de 48 horas hábiles tras la confirmación del pago para contactar con EL CLIENTE e iniciar la gestión.' },
         { type: 'paragraph', text: 'El cómputo excluye fines de semana y días festivos. En caso de no contacto en plazo, el CLIENTE podrá comunicarse mediante los canales oficiales para información.' },
         { type: 'paragraph', text: 'Condición para protocolar el trámite: solo se presentará en la plataforma correspondiente, cuando se haya recibido el pago completo de los honorarios y toda la documentación requerida.' },
