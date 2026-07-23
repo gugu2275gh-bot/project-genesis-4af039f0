@@ -12,7 +12,26 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
-import logoImage from '@/assets/logo-cb-asesoria.png';
+import headerLogoImage from '@/assets/cb-header-logo.png';
+import footerBandImage from '@/assets/cb-footer-band.png';
+
+// Load an image URL and return a base64 data URL (for jsPDF.addImage)
+async function loadImageAsDataURL(url: string): Promise<string> {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Load an image URL as ArrayBuffer (for docx ImageRun)
+async function loadImageAsArrayBuffer(url: string): Promise<ArrayBuffer> {
+  const res = await fetch(url);
+  return await res.arrayBuffer();
+}
 
 export interface BeneficiaryData {
   fullName: string;
@@ -1082,20 +1101,30 @@ export function getContractSections(data: ContractData): ContractSection[] {
   }
 }
 
+
 export async function generateContractDocument(data: ContractData): Promise<void> {
   const sections = getContractSections(data);
-  
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 14;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 18;
   const maxWidth = pageWidth - margin * 2;
-  let y = 20;
+  const topMargin = 32; // deixa espaço para a logo
+  const bottomMargin = 22; // deixa espaço para a faixa
+  let y = topMargin;
   const lineHeight = 5.5;
 
+  // Preload brand assets
+  const [logoData, bandData] = await Promise.all([
+    loadImageAsDataURL(headerLogoImage),
+    loadImageAsDataURL(footerBandImage),
+  ]);
+
   const checkPage = (needed: number) => {
-    if (y + needed > doc.internal.pageSize.getHeight() - 20) {
+    if (y + needed > pageHeight - bottomMargin) {
       doc.addPage();
-      y = 20;
+      y = topMargin;
     }
   };
 
@@ -1165,16 +1194,24 @@ export async function generateContractDocument(data: ContractData): Promise<void
     }
   }
 
-  // Footer on each page
+  // Header (logo) + Footer (banda vermelha) em todas as páginas
   const totalPages = doc.getNumberOfPages();
+  // Logo header: ~2069x650 (aspect ~3.18). Largura 45mm -> altura ~14mm.
+  const logoW = 45;
+  const logoH = 14;
+  const logoX = (pageWidth - logoW) / 2;
+  const logoY = 8;
+  // Banda vermelha: 2640x216 (aspect ~12.2). Largura total da página -> altura ~7mm.
+  const bandW = pageWidth;
+  const bandH = pageWidth * (216 / 2640);
+  const bandY = pageHeight - bandH - 4;
+
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'italic');
-    doc.setTextColor(136, 136, 136);
-    doc.text('Sus trámites en buenas manos.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
-    doc.setTextColor(0, 0, 0);
+    doc.addImage(logoData, 'PNG', logoX, logoY, logoW, logoH);
+    doc.addImage(bandData, 'PNG', 0, bandY, bandW, bandH);
   }
+
 
   const templateName = data.template === 'REGULARIZACION_EXTRAORDINARIA'
     ? 'Regularizacion_Extraordinaria'
@@ -1221,14 +1258,47 @@ export async function generateContractWord(data: ContractData): Promise<void> {
     }
   }
 
+  // Carrega assets da marca para header/footer
+  const [logoBuffer, bandBuffer] = await Promise.all([
+    loadImageAsArrayBuffer(headerLogoImage),
+    loadImageAsArrayBuffer(footerBandImage),
+  ]);
+
+  const headerParagraph = new Paragraph({
+    alignment: AlignmentType.CENTER,
+    children: [
+      new ImageRun({
+        type: 'png',
+        data: logoBuffer,
+        transformation: { width: 170, height: 53 },
+      }),
+    ],
+  });
+
+  const footerBandParagraph = new Paragraph({
+    alignment: AlignmentType.CENTER,
+    children: [
+      new ImageRun({
+        type: 'png',
+        data: bandBuffer,
+        transformation: { width: 520, height: 42 },
+      }),
+    ],
+  });
+
   const doc = new Document({
     sections: [{
-      properties: {},
-      headers: { default: new Header({ children: [] }) },
-      footers: { default: footerParagraph() },
+      properties: {
+        page: {
+          margin: { top: 2000, right: 1200, bottom: 1400, left: 1200, header: 400, footer: 200 },
+        },
+      },
+      headers: { default: new Header({ children: [headerParagraph] }) },
+      footers: { default: new Footer({ children: [footerBandParagraph] }) },
       children: paragraphs,
     }],
   });
+
 
   const blob = await Packer.toBlob(doc);
 
