@@ -556,7 +556,7 @@ export default function ContractDetail() {
         installment_count: contract.installment_count?.toString() || '1',
         installment_amount: contract.installment_amount?.toString() || '',
         first_due_date: contract.first_due_date || '',
-        contract_template: c.contract_template || 'GENERICO',
+        contract_template: c.contract_template || (contract.service_type === 'NACIONALIDADE_RESIDENCIA' ? 'NACIONALIDADE' : 'DOCUMENTOS'),
         status: contract.status || 'EM_ELABORACAO',
         contract_number: c.contract_number || '',
         assigned_to_user_id: c.assigned_to_user_id || '',
