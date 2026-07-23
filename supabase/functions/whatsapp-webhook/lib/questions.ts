@@ -453,13 +453,7 @@ export function getOutsideSpainNextQuestion(
     if (language === 'fr') return prefix + 'Travaillez-vous à distance ?'
     return prefix + 'você trabalha remoto?'
   }
-  if (!answeredFormacao) {
-    const prefix = askedFormacaoInTranscript ? reaskPrefix(language) : ''
-    if (language === 'es') return prefix + '¿Tienes formación superior?'
-    if (language === 'en') return prefix + 'Do you have higher education?'
-    if (language === 'fr') return prefix + 'Avez-vous une formation supérieure ?'
-    return prefix + 'Você possui formação superior?'
-  }
+  // A6 (formação superior) removida do fluxo.
 
 
   // D3 Bizagi: pré-handoff em 2 mensagens (summary ||| transfer). Idempotência via transcript.
