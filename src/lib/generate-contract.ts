@@ -1021,7 +1021,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         ...header, ...parties,
         { type: 'heading', text: 'PRIMERA. Objeto del Contrato' },
         { type: 'paragraph', text: 'El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA, consistentes en:' },
-        { type: 'paragraph', text: data.serviceDescription || 'TRAMITACIÓN TELEMÁTICA DE LA SOLICITUD DE LA NACIONALIDAD ESPAÑOLA POR RESIDENCIA.', bold: true },
+        ...(data.serviceDescription ? [{ type: 'paragraph' as const, text: data.serviceDescription, bold: true }] : []),
         { type: 'paragraph', text: 'Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA.' },
         ...honorarios,
         ...sectionsBankAccount(data),
