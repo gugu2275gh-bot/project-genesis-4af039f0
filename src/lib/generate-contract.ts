@@ -12,7 +12,26 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
-import logoImage from '@/assets/logo-cb-asesoria.png';
+import headerLogoImage from '@/assets/cb-header-logo.png';
+import footerBandImage from '@/assets/cb-footer-band.png';
+
+// Load an image URL and return a base64 data URL (for jsPDF.addImage)
+async function loadImageAsDataURL(url: string): Promise<string> {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Load an image URL as ArrayBuffer (for docx ImageRun)
+async function loadImageAsArrayBuffer(url: string): Promise<ArrayBuffer> {
+  const res = await fetch(url);
+  return await res.arrayBuffer();
+}
 
 export interface BeneficiaryData {
   fullName: string;
