@@ -2049,13 +2049,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
             `Pergunte APENAS o NOME COMPLETO do cliente. Envie EXATAMENTE esta frase, JÁ no idioma travado da conversa, sem traduzir nem alterar: "${t.askName}". Se o cliente fez outra pergunta, agradeça em UMA frase ("${t.oneMomentPlease}") e em seguida faça SOMENTE a pergunta do nome.`,
         })
 
-        // Etapa 3 — Email (Msg4)
-        steps.push({
-          key: 'email', label: 'E-MAIL',
-          done: !emailMissing,
-          instruction:
-            `Agradeça brevemente o nome e pergunte APENAS o melhor e-mail. Envie EXATAMENTE esta frase, JÁ no idioma travado da conversa, sem traduzir nem alterar: "${t.thanksThenAskEmail}". NÃO faça outras perguntas nem responda dúvidas factuais agora.`,
-        })
+        // Etapa 3 — Email REMOVIDA do fluxo. Segue direto de NOME → LOCALIZAÇÃO.
 
         // Etapa 4 — Interesse (M5/M6) REMOVIDA do onboarding. O fluxo pula
         // direto de e-mail para localização. `catalogSent` mantido como
