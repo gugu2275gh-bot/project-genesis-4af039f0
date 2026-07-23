@@ -218,10 +218,10 @@ export function isPotentialInterestAnswer(text: string): boolean {
 }
 
 export function getLocationQuestion(language: ChatLanguage): string {
-  if (language === 'es') return '¿Hoy ya estás en España? Acepta solo *sí* o *no*.'
-  if (language === 'en') return 'Are you already in Spain today? Please reply only *yes* or *no*.'
-  if (language === 'fr') return 'Êtes-vous déjà en Espagne aujourd’hui ? Répondez uniquement *oui* ou *non*.'
-  return 'Hoje você já está na Espanha? Aceite somente *sim* ou *não*.'
+  if (language === 'es') return '¿Hoy ya estás en España?'
+  if (language === 'en') return 'Are you already in Spain today?'
+  if (language === 'fr') return 'Êtes-vous déjà en Espagne aujourd’hui ?'
+  return 'Hoje você já está na Espanha?'
 }
 
 /**
@@ -249,10 +249,10 @@ export function isQuestionAboutEmpadronamientoCity(question: string): boolean {
 }
 
 export function getEmpadronadoQuestion(language: ChatLanguage): string {
-  if (language === 'es') return '¿Estás empadronado?\n\n(solo sí o no)'
-  if (language === 'en') return 'Are you registered (empadronado)?\n\n(only yes or no)'
-  if (language === 'fr') return 'Êtes-vous empadronado ?\n\n(uniquement oui ou non)'
-  return 'você está empadronado?\n\n(somente sim ou não)'
+  if (language === 'es') return '¿Estás empadronado?'
+  if (language === 'en') return 'Are you registered (empadronado)?'
+  if (language === 'fr') return 'Êtes-vous empadronado ?'
+  return 'você está empadronado?'
 }
 
 export function getEmpadronamientoSinceQuestion(language: ChatLanguage): string {
@@ -434,31 +434,31 @@ export function getOutsideSpainNextQuestion(
   if (!askedIdade) return getOutsideSpainAgeQuestion(language)
   if (!skipEuropa && !answeredEuropa) {
     const prefix = askedEuropaInTranscript ? reaskPrefix(language) : ''
-    if (language === 'es') return prefix + '¿Estuviste en Europa en los últimos 6 meses? (sí o no)'
-    if (language === 'en') return prefix + 'Have you been in Europe in the last 6 months? (yes or no)'
-    if (language === 'fr') return prefix + 'Êtes-vous allé en Europe au cours des 6 derniers mois ? (oui ou non)'
-    return prefix + 'você esteve na Europa nos últimos 6 meses? (sim ou não)'
+    if (language === 'es') return prefix + '¿Estuviste en Europa en los últimos 6 meses?'
+    if (language === 'en') return prefix + 'Have you been in Europe in the last 6 months?'
+    if (language === 'fr') return prefix + 'Êtes-vous allé en Europe au cours des 6 derniers mois ?'
+    return prefix + 'você esteve na Europa nos últimos 6 meses?'
   }
   if (!answeredFamiliar) {
     const prefix = askedFamiliarInTranscript ? reaskPrefix(language) : ''
-    if (language === 'es') return prefix + '¿Tienes algún familiar europeo o residente legal en España? (sí o no)'
-    if (language === 'en') return prefix + 'Do you have a European family member or a legal resident in Spain? (yes or no)'
-    if (language === 'fr') return prefix + 'Avez-vous un membre de votre famille européen ou résident légal en Espagne ? (oui ou non)'
-    return prefix + 'possui familiar europeu ou residente legal na espanha? (sim ou não)'
+    if (language === 'es') return prefix + '¿Tienes algún familiar europeo o residente legal en España?'
+    if (language === 'en') return prefix + 'Do you have a European family member or a legal resident in Spain?'
+    if (language === 'fr') return prefix + 'Avez-vous un membre de votre famille européen ou résident légal en Espagne ?'
+    return prefix + 'possui familiar europeu ou residente legal na espanha?'
   }
   if (!answeredRemoto) {
     const prefix = askedRemotoInTranscript ? reaskPrefix(language) : ''
-    if (language === 'es') return prefix + '¿Trabajas de forma remota? (sí o no)'
-    if (language === 'en') return prefix + 'Do you work remotely? (yes or no)'
-    if (language === 'fr') return prefix + 'Travaillez-vous à distance ? (oui ou non)'
-    return prefix + 'você trabalha remoto? (sim ou não)'
+    if (language === 'es') return prefix + '¿Trabajas de forma remota?'
+    if (language === 'en') return prefix + 'Do you work remotely?'
+    if (language === 'fr') return prefix + 'Travaillez-vous à distance ?'
+    return prefix + 'você trabalha remoto?'
   }
   if (!answeredFormacao) {
     const prefix = askedFormacaoInTranscript ? reaskPrefix(language) : ''
-    if (language === 'es') return prefix + '¿Tienes formación superior? (sí o no)'
-    if (language === 'en') return prefix + 'Do you have higher education? (yes or no)'
-    if (language === 'fr') return prefix + 'Avez-vous une formation supérieure ? (oui ou non)'
-    return prefix + 'Você possui formação superior? (sim ou não)'
+    if (language === 'es') return prefix + '¿Tienes formación superior?'
+    if (language === 'en') return prefix + 'Do you have higher education?'
+    if (language === 'fr') return prefix + 'Avez-vous une formation supérieure ?'
+    return prefix + 'Você possui formação superior?'
   }
 
 
