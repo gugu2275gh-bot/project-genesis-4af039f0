@@ -1,0 +1,1 @@
+UPDATE contracts SET contract_template = CASE WHEN service_type = 'NACIONALIDADE_RESIDENCIA' THEN 'NACIONALIDADE' ELSE 'DOCUMENTOS' END WHERE contract_template IS NULL OR contract_template = 'GENERICO' OR (service_type <> 'NACIONALIDADE_RESIDENCIA' AND contract_template = 'NACIONALIDADE') OR (service_type = 'NACIONALIDADE_RESIDENCIA' AND contract_template <> 'NACIONALIDADE');
