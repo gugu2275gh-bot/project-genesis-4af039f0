@@ -162,7 +162,7 @@ export default function ContractDetail() {
     installment_count: '1',
     installment_amount: '',
     first_due_date: '',
-    contract_template: 'NACIONALIDADE',
+    contract_template: 'DOCUMENTOS',
     status: 'EM_ELABORACAO',
     // New fields
     contract_number: '',
