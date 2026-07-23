@@ -2608,9 +2608,9 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
           nameKnown: !nameMissing,
           emailKnown: !emailMissing,
         }
-        aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, emailMissing)
+        aiResponse = forceSkipFullNameIfAlreadyKnown(aiResponse, detectedChatLanguage, !nameMissing, false)
         aiResponse = forceReaskFullNameIfSingleWord(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !nameMissing)
-        aiResponse = forceReaskEmailIfMissing(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, !emailMissing)
+        // Email removido do fluxo — não reask.
         aiResponse = forceReaskLocationSpainIfAmbiguous(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage)
         aiResponse = forceAdvanceFromInterestQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, allAssistant)
         aiResponse = forceAdvanceFromEntryDateQuestion(lastAssistantMessage, rawCustomerMessage, aiResponse, detectedChatLanguage, outsideSpainNextQuestion)
@@ -2618,7 +2618,7 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         // Wave 6: trava determinística pós-IA — nunca re-perguntar dado já confirmado
         aiResponse = lockConfirmedFieldsInResponse(aiResponse, detectedChatLanguage, {
           nameKnown: !nameMissing,
-          emailKnown: !emailMissing,
+          emailKnown: true,
           interestKnown: !serviceMissing,
           locationKnown: !!funnelStateLive.location_known,
         })
