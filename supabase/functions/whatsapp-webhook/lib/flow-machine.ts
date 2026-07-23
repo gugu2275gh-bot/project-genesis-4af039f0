@@ -88,7 +88,8 @@ const STEPS: Record<StepCode, StepDef> = {
         ? { valid: true, value: raw.trim() }
         : { valid: false, reason: 'not_a_full_name' }
     },
-    next: (state) => (state.email_confirmed ? 'LOCATION' : 'EMAIL'),
+    // EMAIL removido do onboarding: pula direto de NAME → LOCATION.
+    next: ALWAYS('LOCATION'),
   },
 
   EMAIL: {
@@ -291,8 +292,7 @@ export function resolveCurrentStep(state: FunnelState): StepCode {
   if (state.handoff_sent) return 'FREE_KB'
   if (state.pre_handoff_sent) return 'HANDOFF'
   if (!state.name_confirmed) return state.step === 'abertura' ? 'ABERTURA' : 'NAME'
-  if (!state.email_confirmed) return 'EMAIL'
-  // INTEREST desativado: onboarding pula direto de EMAIL → LOCATION.
+  // EMAIL e INTEREST desativados: onboarding pula direto de NAME → LOCATION.
   if (!state.location_known) return 'LOCATION'
   if (state.location_known === 'spain') {
     if (!state.entry_date_confirmed) return 'INSIDE_ENTRY_DATE'

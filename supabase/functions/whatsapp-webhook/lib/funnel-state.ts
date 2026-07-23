@@ -139,8 +139,7 @@ export async function loadFunnelState(
 
 export function computeNextStep(state: FunnelState): FunnelStep {
   if (!state.name_confirmed) return 'nome'
-  if (!state.email_confirmed) return 'email'
-  // INTEREST removido do onboarding: pula direto de email → localizacao.
+  // EMAIL e INTEREST removidos do onboarding: pula direto de nome → localizacao.
   if (!state.location_known) return 'localizacao'
   return 'levantamento'
 }
