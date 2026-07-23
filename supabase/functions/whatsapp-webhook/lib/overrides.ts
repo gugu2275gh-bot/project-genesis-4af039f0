@@ -1733,10 +1733,10 @@ type CanonicalQuestionKey =
 
 const CANONICAL_BY_LANG: Record<CanonicalQuestionKey, Record<ChatLanguage, string>> = {
   askLocationSpain: {
-    'pt-BR': 'Hoje você já está na Espanha? Aceite somente *sim* ou *não*.',
-    'es': '¿Hoy ya estás en España? Acepta solo *sí* o *no*.',
-    'en': 'Are you already in Spain today? Please reply only *yes* or *no*.',
-    'fr': 'Êtes-vous déjà en Espagne aujourd’hui ? Répondez uniquement *oui* ou *non*.',
+    'pt-BR': 'Hoje você já está na Espanha?',
+    'es': '¿Hoy ya estás en España?',
+    'en': 'Are you already in Spain today?',
+    'fr': 'Êtes-vous déjà en Espagne aujourd’hui ?',
   },
   insideIntroPlusEntryDate: {
     'pt-BR': 'Perfeito. Agora preciso entender como está sua situação aqui.\n\nQual foi a data exata da sua entrada na Espanha? Por favor, envie no formato DD/MM/AAAA (exemplo: 22/05/2025).',
