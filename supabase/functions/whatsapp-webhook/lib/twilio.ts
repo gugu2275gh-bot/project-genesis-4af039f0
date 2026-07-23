@@ -104,9 +104,9 @@ async function sha256Hex(input: string): Promise<string> {
  */
 export async function sendOutgoingIdempotent(
   supabase: any,
-  args: { phone: string; leadId: string | null; body: string; windowSeconds?: number },
+  args: { phone: string; leadId: string | null; body: string; windowSeconds?: number; language?: ChatLanguage },
 ): Promise<{ sent: boolean; reason?: string }> {
-  const { phone, leadId, body } = args
+  const { phone, leadId, body, language } = args
   const windowSec = args.windowSeconds ?? 60
   const norm = normalizeForDedup(body)
   if (!norm) return { sent: false, reason: 'empty_body' }
@@ -147,6 +147,17 @@ export async function sendOutgoingIdempotent(
           return { sent: false, reason: 'near_duplicate' }
         }
       }
+    }
+  }
+
+  // Quick Reply para perguntas binárias SIM/NÃO conhecidas do fluxo.
+  // Se falhar, cai em texto normal (não altera fallback existente de templates HSM).
+  if (language && isBinaryYesNoQuestion(body)) {
+    try {
+      await sendYesNoQuickReply(phone, sanitizeOutgoingText(body), language)
+      return { sent: true }
+    } catch (qrErr) {
+      console.warn('[QUICK_REPLY] falhou, caindo em texto:', qrErr instanceof Error ? qrErr.message : qrErr)
     }
   }
 
