@@ -513,6 +513,22 @@ export default function PaymentsList() {
           )}
           {payment.status === 'CONFIRMADO' && (
             <div className="flex items-center gap-1">
+              {/* Emitir Fatura Manualmente */}
+              {!invoicedPaymentIds.has(payment.id) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    emitInvoiceForPayment(payment.id);
+                  }}
+                  disabled={emittingInvoiceId === payment.id}
+                  title="Emitir Fatura"
+                >
+                  <Receipt className="h-4 w-4" />
+                </Button>
+              )}
+
               {/* Gerar Recibo Manualmente */}
               {!payment.receipt_number && (
                 <Button 
