@@ -5,6 +5,10 @@ import { useOpportunities } from '@/hooks/useOpportunities';
 import { useQuery } from '@tanstack/react-query';
 import { Tables } from '@/integrations/supabase/types';
 import { useReceipts } from '@/hooks/useReceipts';
+import { useInvoices } from '@/hooks/useInvoices';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
+import { Receipt } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -30,6 +34,27 @@ export default function PaymentsList() {
   const { payments, isLoading, createPayment, confirmPayment, sendCollectionMessage } = usePayments();
   const { opportunities } = useOpportunities();
   const { generateAndSaveReceipt, approveReceipt, downloadReceipt } = useReceipts();
+  const { invoices } = useInvoices();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [emittingInvoiceId, setEmittingInvoiceId] = useState<string | null>(null);
+  const invoicedPaymentIds = useMemo(
+    () => new Set((invoices || []).filter(i => i.payment_id).map(i => i.payment_id as string)),
+    [invoices]
+  );
+  const emitInvoiceForPayment = async (paymentId: string) => {
+    setEmittingInvoiceId(paymentId);
+    try {
+      const { error } = await supabase.rpc('create_manual_invoice_for_payment', { p_payment_id: paymentId });
+      if (error) throw error;
+      toast({ title: 'Fatura emitida com sucesso' });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    } catch (e: any) {
+      toast({ title: 'Erro ao emitir fatura', description: e.message, variant: 'destructive' });
+    } finally {
+      setEmittingInvoiceId(null);
+    }
+  };
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -488,6 +513,22 @@ export default function PaymentsList() {
           )}
           {payment.status === 'CONFIRMADO' && (
             <div className="flex items-center gap-1">
+              {/* Emitir Fatura Manualmente */}
+              {!invoicedPaymentIds.has(payment.id) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    emitInvoiceForPayment(payment.id);
+                  }}
+                  disabled={emittingInvoiceId === payment.id}
+                  title="Emitir Fatura"
+                >
+                  <Receipt className="h-4 w-4" />
+                </Button>
+              )}
+
               {/* Gerar Recibo Manualmente */}
               {!payment.receipt_number && (
                 <Button 
