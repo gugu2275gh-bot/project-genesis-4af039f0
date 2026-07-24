@@ -786,13 +786,13 @@ export default function Invoices() {
                       const contract = contracts.find((c) => c.id === selectedContractId);
                       if (contract) {
                         const total = contractEffectiveTotal(contract);
-                        const base = newRate > 0 ? total / (1 + newRate) : total;
-                        setFormData({ ...formData, vat_rate: newRate, amount_without_vat: Math.round(base * 100) / 100 });
+                        setFormData({ ...formData, vat_rate: newRate, amount_without_vat: Math.round(total * 100) / 100 });
                       } else {
                         setFormData({ ...formData, vat_rate: newRate });
                       }
                     }}
                   >
+
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
