@@ -34,6 +34,27 @@ export default function PaymentsList() {
   const { payments, isLoading, createPayment, confirmPayment, sendCollectionMessage } = usePayments();
   const { opportunities } = useOpportunities();
   const { generateAndSaveReceipt, approveReceipt, downloadReceipt } = useReceipts();
+  const { invoices } = useInvoices();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [emittingInvoiceId, setEmittingInvoiceId] = useState<string | null>(null);
+  const invoicedPaymentIds = useMemo(
+    () => new Set((invoices || []).filter(i => i.payment_id).map(i => i.payment_id as string)),
+    [invoices]
+  );
+  const emitInvoiceForPayment = async (paymentId: string) => {
+    setEmittingInvoiceId(paymentId);
+    try {
+      const { error } = await supabase.rpc('create_manual_invoice_for_payment', { p_payment_id: paymentId });
+      if (error) throw error;
+      toast({ title: 'Fatura emitida com sucesso' });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    } catch (e: any) {
+      toast({ title: 'Erro ao emitir fatura', description: e.message, variant: 'destructive' });
+    } finally {
+      setEmittingInvoiceId(null);
+    }
+  };
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
