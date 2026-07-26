@@ -1,45 +1,45 @@
-# Validação do aproveitamento da 1ª mensagem
+## O que eu verifiquei no banco e nos logs
 
-## O que já verifiquei no código (confirmado por leitura)
+Atendimento do contato "WhatsApp 0909" (`553195720909`), 26/07 22:51:
 
-- `startFlowWithPrefill` valida cada dado aproveitado com a validação da própria etapa antes de aceitá-lo, e o laço `run` pula perguntas já respondidas seguindo o ramo correspondente — ou seja, **o fluxo retoma na primeira pergunta pendente**, como pedido (`_shared/flow-engine.ts:522-552`, `607-644`).
-- As respostas aproveitadas são devolvidas em `captured` e o webhook as grava no CRM via `applyCapturedFields`; todos os campos que o intake produz (`contact.full_name`, `contact.email`, `funnel.location_known`, `funnel.interest_confirmed`, `funnel.entry_date_confirmed`, `contact.spain_arrival_date`, `funnel.empadronado_confirmed`, `funnel.empadronado_city`, `lead.service_interest`) têm destino tratado (`whatsapp-webhook/lib/visual-flow.ts:248-390`).
-- `visual_flow_state.answers` recebe as respostas aproveitadas, então o turno seguinte (`advanceFlow`) continua com o histórico correto e não repergunta.
+- 1ª mensagem do cliente: **"Oi. Sou Roberto. Estou na Espanha tem 30 dias e vim estudar"**
+- Respostas enviadas: abertura padrão + "Antes de tudo, como é seu nome completo?" — ou seja, **nenhum dado foi aproveitado e a saudação personalizada não foi usada**.
+- Estado gravado no funil: `visual_flow_state.answers = {}` e `visited = [inicio, msg_1_2_abertura, msg_3_nome]` → o motor **não recebeu nenhum prefill**.
+- O fluxo "Pré-Handsoff" tem `intake_config.enabled = true`, `min_confidence 0.7` e os campos marcados (nome, e-mail, localização, intenção, datas, empadronamento).
+- As etapas têm `field_mapping` corretos (`contact.full_name`, `funnel.interest_confirmed`, `funnel.location_known`, `funnel.entry_date_confirmed`…), então o casamento etapa↔campo deveria funcionar.
+- Nos logs do `whatsapp-webhook` aparece `[VISUAL_FLOW]` do turno, mas **nenhum log `[VISUAL_FLOW][INTAKE]` e nenhum aviso de falha**.
 
-## Duas lacunas de continuidade confirmadas
+**Diagnóstico ainda não confirmado.** Hoje o código tem três caminhos que produzem exatamente esse resultado **sem deixar rastro nenhum no log**:
 
-1. **Reconhecimento humano por resposta aberta não acontece.** `renderAckMessage` existe em `_shared/flow-intake.ts` e o campo é editável na aba "Primeira mensagem", mas **nenhum ponto do motor, do webhook ou do sandbox o chama**. Hoje, após uma resposta aberta, o agente vai direto à próxima pergunta, sem a frase humana pedida.
-2. **Saudação padrão nunca é usada.** Quando o intake não aproveita nada, `runIntake` devolve saudação vazia e o fluxo cai em `startFlow`, usando só a mensagem da etapa de INÍCIO. O campo "Saudação padrão" configurado na tela fica inerte.
+1. `runIntake` engole erro do LLM (`catch { return empty }`) — uma resposta 429/500 do Gemini free tier some silenciosamente;
+2. o LLM responde algo sem JSON válido → retorna vazio, sem log;
+3. a configuração da aba "Primeira mensagem" pode ter vindo do cache de 60 s ainda desligada (ela foi salva 21 s antes da conversa).
 
-Também não há **nenhum teste automatizado** cobrindo intake/prefill: os 480 testes atuais não exercitam esse caminho.
+Como só um dos três explica o caso, o primeiro passo do plano é tornar isso observável e reproduzir; as correções cobrem os três.
 
 ## Plano
 
-### 1. Fechar a lacuna do reconhecimento humano
-- Adicionar em cada etapa uma opção "Enviar reconhecimento antes da próxima pergunta" (padrão: ligado para respostas abertas — `TEXTO_LIVRE`, `NOME`, `EMAIL`; desligado para `SIM_NAO`/opções).
-- No motor, ao avançar com resposta válida, prefixar a frase de reconhecimento do fluxo (`ack_message`, com `{nome}` resolvido a partir das respostas já capturadas) na primeira mensagem do próximo passo.
-- Expor o interruptor no inspetor de etapas do editor visual.
+### 1. Observabilidade do intake (primeiro passo, obrigatório)
+Fazer `runIntake` devolver um motivo (`reason`) em vez de vazio mudo: `disabled`, `no_llm`, `llm_error:<status>`, `parse_error`, `low_confidence`, `no_match`, `ok`. Registrar sempre uma linha `[VISUAL_FLOW][INTAKE]` no webhook e no sandbox, com motivo, campos extraídos e etapas aproveitadas. Sem isso não há como afirmar a causa raiz.
 
-### 2. Usar a saudação padrão
-- Quando o intake está ligado e nada é aproveitado, enviar a "Saudação padrão" (se preenchida) antes das mensagens da etapa de INÍCIO; se estiver vazia, manter o comportamento atual.
+### 2. Chamada do LLM de intake resiliente
+Hoje o intake chama `gemini-2.5-flash-lite` fixo e direto. Passar a usar a mesma cascata de modelos do agente, com fallback para o Lovable AI Gateway, e uma nova tentativa em caso de 429/5xx. Assim uma limitação de cota deixa de derrubar o aproveitamento em silêncio.
 
-### 3. Bateria de testes de continuidade (`supabase/functions/_shared/flow_intake_test.ts`)
-Casos cobrindo exatamente os exemplos citados:
-- "Oi. Meu nome é Fred. Estou na Espanha tem 5 dias, e quero estudar" → nome, localização, data de entrada e intenção aproveitados; fluxo para na primeira pergunta **não** respondida; nenhuma das perguntas aproveitadas é reenviada.
-- "My name is Robert. I live in US and want to go to Spain to work." → nome, fora da Espanha e intenção aproveitados; ramo "fora da Espanha" é seguido; idioma `en` na saudação e nas perguntas.
-- Turno seguinte: resposta do cliente à pergunta pendente avança normalmente e **não** reabre as etapas aproveitadas.
-- Dado abaixo da confiança mínima → descartado, pergunta é feita normalmente.
-- Campo desabilitado na aba "Primeira mensagem" → ignorado mesmo quando extraído.
-- Prefill que reprova na validação da etapa (ex.: intenção livre numa etapa de opções fixas) → descartado sem quebrar o fluxo.
-- Todas as perguntas aproveitadas → fluxo chega ao handoff no primeiro turno com `finished`/`handoff` corretos.
-- LLM indisponível ou JSON inválido → fluxo inicia normalmente (sem exceção).
-- Reconhecimento humano: aparece nas respostas abertas e não aparece em Sim/Não.
+### 3. Cache da configuração
+Invalidar o cache de `intake_config`/etapas quando o fluxo é salvo (chave de cache com o `updated_at` do fluxo), para que uma alteração na aba "Primeira mensagem" valha no atendimento seguinte, não até 60 s depois.
 
-### 4. Verificação ponta a ponta
-- Rodar a suíte completa das Edge Functions (as 17 falhas atuais são do funil legado e pré-existentes; devem continuar iguais, sem novas).
-- Testar as duas frases de exemplo no simulador (Sandbox) do AGENTE em produção e conferir os logs `[VISUAL_FLOW][INTAKE]`.
-- Reimplantar `whatsapp-webhook` e `ai-agent-sandbox`.
+### 4. Nome parcial e saudação
+Com "Sou Roberto", o motor descarta o nome (a etapa exige nome completo) e hoje isso também derruba a saudação personalizada. Passar a guardar o primeiro nome como dado de saudação mesmo quando a etapa de nome completo continua pendente: a resposta vira "Olá, Roberto! … Vi que você já está na Espanha e que seu objetivo é estudar. Antes de seguir, me confirma seu nome completo?".
+
+### 5. Evitar saudação duplicada
+Quando a saudação do intake for usada, suprimir a etapa informativa de abertura (Msg 1-2), para não mandar duas saudações seguidas.
+
+### 6. Validação
+Teste com a frase exata do Roberto no sandbox e testes automatizados em `flow_intake_test.ts` cobrindo: motivo registrado em cada caminho de falha, fallback de modelo, nome parcial + saudação, e ausência de abertura duplicada. Depois reenviar o caso pelo WhatsApp e conferir o log `[VISUAL_FLOW][INTAKE]`.
 
 ## Detalhes técnicos
-- Arquivos afetados: `supabase/functions/_shared/flow-engine.ts` (reconhecimento), `_shared/flow-intake.ts` (saudação padrão), `whatsapp-webhook/lib/visual-flow.ts`, `ai-agent-sandbox/index.ts`, `src/components/ai-agents/flow-builder/StepInspector.tsx` (interruptor por etapa) e novo `flow_intake_test.ts`.
-- Sem mudanças de schema: o interruptor por etapa vai no JSON de configuração já existente da etapa.
+
+- `supabase/functions/_shared/flow-intake.ts`: `IntakeResult.reason`, primeiro nome preservado, `renderIntakeGreeting` aceitando nome parcial.
+- `supabase/functions/whatsapp-webhook/lib/visual-flow.ts`: log do motivo, supressão da etapa de abertura quando há saudação de intake, chave de cache versionada por `updated_at`.
+- `supabase/functions/whatsapp-webhook/index.ts` e `ai-agent-sandbox/index.ts`: `intakeLLM` usando cascata + Lovable AI Gateway com retry.
+- Sem mudanças de banco de dados.
