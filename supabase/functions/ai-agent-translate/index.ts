@@ -1,7 +1,7 @@
 // @ts-nocheck
 // Tradução automática dos textos dos Agentes de IA.
 // Usa a cascata de modelos configurada em Configurações → LLM.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,17 +25,31 @@ function json(body: unknown, status = 200) {
 }
 
 async function requireAdmin(req: Request) {
-  const token = (req.headers.get('Authorization') || '').replace('Bearer ', '')
+  const token = (req.headers.get('Authorization') || '').replace('Bearer ', '').trim()
   if (!token) return { error: 'missing auth', status: 401 }
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const authClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+    auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
   })
-  const { data: userData, error } = await authClient.auth.getUser(token)
-  if (error || !userData?.user) return { error: 'invalid token', status: 401 }
+
+  // Chaves de assinatura assimétricas: valida via JWKS (getClaims) e só
+  // recorre ao getUser quando o claims não estiver disponível.
+  let userId: string | null = null
+  try {
+    const { data: claimsData } = await authClient.auth.getClaims(token)
+    userId = (claimsData as any)?.claims?.sub ?? null
+  } catch (_) {
+    userId = null
+  }
+  if (!userId) {
+    const { data: userData } = await authClient.auth.getUser(token)
+    userId = userData?.user?.id ?? null
+  }
+  if (!userId) return { error: 'invalid token', status: 401 }
 
   const service = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-  const { data: roles } = await service.from('user_roles').select('role').eq('user_id', userData.user.id)
+  const { data: roles } = await service.from('user_roles').select('role').eq('user_id', userId)
   if (!(roles || []).some((r: any) => r.role === 'ADMIN')) return { error: 'forbidden', status: 403 }
   return { service }
 }
