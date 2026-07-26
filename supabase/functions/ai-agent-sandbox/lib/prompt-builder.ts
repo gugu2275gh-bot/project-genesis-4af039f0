@@ -41,7 +41,6 @@ export interface FlowStep {
   message?: string | null
   answer_type?: string | null
   next_step_code?: string | null
-  exit_condition?: string | null
   allow_parallel_question?: boolean
   allow_free_answer?: boolean
   handoff?: boolean
@@ -66,7 +65,6 @@ export function buildFlowSection(steps: FlowStep[]): string {
         s.message ? `  Mensagem ao cliente: ${s.message}` : '',
         s.answer_type ? `  Tipo de resposta esperada: ${s.answer_type}` : '',
         s.next_step_code ? `  Próxima etapa: ${s.next_step_code}` : '',
-        s.exit_condition ? `  Condição de saída: ${s.exit_condition}` : '',
         s.allow_parallel_question === false ? '  Não aceitar pergunta paralela.' : '',
         s.allow_free_answer === false ? '  Não aceitar resposta livre.' : '',
         s.handoff ? '  Esta etapa encaminha para atendimento humano.' : '',

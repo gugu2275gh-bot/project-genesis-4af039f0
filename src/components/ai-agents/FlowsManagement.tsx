@@ -73,7 +73,6 @@ function StepDialog({
       answer_type: 'TEXTO_LIVRE',
       field_mapping: null,
       next_step_code: '',
-      exit_condition: '',
       branches: [],
       allow_parallel_question: true,
       allow_free_answer: true,
