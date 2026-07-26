@@ -2,7 +2,14 @@ import type { AgentFlowStep } from '@/types/ai-agents';
 import { normalizeBranches, stepKindOf, type FlowIssue } from '@/types/ai-agent-flow-builder';
 
 
+/** Primeira mensagem preenchida da etapa, em qualquer idioma. */
+function firstMessage(step: AgentFlowStep): string {
+  const list = messageList(step.messages as any, 'pt-BR');
+  return list[0]?.trim() || (step.message || '').trim();
+}
+
 /** Todas as saídas de uma etapa (ramificações + caminho padrão). */
+
 export function outgoingCodes(step: AgentFlowStep): string[] {
   const codes = normalizeBranches((step as any).branches)
     .map((b) => b.next_step_code)
