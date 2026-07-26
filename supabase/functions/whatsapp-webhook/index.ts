@@ -1519,6 +1519,10 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         }
 
 
+        // Wave 4: carregar estado persistente do funil (antes do lock de idioma:
+        // o `visual_flow_state.lang` é a fonte primária do idioma travado).
+        let funnelState = await loadFunnelState(supabase, lead.id, contact)
+
         const currentCustomerMessage = String(effectiveBody || '')
         // ============================================================
         // LANGUAGE LOCK — detecta UMA ÚNICA VEZ e trava para sempre.
@@ -1535,7 +1539,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         }
 
         // Lock persistido: estado do fluxo visual tem precedência, depois o contato.
-        const flowLockRaw = (funnelStateEarly as any)?.visual_flow_state?.lang
+        const flowLockRaw = (funnelState as any)?.visual_flow_state?.lang
         const lockedLanguage: ChatLanguage | null =
           (isFlowLanguage(flowLockRaw) ? (flowLockRaw as ChatLanguage) : null) ??
           (contact.preferred_language && preferredLangMap[contact.preferred_language]
@@ -1561,15 +1565,12 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
             await persistLangLock(detectedChatLanguage)
             console.log('[LANG] idioma travado (1ª detecção):', detectedChatLanguage, 'amostra:', currentCustomerMessage.slice(0, 120))
           } else {
-            const agentDefault = preferredLangMap[String(getAgentRuntime()?.defaultLanguage || '')] || 'pt-BR'
+            const agentDefault = preferredLangMap[String((getAgentRuntime()?.runtimeConfig as any)?.default_language || '')] || 'pt-BR'
             detectedChatLanguage = agentDefault
             console.log('[LANG] provisório (sem sinal claro, sem lock persistido):', detectedChatLanguage)
           }
         }
 
-
-        // Wave 4: carregar estado persistente do funil
-        let funnelState = await loadFunnelState(supabase, lead.id, contact)
 
         // ============================================================
         // PRECEDÊNCIA DO FLUXO VISUAL (Gestão de Agentes de IA)
