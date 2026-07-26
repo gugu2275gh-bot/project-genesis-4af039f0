@@ -553,9 +553,14 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
     )
     __supabaseOuter = supabase
 
+    // Instrumentação de latência por fase (diagnóstico de tempo de resposta).
+    const __perf = new Timings()
+
     // Carrega a configuração do agente marcado como "em produção" (AGENTE 1.0).
     // Sem agente configurado, o comportamento atual em código continua valendo.
     await loadProductionAgentRuntime(supabase)
+    __perf.mark('agent_runtime_ms')
+
 
 
     // Parse request body - handle both JSON and form-encoded (Twilio)
