@@ -195,3 +195,19 @@ export async function applyCapturedFields(
     console.warn('[VISUAL_FLOW] falha ao atualizar funil:', e instanceof Error ? e.message : e)
   }
 }
+
+/**
+ * A etapa atual espera uma resposta curta (Sim/Não, opção, data, número)?
+ * Nesses casos não faz sentido esperar o buffer de consolidação de balões.
+ */
+export function expectsShortAnswer(plan: VisualFlowPlan, stepCode: unknown): boolean {
+  try {
+    if (!plan?.enabled || !stepCode) return false
+    const step = plan.steps.find((s: any) => s?.step_code === stepCode)
+    if (!step) return false
+    const type = String((step as any).answer_type || '').toUpperCase()
+    return ['SIM_NAO', 'OPCOES', 'OPCAO', 'DATA', 'NUMERO', 'IDADE'].includes(type)
+  } catch {
+    return false
+  }
+}
