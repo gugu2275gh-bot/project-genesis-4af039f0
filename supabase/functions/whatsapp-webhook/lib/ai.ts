@@ -155,9 +155,9 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
     ? conversationHistory
     : conversationHistory.filter((msg) => msg.role === 'user' || !looksPortuguese(msg.content))
 
-  // Otimização de latência: limita às últimas 24 mensagens (≈12 turnos).
+  // Otimização de latência: limita às últimas 12 mensagens (≈6 turnos).
   // O suficiente para contexto do roteiro sem sobrecarregar o prompt.
-  const HISTORY_LIMIT = 24
+  const HISTORY_LIMIT = 12
   const effectiveHistory = filteredHistory.length > HISTORY_LIMIT
     ? filteredHistory.slice(-HISTORY_LIMIT)
     : filteredHistory
@@ -190,13 +190,13 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 45000)
+      const timeoutId = setTimeout(() => controller.abort(), 20000)
 
       try {
         let response: Response
         if (provider === 'gemini') {
           // thinkingBudget só é aceito na família Gemini 2.x; Gemini 3+ retorna HTTP 400.
-          const generationConfig: Record<string, unknown> = { maxOutputTokens: 2048 }
+          const generationConfig: Record<string, unknown> = { maxOutputTokens: 700 }
           if (/^gemini-2\./.test(model)) {
             generationConfig.thinkingConfig = { thinkingBudget: 0 }
           }
@@ -235,7 +235,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
           const endpoint = isLovable
             ? 'https://ai.gateway.lovable.dev/v1/chat/completions'
             : 'https://api.openai.com/v1/chat/completions'
-          const payload: Record<string, unknown> = { model, messages: oaMessages, max_tokens: 1000 }
+          const payload: Record<string, unknown> = { model, messages: oaMessages, max_tokens: 700 }
           if (isLovable && model.startsWith('openai/gpt-5.6')) payload.reasoning_effort = 'none'
           response = await fetch(endpoint, {
             method: 'POST',
@@ -294,7 +294,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
         clearTimeout(timeoutId)
         lastError = err
         if (err instanceof DOMException && err.name === 'AbortError') {
-          console.error(`[AI cascade] ${provider}/${model} call timed out after 45s`)
+          console.error(`[AI cascade] ${provider}/${model} call timed out after 20s`)
           if (attempt < MAX_RETRIES - 1) {
             await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]))
             continue
