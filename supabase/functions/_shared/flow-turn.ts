@@ -140,10 +140,23 @@ export async function advanceFlowTurn(
 
   // 3) "Responde e volta na hora": o fluxo ficou na mesma etapa por causa de
   // uma dúvida do cliente → resposta curta + pergunta na MESMA mensagem.
-  if (turn.reasked && wantsAside) {
-    const answer = aside || defaultAsideAck(lang)
+  // Só agora buscamos na base — respostas válidas não pagam esse custo.
+  if (turn.reasked && canAside) {
     const outbound = (turn.outbound || []).slice()
     if (outbound.length) {
+      const ctx = kbContext ?? (await withTimeout(
+        Promise.resolve(deps.kbSearch(text)),
+        ASSIST_TIMEOUT_MS,
+        'kb_search_aside',
+      ))
+      const aside = ctx
+        ? await withTimeout(
+          answerAside({ question: text, lang, kbContext: ctx, callLLM: deps.callLLM }),
+          ASSIST_TIMEOUT_MS,
+          'answer_aside',
+        )
+        : null
+      const answer = aside || defaultAsideAck(lang)
       outbound[0] = { ...outbound[0], text: composeAnswerAndReask(answer, outbound[0].text, lang) }
       console.log(`${tag}[ANSWER_REASK]`, JSON.stringify({
         step: step.step_code,
@@ -152,6 +165,7 @@ export async function advanceFlowTurn(
       return { ...turn, outbound, messages: outbound.map((o) => o.text) }
     }
   }
+
 
   return turn
 }
