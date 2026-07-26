@@ -27,7 +27,7 @@ function statusVariant(status: string) {
   return 'outline' as const;
 }
 
-export default function AIAgents() {
+export default function AIAgents({ embedded = false }: { embedded?: boolean } = {}) {
   const { hasRole, loading } = useAuth();
   const { data: agents, isLoading } = useAIAgents();
   const toggleStatus = useToggleAgentStatus();
@@ -61,10 +61,12 @@ export default function AIAgents() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Agentes de IA"
-        description="Gerencie os agentes de inteligência artificial, seus comportamentos, fluxos e versões"
-      />
+      {!embedded && (
+        <PageHeader
+          title="Agentes de IA"
+          description="Gerencie os agentes de inteligência artificial, seus comportamentos, fluxos e versões"
+        />
+      )}
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-6">
         <TabsList>
