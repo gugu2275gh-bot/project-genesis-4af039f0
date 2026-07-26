@@ -210,7 +210,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
               signal: controller.signal,
             },
           )
-        } else if (provider === 'openai') {
+        } else if (provider === 'openai' || provider === 'lovable') {
           const openaiKey = Deno.env.get('OPENAI_API_KEY')
           if (!openaiKey) {
             clearTimeout(timeoutId)
