@@ -420,6 +420,8 @@ import { buildConversationContext } from './lib/conversation-context.ts'
 import { decideTurn, applyTurnDecision, type TurnDecision } from './lib/turn-orchestrator.ts'
 import { resolveCurrentStep, getStepDef } from './lib/flow-machine.ts'
 import { loadVisualFlowPlan, runVisualFlowTurn, runVisualFlowFirstTurn, applyCapturedFields, expectsShortAnswer } from './lib/visual-flow.ts'
+import { createIntakeLLM } from '../_shared/intake-llm.ts'
+
 import { Timings, fireAndForget } from './lib/perf.ts'
 
 
