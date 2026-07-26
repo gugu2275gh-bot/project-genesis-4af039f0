@@ -1269,9 +1269,13 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       const __msg = reactivationError instanceof Error ? reactivationError.message : String(reactivationError)
       if (__msg === '__skip_reactivation_visual_flow__') {
         console.log('[VISUAL_FLOW] reativação inteligente ignorada (fluxo em andamento)')
+      } else if (__msg === '__skip_reactivation_active_session__') {
+        // já logado acima
       } else
       console.error('Smart reactivation error (non-blocking):', reactivationError instanceof Error ? reactivationError.message : reactivationError)
     }
+    __perf.mark('reactivation_ms')
+
 
     // ========== ADAPTIVE BUFFER: wait briefly to consolidate multiple client messages ==========
     if (!skipAIAgent) {
