@@ -105,6 +105,13 @@ export interface AIAgent {
   model_cascade?: ModelCascadeItem[] | null;
   /** Prompt estruturado do fluxo, com placeholders. */
   prompt_flow?: string | null;
+  /** Blocos editáveis que compõem o prompt do fluxo. */
+  prompt_blocks?: unknown;
+  /** Fluxo executado antes do encaminhamento para atendente. */
+  pre_handoff_flow_id?: string | null;
+  /** Fluxo executado no encaminhamento para atendente. */
+  handoff_flow_id?: string | null;
+
 }
 
 export interface ModelCascadeItem {
