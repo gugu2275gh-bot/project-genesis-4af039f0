@@ -15,11 +15,19 @@ import {
   ANSWER_FORMATS,
   BRANCH_MATCH_TYPES,
   SKIP_MODES,
+  STEP_KINDS,
+  messageAt,
+  messageCount,
   normalizeBranches,
+  normalizeMessages,
   normalizeValidation,
+  removeMessageAt,
+  setMessageAt,
+  stepKindOf,
   type FlowBranch,
   type StepValidation,
 } from '@/types/ai-agent-flow-builder';
+
 
 interface Props {
   step: AgentFlowStep;
