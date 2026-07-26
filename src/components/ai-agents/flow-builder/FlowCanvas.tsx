@@ -264,7 +264,16 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
           <Button size="sm" variant="outline" onClick={organize}>
             <LayoutGrid className="h-4 w-4 mr-1" /> Auto-organizar
           </Button>
+          <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4 mr-1" /> Importar do Bizagi
+          </Button>
+          {selected && (
+            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteStep(selected.id)}>
+              <Trash2 className="h-4 w-4 mr-1" /> Excluir etapa
+            </Button>
+          )}
         </div>
+
         <div className="flex items-center gap-2">
           {errors.length === 0 && warnings.length === 0 ? (
             <Badge variant="outline" className="gap-1">
