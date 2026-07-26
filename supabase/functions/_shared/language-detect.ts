@@ -17,7 +17,7 @@ export function detectFlowLanguageOrNull(text: string): FlowLanguage | null {
   // Espanhol primeiro (evita falso positivo do PT por causa de ñ/¿).
   if (
     /[¿¡ñ]/.test(sample) ||
-    /\b(hola|hol[aá]|buen(?:os|as)?\s+(?:d[ií]as?|tardes?|noches?)|buen\s+d[ií]a|gracias|nombre|apellido|correo|quiero|necesito|estoy|espa[nñ]ola?|puedes|puede|ayuda|cu[aá]l|gustar[ií]a|me gusta|mi nacionalidad|por favor|entiendo|no\s+entiendo|en\s+espa[nñ]ol|s[ií]|residencia|trabajo)\b/u.test(sample)
+    /\b(hola|hol[aá]|buenas|buenos|buen(?:os|as)?\s+(?:d[ií]as?|tardes?|noches?)|buen\s+d[ií]a|gracias|nombre|apellido|correo|quiero|necesito|estoy|espa[nñ]ola?|puedes|puede|ayuda|cu[aá]l|gustar[ií]a|me gusta|en mi|mi nacionalidad|por favor|entiendo|no\s+entiendo|en\s+espa[nñ]ol|s[ií]|residencia|trabajo)\b/u.test(sample)
   ) {
     return 'es'
   }
@@ -30,13 +30,13 @@ export function detectFlowLanguageOrNull(text: string): FlowLanguage | null {
   }
 
   if (
-    /\b(bonjour|bonsoir|salut|merci|s'il vous pla[iî]t|courriel|besoin|aide|espagne|comment|quel|quelle|oui|non|je suis|j'ai|je m'appelle|monsieur|madame|nationalit[eé]|r[eé]sidence)\b/.test(sample)
+    /\b(bonjour|bonsoir|salut|merci|coucou|s'il vous pla[iî]t|courriel|besoin|aide|espagne|comment|quel|quelle|oui|non|je suis|j'ai|je m'appelle|monsieur|madame|nationalit[eé]|r[eé]sidence)\b/.test(sample)
   ) {
     return 'fr'
   }
 
   if (
-    /\b(hello|hi|hey|thanks|thank you|name|my name|email|need|help|helping|spain|how|what|where|when|why|can you|could you|would you|please|plz|good morning|good evening|good afternoon|mroning|mornin|are you|i am|i'm|yes|no|my|your|information|info|residency|citizenship)\b/.test(sample)
+    /\b(hello|hi|hey|good\s+(?:morning|evening|afternoon)|thanks|thank you|name|my name|email|need|help|helping|spain|how|what|where|when|why|can you|could you|would you|please|plz|mroning|mornin|are you|i am|i'm|yes|no|my|your|information|info|residency|citizenship)\b/.test(sample)
   ) {
     return 'en'
   }

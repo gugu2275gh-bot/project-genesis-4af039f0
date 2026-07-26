@@ -188,12 +188,12 @@ Deno.serve(async (req) => {
     let sessionLangLocked = false
 
 
-    // Idioma do turno: travado no `flow_state` assim que a primeira resposta
-    // do cliente permite identificá-lo; antes disso usa o padrão do agente.
+    // Idioma do turno: detectado já na PRIMEIRA mensagem do cliente e travado
+    // no `flow_state`. Sem sinal positivo, usa o padrão do agente sem travar.
     const firstTurnGlobal = !flowState.current_step
     const langResolution = resolveFlowLanguage(
       flowState.lang,
-      firstTurnGlobal ? '' : message,
+      message,
       config.default_language,
     )
     sessionLang = langResolution.lang

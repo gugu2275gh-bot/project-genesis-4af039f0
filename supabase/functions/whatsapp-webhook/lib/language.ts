@@ -1,35 +1,13 @@
 // Language detection + locale-aware directives.
-// Extracted from index.ts (Wave 3b, step 1) — pure functions, no side effects.
+// A detecção em si vive em `_shared/language-detect.ts` para que produção
+// (webhook) e sandbox se comportem exatamente igual.
 import { t as agentText } from './agent-runtime.ts'
+import { detectFlowLanguageOrNull } from '../../_shared/language-detect.ts'
 
 export type ChatLanguage = 'pt-BR' | 'es' | 'en' | 'fr'
 
 export function detectChatLanguageOrNull(text: string): ChatLanguage | null {
-  const sample = text.toLowerCase().normalize('NFC')
-
-  // Strong Spanish signals (must run BEFORE Portuguese to avoid false positives like
-  // "española" matching \bola\b because ñ is not a JS word-character).
-  if (/[¿¡ñ]/.test(sample) || /\b(hola|hol[aá]|buen(?:os|as)?\s+(?:d[ií]as?|tardes?|noches?)|buen\s+d[ií]a|gracias|nombre|correo|quiero|necesito|estoy|espa[nñ]ola?|puedes|puede|ayuda|cu[aá]l|gustar[ií]a|me gusta|en mi|mi nacionalidad|por favor|entiendo|no\s+entiendo|en\s+espa[nñ]ol)\b/u.test(sample)) {
-    return 'es'
-  }
-
-  // Strong Portuguese signal — uses 'u' flag so ñ is treated as a word char and
-  // doesn't create false word boundaries inside Spanish words.
-  if (/\b(ol[aá]|oi|obrigad[oa]|voc[eê]|n[aã]o|sim|meu|minha|nome|email|telefone|cpf|cnpj|whatsapp|preciso|quero|estou|tudo bem|bom dia|boa tarde|boa noite|valeu|brasil|portugu[eê]s|espanha)\b/u.test(sample) || /[ãõ]/.test(sample)) {
-    return 'pt-BR'
-  }
-
-  // French requires explicit French words — accents alone are too ambiguous (PT/ES also use them)
-  if (/\b(bonjour|bonsoir|salut|merci|s'il vous pla[iî]t|courriel|besoin|aide|espagne|comment|quel|quelle|oui|non|je suis|j'ai|monsieur|madame)\b/.test(sample)) {
-    return 'fr'
-  }
-
-  // English — include common typos (mroning, mornin, plz) and short greetings
-  if (/\b(hello|hi|hey|thanks|thank you|name|email|need|help|helping|spain|how|what|where|when|why|can you|could you|would you|please|plz|good morning|good evening|good afternoon|mroning|mornin|are you|i am|i'm|my|your|information|info)\b/.test(sample)) {
-    return 'en'
-  }
-
-  return null
+  return detectFlowLanguageOrNull(String(text || '')) as ChatLanguage | null
 }
 
 export function detectChatLanguage(text: string): ChatLanguage {
