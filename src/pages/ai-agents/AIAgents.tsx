@@ -13,9 +13,26 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Bot, Plus, MoreHorizontal, Eye, Pencil, Copy, Power, PowerOff, FlaskConical, Workflow, RefreshCw } from 'lucide-react';
+import { Bot, Plus, MoreHorizontal, Eye, Pencil, Copy, Power, PowerOff, FlaskConical, Workflow, RefreshCw, Rocket, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAIAgents, useDuplicateAgent, useSyncAgentDefaults, useToggleAgentStatus } from '@/hooks/useAIAgents';
+import {
+  useAIAgents,
+  useDeleteAgent,
+  useDuplicateAgent,
+  usePromoteAgentToProduction,
+  useSyncAgentDefaults,
+  useToggleAgentStatus,
+} from '@/hooks/useAIAgents';
 import { AgentFormDialog } from '@/components/ai-agents/AgentFormDialog';
 import { FlowsManagement } from '@/components/ai-agents/FlowsManagement';
 import { AgentSandbox } from '@/components/ai-agents/AgentSandbox';
@@ -33,12 +50,15 @@ export default function AIAgents({ embedded = false }: { embedded?: boolean } = 
   const toggleStatus = useToggleAgentStatus();
   const duplicate = useDuplicateAgent();
   const syncDefaults = useSyncAgentDefaults();
+  const promote = usePromoteAgentToProduction();
+  const removeAgent = useDeleteAgent();
 
   const [tab, setTab] = useState('agentes');
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
   const [editing, setEditing] = useState<AIAgent | null>(null);
+  const [toDelete, setToDelete] = useState<AIAgent | null>(null);
   const [sandboxAgentId, setSandboxAgentId] = useState<string | null>(null);
 
   // Só bloqueia a tela na primeira carga; revalidações de sessão não podem
@@ -171,7 +191,21 @@ export default function AIAgents({ embedded = false }: { embedded?: boolean } = 
                                 <DropdownMenuItem onClick={() => openTest(a)}>
                                   <FlaskConical className="h-4 w-4 mr-2" /> Testar
                                 </DropdownMenuItem>
+                                {!a.is_production && (
+                                  <DropdownMenuItem onClick={() => promote.mutate(a)}>
+                                    <Rocket className="h-4 w-4 mr-2" /> Colocar em produção
+                                  </DropdownMenuItem>
+                                )}
+                                {!a.is_production && a.status !== 'ATIVO' && (
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setToDelete(a)}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
+
                             </DropdownMenu>
                           </TableCell>
                         </TableRow>
@@ -199,6 +233,31 @@ export default function AIAgents({ embedded = false }: { embedded?: boolean } = 
         agent={editing}
         readOnly={readOnly}
       />
+
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir agente</AlertDialogTitle>
+            <AlertDialogDescription>
+              O agente "{toDelete?.name}" e todo o seu histórico de versões, textos e testes serão
+              removidos definitivamente. O fluxo de atendimento vinculado não é excluído.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (toDelete) removeAgent.mutate(toDelete);
+                setToDelete(null);
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+
   );
 }
