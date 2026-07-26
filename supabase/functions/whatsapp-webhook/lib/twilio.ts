@@ -164,9 +164,12 @@ export async function sendOutgoingIdempotent(
     }
   }
 
-  // Quick Reply para perguntas binárias SIM/NÃO conhecidas do fluxo.
-  // Se falhar, cai em texto normal (não altera fallback existente de templates HSM).
-  if (language && isBinaryYesNoQuestion(body)) {
+  // Quick Reply: SÓ quando a etapa do fluxo pediu ('on') ou, no modo legado
+  // ('auto'), quando o texto casa com uma pergunta binária conhecida.
+  // Com fluxo visual ativo o modo é 'on'/'off' — a heurística nunca é consultada.
+  const wantsQuickReply = quickReplyMode === 'on'
+    || (quickReplyMode === 'auto' && isBinaryYesNoQuestion(body))
+  if (language && wantsQuickReply) {
     try {
       await sendYesNoQuickReply(phone, sanitizeOutgoingText(body), language)
       return { sent: true }
@@ -174,6 +177,7 @@ export async function sendOutgoingIdempotent(
       console.warn('[QUICK_REPLY] falhou, caindo em texto:', qrErr instanceof Error ? qrErr.message : qrErr)
     }
   }
+
 
   await sendWhatsAppMessage(phone, body)
   return { sent: true }
