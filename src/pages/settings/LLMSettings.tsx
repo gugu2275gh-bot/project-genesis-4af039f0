@@ -207,6 +207,10 @@ export default function LLMSettings() {
             label="OpenAI (OPENAI_API_KEY)"
             present={!!keyStatus?.openai_key_present}
           />
+          <KeyRow
+            label="Lovable AI Gateway (LOVABLE_API_KEY)"
+            present={!!keyStatus?.lovable_key_present}
+          />
           <div className="flex gap-2 pt-2">
             <Button variant="outline" size="sm" onClick={() => refetchStatus()}>
               Atualizar status
