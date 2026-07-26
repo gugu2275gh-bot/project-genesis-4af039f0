@@ -50,12 +50,15 @@ export default function AIAgents({ embedded = false }: { embedded?: boolean } = 
   const toggleStatus = useToggleAgentStatus();
   const duplicate = useDuplicateAgent();
   const syncDefaults = useSyncAgentDefaults();
+  const promote = usePromoteAgentToProduction();
+  const removeAgent = useDeleteAgent();
 
   const [tab, setTab] = useState('agentes');
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
   const [editing, setEditing] = useState<AIAgent | null>(null);
+  const [toDelete, setToDelete] = useState<AIAgent | null>(null);
   const [sandboxAgentId, setSandboxAgentId] = useState<string | null>(null);
 
   // Só bloqueia a tela na primeira carga; revalidações de sessão não podem
