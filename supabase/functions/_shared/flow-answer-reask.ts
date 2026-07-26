@@ -38,7 +38,7 @@ export function looksLikeQuestion(text: string): boolean {
   const t = String(text || '').trim()
   if (!t) return false
   if (t.includes('?')) return true
-  return /^(o que|oque|que |qual|quais|quanto|quantos|quanta|como|onde|quando|por que|porque|porqu[eê]|preciso|posso|pode|d[aá] para|tem como|serve|vale|é poss[ií]vel|explica|me explica|qu[ée]|cu[aá]l|cu[aá]les|cu[aá]nto|c[oó]mo|d[oó]nde|cu[aá]ndo|por qu[eé]|puedo|puede|what|which|how|where|when|why|can i|could|do i|is it|does it|quoi|quel|quelle|comment|o[uù]|quand|pourquoi|puis-je|est-ce)\b/i.test(t)
+  return /^(o que|oque|que |qual|quais|quanto|quantos|quanta|como|onde|quando|por que|porque|porqu[eê]|preciso|posso|pode|d[aá] para|tem como|serve|vale|é poss[ií]vel|explica|me explica|qu[ée]|cu[aá]l|cu[aá]les|cu[aá]nto|c[oó]mo|d[oó]nde|cu[aá]ndo|por qu[eé]|puedo|puede|what|which|how|where|when|why|can i|could|do i|is it|does it|quoi|quel|quelle|comment|combien|o[uù]|quand|pourquoi|puis-je|est-ce)\b/i.test(t)
 }
 
 function firstSentences(text: string, max = 3): string {

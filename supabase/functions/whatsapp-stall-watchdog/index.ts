@@ -16,9 +16,10 @@ const MAX_STALL_ATTEMPTS = 2
 const LOOKBACK_MINUTES = 30 // ignore very old conversations
 
 // O cron do Postgres roda no máximo a cada minuto; para recuperar em ~20s a
-// função varre em ciclos curtos dentro da mesma execução.
-const SWEEP_CYCLES = 3
-const SWEEP_INTERVAL_MS = 18_000
+// função varre em ciclos curtos dentro da mesma execução (sem passar de 1min).
+const SWEEP_CYCLES = 2
+const SWEEP_INTERVAL_MS = 20_000
+
 
 
 async function sweep(supabase: any, supabaseUrl: string, serviceKey: string) {
@@ -214,11 +215,23 @@ serve(async (req) => {
   for (let i = 0; i < SWEEP_CYCLES; i++) {
     if (i > 0) await new Promise((r) => setTimeout(r, SWEEP_INTERVAL_MS))
     try {
-      cycles.push(await sweep(supabase, supabaseUrl, serviceKey))
+      const res = await sweep(supabase, supabaseUrl, serviceKey)
+      console.log('[STALL_WATCHDOG] ciclo', JSON.stringify({
+        cycle: i + 1,
+        of: SWEEP_CYCLES,
+        scanned: res.scanned,
+        recovered: (res.recovered || []).length,
+        skipped: res.skipped || null,
+      }))
+      cycles.push({ cycle: i + 1, ...res })
+      if (res.skipped) break
     } catch (e) {
-      cycles.push({ error: e instanceof Error ? e.message : String(e), scanned: 0, recovered: [] })
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[STALL_WATCHDOG] ciclo falhou', JSON.stringify({ cycle: i + 1, error: msg }))
+      cycles.push({ cycle: i + 1, error: msg, scanned: 0, recovered: [] })
     }
   }
+
 
   return new Response(
     JSON.stringify({

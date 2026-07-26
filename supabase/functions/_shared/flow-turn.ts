@@ -30,17 +30,24 @@ import { answerAside, composeAnswerAndReask, defaultAsideAck, looksLikeQuestion 
 const ASSIST_TIMEOUT_MS = 6000
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T | null> {
+  let timer: number | undefined
+  const guard = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      console.warn(`[FLOW_TURN] ${label} excedeu ${ms}ms — seguindo sem esperar`)
+      resolve(null)
+    }, ms)
+  })
   return Promise.race([
     p.catch((e) => {
       console.warn(`[FLOW_TURN] ${label} falhou:`, e instanceof Error ? e.message : e)
       return null
     }),
-    new Promise<null>((resolve) => setTimeout(() => {
-      console.warn(`[FLOW_TURN] ${label} excedeu ${ms}ms — seguindo sem esperar`)
-      resolve(null)
-    }, ms)),
-  ])
+    guard,
+  ]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer)
+  })
 }
+
 
 export interface FlowTurnDeps {
   /** Frase fixa de reconhecimento (aba "Primeira mensagem"). */
@@ -71,19 +78,19 @@ export async function advanceFlowTurn(
   let effectiveMessage = message
   let workingState: FlowRunState = state
 
-  // Recursos opcionais rodam EM PARALELO (base + reconhecimento + resposta à
-  // dúvida), com timeout curto: nenhum deles pode atrasar a retomada do fluxo.
+  // Recursos opcionais rodam EM PARALELO (base + reconhecimento), com timeout
+  // curto: nenhum deles pode atrasar a retomada do fluxo.
   const kbCfg = kbCheckOf(step)
   const wantsKbCheck = kbCfg.enabled && !!deps.callLLM && !!deps.kbSearch && !!text
   const wantsAck = ackAiEnabledFor(step) && !!deps.callLLM
-  const wantsAside = !!deps.callLLM && !!deps.kbSearch && looksLikeQuestion(text)
-
-  const kbContextP = (wantsKbCheck || wantsAside) && deps.kbSearch
-    ? withTimeout(Promise.resolve(deps.kbSearch(text)), ASSIST_TIMEOUT_MS, 'kb_search')
-    : Promise.resolve(null)
+  // A "resposta e retomada" só é possível quando há LLM + base e a mensagem
+  // parece uma dúvida — mas só é EXECUTADA se o fluxo realmente reperguntar.
+  const canAside = !!deps.callLLM && !!deps.kbSearch && looksLikeQuestion(text)
 
   const [kbContext, ackGenerated] = await Promise.all([
-    kbContextP,
+    wantsKbCheck && deps.kbSearch
+      ? withTimeout(Promise.resolve(deps.kbSearch(text)), ASSIST_TIMEOUT_MS, 'kb_search')
+      : Promise.resolve(null),
     wantsAck
       ? withTimeout(
         generateAckPhrase({ question, answer: message, lang, callLLM: deps.callLLM }),
@@ -93,22 +100,14 @@ export async function advanceFlowTurn(
       : Promise.resolve(null),
   ])
 
-  const [verdict, aside] = await Promise.all([
-    wantsKbCheck && kbContext
-      ? withTimeout(
-        runKbCheck({ question, answer: message, cfg: kbCfg, lang, kbContext, callLLM: deps.callLLM }),
-        ASSIST_TIMEOUT_MS,
-        'kb_check',
-      )
-      : Promise.resolve(null),
-    wantsAside && kbContext
-      ? withTimeout(
-        answerAside({ question: text, lang, kbContext, callLLM: deps.callLLM }),
-        ASSIST_TIMEOUT_MS,
-        'answer_aside',
-      )
-      : Promise.resolve(null),
-  ])
+  const verdict = wantsKbCheck && kbContext
+    ? await withTimeout(
+      runKbCheck({ question, answer: message, cfg: kbCfg, lang, kbContext, callLLM: deps.callLLM }),
+      ASSIST_TIMEOUT_MS,
+      'kb_check',
+    )
+    : null
+
 
   // 1) Checagem na base de conhecimento (só quando ligada na etapa).
   if (wantsKbCheck) {
@@ -144,22 +143,43 @@ export async function advanceFlowTurn(
   // 2) Reconhecimento humanizado: gerado pela IA quando a etapa pedir.
   const ack = ackGenerated || deps.ack || ''
 
+  // 3) "Responde e volta na hora": a mensagem é uma dúvida, não a resposta da
+  // etapa. Respondemos pela base e repetimos a pergunta na MESMA bolha, sem
+  // gravar a dúvida como resposta. Uma vez por etapa, para nunca criar laço.
+  const asideTries = Number(state.aside_attempts || 0)
+  if (canAside && asideTries < 1) {
+    const ctx = kbContext ?? (await withTimeout(
+      Promise.resolve(deps.kbSearch(text)),
+      ASSIST_TIMEOUT_MS,
+      'kb_search_aside',
+    ))
+    const aside = ctx
+      ? await withTimeout(
+        answerAside({ question: text, lang, kbContext: ctx, callLLM: deps.callLLM }),
+        ASSIST_TIMEOUT_MS,
+        'answer_aside',
+      )
+      : null
+    const answer = aside || defaultAsideAck(lang)
+    console.log(`${tag}[ANSWER_REASK]`, JSON.stringify({
+      step: step.step_code,
+      from_kb: !!aside,
+    }))
+    return buildStayTurn(
+      step,
+      composeAnswerAndReask(answer, question, lang),
+      workingState,
+      { aside_attempts: asideTries + 1 },
+    )
+  }
+
   const turn = advanceFlow(steps, workingState, effectiveMessage, lang, { ack })
 
-  // 3) "Responde e volta na hora": o fluxo ficou na mesma etapa por causa de
-  // uma dúvida do cliente → resposta curta + pergunta na MESMA mensagem.
-  if (turn.reasked && wantsAside) {
-    const answer = aside || defaultAsideAck(lang)
-    const outbound = (turn.outbound || []).slice()
-    if (outbound.length) {
-      outbound[0] = { ...outbound[0], text: composeAnswerAndReask(answer, outbound[0].text, lang) }
-      console.log(`${tag}[ANSWER_REASK]`, JSON.stringify({
-        step: step.step_code,
-        from_kb: !!aside,
-      }))
-      return { ...turn, outbound, messages: outbound.map((o) => o.text) }
-    }
+  // Etapa mudou: zera o contador de dúvidas respondidas.
+  if (turn.state?.current_step !== state.current_step) {
+    return { ...turn, state: { ...turn.state, aside_attempts: 0 } }
   }
 
   return turn
 }
+
