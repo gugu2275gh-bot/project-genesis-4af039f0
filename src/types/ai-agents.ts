@@ -161,9 +161,11 @@ export interface AgentFlow {
   name: string;
   description: string | null;
   status: string;
+  phase: FlowPhase;
   created_at: string;
   updated_at: string;
 }
+
 
 export type AnswerType =
   | 'TEXTO_LIVRE'
