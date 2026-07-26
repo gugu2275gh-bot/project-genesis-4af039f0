@@ -444,6 +444,7 @@ export function advanceFlow(
 
     return {
       messages: reask ? [reask] : [],
+      outbound: reask ? [{ text: reask, step_code: step.step_code, quick_reply: quickReplyOf(step) }] : [],
       state: { ...state, attempts },
       reasked: true,
       finished: false,
@@ -451,6 +452,7 @@ export function advanceFlow(
       path: [step.step_code],
       captured: [],
     }
+
   }
 
 
