@@ -249,6 +249,14 @@ function StepDialog({
           {stepKindOf({ validation, handoff: draft.handoff }) === 'PERGUNTA' && (
             <>
               <Separator />
+              <p className="text-sm font-medium">Base de conhecimento</p>
+              <StepKnowledgeCheckEditor
+                value={validation.kb_check}
+                isQuestion
+                onChange={(next) => set({ validation: { ...validation, kb_check: next } })}
+              />
+
+              <Separator />
               <p className="text-sm font-medium">Resposta diferente do esperado</p>
               <StepUnexpectedAnswerEditor
                 value={validation.unexpected_answer}
