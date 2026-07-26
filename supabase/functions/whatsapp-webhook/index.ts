@@ -1166,6 +1166,37 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
 
     try {
       if (visualFlowActive) throw new Error('__skip_reactivation_visual_flow__')
+
+      // Otimização de latência: a reativação inteligente só é relevante quando a
+      // sessão expirou (ou há uma confirmação pendente). Nos demais turnos ela
+      // sempre devolve CURRENT_FLOW — e custava um invoke de edge function
+      // (cold start + chamada LLM) em cada mensagem recebida.
+      const sessionTimeoutMin = 120
+      const [{ data: prevMsg }, { data: pendingResolution }] = await Promise.all([
+        supabase
+          .from('mensagens_cliente')
+          .select('created_at')
+          .eq('id_lead', lead.id)
+          .lt('id', insertedMsg?.id || Number.MAX_SAFE_INTEGER)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('reactivation_resolutions')
+          .select('id')
+          .eq('contact_id', contact.id)
+          .eq('user_confirmation_status', 'pending')
+          .limit(1)
+          .maybeSingle(),
+      ])
+      const lastMsgAgeMin = prevMsg?.created_at
+        ? (Date.now() - new Date(prevMsg.created_at).getTime()) / 60000
+        : Number.POSITIVE_INFINITY
+      if (!pendingResolution && lastMsgAgeMin < sessionTimeoutMin) {
+        console.log(`[REACTIVATION] sessão ativa (${Math.round(lastMsgAgeMin)}min) — chamada ignorada (otimização)`)
+        throw new Error('__skip_reactivation_active_session__')
+      }
+
       const reactivationResponse = await fetch(
         `${Deno.env.get('SUPABASE_URL')}/functions/v1/smart-reactivation`,
         {
