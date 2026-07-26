@@ -31,7 +31,25 @@ export function useAgentTranslate() {
       const { data, error } = await supabase.functions.invoke('ai-agent-translate', {
         body: { text, source, targets },
       });
-      if (error) throw error;
+      if (error) {
+        // functions.invoke esconde o corpo do erro ("non-2xx status code"):
+        // lemos a resposta original para mostrar a causa real ao usuário.
+        let detail = '';
+        const res = (error as any)?.context;
+        if (res && typeof res.text === 'function') {
+          try {
+            const body = await res.text();
+            try {
+              detail = JSON.parse(body)?.error || body;
+            } catch {
+              detail = body;
+            }
+          } catch {
+            /* ignora */
+          }
+        }
+        throw new Error(detail || error.message);
+      }
       if ((data as any)?.error) throw new Error((data as any).error);
       const translations = sanitizeTranslations((data as any)?.translations);
       if (Object.keys(translations).length === 0) {
