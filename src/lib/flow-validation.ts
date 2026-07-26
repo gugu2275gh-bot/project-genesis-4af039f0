@@ -1,5 +1,5 @@
 import type { AgentFlowStep } from '@/types/ai-agents';
-import { normalizeBranches, stepKindOf, type FlowIssue } from '@/types/ai-agent-flow-builder';
+import { messageList, normalizeBranches, stepKindOf, type FlowIssue } from '@/types/ai-agent-flow-builder';
 
 
 /** Primeira mensagem preenchida da etapa, em qualquer idioma. */
