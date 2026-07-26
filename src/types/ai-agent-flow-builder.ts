@@ -150,6 +150,67 @@ export const SKIP_MODES: { value: SkipMode; label: string }[] = [
   { value: 'UMA_VEZ_POR_CONTATO', label: 'Perguntar apenas uma vez por contato' },
 ];
 
+/** O que fazer quando o cliente diz que não sabe / não lembra a resposta. */
+export type UnknownAnswerMode = 'INSISTIR' | 'ACEITAR_APROXIMADO' | 'PULAR' | 'ENCAMINHAR';
+
+export const UNKNOWN_ANSWER_MODES: { value: UnknownAnswerMode; label: string; hint: string }[] = [
+  {
+    value: 'INSISTIR',
+    label: 'Insistir na pergunta',
+    hint: 'O agente acolhe e volta a fazer a mesma pergunta (comportamento padrão).',
+  },
+  {
+    value: 'ACEITAR_APROXIMADO',
+    label: 'Aceitar valor aproximado',
+    hint: 'Pede uma estimativa; se o cliente continuar sem saber, grava o valor de reserva e segue.',
+  },
+  {
+    value: 'PULAR',
+    label: 'Pular a etapa',
+    hint: 'Aceita o "não sei", grava o valor de reserva e segue para a próxima etapa normal.',
+  },
+  {
+    value: 'ENCAMINHAR',
+    label: 'Ir para a etapa de fallback',
+    hint: 'Desvia para a etapa de fallback configurada na aba Validação.',
+  },
+];
+
+/** Configuração por etapa para respostas do tipo "não sei / não lembro". */
+export interface UnknownAnswerConfig {
+  mode: UnknownAnswerMode;
+  /** Mensagem de acolhimento, por idioma. */
+  messages: MultiLangText;
+  /** Quantas vezes acolher antes de aplicar o comportamento. */
+  attempts: number;
+  /** Valor gravado quando o agente aceita/pula. */
+  fallback_value: string;
+  /** Frases adicionais que indicam "não sei". */
+  phrases: string[];
+}
+
+export const DEFAULT_UNKNOWN_ANSWER: UnknownAnswerConfig = {
+  mode: 'INSISTIR',
+  messages: {},
+  attempts: 1,
+  fallback_value: '',
+  phrases: [],
+};
+
+export function normalizeUnknownAnswer(raw: unknown): UnknownAnswerConfig {
+  const v = (raw && typeof raw === 'object' ? raw : {}) as Partial<UnknownAnswerConfig>;
+  const mode = UNKNOWN_ANSWER_MODES.some((m) => m.value === v.mode)
+    ? (v.mode as UnknownAnswerMode)
+    : 'INSISTIR';
+  return {
+    mode,
+    messages: (v.messages && typeof v.messages === 'object' ? v.messages : {}) as MultiLangText,
+    attempts: Number.isFinite(Number(v.attempts)) ? Math.max(0, Number(v.attempts)) : 1,
+    fallback_value: String(v.fallback_value || ''),
+    phrases: Array.isArray(v.phrases) ? v.phrases.map((p) => String(p ?? '')).filter(Boolean) : [],
+  };
+}
+
 /** Conteúdo estruturado da coluna `validation` (jsonb). */
 export interface StepValidation {
   required?: boolean;
@@ -169,6 +230,8 @@ export interface StepValidation {
   step_kind?: StepKind;
   /** Enviar a pergunta como botões Sim/Não no WhatsApp (só para SIM_NAO). */
   quick_reply?: boolean;
+  /** Comportamento quando o cliente não sabe responder esta etapa. */
+  unknown_answer?: UnknownAnswerConfig;
 
   [key: string]: unknown;
 }
