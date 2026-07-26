@@ -184,6 +184,9 @@ Deno.serve(async (req) => {
     const flowState = (session.flow_state && typeof session.flow_state === 'object') ? session.flow_state : {}
 
     let userMessageStored = false
+    let sessionLang: any = 'pt-BR'
+    let sessionLangLocked = false
+
 
     // Idioma do turno: travado no `flow_state` assim que a primeira resposta
     // do cliente permite identificá-lo; antes disso usa o padrão do agente.
