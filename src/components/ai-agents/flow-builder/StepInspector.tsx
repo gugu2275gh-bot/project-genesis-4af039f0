@@ -11,6 +11,7 @@ import { Plus, Trash2, X } from 'lucide-react';
 import { MultiLangField } from '@/components/ai-agents/MultiLangField';
 import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
+import { StepUnknownAnswerEditor } from '@/components/ai-agents/flow-builder/StepUnknownAnswerEditor';
 import { ANSWER_TYPES, FLOW_PHASES, STEP_FIELD_MAPPINGS, type AgentFlowStep } from '@/types/ai-agents';
 
 import {
