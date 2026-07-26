@@ -467,6 +467,20 @@ export function useSyncAgentDefaults() {
         if (error) throw error;
       }
 
+      // 1b) Blocos editáveis do prompt — gerados na primeira sincronização
+      const currentBlocks = (agent as any).prompt_blocks;
+      if (!Array.isArray(currentBlocks) || currentBlocks.length === 0) {
+        const blocks = splitPromptIntoBlocks(agent.prompt_flow || defaults.prompt_flow || '');
+        if (blocks.length > 0) {
+          const { error } = await db
+            .from('ai_agents')
+            .update({ prompt_blocks: blocks, updated_by: userId })
+            .eq('id', agent.id);
+          if (error) throw error;
+        }
+      }
+
+
       // 2) Textos por idioma — só insere os que ainda não existem (não sobrescreve edições)
       const { data: currentTexts, error: txErr } = await db
         .from('ai_agent_texts')
