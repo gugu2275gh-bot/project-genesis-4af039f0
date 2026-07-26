@@ -6,6 +6,8 @@ import { buildSystemPrompt } from './lib/prompt-builder.ts'
 import { advanceFlow, findStartStep, mergeFlows, startFlow, startFlowWithPrefill, stepKindOf } from '../_shared/flow-engine.ts'
 import { dropOpeningMessages, normalizeIntakeConfig, prependIntakeGreeting, renderAckMessage, renderIntakeGreeting, runIntake } from '../_shared/flow-intake.ts'
 import { createIntakeLLM } from '../_shared/intake-llm.ts'
+import { advanceFlowTurn } from '../_shared/flow-turn.ts'
+import { searchKnowledgeBase } from '../_shared/kb-search.ts'
 import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
 
 
