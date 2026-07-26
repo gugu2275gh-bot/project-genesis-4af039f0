@@ -1,32 +1,29 @@
-## Causa da quebra ao traduzir (confirmada no código)
+## Plano
 
-`src/hooks/useAgentTranslate.ts:17` chama `supabase.auth.refreshSession()` antes de invocar a edge function. Isso dispara `TOKEN_REFRESHED` no `AuthContext` (`src/contexts/AuthContext.tsx:59-72`), que faz `setLoading(true)`. Com `loading = true`, tanto `ProtectedRoute` (`src/App.tsx:76-81`) quanto `AIAgents` (`src/pages/ai-agents/AIAgents.tsx:44`) substituem a árvore por um spinner — o editor é desmontado no meio da tradução e o rascunho não salvo (etapas, ligações, posições) se perde.
+1. **Corrigir o estado visual da tradução**
+   - Garantir que o botão de tradução sempre saia do estado “Traduzindo…”/carregando mesmo se o componente for fechado, o painel trocar de etapa ou a chamada retornar sem alterações visíveis.
+   - Evitar atualizações com valores antigos do formulário depois que a chamada assíncrona termina.
 
-O mesmo padrão existe em `useAIAgents.ts`, `KnowledgeBaseManager.tsx` e `ContractGroupsSection.tsx`.
+2. **Aplicar tradução de forma confiável nas mensagens**
+   - Ajustar `MultiLangField` para usar o valor mais recente no momento em que a tradução retorna.
+   - Preservar o texto em português e preencher `Espanhol`, `Inglês` e `Francês` sem apagar alterações manuais já feitas durante a chamada.
 
-## Correção
+3. **Corrigir tradução das respostas/opções**
+   - No inspetor de etapa, trocar a atualização baseada em uma lista antiga de ramificações por atualização funcional/segura.
+   - Adicionar proteção para não deixar a ramificação travada se a tradução falhar ou se a etapa mudar durante a tradução.
 
-1. **AuthContext** — só `loading = true` na carga inicial/login. Em `TOKEN_REFRESHED` e `USER_UPDATED`, atualizar sessão em segundo plano, sem recarregar perfil/papéis se o usuário for o mesmo.
-2. **Guardas de rota** — `ProtectedRoute` e `AIAgents` mostram spinner apenas quando ainda não há usuário conhecido; revalidações não desmontam a tela.
-3. **Hook de tradução** — remover o `refreshSession()` obrigatório (o cliente renova sozinho); renovar só se o token estiver realmente expirado. Mesmo ajuste nos demais pontos que chamam `refreshSession()` antes de `functions.invoke`.
-4. **MultiLangField** — ignorar chaves não-string vindas do modelo, preservar o texto base em caso de falha, ignorar resposta se o componente foi desmontado, erro só via toast.
-5. **Tradução das opções de resposta** — adicionar tradução automática também para rótulos de ramificações e para a lista de "Opções oferecidas", gravando por idioma sem quebrar o casamento de resposta (o valor de comparação continua sendo o do idioma base, com os sinônimos traduzidos aceitos no runtime).
+4. **Melhorar feedback de erro**
+   - Se a função Edge retornar sucesso, mas nenhuma tradução aplicável ao campo atual, mostrar aviso claro em vez de parecer que “não traduziu”.
+   - Manter o toast de erro atual para falhas reais da função.
 
-## Validação completa do editor
+5. **Validar**
+   - Conferir via logs/rede que `ai-agent-translate` retorna `200` e que a UI aplica o resultado nas abas dos idiomas.
+   - Testar o caso do print: texto em Português na mensagem da etapa e clique em “Traduzir para os outros idiomas”.
 
-Auditar e testar cada opção do editor visual, corrigindo o que falhar:
+## Detalhes técnicos
 
-- **Canvas**: criar etapa, mover (posições por id), auto-organizar, zoom/minimapa, selecionar/desselecionar, excluir por ícone e por tecla Delete, desfazer ligações.
-- **Ligações**: conectar saída padrão e saídas por ramificação, reapontar, destino inexistente, remoção em cascata ao excluir etapa.
-- **Inspetor**: renomear código (remapeia referências), código duplicado/vazio, nome, tipo de etapa, tipo de resposta, múltiplas mensagens (adicionar/remover/reordenar), reperguntas, validações (obrigatório, formato, min/max, tentativas, modo de pular), comportamento (handoff, pergunta paralela, resposta livre), geração de ramificações.
-- **Multi-idioma**: abas pt-BR/es/en/fr, tradução por campo, campos vazios, texto com emojis e marcadores `{{VAR}}`.
-- **Importação Bizagi**: modos substituir e acrescentar, códigos duplicados, posições.
-- **Salvamento**: novas etapas (`tmp_` → id real), atualização, exclusão, posições, aviso de alterações não salvas, fechar diálogo, alternar canvas/tabela, salvar com erros de validação.
-- **Resiliência**: `FlowErrorBoundary` ativo; nenhuma ação assíncrona (tradução, salvar, importar) pode fechar o editor ou zerar o rascunho.
-
-## Como verifico
-
-- Typecheck do projeto.
-- Testes unitários (Vitest) para os helpers de fluxo: código único, renomeio com remapeamento, posições, mensagens multi-idioma, ramificações e validação do grafo.
-- Testes de componente do inspetor cobrindo tradução (sucesso e falha) e edição de opções.
-- Execução no preview com Playwright para o que depender de interação real; o login automatizado não está disponível neste projeto (Supabase externo), então os pontos que exigem sessão ficam para sua conferência final, listados explicitamente no fim.
+- A rede mostra chamadas `POST /functions/v1/ai-agent-translate` com status `200` e traduções retornadas, então a correção deve focar na aplicação do resultado no estado do editor, não na função de tradução em si.
+- Arquivos previstos:
+  - `src/components/ai-agents/MultiLangField.tsx`
+  - `src/components/ai-agents/flow-builder/StepInspector.tsx`
+  - se necessário, pequeno ajuste em `src/hooks/useAgentTranslate.ts` para mensagens de erro mais claras.
