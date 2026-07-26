@@ -134,11 +134,28 @@ function composePromptFlow(agent: any): string {
  */
 export async function loadProductionAgentRuntime(supabase: any): Promise<AgentRuntime | null> {
   try {
+    // Cache de 60s: `ai_agents` + `ai_agent_texts` mudam raramente e eram
+    // relidos a cada mensagem recebida (2 roundtrips por turno).
+    const cachedRuntime = await cached<AgentRuntime | null>('agent-runtime:production', 60_000, async () => {
+      return await fetchProductionAgentRuntime(supabase)
+    })
+    setAgentRuntime(cachedRuntime)
+    return cachedRuntime
+  } catch (e) {
+    console.warn('[AGENT_RUNTIME] falha ao carregar agente de producao (usando fallback):', e instanceof Error ? e.message : e)
+    setAgentRuntime(null)
+    return null
+  }
+}
+
+async function fetchProductionAgentRuntime(supabase: any): Promise<AgentRuntime | null> {
+  try {
     const { data: agent, error } = await supabase
       .from('ai_agents')
       .select('id, name, prompt_base, prompt_flow, prompt_blocks, model_cascade, runtime_config, status, is_production, flow_id, pre_handoff_flow_id, handoff_flow_id')
       .eq('is_production', true)
       .maybeSingle()
+
 
     if (error || !agent) {
       setAgentRuntime(null)
