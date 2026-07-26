@@ -1,51 +1,39 @@
-## Objetivo
+## O que validei
 
-Hoje o WhatsApp de produção ignora os fluxos desenhados: `whatsapp-webhook` roda o funil legado em código (`flow-machine.ts` + `turn-orchestrator.ts` + textos do agente). Os campos `pre_handoff_flow_id` / `handoff_flow_id` / `flow_id` do agente só são lidos pelo simulador (`ai-agent-sandbox`). O objetivo é: **quando o agente de produção tiver fluxo configurado, o motor determinístico do fluxo comanda o atendimento; o funil legado só roda quando nenhum fluxo estiver configurado.**
+Li o bypass em `whatsapp-webhook/index.ts` (linhas ~1500-1606), a ponte `lib/visual-flow.ts` e o motor `_shared/flow-engine.ts`.
 
-## Escopo aprovado
+Funciona como esperado: quando o agente de produção aponta um fluxo com etapa de INÍCIO válida, o motor determinístico roda, grava `visual_flow_state`, aplica `field_mapping` no CRM, envia as mensagens e retorna antes do funil legado.
 
-- Fluxo substitui **todo o pré-handoff** (perguntas, validações, ramificações, reperguntas). O LLM só entra depois do fluxo terminar (modo livre / base de conhecimento).
-- Etapas ganham um campo configurável **"Salvar resposta em"** para alimentar o CRM.
-- Ao terminar o pré-handoff, o **fluxo de handoff é encadeado automaticamente**.
+Mas a validação encontrou **6 pontos onde o atendimento pode sair do fluxo antes dele terminar**. Todos são reais no código atual:
 
-## O que será feito
+1. **O bypass está dentro do `if (botEnabled && geminiApiKey && ...)`** (linha 1401). Se a chave da IA falhar ou o bot for desligado, um cliente no meio do fluxo cai no comportamento legado. O fluxo é determinístico e não precisa de LLM para rodar.
+2. **Silêncios automáticos pausam o fluxo** (linhas 1280-1332): se o cliente responder "ok", "obrigado", "vale", "gracias" ou só emoji, a IA é pausada — mas essas podem ser respostas legítimas de uma etapa do fluxo (ex.: confirmação Sim/Não).
+3. **Reativação inteligente** (linhas 1118-1192): `DIRECT_ROUTE`/`SEND_MESSAGE` marcam `skipAIAgent = true` e mandam mensagem própria, atropelando um fluxo em andamento.
+4. **Desambiguação de setor** (linha ~996) envia mensagem de menu numerado no meio do fluxo.
+5. **Fallback silencioso para o legado**: qualquer erro dentro do bloco (`catch` da linha 1604), ou um turno que não gere mensagem, devolve o cliente ao funil legado mesmo com fluxo já iniciado.
+6. **Sandbox x produção**: o simulador já usa `mergeFlows`, mas não replica essas travas, então o teste pode passar e a produção desviar.
 
-### 1. Banco de dados
-- `ai_agent_flow_steps`: nova coluna `field_mapping text` (nulo = não salva em campo).
-- `lead_funnel_state`: nova coluna `visual_flow_state jsonb default '{}'` para guardar `current_step`, `answers`, `lang`, `reask_count`, `finished`, `path`.
-- Grants/RLS seguem os padrões já existentes nessas tabelas.
+## O que proponho fazer
 
-### 2. Motor de fluxo compartilhado (`_shared/flow-engine.ts`)
-- Suporte a **encadeamento de fluxos**: quando o pré-handoff termina (etapa `FIM`/`handoff = true`), o motor inicia o fluxo de handoff sem perder o estado.
-- Exposição do `field_mapping` no resultado do turno, para o chamador persistir os valores.
-- Continua determinístico: mensagens exatas, `validation`, `branches`, `next_step_code`, `fallback_step_code`, datas DD/MM/AAAA e detecção de idioma já implementadas.
+**A. Trava dura de fluxo ativo (núcleo)**
+- Carregar `visual_flow_state` e o plano do fluxo **antes** de reativação, desambiguação, buffers e checagens de pausa.
+- Criar a condição `flowActive = plano habilitado && fluxo não finalizado`.
+- Enquanto `flowActive`: pular reativação inteligente, desambiguação de setor, silêncio por "ok/obrigado" e a dependência de `botEnabled`/chave da IA. Continuam valendo apenas as proteções que evitam mensagem duplicada (buffer de mensagens novas, anti-duplicidade e lock concorrente) e a pausa real por atendente humano (`origem = SISTEMA`), que é intervenção humana explícita.
 
-### 3. Produção (`whatsapp-webhook`)
-- Carregar, junto com o agente de produção, as etapas de `pre_handoff_flow_id`, `handoff_flow_id` e `flow_id`.
-- Se houver etapa de INÍCIO válida e `runtime_config.execute_visual_flow !== false`:
-  - **bypass** de `decideTurn` / `flow-machine` / heurísticas de nome, e-mail, localização, empadronado e pré-handoff;
-  - o turno é resolvido por `startFlow` / `advanceFlow`, e as mensagens do fluxo são enviadas via o mesmo dispatcher de WhatsApp atual (respeitando janela de 24h e templates);
-  - estado salvo em `lead_funnel_state.visual_flow_state`; `pre_handoff_sent` / `handoff_sent` continuam sendo marcados para os SLAs e notificações existentes.
-- Sem fluxo configurado → comportamento atual intacto (fallback total).
-- Depois do fluxo (handoff concluído): modo livre com LLM/KB, exatamente como hoje.
+**B. Sem saída acidental para o legado**
+- Com fluxo iniciado e não finalizado, o handler termina o turno no motor de fluxo, mesmo se o turno não gerar mensagem (loga e sai em silêncio, em vez de cair no funil antigo).
+- Erros dentro do bloco passam a re-perguntar a etapa atual / sair em silêncio, sem repassar o turno para o legado — o estado do fluxo é preservado.
 
-### 4. Persistência das respostas no CRM
-- Cada resposta validada com `field_mapping` preenchido grava no destino correspondente (`contacts.full_name`, `contacts.email`, `lead_funnel_state.location_known`, `entry_date_confirmed`, `empadronado_confirmed`, `empadronado_city`, `interest_confirmed`, entre outros).
-- Todas as respostas, mapeadas ou não, ficam também em `lead_funnel_state.answers` pelo `step_code`.
+**C. Saída controlada só no fim**
+- O legado (ou o modo livre com LLM) só volta a comandar quando `finished = true`, sinalizado explicitamente no `visual_flow_state` e no funil (`step = 'livre'`, `handoff_sent` quando aplicável).
 
-### 5. UI
-- `StepInspector` (editor visual) e o diálogo de etapa da tabela ganham o seletor **"Salvar resposta em"** com a lista de campos do CRM.
-- Na tela do agente, indicar claramente que, havendo fluxo selecionado, ele **tem precedência** sobre prompts/heurísticas do pré-handoff.
-
-### 6. Simulador
-- `ai-agent-sandbox` passa a carregar também o `handoff_flow_id` e a usar o mesmo encadeamento, garantindo paridade simulador ↔ produção.
-
-### 7. Testes
-- Testes Deno: fluxo assume o pré-handoff, encadeia handoff, grava `field_mapping`, ignora heurísticas legadas, e fallback para o legado quando não há fluxo.
-- Regressões existentes do webhook devem continuar passando.
+**D. Paridade e testes**
+- Aplicar o mesmo encadeamento pré-handoff → handoff no simulador.
+- Testes Deno cobrindo: fluxo com resposta "ok"/"obrigado" no meio (não pode pausar), fluxo com falha da IA (deve continuar), erro na aplicação de campos do CRM (não pode desviar), reinício de fluxo já finalizado (não pode reiniciar) e conclusão com handoff.
 
 ## Detalhes técnicos
 
-- Ponto de corte em `whatsapp-webhook/index.ts` logo antes de `decideTurn` (linha ~1516): se `visualFlowEnabled`, resolve o turno pelo motor e pula todo o bloco legado até o dispatcher.
-- `resolveFlowLanguage` continua definindo o idioma já na 1ª mensagem.
-- Idempotência preservada: dedupe de mensagens e `pre_handoff_sent` / `handoff_sent` continuam bloqueando reenvios.
+- `loadVisualFlowPlan` passa a ser chamado logo após resolver `lead`/`contact`, com cache na requisição, e a flag `flowActive` propaga por todo o handler.
+- `runtime_config.execute_visual_flow = false` continua sendo o escape manual para voltar ao legado.
+- Nenhuma mudança de schema é necessária: `visual_flow_state` e `field_mapping` já existem.
+- Arquivos: `supabase/functions/whatsapp-webhook/index.ts`, `.../lib/visual-flow.ts`, `supabase/functions/ai-agent-sandbox/index.ts` e novo `_shared/flow-engine_strict_test.ts`.
