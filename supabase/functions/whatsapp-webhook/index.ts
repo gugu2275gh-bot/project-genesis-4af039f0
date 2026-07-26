@@ -419,7 +419,7 @@ import { logTurn } from './lib/turn-log.ts'
 import { buildConversationContext } from './lib/conversation-context.ts'
 import { decideTurn, applyTurnDecision, type TurnDecision } from './lib/turn-orchestrator.ts'
 import { resolveCurrentStep, getStepDef } from './lib/flow-machine.ts'
-import { loadVisualFlowPlan, runVisualFlowTurn, applyCapturedFields, expectsShortAnswer } from './lib/visual-flow.ts'
+import { loadVisualFlowPlan, runVisualFlowTurn, runVisualFlowFirstTurn, applyCapturedFields, expectsShortAnswer } from './lib/visual-flow.ts'
 import { Timings, fireAndForget } from './lib/perf.ts'
 
 
@@ -1606,7 +1606,29 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
             const flowLang = isFlowLanguage(flowStateSaved?.lang) && !explicitRequest
               ? (flowStateSaved.lang as any)
               : detectedChatLanguage
-            const turn = runVisualFlowTurn(flowPlan, flowStateSaved, currentCustomerMessage || '', flowLang as any)
+            const isFirstFlowTurn = !flowStateSaved?.current_step
+            const intakeLLM = geminiApiKey
+              ? async (prompt: string) => {
+                  const resp = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiApiKey}`,
+                    {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                        generationConfig: { maxOutputTokens: 400, temperature: 0 },
+                      }),
+                    },
+                  )
+                  if (!resp.ok) throw new Error(`intake LLM ${resp.status}`)
+                  const data = await resp.json()
+                  return String(data?.candidates?.[0]?.content?.parts?.[0]?.text || '')
+                }
+              : null
+
+            const turn = isFirstFlowTurn
+              ? await runVisualFlowFirstTurn(flowPlan, currentCustomerMessage || '', flowLang as any, intakeLLM)
+              : runVisualFlowTurn(flowPlan, flowStateSaved, currentCustomerMessage || '', flowLang as any)
             const nextFlowState = { ...turn.state, lang: flowLang }
 
             console.log('[VISUAL_FLOW]', JSON.stringify({
