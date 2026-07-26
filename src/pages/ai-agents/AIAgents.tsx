@@ -13,9 +13,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Bot, Plus, MoreHorizontal, Eye, Pencil, Copy, Power, PowerOff, FlaskConical, Workflow } from 'lucide-react';
+import { Bot, Plus, MoreHorizontal, Eye, Pencil, Copy, Power, PowerOff, FlaskConical, Workflow, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAIAgents, useDuplicateAgent, useToggleAgentStatus } from '@/hooks/useAIAgents';
+import { useAIAgents, useDuplicateAgent, useSyncAgentDefaults, useToggleAgentStatus } from '@/hooks/useAIAgents';
 import { AgentFormDialog } from '@/components/ai-agents/AgentFormDialog';
 import { FlowsManagement } from '@/components/ai-agents/FlowsManagement';
 import { AgentSandbox } from '@/components/ai-agents/AgentSandbox';
@@ -32,6 +32,7 @@ export default function AIAgents({ embedded = false }: { embedded?: boolean } = 
   const { data: agents, isLoading } = useAIAgents();
   const toggleStatus = useToggleAgentStatus();
   const duplicate = useDuplicateAgent();
+  const syncDefaults = useSyncAgentDefaults();
 
   const [tab, setTab] = useState('agentes');
   const [search, setSearch] = useState('');
@@ -86,6 +87,15 @@ export default function AIAgents({ embedded = false }: { embedded?: boolean } = 
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
+                <Button
+                  variant="outline"
+                  onClick={() => syncDefaults.mutate()}
+                  disabled={syncDefaults.isPending}
+                  title="Importa o prompt e os textos que o agente do WhatsApp executa hoje"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-1 ${syncDefaults.isPending ? 'animate-spin' : ''}`} />
+                  Sincronizar com produção
+                </Button>
                 <Button onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo agente</Button>
               </div>
             </CardHeader>
@@ -118,7 +128,12 @@ export default function AIAgents({ embedded = false }: { embedded?: boolean } = 
                       )}
                       {filtered.map((a) => (
                         <TableRow key={a.id}>
-                          <TableCell className="font-medium max-w-[200px] truncate" title={a.name}>{a.name}</TableCell>
+                          <TableCell className="font-medium max-w-[200px] truncate" title={a.name}>
+                            <div className="flex items-center gap-2">
+                              <span className="truncate">{a.name}</span>
+                              {a.is_production && <Badge variant="default">Produção</Badge>}
+                            </div>
+                          </TableCell>
                           <TableCell className="max-w-[240px] truncate" title={a.description || ''}>{a.description || '—'}</TableCell>
                           <TableCell className="font-mono text-xs">{a.model}</TableCell>
                           <TableCell>{a.provider}</TableCell>
