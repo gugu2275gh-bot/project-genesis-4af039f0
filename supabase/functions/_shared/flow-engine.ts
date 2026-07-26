@@ -19,10 +19,13 @@ export type StepKind = 'INICIO' | 'INFORMATIVA' | 'PERGUNTA' | 'FIM'
 export interface FlowBranch {
   id?: string
   label?: string
-  match_type?: 'IGUAL' | 'CONTEM' | 'REGEX' | 'INTENCAO'
+  match_type?: 'IGUAL' | 'CONTEM' | 'REGEX' | 'INTENCAO' | 'QUALQUER'
   value?: string
+  /** Equivalentes aceitos (traduções e variações) além do valor principal. */
+  synonyms?: string[]
   next_step_code?: string | null
 }
+
 
 export interface FlowStep {
   id: string
