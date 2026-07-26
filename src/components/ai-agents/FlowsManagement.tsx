@@ -18,6 +18,7 @@ import { FlowErrorBoundary } from '@/components/ai-agents/flow-builder/FlowError
 import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
 import { StepUnexpectedAnswerEditor } from '@/components/ai-agents/flow-builder/StepUnexpectedAnswerEditor';
+import { StepKnowledgeCheckEditor } from '@/components/ai-agents/flow-builder/StepKnowledgeCheckEditor';
 import { STEP_KINDS, normalizeBranches, normalizeValidation, stepKindOf } from '@/types/ai-agent-flow-builder';
 
 
@@ -248,6 +249,14 @@ function StepDialog({
 
           {stepKindOf({ validation, handoff: draft.handoff }) === 'PERGUNTA' && (
             <>
+              <Separator />
+              <p className="text-sm font-medium">Base de conhecimento</p>
+              <StepKnowledgeCheckEditor
+                value={validation.kb_check}
+                isQuestion
+                onChange={(next) => set({ validation: { ...validation, kb_check: next } })}
+              />
+
               <Separator />
               <p className="text-sm font-medium">Resposta diferente do esperado</p>
               <StepUnexpectedAnswerEditor
