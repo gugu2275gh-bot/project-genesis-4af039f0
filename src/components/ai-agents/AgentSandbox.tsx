@@ -14,9 +14,17 @@ import {
   useTestMessages,
 } from '@/hooks/useAIAgents';
 
+const LANG_LABELS: Record<string, string> = {
+  'pt-BR': 'Português (BR)',
+  es: 'Espanhol',
+  en: 'Inglês',
+  fr: 'Francês',
+};
+
 interface Props {
   initialAgentId?: string | null;
 }
+
 
 export function AgentSandbox({ initialAgentId }: Props) {
   const { data: agents } = useAIAgents();
