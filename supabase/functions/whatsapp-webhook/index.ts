@@ -1223,6 +1223,10 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         }
       }
     } catch (reactivationError) {
+      const __msg = reactivationError instanceof Error ? reactivationError.message : String(reactivationError)
+      if (__msg === '__skip_reactivation_visual_flow__') {
+        console.log('[VISUAL_FLOW] reativação inteligente ignorada (fluxo em andamento)')
+      } else
       console.error('Smart reactivation error (non-blocking):', reactivationError instanceof Error ? reactivationError.message : reactivationError)
     }
 
