@@ -1,41 +1,37 @@
-## O que aconteceu (confirmado nos dados)
+# Retomada rápida do fluxo em respostas não previstas
 
-Lead `8486bb41…1636c` (Roberto Barros), fluxo parado na etapa **msg_b2_data_de_entrada_na_espanha**, `unknown_attempts: 2`, `finished: false`.
+Hoje, quando o cliente responde algo fora do esperado (uma pergunta, um desabafo, um formato diferente), o agente reformula a pergunta até 2–3 vezes em turnos separados e, se o envio for descartado pela deduplicação, o cliente fica sem resposta até o watchdog agir — o que só acontece 90 segundos depois. A sensação é de travamento.
 
-Sequência real (tabela `mensagens_cliente`):
+## O que muda
 
-```text
-IA     "Qual foi a data exata da sua entrada na Espanha?"
-Cliente "Nao sei"
-IA     "Sem problema! Uma data aproximada já me ajuda — só o mês e o ano servem."
-Cliente "Maio de 2026"
-IA     "Por favor digite uma data valida. Formato (DD/MM/AAAA)"
-Cliente "Nao sei a data certa"
-IA     (nada — log: [SEND_DEDUP] skipping duplicate → [VISUAL_FLOW] send skipped (dedup_hash))
-```
+### 1. Responde e volta na hora (mesma mensagem)
+Quando a resposta do cliente não é a esperada mas é uma pergunta ou comentário fora do tema, o agente passa a montar UMA única resposta com duas partes:
 
-Três causas encadeadas:
+1. resposta curta (2–3 frases) buscada na base de conhecimento;
+2. a pergunta da etapa, reformulada, logo em seguida.
 
-1. **Contradição de configuração.** A etapa (`ai_agent_flow_steps`) tem `unexpected_answer.unknown` = `enabled: true`, `mode: INSISTIR`, com a mensagem "só o mês e o ano servem"; mas `invalid_format` está `enabled: false` e nenhum modo é `ACEITAR_APROXIMADO`. No motor (`flow-engine.ts`, ~linha 777) o `parseApproxDate` só roda quando **a regra do desvio classificado** é `ACEITAR_APROXIMADO`. Logo "Maio de 2026" foi rejeitada, mesmo depois de o agente prometer aceitar mês/ano.
-2. **Sem saída após esgotar tentativas.** `unknown.attempts = 2` e `max_reasks = 2`, sem `fallback_step_code` e sem modo `PULAR`: ao estourar, o motor volta a `stay(defaultReask())` — loop infinito na mesma etapa.
-3. **Silêncio total.** Como o texto repetido é idêntico ao anterior, o dedup de envio (`lib/twilio.ts`, hash + near-duplicate 90s) bloqueia o envio. O cliente simplesmente para de receber respostas — a sensação de "travou".
+O fluxo nunca sai da etapa e nunca gasta um turno só para reperguntar. Se a base não tiver resposta, o agente reconhece a mensagem em uma frase e repete a pergunta na mesma bolha.
 
-## Correções propostas
+### 2. Uma tentativa, depois segue
+- Padrão de reperguntas por etapa cai de 2 para 1.
+- Esgotada a tentativa: se houver etapa de fallback, desvia; se a etapa for opcional, grava vazio e avança; se for obrigatória, encaminha ao especialista. Nunca repete a mesma pergunta uma terceira vez.
+- Respostas aproximadas (mês/ano em datas, cidade escrita diferente) passam a ser aceitas já na primeira falha, e não só depois de insistir.
 
-**A. Data aproximada coerente com a promessa** (`_shared/flow-engine.ts`)
-Em etapas `answer_type = DATA`, tentar `parseApproxDate` sempre que **qualquer** regra da etapa estiver em `ACEITAR_APROXIMADO` **ou** quando a mensagem da regra `unknown` já tiver sido usada para prometer data aproximada (`unknown_attempts > 0`). "Maio de 2026" passa a virar `01/05/2026` e o fluxo avança.
+### 3. Recuperação em ~20 segundos
+O watchdog passa a considerar uma conversa travada após 20 segundos sem resposta (hoje 90s) e roda em janelas curtas dentro do mesmo minuto, para que a recuperação real aconteça em torno de 20–30 segundos. Proteções contra resposta duplicada continuam: o reenvio só ocorre se nada tiver sido efetivamente entregue no turno.
 
-**B. Nunca ficar preso na etapa**
-Ao esgotar `attempts`/`max_reasks` sem `fallback_step_code`, em vez de repetir a mesma pergunta: avançar com `fallback_value` (ou vazio, registrando "não informado") para etapas não críticas; se a etapa for obrigatória e não houver como avançar, encerrar em handoff humano com log `exit_reason` próprio.
+### 4. Menos espera dentro do turno
+- A validação na base de conhecimento e a frase humanizada gerada pela IA passam a rodar em paralelo (e com limite de tempo), em vez de uma depois da outra.
+- Se qualquer uma delas demorar demais, o agente segue com o texto configurado na etapa em vez de esperar.
 
-**C. Nunca deixar o cliente sem resposta**
-No envio do fluxo visual (`whatsapp-webhook/index.ts` + `lib/twilio.ts`): se todas as partes forem descartadas por dedup, enviar uma variação curta (ex.: "Só para confirmar: …") em vez de nada, e registrar `whatsapp_turn_log` com `exit_reason` indicando o descarte, para o watchdog conseguir enxergar.
+## Onde isso aparece na configuração
 
-**D. Destravar o atendimento atual**
-Migration pontual atualizando `lead_funnel_state.visual_flow_state` desse lead: gravar `msg_b2… = "01/05/2026"` (a data que ele informou) e mover `current_step` para a etapa seguinte, para o atendimento continuar sem reiniciar.
+Na aba "Resposta diferente do esperado" de cada etapa, o padrão passa a ser "responder e retomar" com 1 tentativa. As opções atuais (insistir, aceitar aproximado, pular, encaminhar) continuam disponíveis por etapa para quem quiser um comportamento diferente.
 
-**E. Validação**
-Ampliar `_shared/flow_turn_test.ts` com casos: "Nao sei" → mensagem aproximada; "Maio de 2026" → aceita e avança; 3ª resposta vaga → avança/encaminha, nunca repete idêntico. Rodar a suíte e fazer deploy das edge functions.
+## Detalhes técnicos
 
-### Detalhes técnicos
-Arquivos: `supabase/functions/_shared/flow-engine.ts`, `supabase/functions/whatsapp-webhook/index.ts`, `supabase/functions/whatsapp-webhook/lib/twilio.ts`, `supabase/functions/_shared/flow_turn_test.ts`, + 1 migration de correção do estado do lead.
+- `supabase/functions/_shared/flow-engine.ts`: padrão de `attempts` das regras de desvio para 1 e de `max_reasks` para 1; aceitar valor aproximado já na primeira falha; nova saída `answer_and_reask` que devolve resposta + pergunta em uma única mensagem.
+- `supabase/functions/_shared/flow-turn.ts`: quando o desvio é classificado como pergunta/off-topic, buscar na base (`kb-search.ts`) e compor a bolha única; executar checagem de base e frase humanizada com `Promise.allSettled` e timeout curto, com fallback para o texto da etapa.
+- `supabase/functions/whatsapp-webhook/index.ts`: já reenvia variação quando a dedup descarta; passa a registrar o turno como `NO_REPLY` imediatamente para o watchdog não esperar o ciclo completo.
+- `supabase/functions/whatsapp-stall-watchdog/index.ts`: `STALL_THRESHOLD_SECONDS` de 90 para 20; a função varre em ciclos curtos dentro da execução para cobrir o intervalo do cron de 1 minuto.
+- Testes: casos novos em `_shared/flow_turn_test.ts` e `ai-agent-sandbox/unexpected-answer_test.ts` cobrindo "pergunta fora do tema volta com a etapa na mesma mensagem", "1 tentativa e avança" e "aproximado aceito na primeira falha".
