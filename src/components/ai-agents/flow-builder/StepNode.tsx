@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, MessageSquare, UserCheck, SkipForward } from 'lucide-react';
+import { AlertTriangle, MessageSquare, UserCheck, SkipForward, Trash2 } from 'lucide-react';
 import { ANSWER_TYPES, type AgentFlowStep } from '@/types/ai-agents';
 import { firstText, normalizeBranches, normalizeValidation } from '@/types/ai-agent-flow-builder';
 
@@ -10,10 +10,11 @@ export type StepNodeData = {
   step: AgentFlowStep;
   selected?: boolean;
   hasIssue?: boolean;
+  onDelete?: (id: string) => void;
 };
 
-function StepNodeComponent({ data, selected }: NodeProps) {
-  const { step, hasIssue } = data as unknown as StepNodeData;
+function StepNodeComponent({ data, selected, id }: NodeProps) {
+  const { step, hasIssue, onDelete } = data as unknown as StepNodeData;
   const branches = normalizeBranches((step as any).branches);
   const validation = normalizeValidation(step.validation);
   const message = firstText(step.messages, step.message);
@@ -21,7 +22,7 @@ function StepNodeComponent({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'w-[260px] rounded-lg border bg-card shadow-sm transition-colors',
+        'group w-[260px] rounded-lg border bg-card shadow-sm transition-colors',
         selected ? 'border-primary ring-2 ring-primary/30' : 'border-border',
         hasIssue && 'border-destructive/60',
       )}
@@ -36,10 +37,25 @@ function StepNodeComponent({ data, selected }: NodeProps) {
             {validation.skip_mode && validation.skip_mode !== 'NUNCA' && (
               <SkipForward className="h-3.5 w-3.5 text-muted-foreground" />
             )}
+            {onDelete && (
+              <button
+                type="button"
+                title="Excluir etapa"
+                aria-label="Excluir etapa"
+                className="nodrag opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(id);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         </div>
         <p className="text-sm font-medium truncate">{step.name || 'Sem nome'}</p>
       </div>
+
 
       <div className="px-3 py-2 space-y-2">
         <p className="text-xs text-muted-foreground line-clamp-2 flex gap-1">
