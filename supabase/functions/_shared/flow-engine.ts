@@ -55,6 +55,9 @@ export interface FlowRunState {
   visited?: string[]
   /** Tentativas inválidas na etapa atual. */
   attempts?: number
+  /** Vezes que o cliente disse "não sei" na etapa atual. */
+  unknown_attempts?: number
+
   /** Fluxo concluído (chegou a uma etapa FIM). */
   finished?: boolean
   /** Handoff disparado pela etapa final. */
@@ -135,6 +138,107 @@ export function reaskOf(step: FlowStep, lang: FlowLang): string {
   const pick = (raw as any)[lang] ?? (raw as any)['pt-BR'] ?? Object.values(raw)[0]
   return String(pick || '').trim()
 }
+
+// ---------------------------------------------------------------------------
+// "Não sei responder" — configuração POR ETAPA (validation.unknown_answer)
+
+export type UnknownAnswerMode = 'INSISTIR' | 'ACEITAR_APROXIMADO' | 'PULAR' | 'ENCAMINHAR'
+
+export interface UnknownAnswerConfig {
+  mode: UnknownAnswerMode
+  /** Mensagem de acolhimento (multi-idioma) enviada antes de aplicar o modo. */
+  messages: Record<string, string>
+  /** Quantas vezes acolher/insistir antes de aplicar o modo. */
+  attempts: number
+  /** Valor gravado quando o modo aceita/pula. */
+  fallback_value: string
+  /** Frases extras que indicam "não sei". */
+  phrases: string[]
+}
+
+export const DEFAULT_UNKNOWN_PHRASES: string[] = [
+  'nao sei', 'não sei', 'nao lembro', 'não lembro', 'nao me lembro', 'não me lembro',
+  'nao faco ideia', 'não faço ideia', 'sei nao', 'sei lá', 'sei la', 'nao tenho certeza',
+  'não tenho certeza', 'nao tenho essa informacao', 'não tenho essa informação',
+  'no se', 'no sé', 'no recuerdo', 'no me acuerdo', 'ni idea', 'no estoy seguro',
+  'no lo se', 'no lo sé',
+  "i don't know", 'i dont know', "i don't remember", 'i dont remember', 'no idea',
+  'not sure', "i'm not sure", 'im not sure', 'dunno',
+  'je ne sais pas', 'aucune idee', 'aucune idée', 'je ne me souviens pas', 'pas sûr', 'pas sur',
+]
+
+const DEFAULT_UNKNOWN_MESSAGE: Record<string, string> = {
+  'pt-BR': 'Sem problema! Uma informação aproximada já me ajuda. Pode me dar uma estimativa?',
+  es: '¡Sin problema! Una información aproximada ya me ayuda. ¿Me puedes dar una estimación?',
+  en: 'No problem! An approximate answer already helps. Could you give me an estimate?',
+  fr: 'Pas de souci ! Une information approximative m’aide déjà. Pouvez-vous me donner une estimation ?',
+}
+
+export function unknownAnswerOf(step: FlowStep): UnknownAnswerConfig {
+  const raw = ((step?.validation as any)?.unknown_answer || {}) as Partial<UnknownAnswerConfig>
+  const mode = ['INSISTIR', 'ACEITAR_APROXIMADO', 'PULAR', 'ENCAMINHAR'].includes(String(raw.mode))
+    ? (raw.mode as UnknownAnswerMode)
+    : 'INSISTIR'
+  const attempts = Number.isFinite(Number(raw.attempts)) ? Math.max(0, Number(raw.attempts)) : 1
+  return {
+    mode,
+    messages: (raw.messages && typeof raw.messages === 'object' ? raw.messages : {}) as Record<string, string>,
+    attempts,
+    fallback_value: String(raw.fallback_value || ''),
+    phrases: Array.isArray(raw.phrases) ? raw.phrases.map((p) => String(p || '')).filter(Boolean) : [],
+  }
+}
+
+function normalizeText(v: string): string {
+  return String(v || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9' ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Detecta se o cliente disse que não sabe/não lembra a resposta. */
+export function isUnknownAnswer(message: string, cfg?: UnknownAnswerConfig): boolean {
+  const text = normalizeText(message)
+  if (!text) return false
+  const list = [...DEFAULT_UNKNOWN_PHRASES, ...(cfg?.phrases || [])].map(normalizeText).filter(Boolean)
+  return list.some((p) => text === p || text.includes(p))
+}
+
+export function unknownMessageOf(cfg: UnknownAnswerConfig, lang: FlowLang): string {
+  const raw = cfg.messages || {}
+  const pick = (raw as any)[lang] ?? (raw as any)['pt-BR'] ?? Object.values(raw).find(Boolean)
+  const text = String(pick || '').trim()
+  return text || DEFAULT_UNKNOWN_MESSAGE[String(lang)] || DEFAULT_UNKNOWN_MESSAGE['pt-BR']
+}
+
+/**
+ * Aceita datas aproximadas ("03/2024", "março de 2024", "2024") e normaliza
+ * para DD/MM/YYYY usando o dia 01. Só usada no modo ACEITAR_APROXIMADO.
+ */
+export function parseApproxDate(raw: string): string | null {
+  const text = String(raw || '')
+  const mm = /\b(\d{1,2})\s*[\/\-.]\s*((?:19|20)\d{2})\b/.exec(text)
+  if (mm) {
+    const month = Number(mm[1])
+    if (month >= 1 && month <= 12) return `01/${String(month).padStart(2, '0')}/${mm[2]}`
+  }
+  const MONTHS = [
+    ['jan'], ['fev', 'feb'], ['mar'], ['abr', 'apr', 'avr'], ['mai', 'may'], ['jun'],
+    ['jul'], ['ago', 'aug', 'aou', 'aoû'], ['set', 'sep'], ['out', 'oct'], ['nov'], ['dez', 'dec'],
+  ]
+  const norm = normalizeText(text)
+  const yr = /\b((?:19|20)\d{2})\b/.exec(norm)
+  if (yr) {
+    const idx = MONTHS.findIndex((names) => names.some((n) => norm.includes(n)))
+    const month = idx >= 0 ? idx + 1 : 1
+    return `01/${String(month).padStart(2, '0')}/${yr[1]}`
+  }
+  return null
+}
+
 
 export function indexSteps(steps: FlowStep[]): Map<string, FlowStep> {
   const map = new Map<string, FlowStep>()
@@ -363,7 +467,7 @@ function run(
       return {
         messages,
         outbound,
-        state: { ...state, current_step: code, visited: [...visited], attempts: 0, finished: false },
+        state: { ...state, current_step: code, visited: [...visited], attempts: 0, unknown_attempts: 0, finished: false },
         reasked: false,
         finished: false,
         handoff: sawHandoff,
@@ -427,8 +531,72 @@ export function advanceFlow(
   const step = index.get(state.current_step)
   if (!step) return startFlow(steps, lang)
 
+  const unknownCfg = unknownAnswerOf(step)
+
+  /** Avança usando a saída padrão da etapa (não altera a sequência do fluxo). */
+  const advanceWith = (value: string): FlowTurnResult => {
+    const answers = { ...(state.answers || {}), [step.step_code]: value }
+    const captured = value ? captureOf(step, value) : []
+    const nextCode = resolveNextCode(step, '')
+    const nextState: FlowRunState = { ...state, answers, attempts: 0, unknown_attempts: 0 }
+    if (!nextCode) {
+      return {
+        messages: [], outbound: [], state: { ...nextState, finished: true },
+        reasked: false, finished: true, handoff: false, path: [step.step_code], captured,
+      }
+    }
+    return run(index, nextCode, nextState, lang, captured)
+  }
+
+  const stay = (text: string, patch: Partial<FlowRunState>): FlowTurnResult => ({
+    messages: text ? [text] : [],
+    outbound: text ? [{ text, step_code: step.step_code, quick_reply: quickReplyOf(step) }] : [],
+    state: { ...state, ...patch },
+    reasked: true,
+    finished: false,
+    handoff: false,
+    path: [step.step_code],
+    captured: [],
+  })
+
+  // 1) Cliente disse que não sabe/não lembra → comportamento configurado na etapa.
+  if (isUnknownAnswer(message, unknownCfg)) {
+    const tries = (state.unknown_attempts || 0) + 1
+    if (tries <= unknownCfg.attempts) {
+      return stay(unknownMessageOf(unknownCfg, lang), { unknown_attempts: tries })
+    }
+    const v = (step.validation || {}) as Record<string, unknown>
+    switch (unknownCfg.mode) {
+      case 'PULAR':
+      case 'ACEITAR_APROXIMADO':
+        return advanceWith(unknownCfg.fallback_value)
+      case 'ENCAMINHAR': {
+        const fallbackCode = String(v.fallback_step_code || '').trim()
+        if (fallbackCode && index.get(fallbackCode)) {
+          return run(index, fallbackCode, { ...state, attempts: 0, unknown_attempts: 0 }, lang)
+        }
+        break
+      }
+      default:
+        break
+    }
+    // INSISTIR (ou ENCAMINHAR sem etapa de destino): repergunta padrão.
+    const insist = reaskOf(step, lang) || messagesOf(step, lang).slice(-1)[0] || ''
+    return stay(insist, { unknown_attempts: tries })
+  }
+
   const result = validateAnswer(step, message)
   if (!result.valid) {
+    // Modo aproximado: aceita data incompleta ("03/2024", "em 2023") e segue.
+    if (
+      unknownCfg.mode === 'ACEITAR_APROXIMADO' &&
+      String(step.answer_type || '') === 'DATA' &&
+      result.reason === 'invalid_date'
+    ) {
+      const approx = parseApproxDate(message)
+      if (approx) return advanceWith(approx)
+    }
+
     const attempts = (state.attempts || 0) + 1
     const v = (step.validation || {}) as Record<string, unknown>
     const maxReasks = Number.isFinite(Number(v.max_reasks)) ? Number(v.max_reasks) : 2
@@ -436,7 +604,16 @@ export function advanceFlow(
 
     // Esgotou as reperguntas e existe etapa de fallback: desvia o fluxo.
     if (fallbackCode && attempts > maxReasks && index.get(fallbackCode)) {
-      return run(index, fallbackCode, { ...state, attempts: 0 }, lang)
+      return run(index, fallbackCode, { ...state, attempts: 0, unknown_attempts: 0 }, lang)
+    }
+
+    // Esgotou as reperguntas sem etapa de fallback, mas a etapa permite pular.
+    if (
+      attempts > maxReasks &&
+      !fallbackCode &&
+      (unknownCfg.mode === 'PULAR' || unknownCfg.mode === 'ACEITAR_APROXIMADO')
+    ) {
+      return advanceWith(unknownCfg.fallback_value)
     }
 
     const reask = reaskOf(step, lang)
@@ -462,7 +639,7 @@ export function advanceFlow(
   const answers = { ...(state.answers || {}), [step.step_code]: value }
   const captured = captureOf(step, value)
   const nextCode = resolveNextCode(step, value)
-  const nextState: FlowRunState = { ...state, answers, attempts: 0 }
+  const nextState: FlowRunState = { ...state, answers, attempts: 0, unknown_attempts: 0 }
   if (!nextCode) {
     return {
       messages: [],

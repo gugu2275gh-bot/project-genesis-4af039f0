@@ -11,6 +11,7 @@ import { Plus, Trash2, X } from 'lucide-react';
 import { MultiLangField } from '@/components/ai-agents/MultiLangField';
 import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
+import { StepUnknownAnswerEditor } from '@/components/ai-agents/flow-builder/StepUnknownAnswerEditor';
 import { ANSWER_TYPES, FLOW_PHASES, STEP_FIELD_MAPPINGS, type AgentFlowStep } from '@/types/ai-agents';
 
 import {
@@ -73,10 +74,11 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
       </div>
 
       <Tabs defaultValue="pergunta" className="flex-1 overflow-hidden flex flex-col">
-        <TabsList className="mx-4 mt-3 grid grid-cols-4">
+        <TabsList className="mx-4 mt-3 grid grid-cols-5">
           <TabsTrigger value="pergunta">Mensagens</TabsTrigger>
           <TabsTrigger value="respostas">Respostas</TabsTrigger>
           <TabsTrigger value="validacao">Validação</TabsTrigger>
+          <TabsTrigger value="naosei">Se não souber</TabsTrigger>
           <TabsTrigger value="comportamento">Comportamento</TabsTrigger>
         </TabsList>
 
@@ -256,7 +258,16 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
 
           </TabsContent>
 
+          <TabsContent value="naosei" className="mt-0 space-y-4">
+            <StepUnknownAnswerEditor
+              value={validation.unknown_answer}
+              fallbackStepCode={validation.fallback_step_code}
+              onChange={(next) => setValidation({ unknown_answer: next })}
+            />
+          </TabsContent>
+
           <TabsContent value="comportamento" className="mt-0 space-y-4">
+
 
 
             <Separator />
