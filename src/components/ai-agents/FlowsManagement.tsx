@@ -18,7 +18,20 @@ import {
   useSaveFlow,
   useSaveFlowStep,
 } from '@/hooks/useAIAgents';
-import { ANSWER_TYPES, type AgentFlow, type AgentFlowStep } from '@/types/ai-agents';
+import { MultiLangField } from '@/components/ai-agents/MultiLangField';
+import {
+  ANSWER_TYPES,
+  FLOW_PHASES,
+  type AgentFlow,
+  type AgentFlowStep,
+  type FlowPhase,
+  type MultiLangText,
+} from '@/types/ai-agents';
+
+function phaseLabel(phase?: string) {
+  return FLOW_PHASES.find((p) => p.value === (phase || 'GERAL'))?.label || 'Geral';
+}
+
 
 function StepDialog({
   open,
