@@ -140,21 +140,34 @@ export function reaskOf(step: FlowStep, lang: FlowLang): string {
 }
 
 // ---------------------------------------------------------------------------
-// "Não sei responder" — configuração POR ETAPA (validation.unknown_answer)
+// "Resposta diferente do esperado" — configuração POR ETAPA
+// (validation.unexpected_answer, com retrocompatibilidade para unknown_answer)
 
-export type UnknownAnswerMode = 'INSISTIR' | 'ACEITAR_APROXIMADO' | 'PULAR' | 'ENCAMINHAR'
+export type UnexpectedAnswerMode = 'INSISTIR' | 'ACEITAR_APROXIMADO' | 'PULAR' | 'ENCAMINHAR'
+export type UnknownAnswerMode = UnexpectedAnswerMode
 
-export interface UnknownAnswerConfig {
-  mode: UnknownAnswerMode
+/** Situações em que a resposta é diferente do esperado. */
+export type DeviationKind = 'unknown' | 'invalid_format' | 'no_match' | 'off_topic'
+
+export const DEVIATION_KINDS: DeviationKind[] = ['unknown', 'invalid_format', 'no_match', 'off_topic']
+
+export interface UnexpectedRule {
+  /** Quando falso, a situação segue a regra de "não sabe / não lembra". */
+  enabled: boolean
+  mode: UnexpectedAnswerMode
   /** Mensagem de acolhimento (multi-idioma) enviada antes de aplicar o modo. */
   messages: Record<string, string>
   /** Quantas vezes acolher/insistir antes de aplicar o modo. */
   attempts: number
   /** Valor gravado quando o modo aceita/pula. */
   fallback_value: string
-  /** Frases extras que indicam "não sei". */
+  /** Frases extras que caracterizam a situação. */
   phrases: string[]
 }
+
+export type UnexpectedAnswerConfig = Record<DeviationKind, UnexpectedRule>
+/** @deprecated formato antigo e plano. */
+export type UnknownAnswerConfig = UnexpectedRule
 
 export const DEFAULT_UNKNOWN_PHRASES: string[] = [
   'nao sei', 'não sei', 'nao lembro', 'não lembro', 'nao me lembro', 'não me lembro',
@@ -174,19 +187,66 @@ const DEFAULT_UNKNOWN_MESSAGE: Record<string, string> = {
   fr: 'Pas de souci ! Une information approximative m’aide déjà. Pouvez-vous me donner une estimation ?',
 }
 
-export function unknownAnswerOf(step: FlowStep): UnknownAnswerConfig {
-  const raw = ((step?.validation as any)?.unknown_answer || {}) as Partial<UnknownAnswerConfig>
-  const mode = ['INSISTIR', 'ACEITAR_APROXIMADO', 'PULAR', 'ENCAMINHAR'].includes(String(raw.mode))
-    ? (raw.mode as UnknownAnswerMode)
+const DEFAULT_DEVIATION_MESSAGES: Record<DeviationKind, Record<string, string>> = {
+  unknown: DEFAULT_UNKNOWN_MESSAGE,
+  invalid_format: {
+    'pt-BR': 'Acho que a resposta veio em outro formato. Pode me enviar novamente, por favor?',
+    es: 'Creo que la respuesta vino en otro formato. ¿Me la puedes enviar de nuevo, por favor?',
+    en: 'I think the answer came in a different format. Could you send it again, please?',
+    fr: 'Je crois que la réponse est dans un autre format. Pouvez-vous la renvoyer, s’il vous plaît ?',
+  },
+  no_match: {
+    'pt-BR': 'Não consegui encaixar sua resposta nas opções desta pergunta. Pode escolher uma delas?',
+    es: 'No pude encajar tu respuesta en las opciones de esta pregunta. ¿Puedes elegir una?',
+    en: "I couldn't match your answer to the options for this question. Could you pick one?",
+    fr: 'Je n’ai pas pu associer votre réponse aux options de cette question. Pouvez-vous en choisir une ?',
+  },
+  off_topic: {
+    'pt-BR': 'Só para eu não me perder: pode me responder essa pergunta primeiro?',
+    es: 'Solo para no perderme: ¿puedes responder primero esta pregunta?',
+    en: 'Just so I don’t lose track: could you answer this question first?',
+    fr: 'Juste pour ne pas me perdre : pouvez-vous répondre d’abord à cette question ?',
+  },
+}
+
+function normalizeRule(raw: unknown, enabledDefault = false): UnexpectedRule {
+  const v = (raw && typeof raw === 'object' ? raw : {}) as Partial<UnexpectedRule>
+  const mode = ['INSISTIR', 'ACEITAR_APROXIMADO', 'PULAR', 'ENCAMINHAR'].includes(String(v.mode))
+    ? (v.mode as UnexpectedAnswerMode)
     : 'INSISTIR'
-  const attempts = Number.isFinite(Number(raw.attempts)) ? Math.max(0, Number(raw.attempts)) : 1
   return {
+    enabled: typeof v.enabled === 'boolean' ? v.enabled : enabledDefault,
     mode,
-    messages: (raw.messages && typeof raw.messages === 'object' ? raw.messages : {}) as Record<string, string>,
-    attempts,
-    fallback_value: String(raw.fallback_value || ''),
-    phrases: Array.isArray(raw.phrases) ? raw.phrases.map((p) => String(p || '')).filter(Boolean) : [],
+    messages: (v.messages && typeof v.messages === 'object' ? v.messages : {}) as Record<string, string>,
+    attempts: Number.isFinite(Number(v.attempts)) ? Math.max(0, Number(v.attempts)) : 1,
+    fallback_value: String(v.fallback_value || ''),
+    phrases: Array.isArray(v.phrases) ? v.phrases.map((p) => String(p || '')).filter(Boolean) : [],
   }
+}
+
+/** Configuração completa da etapa (nova ou convertida do formato antigo). */
+export function unexpectedAnswerOf(step: FlowStep): UnexpectedAnswerConfig {
+  const v = (step?.validation || {}) as Record<string, unknown>
+  const raw = (v.unexpected_answer || {}) as Partial<UnexpectedAnswerConfig>
+  const hasNew = DEVIATION_KINDS.some((k) => raw[k] && typeof raw[k] === 'object')
+  const legacy = v.unknown_answer
+  return {
+    unknown: { ...normalizeRule(hasNew ? raw.unknown : legacy, true), enabled: true },
+    invalid_format: normalizeRule(hasNew ? raw.invalid_format : undefined),
+    no_match: normalizeRule(hasNew ? raw.no_match : undefined),
+    off_topic: normalizeRule(hasNew ? raw.off_topic : undefined),
+  }
+}
+
+/** Regra efetiva de uma situação (cai na regra de "não sabe" quando desativada). */
+export function ruleFor(cfg: UnexpectedAnswerConfig, kind: DeviationKind): UnexpectedRule {
+  const rule = cfg[kind]
+  return rule?.enabled ? rule : cfg.unknown
+}
+
+/** @deprecated use unexpectedAnswerOf(step).unknown */
+export function unknownAnswerOf(step: FlowStep): UnexpectedRule {
+  return unexpectedAnswerOf(step).unknown
 }
 
 function normalizeText(v: string): string {
@@ -200,19 +260,34 @@ function normalizeText(v: string): string {
 }
 
 /** Detecta se o cliente disse que não sabe/não lembra a resposta. */
-export function isUnknownAnswer(message: string, cfg?: UnknownAnswerConfig): boolean {
+export function isUnknownAnswer(message: string, cfg?: UnexpectedRule): boolean {
   const text = normalizeText(message)
   if (!text) return false
   const list = [...DEFAULT_UNKNOWN_PHRASES, ...(cfg?.phrases || [])].map(normalizeText).filter(Boolean)
   return list.some((p) => text === p || text.includes(p))
 }
 
-export function unknownMessageOf(cfg: UnknownAnswerConfig, lang: FlowLang): string {
-  const raw = cfg.messages || {}
+/** Detecta se a mensagem casa com as frases extras configuradas numa situação. */
+export function matchesRulePhrases(message: string, rule?: UnexpectedRule): boolean {
+  const text = normalizeText(message)
+  if (!text || !rule?.phrases?.length) return false
+  return rule.phrases.map(normalizeText).filter(Boolean).some((p) => text === p || text.includes(p))
+}
+
+export function unexpectedMessageOf(rule: UnexpectedRule, kind: DeviationKind, lang: FlowLang): string {
+  const raw = rule.messages || {}
   const pick = (raw as any)[lang] ?? (raw as any)['pt-BR'] ?? Object.values(raw).find(Boolean)
   const text = String(pick || '').trim()
-  return text || DEFAULT_UNKNOWN_MESSAGE[String(lang)] || DEFAULT_UNKNOWN_MESSAGE['pt-BR']
+  if (text) return text
+  const defaults = DEFAULT_DEVIATION_MESSAGES[kind] || DEFAULT_UNKNOWN_MESSAGE
+  return defaults[String(lang)] || defaults['pt-BR']
 }
+
+/** @deprecated use unexpectedMessageOf */
+export function unknownMessageOf(rule: UnexpectedRule, lang: FlowLang): string {
+  return unexpectedMessageOf(rule, 'unknown', lang)
+}
+
 
 /**
  * Aceita datas aproximadas ("03/2024", "março de 2024", "2024") e normaliza
@@ -531,7 +606,8 @@ export function advanceFlow(
   const step = index.get(state.current_step)
   if (!step) return startFlow(steps, lang)
 
-  const unknownCfg = unknownAnswerOf(step)
+  const cfg = unexpectedAnswerOf(step)
+  const unknownCfg = cfg.unknown
 
   /** Avança usando a saída padrão da etapa (não altera a sequência do fluxo). */
   const advanceWith = (value: string): FlowTurnResult => {
@@ -559,42 +635,78 @@ export function advanceFlow(
     captured: [],
   })
 
-  // 1) Cliente disse que não sabe/não lembra → comportamento configurado na etapa.
-  if (isUnknownAnswer(message, unknownCfg)) {
-    const tries = (state.unknown_attempts || 0) + 1
-    if (tries <= unknownCfg.attempts) {
-      return stay(unknownMessageOf(unknownCfg, lang), { unknown_attempts: tries })
+  /**
+   * Aplica a tratativa configurada para a situação. Devolve `null` quando o
+   * modo é INSISTIR (o chamador decide qual repergunta enviar).
+   */
+  const applyRule = (kind: DeviationKind, tries: number): FlowTurnResult | null => {
+    const rule = ruleFor(cfg, kind)
+    if (tries <= rule.attempts) {
+      return stay(unexpectedMessageOf(rule, kind, lang), { unknown_attempts: tries })
     }
     const v = (step.validation || {}) as Record<string, unknown>
-    switch (unknownCfg.mode) {
+    switch (rule.mode) {
+      case 'ACEITAR_APROXIMADO': {
+        if (String(step.answer_type || '') === 'DATA') {
+          const approx = parseApproxDate(message)
+          if (approx) return advanceWith(approx)
+        }
+        return advanceWith(rule.fallback_value)
+      }
       case 'PULAR':
-      case 'ACEITAR_APROXIMADO':
-        return advanceWith(unknownCfg.fallback_value)
+        return advanceWith(rule.fallback_value)
       case 'ENCAMINHAR': {
         const fallbackCode = String(v.fallback_step_code || '').trim()
         if (fallbackCode && index.get(fallbackCode)) {
           return run(index, fallbackCode, { ...state, attempts: 0, unknown_attempts: 0 }, lang)
         }
-        break
+        return null
       }
       default:
-        break
+        return null
     }
+  }
+
+  const defaultReask = (reason?: string): string =>
+    reaskOf(step, lang)
+      || (reason === 'invalid_date' ? defaultDateReask(lang) : '')
+      || messagesOf(step, lang).slice(-1)[0]
+      || ''
+
+  // 1) Cliente disse que não sabe/não lembra → tratativa da situação "unknown".
+  if (isUnknownAnswer(message, unknownCfg)) {
+    const tries = (state.unknown_attempts || 0) + 1
+    const applied = applyRule('unknown', tries)
+    if (applied) return applied
     // INSISTIR (ou ENCAMINHAR sem etapa de destino): repergunta padrão.
-    const insist = reaskOf(step, lang) || messagesOf(step, lang).slice(-1)[0] || ''
-    return stay(insist, { unknown_attempts: tries })
+    return stay(defaultReask(), { unknown_attempts: tries })
   }
 
   const result = validateAnswer(step, message)
   if (!result.valid) {
+    // Classifica o desvio para escolher a tratativa configurada na etapa.
+    const kind: DeviationKind =
+      result.reason === 'empty' ? 'off_topic'
+        : result.reason === 'no_yesno' ? 'no_match'
+          : 'invalid_format'
+    const rule = ruleFor(cfg, kind)
+
     // Modo aproximado: aceita data incompleta ("03/2024", "em 2023") e segue.
     if (
-      unknownCfg.mode === 'ACEITAR_APROXIMADO' &&
+      rule.mode === 'ACEITAR_APROXIMADO' &&
       String(step.answer_type || '') === 'DATA' &&
       result.reason === 'invalid_date'
     ) {
       const approx = parseApproxDate(message)
       if (approx) return advanceWith(approx)
+    }
+
+    // Tratativa específica ligada para esta situação (ou frase personalizada).
+    if (cfg[kind].enabled || matchesRulePhrases(message, cfg[kind])) {
+      const tries = (state.unknown_attempts || 0) + 1
+      const applied = applyRule(kind, tries)
+      if (applied) return applied
+      return stay(defaultReask(result.reason), { unknown_attempts: tries })
     }
 
     const attempts = (state.attempts || 0) + 1
@@ -611,15 +723,12 @@ export function advanceFlow(
     if (
       attempts > maxReasks &&
       !fallbackCode &&
-      (unknownCfg.mode === 'PULAR' || unknownCfg.mode === 'ACEITAR_APROXIMADO')
+      (rule.mode === 'PULAR' || rule.mode === 'ACEITAR_APROXIMADO')
     ) {
-      return advanceWith(unknownCfg.fallback_value)
+      return advanceWith(rule.fallback_value)
     }
 
-    const reask = reaskOf(step, lang)
-      || (result.reason === 'invalid_date' ? defaultDateReask(lang) : '')
-      || messagesOf(step, lang).slice(-1)[0]
-      || ''
+    const reask = defaultReask(result.reason)
 
     return {
       messages: reask ? [reask] : [],
@@ -635,7 +744,21 @@ export function advanceFlow(
   }
 
 
+
   const value = result.value ?? ''
+
+  // 2) Resposta válida, mas fora das opções/caminhos previstos na etapa.
+  if (cfg.no_match.enabled) {
+    const branches = Array.isArray(step.branches) ? step.branches : []
+    const strict = branches.length > 0 && branches.every((b) => String(b?.value || '').trim() && b?.match_type !== 'QUALQUER')
+    if (strict && !branches.some((b) => branchMatches(b, value))) {
+      const tries = (state.unknown_attempts || 0) + 1
+      const applied = applyRule('no_match', tries)
+      if (applied) return applied
+      return stay(defaultReask(), { unknown_attempts: tries })
+    }
+  }
+
   const answers = { ...(state.answers || {}), [step.step_code]: value }
   const captured = captureOf(step, value)
   const nextCode = resolveNextCode(step, value)

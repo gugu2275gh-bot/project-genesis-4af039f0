@@ -15,7 +15,8 @@ import { FlowCanvas } from '@/components/ai-agents/flow-builder/FlowCanvas';
 import { FlowErrorBoundary } from '@/components/ai-agents/flow-builder/FlowErrorBoundary';
 import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
-import { STEP_KINDS, normalizeBranches, normalizeValidation } from '@/types/ai-agent-flow-builder';
+import { StepUnexpectedAnswerEditor } from '@/components/ai-agents/flow-builder/StepUnexpectedAnswerEditor';
+import { STEP_KINDS, normalizeBranches, normalizeValidation, stepKindOf } from '@/types/ai-agent-flow-builder';
 
 
 import {
@@ -247,6 +248,21 @@ function StepDialog({
             answerType={draft.answer_type}
             onChange={(patch) => set({ validation: { ...validation, ...patch } })}
           />
+
+          {stepKindOf({ validation, handoff: draft.handoff }) === 'PERGUNTA' && (
+            <>
+              <Separator />
+              <p className="text-sm font-medium">Resposta diferente do esperado</p>
+              <StepUnexpectedAnswerEditor
+                value={validation.unexpected_answer}
+                legacyValue={validation.unknown_answer}
+                fallbackStepCode={validation.fallback_step_code}
+                onChange={(next) => set({ validation: { ...validation, unexpected_answer: next } })}
+              />
+            </>
+          )}
+
+
 
 
           <div className="space-y-2">

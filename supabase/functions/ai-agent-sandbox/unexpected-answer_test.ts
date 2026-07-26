@@ -108,3 +108,56 @@ Deno.test('resposta válida continua avançando normalmente (sem regressão)', (
   assertEquals(r.state.answers.DATA_ENTRADA, '24/01/2026')
   assertEquals(r.state.current_step, 'PROXIMA')
 })
+
+/* ------- tratativas por situação (resposta diferente do esperado) --------- */
+
+import { unexpectedAnswerOf, ruleFor } from '../_shared/flow-engine.ts'
+
+function buildNew(unexpected: Record<string, unknown>) {
+  const steps = buildSteps({})
+  steps[0].validation = {
+    step_kind: 'PERGUNTA', required: true, max_reasks: 2,
+    fallback_step_code: 'ESPECIALISTA', unexpected_answer: unexpected,
+  }
+  return steps
+}
+
+Deno.test('retrocompatibilidade: unknown_answer antigo vira a regra "unknown"', () => {
+  const steps = buildSteps({ mode: 'PULAR', attempts: 1, fallback_value: 'NÃO INFORMADO' })
+  const cfg = unexpectedAnswerOf(steps[0] as any)
+  assertEquals(cfg.unknown.mode, 'PULAR')
+  assertEquals(cfg.unknown.fallback_value, 'NÃO INFORMADO')
+  // situações não configuradas herdam a regra de "não sabe"
+  assertEquals(ruleFor(cfg, 'invalid_format').mode, 'PULAR')
+})
+
+Deno.test('formato inválido usa tratativa própria quando ativada', () => {
+  const steps = buildNew({
+    unknown: { enabled: true, mode: 'INSISTIR', attempts: 1 },
+    invalid_format: { enabled: true, mode: 'PULAR', attempts: 1, fallback_value: 'FORMATO INVALIDO', messages: { 'pt-BR': 'Formato estranho, pode repetir?' } },
+  })
+  const s1 = advanceFlow(steps, baseState, 'ontem', 'pt-BR')
+  assertEquals(s1.state.current_step, 'DATA_ENTRADA')
+  assertEquals(s1.messages[0], 'Formato estranho, pode repetir?')
+  const s2 = advanceFlow(steps, s1.state, 'anteontem', 'pt-BR')
+  assertEquals(s2.state.current_step, 'PROXIMA')
+  assertEquals(s2.state.answers.DATA_ENTRADA, 'FORMATO INVALIDO')
+})
+
+Deno.test('formato inválido sem tratativa própria mantém comportamento antigo (repergunta)', () => {
+  const steps = buildNew({ unknown: { enabled: true, mode: 'INSISTIR', attempts: 1 } })
+  const r = advanceFlow(steps, baseState, 'ontem', 'pt-BR')
+  assertEquals(r.reasked, true)
+  assertEquals(r.state.current_step, 'DATA_ENTRADA')
+  assertEquals(r.state.attempts, 1)
+})
+
+Deno.test('resposta vazia cai na situação off_topic quando configurada', () => {
+  const steps = buildNew({
+    unknown: { enabled: true, mode: 'INSISTIR', attempts: 1 },
+    off_topic: { enabled: true, mode: 'ENCAMINHAR', attempts: 0 },
+  })
+  const r = advanceFlow(steps, baseState, '   ', 'pt-BR')
+  assertEquals(r.state.current_step, 'ESPECIALISTA')
+  assertEquals(r.handoff, true)
+})
