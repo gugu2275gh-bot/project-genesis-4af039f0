@@ -136,36 +136,43 @@ export async function advanceFlowTurn(
   // 2) Reconhecimento humanizado: gerado pela IA quando a etapa pedir.
   const ack = ackGenerated || deps.ack || ''
 
-  const turn = advanceFlow(steps, workingState, effectiveMessage, lang, { ack })
-
-  // 3) "Responde e volta na hora": o fluxo ficou na mesma etapa por causa de
-  // uma dúvida do cliente → resposta curta + pergunta na MESMA mensagem.
-  // Só agora buscamos na base — respostas válidas não pagam esse custo.
-  if (turn.reasked && canAside) {
-    const outbound = (turn.outbound || []).slice()
-    if (outbound.length) {
-      const ctx = kbContext ?? (await withTimeout(
-        Promise.resolve(deps.kbSearch(text)),
+  // 3) "Responde e volta na hora": a mensagem é uma dúvida, não a resposta da
+  // etapa. Respondemos pela base e repetimos a pergunta na MESMA bolha, sem
+  // gravar a dúvida como resposta. Uma vez por etapa, para nunca criar laço.
+  const asideTries = Number(state.aside_attempts || 0)
+  if (canAside && asideTries < 1) {
+    const ctx = kbContext ?? (await withTimeout(
+      Promise.resolve(deps.kbSearch(text)),
+      ASSIST_TIMEOUT_MS,
+      'kb_search_aside',
+    ))
+    const aside = ctx
+      ? await withTimeout(
+        answerAside({ question: text, lang, kbContext: ctx, callLLM: deps.callLLM }),
         ASSIST_TIMEOUT_MS,
-        'kb_search_aside',
-      ))
-      const aside = ctx
-        ? await withTimeout(
-          answerAside({ question: text, lang, kbContext: ctx, callLLM: deps.callLLM }),
-          ASSIST_TIMEOUT_MS,
-          'answer_aside',
-        )
-        : null
-      const answer = aside || defaultAsideAck(lang)
-      outbound[0] = { ...outbound[0], text: composeAnswerAndReask(answer, outbound[0].text, lang) }
-      console.log(`${tag}[ANSWER_REASK]`, JSON.stringify({
-        step: step.step_code,
-        from_kb: !!aside,
-      }))
-      return { ...turn, outbound, messages: outbound.map((o) => o.text) }
-    }
+        'answer_aside',
+      )
+      : null
+    const answer = aside || defaultAsideAck(lang)
+    console.log(`${tag}[ANSWER_REASK]`, JSON.stringify({
+      step: step.step_code,
+      from_kb: !!aside,
+    }))
+    return buildStayTurn(
+      step,
+      composeAnswerAndReask(answer, question, lang),
+      workingState,
+      { aside_attempts: asideTries + 1 },
+    )
   }
 
+  const turn = advanceFlow(steps, workingState, effectiveMessage, lang, { ack })
+
+  // Etapa mudou: zera o contador de dúvidas respondidas.
+  if (turn.state?.current_step !== state.current_step) {
+    return { ...turn, state: { ...turn.state, aside_attempts: 0 } }
+  }
 
   return turn
 }
+
