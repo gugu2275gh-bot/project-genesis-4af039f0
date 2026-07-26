@@ -332,7 +332,11 @@ export function advanceFlow(
       return run(index, fallbackCode, { ...state, attempts: 0 }, lang)
     }
 
-    const reask = reaskOf(step, lang) || messagesOf(step, lang).slice(-1)[0] || ''
+    const reask = reaskOf(step, lang)
+      || (result.reason === 'invalid_date' ? defaultDateReask(lang) : '')
+      || messagesOf(step, lang).slice(-1)[0]
+      || ''
+
     return {
       messages: reask ? [reask] : [],
       state: { ...state, attempts },
