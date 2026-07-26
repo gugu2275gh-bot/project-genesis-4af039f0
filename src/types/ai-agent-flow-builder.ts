@@ -271,6 +271,65 @@ export function normalizeUnexpectedAnswer(raw: unknown, legacy?: unknown): Unexp
 export const normalizeUnknownAnswer = (raw: unknown) => normalizeUnexpectedRule(raw, true);
 
 
+/** O que fazer quando a resposta não é validada pela base de conhecimento. */
+export type KbCheckOnInvalid = 'REPERGUNTAR' | 'SEGUIR' | 'ENCAMINHAR';
+
+export const KB_CHECK_ON_INVALID: { value: KbCheckOnInvalid; label: string; hint: string }[] = [
+  {
+    value: 'REPERGUNTAR',
+    label: 'Explicar e perguntar de novo',
+    hint: 'O agente explica que não é um serviço/tema atendido e repete a pergunta.',
+  },
+  {
+    value: 'SEGUIR',
+    label: 'Registrar mesmo assim e seguir',
+    hint: 'A resposta é gravada como está e o fluxo avança normalmente.',
+  },
+  {
+    value: 'ENCAMINHAR',
+    label: 'Ir para a etapa de fallback',
+    hint: 'Depois das tentativas, desvia para a etapa de fallback configurada na aba Validação.',
+  },
+];
+
+/** Checagem da resposta contra a base de conhecimento (só etapas Pergunta). */
+export interface StepKbCheck {
+  enabled: boolean;
+  /** Instrução extra para a IA (o que considerar válido nesta etapa). */
+  instruction: string;
+  on_invalid: KbCheckOnInvalid;
+  /** Mensagem por idioma enviada quando a resposta não é válida. */
+  messages: Record<string, string>;
+  /** Quantas vezes reperguntar antes de aplicar `on_invalid`. */
+  attempts: number;
+  /** Grava o nome oficial encontrado na base no lugar do texto do cliente. */
+  normalize: boolean;
+}
+
+export const DEFAULT_KB_CHECK: StepKbCheck = {
+  enabled: false,
+  instruction: '',
+  on_invalid: 'REPERGUNTAR',
+  messages: {},
+  attempts: 1,
+  normalize: true,
+};
+
+export function normalizeKbCheck(raw: unknown): StepKbCheck {
+  const v = (raw && typeof raw === 'object' ? raw : {}) as Partial<StepKbCheck>;
+  const attempts = Number(v.attempts);
+  return {
+    enabled: !!v.enabled,
+    instruction: String(v.instruction ?? ''),
+    on_invalid: (['REPERGUNTAR', 'SEGUIR', 'ENCAMINHAR'] as const).includes(v.on_invalid as KbCheckOnInvalid)
+      ? (v.on_invalid as KbCheckOnInvalid)
+      : 'REPERGUNTAR',
+    messages: (v.messages && typeof v.messages === 'object' ? v.messages : {}) as Record<string, string>,
+    attempts: Number.isFinite(attempts) && attempts >= 0 ? Math.min(5, Math.round(attempts)) : 1,
+    normalize: v.normalize !== false,
+  };
+}
+
 /** Conteúdo estruturado da coluna `validation` (jsonb). */
 export interface StepValidation {
   required?: boolean;
@@ -292,6 +351,10 @@ export interface StepValidation {
   quick_reply?: boolean;
   /** Envia a frase de reconhecimento humano antes da próxima pergunta. */
   ack_enabled?: boolean;
+  /** Reconhecimento gerado pela IA, comentando a resposta do cliente. */
+  ack_ai?: boolean;
+  /** Valida a resposta desta etapa na base de conhecimento. */
+  kb_check?: StepKbCheck;
 
   /** @deprecated formato antigo e plano ("se não souber"). */
   unknown_answer?: UnknownAnswerConfig;
