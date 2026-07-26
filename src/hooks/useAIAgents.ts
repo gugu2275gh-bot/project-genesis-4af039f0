@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
+import { supabase, ensureFreshSession, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { splitPromptIntoBlocks } from '@/lib/agent-prompt-blocks';
 
@@ -427,7 +427,7 @@ export function useSendTestMessage() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: async ({ sessionId, message }: { sessionId: string; message: string }) => {
-      await supabase.auth.refreshSession();
+      await ensureFreshSession();
       const { data, error } = await supabase.functions.invoke('ai-agent-sandbox', {
         body: { session_id: sessionId, message },
       });
@@ -508,7 +508,7 @@ export function useSyncAgentDefaults() {
 
   return useMutation({
     mutationFn: async () => {
-      await supabase.auth.refreshSession();
+      await ensureFreshSession();
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) throw new Error('Sessão expirada. Faça login novamente.');

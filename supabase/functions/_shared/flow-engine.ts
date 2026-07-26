@@ -19,10 +19,13 @@ export type StepKind = 'INICIO' | 'INFORMATIVA' | 'PERGUNTA' | 'FIM'
 export interface FlowBranch {
   id?: string
   label?: string
-  match_type?: 'IGUAL' | 'CONTEM' | 'REGEX' | 'INTENCAO'
+  match_type?: 'IGUAL' | 'CONTEM' | 'REGEX' | 'INTENCAO' | 'QUALQUER'
   value?: string
+  /** Equivalentes aceitos (traduções e variações) além do valor principal. */
+  synonyms?: string[]
   next_step_code?: string | null
 }
+
 
 export interface FlowStep {
   id: string
@@ -145,25 +148,35 @@ export function validateAnswer(step: FlowStep, raw: string): { valid: boolean; v
 // Transição
 
 function branchMatches(branch: FlowBranch, answer: string): boolean {
-  const value = String(branch?.value || '').trim()
   const text = String(answer || '').trim()
-  switch (branch?.match_type) {
-    case 'IGUAL':
-      return text.toLowerCase() === value.toLowerCase()
-    case 'REGEX':
-      try {
-        return new RegExp(value, 'i').test(text)
-      } catch {
-        return false
-      }
-    case 'INTENCAO':
-      // Sem LLM disponível aqui: aproxima por palavras do rótulo/valor.
-      return value ? new RegExp(value.split(/\s+/).filter(Boolean).join('|'), 'i').test(text) : false
-    case 'CONTEM':
-    default:
-      return value ? text.toLowerCase().includes(value.toLowerCase()) : false
-  }
+  // O valor principal e as traduções/variações são aceitos igualmente.
+  const values = [String(branch?.value || ''), ...(Array.isArray(branch?.synonyms) ? branch.synonyms : [])]
+    .map((v) => String(v || '').trim())
+    .filter(Boolean)
+
+  if (branch?.match_type === 'QUALQUER') return true
+  if (values.length === 0) return false
+
+  return values.some((value) => {
+    switch (branch?.match_type) {
+      case 'IGUAL':
+        return text.toLowerCase() === value.toLowerCase()
+      case 'REGEX':
+        try {
+          return new RegExp(value, 'i').test(text)
+        } catch {
+          return false
+        }
+      case 'INTENCAO':
+        // Sem LLM disponível aqui: aproxima por palavras do rótulo/valor.
+        return new RegExp(value.split(/\s+/).filter(Boolean).join('|'), 'i').test(text)
+      case 'CONTEM':
+      default:
+        return text.toLowerCase().includes(value.toLowerCase())
+    }
+  })
 }
+
 
 export function resolveNextCode(step: FlowStep, answer: string): string | null {
   const branches = Array.isArray(step?.branches) ? step.branches : []

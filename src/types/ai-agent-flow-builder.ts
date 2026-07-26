@@ -116,8 +116,11 @@ export interface FlowBranch {
   label: string;
   match_type: BranchMatchType;
   value: string;
+  /** Equivalentes aceitos (traduções e variações) além do valor principal. */
+  synonyms?: string[];
   next_step_code: string | null;
 }
+
 
 /** Formatos aceitos na validação da resposta. */
 export type AnswerFormat =
@@ -214,9 +217,13 @@ export function normalizeBranches(raw: unknown): FlowBranch[] {
       label: String(b.label || ''),
       match_type: (b.match_type || 'IGUAL') as BranchMatchType,
       value: String(b.value ?? ''),
+      synonyms: Array.isArray(b.synonyms)
+        ? b.synonyms.map((s: unknown) => String(s ?? '').trim()).filter(Boolean)
+        : [],
       next_step_code: b.next_step_code || null,
     }));
 }
+
 
 export function firstText(t: MultiLangText | undefined, fallback = ''): string {
   if (!t) return fallback;

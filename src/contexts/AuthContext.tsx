@@ -57,6 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    let currentUserId: string | null = null;
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -64,12 +66,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
 
         if (session?.user) {
+          const sameUser = currentUserId === session.user.id;
+          currentUserId = session.user.id;
+
+          // Renovações de token não devem remontar a aplicação: apenas
+          // atualizamos a sessão em segundo plano.
+          if (sameUser && (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) return;
+
           // Keep loading true until profile/roles arrive to avoid premature role checks
-          setLoading(true);
+          if (!sameUser) setLoading(true);
           setTimeout(() => {
             fetchUserData(session.user.id).finally(() => setLoading(false));
           }, 0);
         } else {
+          currentUserId = null;
           setProfile(null);
           setRoles([]);
           setLoading(false);
@@ -83,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
 
       if (session?.user) {
+        currentUserId = session.user.id;
         await fetchUserData(session.user.id);
       }
 
@@ -91,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

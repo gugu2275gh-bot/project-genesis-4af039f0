@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,14 +32,23 @@ export function MultiLangField({
 }: Props) {
   const [lang, setLang] = useState<AgentLanguage>(baseLanguage);
   const translate = useAgentTranslate();
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
 
   const handleTranslate = async () => {
     const source = value[baseLanguage] || '';
     if (!source.trim()) return;
     const targets = AGENT_LANGUAGES.map((l) => l.code).filter((c) => c !== baseLanguage);
-    const result = await translate.mutateAsync({ text: source, source: baseLanguage, targets });
-    onChange({ ...value, ...result });
+    try {
+      const result = await translate.mutateAsync({ text: source, source: baseLanguage, targets });
+      // Falhas nunca podem derrubar a edição em andamento: mantemos o texto base.
+      if (!mounted.current) return;
+      onChange({ ...value, ...result });
+    } catch {
+      /* erro já exibido em toast pelo hook */
+    }
   };
+
 
   return (
     <div className="space-y-2">
@@ -49,7 +58,7 @@ export function MultiLangField({
           type="button"
           variant="ghost"
           size="sm"
-          disabled={disabled || translate.isPending || !(value[baseLanguage] || '').trim()}
+          disabled={disabled || translate.isPending || !String(value[baseLanguage] ?? '').trim()}
           onClick={handleTranslate}
         >
           {translate.isPending ? (
@@ -66,7 +75,7 @@ export function MultiLangField({
           {AGENT_LANGUAGES.map((l) => (
             <TabsTrigger key={l.code} value={l.code} className="text-xs">
               {l.label}
-              {!(value[l.code] || '').trim() && <span className="ml-1 text-muted-foreground">•</span>}
+              {!String(value[l.code] ?? '').trim() && <span className="ml-1 text-muted-foreground">•</span>}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -75,7 +84,7 @@ export function MultiLangField({
             <Textarea
               rows={rows}
               disabled={disabled}
-              value={value[l.code] || ''}
+              value={String(value[l.code] ?? '')}
               onChange={(e) => onChange({ ...value, [l.code]: e.target.value })}
               placeholder={l.code === baseLanguage ? 'Escreva o texto base aqui' : 'Traduza ou escreva manualmente'}
             />

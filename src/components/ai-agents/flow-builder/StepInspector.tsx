@@ -10,7 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Trash2, X } from 'lucide-react';
 import { MultiLangField } from '@/components/ai-agents/MultiLangField';
-import { ANSWER_TYPES, FLOW_PHASES, type AgentFlowStep, type MultiLangText } from '@/types/ai-agents';
+import { useAgentTranslate } from '@/hooks/useAgentTranslate';
+import { AGENT_LANGUAGES, ANSWER_TYPES, FLOW_PHASES, type AgentFlowStep, type MultiLangText } from '@/types/ai-agents';
+
 import {
   ANSWER_FORMATS,
   BRANCH_MATCH_TYPES,
@@ -43,6 +45,8 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
   const branches = useMemo(() => normalizeBranches((step as any).branches), [step]);
   const validation = useMemo(() => normalizeValidation(step.validation), [step]);
   const [optionInput, setOptionInput] = useState('');
+  const translate = useAgentTranslate();
+  const [translatingId, setTranslatingId] = useState<string | null>(null);
 
   const otherCodes = allSteps.filter((s) => s.id !== step.id).map((s) => s.step_code).filter(Boolean);
   const duplicateCode = otherCodes.includes(step.step_code);
@@ -52,6 +56,33 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
     onChange({ validation: { ...validation, ...patch } as any });
 
   const setBranches = (next: FlowBranch[]) => onChange({ branches: next } as any);
+
+  /**
+   * Traduz o valor da ramificação para os demais idiomas e guarda como
+   * sinônimos, para que a resposta do cliente seja reconhecida em qualquer um.
+   */
+  const translateBranch = async (b: FlowBranch) => {
+    const source = (b.value || b.label || '').trim();
+    if (!source) return;
+    setTranslatingId(b.id);
+    try {
+      const result = await translate.mutateAsync({
+        text: source,
+        source: 'pt-BR',
+        targets: AGENT_LANGUAGES.map((l) => l.code).filter((c) => c !== 'pt-BR'),
+      });
+      const extra = Object.values(result)
+        .map((v) => String(v ?? '').trim())
+        .filter((v) => v && v.toLowerCase() !== source.toLowerCase());
+      const merged = Array.from(new Set([...(b.synonyms || []), ...extra]));
+      setBranches(branches.map((x) => (x.id === b.id ? { ...x, synonyms: merged } : x)));
+    } catch {
+      /* toast já exibido pelo hook */
+    } finally {
+      setTranslatingId(null);
+    }
+  };
+
 
   /** Opções sugeridas para o tipo de resposta atual. */
   const suggestedOptions = AUTO_BRANCH_TYPES.includes(step.answer_type)
@@ -350,6 +381,42 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
                     }
                   />
                 </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs font-normal text-muted-foreground">
+                      Equivalentes aceitos (outros idiomas), separados por vírgula
+                    </Label>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={b.match_type === 'QUALQUER' || translatingId === b.id}
+                      onClick={() => translateBranch(b)}
+                    >
+                      {translatingId === b.id ? 'Traduzindo…' : 'Traduzir'}
+                    </Button>
+                  </div>
+                  <Input
+                    placeholder="ej: sí, yes, oui"
+                    disabled={b.match_type === 'QUALQUER'}
+                    value={(b.synonyms || []).join(', ')}
+                    onChange={(e) =>
+                      setBranches(
+                        branches.map((x) =>
+                          x.id === b.id
+                            ? {
+                                ...x,
+                                synonyms: e.target.value
+                                  .split(',')
+                                  .map((s) => s.trim())
+                                  .filter(Boolean),
+                              }
+                            : x,
+                        ),
+                      )
+                    }
+                  />
+                </div>
+
                 <Select
                   value={b.next_step_code || '__none__'}
                   onValueChange={(v) =>

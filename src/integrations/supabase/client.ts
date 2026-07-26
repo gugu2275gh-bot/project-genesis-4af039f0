@@ -20,28 +20,37 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   },
 });
 
+/**
+ * Renova o token apenas quando ele está perto de expirar.
+ * Chamar `refreshSession()` sem necessidade dispara `TOKEN_REFRESHED`, o que
+ * remontava telas inteiras (e derrubava editores com rascunho não salvo).
+ */
+export async function ensureFreshSession(thresholdMs = 120_000): Promise<void> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
+    if (expiresAt - Date.now() < thresholdMs) {
+      await supabase.auth.refreshSession();
+    }
+  } catch (e) {
+    console.warn('Session refresh skipped:', e);
+  }
+}
+
 // Proactively refresh session when tab regains focus to prevent JWT expired errors
 let isRefreshing = false;
 const handleVisibilityChange = async () => {
   if (document.visibilityState === 'visible' && !isRefreshing) {
     isRefreshing = true;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
-        const now = Date.now();
-        // Refresh if token expires within the next 2 minutes
-        if (expiresAt - now < 120_000) {
-          await supabase.auth.refreshSession();
-        }
-      }
-    } catch (e) {
-      console.warn('Session refresh on focus failed:', e);
+      await ensureFreshSession();
     } finally {
       isRefreshing = false;
     }
   }
 };
+
 
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', handleVisibilityChange);

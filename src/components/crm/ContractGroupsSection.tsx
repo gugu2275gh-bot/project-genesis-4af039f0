@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { TitularLink } from '@/hooks/useContactBeneficiaries';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, ensureFreshSession } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useServiceTypes } from '@/hooks/useServiceTypes';
 import { useToast } from '@/hooks/use-toast';
@@ -881,7 +881,7 @@ export function ContractGroupsSection({
     setIsDeletingService(true);
     try {
       // Refresh session to ensure valid token
-      await supabase.auth.refreshSession();
+      await ensureFreshSession();
 
       const { data, error } = await supabase.functions.invoke('delete-service', {
         body: { lead_id: lead.id },

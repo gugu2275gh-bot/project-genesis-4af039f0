@@ -1,43 +1,32 @@
-## Diagnóstico (verificado no código)
+## Causa da quebra ao traduzir (confirmada no código)
 
-O editor visual (`FlowCanvas.tsx`, `StepNode.tsx`, `StepInspector.tsx`, `useSaveFlowCanvas`) tem falhas estruturais que explicam as quebras — inclusive "mover uma etapa quebra":
+`src/hooks/useAgentTranslate.ts:17` chama `supabase.auth.refreshSession()` antes de invocar a edge function. Isso dispara `TOKEN_REFRESHED` no `AuthContext` (`src/contexts/AuthContext.tsx:59-72`), que faz `setLoading(true)`. Com `loading = true`, tanto `ProtectedRoute` (`src/App.tsx:76-81`) quanto `AIAgents` (`src/pages/ai-agents/AIAgents.tsx:44`) substituem a árvore por um spinner — o editor é desmontado no meio da tradução e o rascunho não salvo (etapas, ligações, posições) se perde.
 
-1. **Posições guardadas pelo `step_code`, não pelo id** (`FlowCanvas.tsx:66,97,147`). Ao arrastar, o handler reconstrói o mapa inteiro de posições a cada evento; qualquer etapa com código vazio ou duplicado colide ou é perdida e o nó salta para `{0,0}`. Renomear o código no inspetor também apaga a posição.
-2. **Nós recriados a cada movimento** — o `useMemo` de `nodes` depende de `positions`, que muda a cada pixel do arrasto; o React Flow perde estado interno (dimensões/seleção), gerando o "tremor"/salto observado.
-3. **Estado local é sobrescrito por refetch** (`useEffect` em `FlowCanvas.tsx:75`): qualquer invalidação do React Query (salvar, voltar à aba, refoco da janela) recarrega `savedSteps` e **descarta as alterações não salvas** sem aviso.
-4. **Renomear o código quebra as ligações**: as outras etapas continuam apontando para o código antigo, virando "etapa aponta para X que não existe".
-5. **Códigos duplicados**: `etapa_${n}` é gerado por contagem; após excluir e criar de novo, gera código repetido → arestas erradas (o mapa de arestas é por código).
-6. **Ramificações automáticas em loop** (`StepInspector.tsx:54-72`): para `SIM_NAO`/seleção, o efeito recria as ramificações apagadas ou renomeadas, tornando impossível excluir/editar uma opção.
-7. **Salvar sem trava de erro** e sem aviso de alterações pendentes ao fechar a tela cheia; um erro no meio do laço de `update/insert` deixa o fluxo meio salvo.
+O mesmo padrão existe em `useAIAgents.ts`, `KnowledgeBaseManager.tsx` e `ContractGroupsSection.tsx`.
 
-## O que será feito
+## Correção
 
-**A. Reescrever o núcleo de estado do canvas**
-- Posições passam a ser indexadas pelo **id da etapa** (com migração automática das posições antigas por código na leitura, e regravação no formato novo).
-- Usar o padrão oficial do React Flow (estado de nós mantido e atualizado por `applyNodeChanges`), aplicando só as mudanças recebidas em vez de recriar tudo; nós ficam estáveis durante o arrasto.
-- `data` do nó com callbacks estáveis (ref) para o `memo` do `StepNode` voltar a funcionar.
+1. **AuthContext** — só `loading = true` na carga inicial/login. Em `TOKEN_REFRESHED` e `USER_UPDATED`, atualizar sessão em segundo plano, sem recarregar perfil/papéis se o usuário for o mesmo.
+2. **Guardas de rota** — `ProtectedRoute` e `AIAgents` mostram spinner apenas quando ainda não há usuário conhecido; revalidações não desmontam a tela.
+3. **Hook de tradução** — remover o `refreshSession()` obrigatório (o cliente renova sozinho); renovar só se o token estiver realmente expirado. Mesmo ajuste nos demais pontos que chamam `refreshSession()` antes de `functions.invoke`.
+4. **MultiLangField** — ignorar chaves não-string vindas do modelo, preservar o texto base em caso de falha, ignorar resposta se o componente foi desmontado, erro só via toast.
+5. **Tradução das opções de resposta** — adicionar tradução automática também para rótulos de ramificações e para a lista de "Opções oferecidas", gravando por idioma sem quebrar o casamento de resposta (o valor de comparação continua sendo o do idioma base, com os sinônimos traduzidos aceitos no runtime).
 
-**B. Não perder trabalho**
-- Só sincronizar com os dados do servidor quando não houver alterações pendentes (ou ao trocar de fluxo); caso contrário manter o rascunho e mostrar aviso "há alterações não salvas".
-- Confirmação ao fechar o editor em tela cheia com alterações pendentes.
+## Validação completa do editor
 
-**C. Integridade dos códigos e ligações**
-- Renomear o código de uma etapa remapeia automaticamente `next_step_code` e `branches.next_step_code` de todas as outras etapas.
-- Geração de código único (sufixo incremental) e bloqueio/normalização de código vazio ou duplicado (aviso no inspetor).
-- Arestas passam a ser construídas de forma resiliente a códigos repetidos.
+Auditar e testar cada opção do editor visual, corrigindo o que falhar:
 
-**D. Inspetor sem loops**
-- Ramificações automáticas geradas **uma vez** por tipo de resposta (com marcação de "geradas automaticamente"), com botão "Gerar opções" manual; o usuário pode excluir/editar sem recriação.
-- Correções de edição de mensagens múltiplas (remover a última mensagem, listas vazias) e de campos numéricos.
+- **Canvas**: criar etapa, mover (posições por id), auto-organizar, zoom/minimapa, selecionar/desselecionar, excluir por ícone e por tecla Delete, desfazer ligações.
+- **Ligações**: conectar saída padrão e saídas por ramificação, reapontar, destino inexistente, remoção em cascata ao excluir etapa.
+- **Inspetor**: renomear código (remapeia referências), código duplicado/vazio, nome, tipo de etapa, tipo de resposta, múltiplas mensagens (adicionar/remover/reordenar), reperguntas, validações (obrigatório, formato, min/max, tentativas, modo de pular), comportamento (handoff, pergunta paralela, resposta livre), geração de ramificações.
+- **Multi-idioma**: abas pt-BR/es/en/fr, tradução por campo, campos vazios, texto com emojis e marcadores `{{VAR}}`.
+- **Importação Bizagi**: modos substituir e acrescentar, códigos duplicados, posições.
+- **Salvamento**: novas etapas (`tmp_` → id real), atualização, exclusão, posições, aviso de alterações não salvas, fechar diálogo, alternar canvas/tabela, salvar com erros de validação.
+- **Resiliência**: `FlowErrorBoundary` ativo; nenhuma ação assíncrona (tradução, salvar, importar) pode fechar o editor ou zerar o rascunho.
 
-**E. Robustez geral**
-- `ErrorBoundary` em volta do canvas: se algo falhar, mostra mensagem e botão "recarregar editor" em vez de tela branca.
-- Salvamento em bloco mais seguro: normaliza etapas (código, order_index, mensagens), avisa quando há erros de validação antes de salvar e reporta a etapa exata em caso de falha.
+## Como verifico
 
-**F. Verificação**
-- Testes unitários para: layout automático, validação, remapeamento de código, aplicação de movimento de nó e normalização de mensagens/ramificações.
-- Teste de interação no preview (arrastar etapa, criar, renomear código, excluir, importar Bizagi, salvar e reabrir) com capturas de tela.
-
-## Observações técnicas
-
-Arquivos afetados: `src/components/ai-agents/flow-builder/FlowCanvas.tsx` (reescrita do estado), `StepNode.tsx`, `StepInspector.tsx`, `src/types/ai-agent-flow-builder.ts` (helpers de remapeamento/códigos), `src/lib/flow-validation.ts`, `src/hooks/useAIAgents.ts` (`useSaveFlowCanvas`), `src/components/ai-agents/FlowsManagement.tsx` (guarda de fechamento). Sem mudanças de banco de dados: o formato novo de `canvas.positions` é retrocompatível com o antigo.
+- Typecheck do projeto.
+- Testes unitários (Vitest) para os helpers de fluxo: código único, renomeio com remapeamento, posições, mensagens multi-idioma, ramificações e validação do grafo.
+- Testes de componente do inspetor cobrindo tradução (sucesso e falha) e edição de opções.
+- Execução no preview com Playwright para o que depender de interação real; o login automatizado não está disponível neste projeto (Supabase externo), então os pontos que exigem sessão ficam para sua conferência final, listados explicitamente no fim.
