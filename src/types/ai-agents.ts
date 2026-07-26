@@ -202,11 +202,22 @@ export const STEP_FIELD_MAPPINGS: { value: string; label: string }[] = [
   { value: 'funnel.entry_date_confirmed', label: 'Funil — Data de entrada na Espanha' },
   { value: 'funnel.empadronado_confirmed', label: 'Funil — Está empadronado? (Sim/Não)' },
   { value: 'funnel.empadronado_city', label: 'Funil — Cidade de empadronamento' },
+  { value: 'contact.spain_arrival_date', label: 'Contato — Data de chegada na Espanha' },
+  { value: 'contact.is_empadronado', label: 'Contato — Está empadronado? (Sim/Não)' },
+  { value: 'contact.empadronamiento_city', label: 'Contato — Cidade do empadronamento' },
+  { value: 'contact.empadronamiento_since', label: 'Contato — Empadronado desde (data)' },
+  { value: 'contact.education_level', label: 'Contato — Formação/escolaridade' },
+  { value: 'contact.works_remotely', label: 'Contato — Trabalha remoto (Sim/Não)' },
+  { value: 'contact.has_eu_family_member', label: 'Contato — Familiar europeu (Sim/Não)' },
+  { value: 'contact.eu_entry_last_6_months', label: 'Contato — Esteve na Europa nos últimos 6 meses' },
+  { value: 'contact.birth_date', label: 'Contato — Data de nascimento' },
+  { value: 'lead.service_interest', label: 'Serviço — Interesse do lead' },
   { value: 'outside.age', label: 'Fora da Espanha — Idade' },
   { value: 'outside.europe_6m', label: 'Fora da Espanha — Esteve na Europa (6 meses)' },
   { value: 'outside.eu_family', label: 'Fora da Espanha — Familiar europeu/residente' },
   { value: 'outside.remote_work', label: 'Fora da Espanha — Trabalha remoto' },
 ];
+
 
 
 export interface AgentFlowStep {
