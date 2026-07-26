@@ -286,6 +286,68 @@ export function useDeleteFlowStep() {
   });
 }
 
+/** Salva em lote o desenho do fluxo: etapas, ramificações e posições no canvas. */
+export function useSaveFlowCanvas() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({
+      flowId,
+      steps,
+      positions,
+      removedIds,
+    }: {
+      flowId: string;
+      steps: any[];
+      positions: Record<string, { x: number; y: number }>;
+      removedIds: string[];
+    }) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id ?? null;
+
+      if (removedIds.length) {
+        const { error } = await db.from('ai_agent_flow_steps').delete().in('id', removedIds);
+        if (error) throw error;
+      }
+
+      for (let i = 0; i < steps.length; i++) {
+        const s = steps[i];
+        const { id, created_at, updated_at, created_by, ...rest } = s;
+        const payload = {
+          ...rest,
+          flow_id: flowId,
+          order_index: i + 1,
+          message: s.messages?.['pt-BR'] || s.message || '',
+          updated_by: userId,
+        };
+        if (String(id).startsWith('tmp_')) {
+          const { error } = await db
+            .from('ai_agent_flow_steps')
+            .insert({ ...payload, created_by: userId });
+          if (error) throw error;
+        } else {
+          const { error } = await db.from('ai_agent_flow_steps').update(payload).eq('id', id);
+          if (error) throw error;
+        }
+      }
+
+      const { error: flowError } = await db
+        .from('ai_agent_flows')
+        .update({ canvas: { positions }, updated_by: userId })
+        .eq('id', flowId);
+      if (flowError) throw flowError;
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['ai_agent_flow_steps', vars.flowId] });
+      qc.invalidateQueries({ queryKey: ['ai_agent_flows'] });
+      toast({ title: 'Fluxo salvo' });
+    },
+    onError: (e: any) =>
+      toast({ title: 'Erro ao salvar fluxo', description: e.message, variant: 'destructive' }),
+  });
+}
+
+
 /* ------------------------------- SANDBOX -------------------------------- */
 
 export function useTestMessages(sessionId?: string) {

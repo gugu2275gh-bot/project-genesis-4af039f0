@@ -1,0 +1,2 @@
+ALTER TABLE public.ai_agent_flow_steps ADD COLUMN IF NOT EXISTS branches jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.ai_agent_flows ADD COLUMN IF NOT EXISTS canvas jsonb NOT NULL DEFAULT '{}'::jsonb;
