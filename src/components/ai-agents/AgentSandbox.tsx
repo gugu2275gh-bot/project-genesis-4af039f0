@@ -110,7 +110,11 @@ export function AgentSandbox({ initialAgentId }: Props) {
           <div className="space-y-2">
             <Label>&nbsp;</Label>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setSessionId(null)} disabled={!agentId}>
+              <Button
+                variant="outline"
+                onClick={() => { setSessionId(null); setDetectedLang(null); }}
+                disabled={!agentId}
+              >
                 <RotateCcw className="h-4 w-4 mr-1" /> Novo teste
               </Button>
             </div>
@@ -122,7 +126,11 @@ export function AgentSandbox({ initialAgentId }: Props) {
             <Badge variant="outline">{agent.provider}</Badge>
             <Badge variant="outline">{agent.model}</Badge>
             <Badge variant="outline">temp {agent.temperature}</Badge>
+            <Badge variant="secondary">
+              idioma: {detectedLang ? LANG_LABELS[detectedLang] || detectedLang : 'aguardando 1ª resposta'}
+            </Badge>
           </div>
+
         )}
 
         <div className="h-[380px] overflow-y-auto rounded-md border p-4 space-y-3 bg-muted/30">
