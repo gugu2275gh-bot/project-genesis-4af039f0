@@ -75,13 +75,13 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
       </div>
 
       <Tabs defaultValue="pergunta" className="flex-1 overflow-hidden flex flex-col">
-        <TabsList className="mx-4 mt-3 grid grid-cols-6">
-          <TabsTrigger value="pergunta">Mensagens</TabsTrigger>
-          <TabsTrigger value="respostas">Respostas</TabsTrigger>
-          <TabsTrigger value="validacao">Validação</TabsTrigger>
-          <TabsTrigger value="base">Base</TabsTrigger>
-          <TabsTrigger value="naosei">Resposta inesperada</TabsTrigger>
-          <TabsTrigger value="comportamento">Comportamento</TabsTrigger>
+        <TabsList className="mx-4 mt-3 flex w-auto justify-start gap-1 overflow-x-auto">
+          <TabsTrigger value="pergunta" className="shrink-0">Mensagens</TabsTrigger>
+          <TabsTrigger value="respostas" className="shrink-0">Respostas</TabsTrigger>
+          <TabsTrigger value="validacao" className="shrink-0">Validação</TabsTrigger>
+          <TabsTrigger value="base" className="shrink-0">Base de conhecimento</TabsTrigger>
+          <TabsTrigger value="naosei" className="shrink-0">Resposta inesperada</TabsTrigger>
+          <TabsTrigger value="comportamento" className="shrink-0">Comportamento</TabsTrigger>
         </TabsList>
 
         <div className="flex-1 overflow-y-auto p-4">
