@@ -93,7 +93,7 @@ export function StepValidationEditor({ validation, stepCodes, answerType, onChan
           <Input
             type="text"
             inputMode="numeric"
-            value={validation.max_reasks ?? 2}
+            value={validation.max_reasks ?? 1}
             onChange={(e) => onChange({ max_reasks: Number(e.target.value.replace(/\D/g, '')) || 0 })}
           />
         </div>

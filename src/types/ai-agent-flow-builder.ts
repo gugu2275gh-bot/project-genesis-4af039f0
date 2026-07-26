@@ -370,7 +370,7 @@ export const DEFAULT_STEP_VALIDATION: StepValidation = {
   regex: '',
   min: null,
   max: null,
-  max_reasks: 2,
+  max_reasks: 1,
   options: [],
   save_to_field: '',
   skip_mode: 'NUNCA',

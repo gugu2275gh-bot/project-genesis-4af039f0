@@ -11,19 +11,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const STALL_THRESHOLD_SECONDS = 90
+const STALL_THRESHOLD_SECONDS = 20
 const MAX_STALL_ATTEMPTS = 2
 const LOOKBACK_MINUTES = 30 // ignore very old conversations
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+// O cron do Postgres roda no máximo a cada minuto; para recuperar em ~20s a
+// função varre em ciclos curtos dentro da mesma execução.
+const SWEEP_CYCLES = 3
+const SWEEP_INTERVAL_MS = 18_000
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const supabase = createClient(supabaseUrl, serviceKey)
 
+async function sweep(supabase: any, supabaseUrl: string, serviceKey: string) {
   const cutoffOld = new Date(Date.now() - STALL_THRESHOLD_SECONDS * 1000).toISOString()
   const cutoffLookback = new Date(Date.now() - LOOKBACK_MINUTES * 60 * 1000).toISOString()
+
 
   // Check bot enabled globally
   const { data: cfg } = await supabase
@@ -33,10 +34,9 @@ serve(async (req) => {
     .maybeSingle()
   const botEnabled = (cfg?.value ?? 'true') !== 'false'
   if (!botEnabled) {
-    return new Response(JSON.stringify({ ok: true, skipped: 'bot disabled' }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return { skipped: 'bot disabled', scanned: 0, recovered: [] as any[] }
   }
+
 
   // Find candidate leads: latest mensagens_cliente row in window is inbound (WHATSAPP)
   // and older than threshold.
@@ -51,10 +51,7 @@ serve(async (req) => {
 
   if (candErr) {
     console.error('[watchdog] query error:', candErr.message)
-    return new Response(JSON.stringify({ ok: false, error: candErr.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return { error: candErr.message, scanned: 0, recovered: [] as any[] }
   }
 
   const seen = new Set<string>()
@@ -203,8 +200,33 @@ serve(async (req) => {
     }
   }
 
+  return { scanned: stalled.length, recovered }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const supabase = createClient(supabaseUrl, serviceKey)
+
+  const cycles: any[] = []
+  for (let i = 0; i < SWEEP_CYCLES; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, SWEEP_INTERVAL_MS))
+    try {
+      cycles.push(await sweep(supabase, supabaseUrl, serviceKey))
+    } catch (e) {
+      cycles.push({ error: e instanceof Error ? e.message : String(e), scanned: 0, recovered: [] })
+    }
+  }
+
   return new Response(
-    JSON.stringify({ ok: true, scanned: stalled.length, recovered }),
+    JSON.stringify({
+      ok: true,
+      cycles,
+      scanned: cycles.reduce((a, c) => a + (c.scanned || 0), 0),
+      recovered: cycles.flatMap((c) => c.recovered || []),
+    }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
   )
 })

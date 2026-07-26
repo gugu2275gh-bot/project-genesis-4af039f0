@@ -815,18 +815,9 @@ export function advanceFlow(
           : 'invalid_format'
     const rule = ruleFor(cfg, kind)
 
-    // Data aproximada ("Maio de 2026", "03/2024", "em 2023"): aceita quando o
-    // modo aproximado está ligado em QUALQUER tratativa da etapa ou quando o
-    // agente já ofereceu ao cliente a alternativa de mês/ano (unknown usado).
-    if (
-      String(step.answer_type || '') === 'DATA' &&
-      result.reason === 'invalid_date' &&
-      (
-        rule.mode === 'ACEITAR_APROXIMADO' ||
-        cfg.unknown.mode === 'ACEITAR_APROXIMADO' ||
-        (cfg.unknown.enabled && (state.unknown_attempts || 0) > 0)
-      )
-    ) {
+    // Data aproximada ("Maio de 2026", "03/2024", "em 2023"): aceita já na
+    // PRIMEIRA falha — retomar o fluxo vale mais do que exigir o dia exato.
+    if (String(step.answer_type || '') === 'DATA' && result.reason === 'invalid_date') {
       const approx = parseApproxDate(message)
       if (approx) return advanceWith(approx)
     }
@@ -841,7 +832,8 @@ export function advanceFlow(
 
     const attempts = (state.attempts || 0) + 1
     const v = (step.validation || {}) as Record<string, unknown>
-    const maxReasks = Number.isFinite(Number(v.max_reasks)) ? Number(v.max_reasks) : 2
+    const maxReasks = Number.isFinite(Number(v.max_reasks)) ? Number(v.max_reasks) : 1
+
     const fallbackCode = String(v.fallback_step_code || '').trim()
 
     // Esgotou as reperguntas e existe etapa de fallback: desvia o fluxo.
