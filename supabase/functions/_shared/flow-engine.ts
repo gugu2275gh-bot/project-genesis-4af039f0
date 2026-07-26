@@ -331,6 +331,7 @@ function run(
   captured: FlowCapturedField[] = [],
 ): FlowTurnResult {
   const messages: string[] = []
+  const outbound: FlowOutboundMessage[] = []
   const path: string[] = []
   const visited = new Set(state.visited || [])
   let code: string | null = fromCode
@@ -345,7 +346,13 @@ function run(
 
     // Nunca reenviar mensagens de uma etapa já executada (evita loops).
     if (!visited.has(code)) {
-      messages.push(...messagesOf(step, lang))
+      const texts = messagesOf(step, lang)
+      messages.push(...texts)
+      const qr = quickReplyOf(step)
+      for (let i = 0; i < texts.length; i++) {
+        // Só a última mensagem da etapa carrega a pergunta binária.
+        outbound.push({ text: texts[i], step_code: step.step_code, quick_reply: qr && i === texts.length - 1 })
+      }
       visited.add(code)
     }
 
@@ -353,6 +360,7 @@ function run(
     if (kind === 'PERGUNTA') {
       return {
         messages,
+        outbound,
         state: { ...state, current_step: code, visited: [...visited], attempts: 0, finished: false },
         reasked: false,
         finished: false,
@@ -364,6 +372,7 @@ function run(
     if (kind === 'FIM') {
       return {
         messages,
+        outbound,
         state: { ...state, current_step: code, visited: [...visited], finished: true, handoff: sawHandoff || !!step.handoff },
         reasked: false,
         finished: true,
@@ -379,6 +388,7 @@ function run(
 
   return {
     messages,
+    outbound,
     state: { ...state, current_step: code, visited: [...visited], finished: true, handoff: sawHandoff || !!state.handoff },
     reasked: false,
     finished: true,
@@ -387,6 +397,7 @@ function run(
     captured,
   }
 }
+
 
 /** Primeiro turno: envia as mensagens de abertura até a primeira pergunta. */
 export function startFlow(steps: FlowStep[], lang: FlowLang = 'pt-BR'): FlowTurnResult {
