@@ -15,7 +15,7 @@ import { FlowCanvas } from '@/components/ai-agents/flow-builder/FlowCanvas';
 import { FlowErrorBoundary } from '@/components/ai-agents/flow-builder/FlowErrorBoundary';
 import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
-import { normalizeBranches, normalizeValidation } from '@/types/ai-agent-flow-builder';
+import { STEP_KINDS, normalizeBranches, normalizeValidation } from '@/types/ai-agent-flow-builder';
 
 
 import {
