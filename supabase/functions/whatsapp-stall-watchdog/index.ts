@@ -215,11 +215,23 @@ serve(async (req) => {
   for (let i = 0; i < SWEEP_CYCLES; i++) {
     if (i > 0) await new Promise((r) => setTimeout(r, SWEEP_INTERVAL_MS))
     try {
-      cycles.push(await sweep(supabase, supabaseUrl, serviceKey))
+      const res = await sweep(supabase, supabaseUrl, serviceKey)
+      console.log('[STALL_WATCHDOG] ciclo', JSON.stringify({
+        cycle: i + 1,
+        of: SWEEP_CYCLES,
+        scanned: res.scanned,
+        recovered: (res.recovered || []).length,
+        skipped: res.skipped || null,
+      }))
+      cycles.push({ cycle: i + 1, ...res })
+      if (res.skipped) break
     } catch (e) {
-      cycles.push({ error: e instanceof Error ? e.message : String(e), scanned: 0, recovered: [] })
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[STALL_WATCHDOG] ciclo falhou', JSON.stringify({ cycle: i + 1, error: msg }))
+      cycles.push({ cycle: i + 1, error: msg, scanned: 0, recovered: [] })
     }
   }
+
 
   return new Response(
     JSON.stringify({
