@@ -1,0 +1,155 @@
+export type AgentProvider = 'gemini' | 'openai' | 'lovable';
+export type AgentStatus = 'ATIVO' | 'INATIVO' | 'RASCUNHO';
+
+export interface AgentCapabilities {
+  answer_questions: boolean;
+  use_knowledge_base: boolean;
+  use_rag: boolean;
+  ask_questions: boolean;
+  run_structured_flow: boolean;
+  handoff_to_human: boolean;
+}
+
+export interface AgentBehavior {
+  personality: string;
+  tone: string;
+  allowed_languages: string[];
+  required_rules: string[];
+  forbidden_rules: string[];
+  forbidden_information: string[];
+  on_unknown: string;
+  on_off_topic: string;
+  on_handoff: string;
+}
+
+export interface AIAgent {
+  id: string;
+  name: string;
+  description: string | null;
+  provider: AgentProvider;
+  model: string;
+  status: AgentStatus;
+  temperature: number;
+  max_tokens: number;
+  default_language: string;
+  prompt_base: string;
+  prompt_behavior: string;
+  fallback_message: string;
+  handoff_message: string;
+  flow_id: string | null;
+  capabilities: AgentCapabilities;
+  behavior: AgentBehavior;
+  current_version: number;
+  parent_agent_id: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+export interface AgentVersion {
+  id: string;
+  agent_id: string;
+  version_number: number;
+  config: Record<string, unknown>;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface AgentFlow {
+  id: string;
+  name: string;
+  description: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type AnswerType =
+  | 'TEXTO_LIVRE'
+  | 'NOME'
+  | 'EMAIL'
+  | 'NUMERO'
+  | 'DATA'
+  | 'SIM_NAO'
+  | 'SELECAO'
+  | 'BOTOES'
+  | 'MULTIPLA_ESCOLHA';
+
+export const ANSWER_TYPES: { value: AnswerType; label: string }[] = [
+  { value: 'TEXTO_LIVRE', label: 'Texto livre' },
+  { value: 'NOME', label: 'Nome' },
+  { value: 'EMAIL', label: 'E-mail' },
+  { value: 'NUMERO', label: 'Número' },
+  { value: 'DATA', label: 'Data' },
+  { value: 'SIM_NAO', label: 'Sim/Não' },
+  { value: 'SELECAO', label: 'Seleção de opção' },
+  { value: 'BOTOES', label: 'Botões' },
+  { value: 'MULTIPLA_ESCOLHA', label: 'Múltipla escolha' },
+];
+
+export interface AgentFlowStep {
+  id: string;
+  flow_id: string;
+  step_code: string;
+  name: string;
+  description: string | null;
+  message: string;
+  answer_type: AnswerType;
+  validation: Record<string, unknown>;
+  next_step_code: string | null;
+  exit_condition: string | null;
+  allow_parallel_question: boolean;
+  allow_free_answer: boolean;
+  handoff: boolean;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentTestSession {
+  id: string;
+  agent_id: string;
+  agent_version_id: string | null;
+  title: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface AgentTestMessage {
+  id: string;
+  session_id: string;
+  agent_id: string | null;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  provider: string | null;
+  model: string | null;
+  latency_ms: number | null;
+  tokens_used: number | null;
+  created_at: string;
+}
+
+export const DEFAULT_CAPABILITIES: AgentCapabilities = {
+  answer_questions: true,
+  use_knowledge_base: false,
+  use_rag: false,
+  ask_questions: true,
+  run_structured_flow: false,
+  handoff_to_human: true,
+};
+
+export const DEFAULT_BEHAVIOR: AgentBehavior = {
+  personality: 'PROFISSIONAL',
+  tone: '',
+  allowed_languages: ['pt'],
+  required_rules: [],
+  forbidden_rules: [],
+  forbidden_information: [],
+  on_unknown: '',
+  on_off_topic: '',
+  on_handoff: '',
+};
+
+export const PERSONALITIES = ['PROFISSIONAL', 'FORMAL', 'ACOLHEDOR', 'OBJETIVO'] as const;

@@ -1,0 +1,326 @@
+import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Plus, Pencil, Trash2, ListOrdered } from 'lucide-react';
+import {
+  useAgentFlows,
+  useDeleteFlow,
+  useDeleteFlowStep,
+  useFlowSteps,
+  useSaveFlow,
+  useSaveFlowStep,
+} from '@/hooks/useAIAgents';
+import { ANSWER_TYPES, type AgentFlow, type AgentFlowStep } from '@/types/ai-agents';
+
+function StepDialog({
+  open,
+  onOpenChange,
+  flowId,
+  step,
+  nextIndex,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  flowId: string;
+  step?: AgentFlowStep | null;
+  nextIndex: number;
+}) {
+  const save = useSaveFlowStep();
+  const [draft, setDraft] = useState<any>(
+    step || {
+      step_code: '',
+      name: '',
+      description: '',
+      message: '',
+      answer_type: 'TEXTO_LIVRE',
+      next_step_code: '',
+      exit_condition: '',
+      allow_parallel_question: true,
+      allow_free_answer: true,
+      handoff: false,
+      order_index: nextIndex,
+    },
+  );
+  const set = (patch: Record<string, unknown>) => setDraft((d: any) => ({ ...d, ...patch }));
+
+  const handleSave = async () => {
+    const { created_at, updated_at, ...rest } = draft;
+    await save.mutateAsync({ ...rest, flow_id: flowId });
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{step ? 'Editar etapa' : 'Nova etapa'}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Código da etapa *</Label>
+              <Input value={draft.step_code} onChange={(e) => set({ step_code: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Nome *</Label>
+              <Input value={draft.name} onChange={(e) => set({ name: e.target.value })} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Descrição</Label>
+            <Textarea rows={2} value={draft.description || ''} onChange={(e) => set({ description: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <Label>Mensagem enviada ao cliente</Label>
+            <Textarea rows={3} value={draft.message || ''} onChange={(e) => set({ message: e.target.value })} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Tipo de resposta esperada</Label>
+              <Select value={draft.answer_type} onValueChange={(v) => set({ answer_type: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ANSWER_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Ordem</Label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={draft.order_index}
+                onChange={(e) => set({ order_index: e.target.value.replace(/\D/g, '') })}
+                onBlur={(e) => set({ order_index: Number(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Próxima etapa (código)</Label>
+              <Input value={draft.next_step_code || ''} onChange={(e) => set({ next_step_code: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Condição de saída</Label>
+              <Input value={draft.exit_condition || ''} onChange={(e) => set({ exit_condition: e.target.value })} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Validação (JSON)</Label>
+            <Textarea
+              rows={2}
+              value={JSON.stringify(draft.validation || {}, null, 0)}
+              onChange={(e) => {
+                try {
+                  set({ validation: JSON.parse(e.target.value || '{}') });
+                } catch {
+                  /* ignora JSON inválido enquanto digita */
+                }
+              }}
+            />
+          </div>
+          <div className="space-y-2">
+            {[
+              { key: 'allow_parallel_question', label: 'Permitir pergunta paralela' },
+              { key: 'allow_free_answer', label: 'Permitir resposta livre' },
+              { key: 'handoff', label: 'Encaminhar para humano' },
+            ].map(({ key, label }) => (
+              <div key={key} className="flex items-center justify-between rounded-md border p-3">
+                <Label className="font-normal">{label}</Label>
+                <Switch checked={!!draft[key]} onCheckedChange={(v) => set({ [key]: v })} />
+              </div>
+            ))}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={handleSave} disabled={!draft.step_code?.trim() || !draft.name?.trim()}>Salvar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FlowSteps({ flow }: { flow: AgentFlow }) {
+  const { data: steps } = useFlowSteps(flow.id);
+  const del = useDeleteFlowStep();
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<AgentFlowStep | null>(null);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium flex items-center gap-2">
+          <ListOrdered className="h-4 w-4" /> Etapas de "{flow.name}"
+        </p>
+        <Button size="sm" onClick={() => { setEditing(null); setOpen(true); }}>
+          <Plus className="h-4 w-4 mr-1" /> Nova etapa
+        </Button>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Ordem</TableHead>
+            <TableHead>Código</TableHead>
+            <TableHead>Nome</TableHead>
+            <TableHead>Tipo</TableHead>
+            <TableHead>Próxima</TableHead>
+            <TableHead className="text-right">Ações</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {(steps || []).length === 0 && (
+            <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Nenhuma etapa cadastrada</TableCell></TableRow>
+          )}
+          {(steps || []).map((s) => (
+            <TableRow key={s.id}>
+              <TableCell>{s.order_index}</TableCell>
+              <TableCell className="font-mono text-xs">{s.step_code}</TableCell>
+              <TableCell>{s.name}</TableCell>
+              <TableCell>{ANSWER_TYPES.find((t) => t.value === s.answer_type)?.label || s.answer_type}</TableCell>
+              <TableCell className="font-mono text-xs">{s.next_step_code || '—'}</TableCell>
+              <TableCell className="text-right space-x-1">
+                <Button size="icon" variant="ghost" onClick={() => { setEditing(s); setOpen(true); }}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="ghost" onClick={() => del.mutate({ id: s.id, flow_id: flow.id })}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      {open && (
+        <StepDialog
+          key={editing?.id || 'new'}
+          open={open}
+          onOpenChange={setOpen}
+          flowId={flow.id}
+          step={editing}
+          nextIndex={(steps?.length || 0) + 1}
+        />
+      )}
+    </div>
+  );
+}
+
+export function FlowsManagement() {
+  const { data: flows, isLoading } = useAgentFlows();
+  const saveFlow = useSaveFlow();
+  const delFlow = useDeleteFlow();
+  const [selected, setSelected] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [draft, setDraft] = useState<any>({ name: '', description: '', status: 'RASCUNHO' });
+
+  const current = (flows || []).find((f) => f.id === selected) || null;
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Fluxos de atendimento</CardTitle>
+          <Button
+            size="sm"
+            onClick={() => { setDraft({ name: '', description: '', status: 'RASCUNHO' }); setDialogOpen(true); }}
+          >
+            <Plus className="h-4 w-4 mr-1" /> Novo fluxo
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Carregando…</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(flows || []).length === 0 && (
+                  <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">Nenhum fluxo cadastrado</TableCell></TableRow>
+                )}
+                {(flows || []).map((f) => (
+                  <TableRow key={f.id} className={selected === f.id ? 'bg-accent/50' : ''}>
+                    <TableCell className="font-medium">{f.name}</TableCell>
+                    <TableCell className="max-w-[280px] truncate">{f.description || '—'}</TableCell>
+                    <TableCell><Badge variant="outline">{f.status}</Badge></TableCell>
+                    <TableCell className="text-right space-x-1">
+                      <Button size="sm" variant="outline" onClick={() => setSelected(f.id)}>Etapas</Button>
+                      <Button size="icon" variant="ghost" onClick={() => { setDraft(f); setDialogOpen(true); }}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => delFlow.mutate(f.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {current && (
+        <Card>
+          <CardContent className="pt-6">
+            <FlowSteps flow={current} />
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{draft.id ? 'Editar fluxo' : 'Novo fluxo'}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nome *</Label>
+              <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Descrição</Label>
+              <Textarea rows={2} value={draft.description || ''} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select value={draft.status} onValueChange={(v) => setDraft({ ...draft, status: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="RASCUNHO">Rascunho</SelectItem>
+                  <SelectItem value="ATIVO">Ativo</SelectItem>
+                  <SelectItem value="INATIVO">Inativo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={!draft.name?.trim()}
+              onClick={async () => {
+                const { created_at, updated_at, ...rest } = draft;
+                await saveFlow.mutateAsync(rest);
+                setDialogOpen(false);
+              }}
+            >
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
