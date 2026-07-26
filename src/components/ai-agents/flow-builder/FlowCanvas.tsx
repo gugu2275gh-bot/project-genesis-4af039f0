@@ -213,7 +213,10 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
     [steps],
   );
 
+  deleteStepRef.current = deleteStep;
+
   useEffect(() => {
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Delete' || !selectedId) return;
       const el = document.activeElement as HTMLElement | null;
