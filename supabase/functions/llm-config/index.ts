@@ -117,6 +117,38 @@ async function testOpenAI(model: string): Promise<{ ok: boolean; latency_ms: num
   }
 }
 
+async function testLovable(model: string): Promise<{ ok: boolean; latency_ms: number; error?: string }> {
+  const key = Deno.env.get('LOVABLE_API_KEY')
+  if (!key) return { ok: false, latency_ms: 0, error: 'LOVABLE_API_KEY não configurada' }
+  const start = Date.now()
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 20000)
+    const payload: Record<string, unknown> = {
+      model,
+      messages: [{ role: 'user', content: 'Responda apenas "ok".' }],
+      max_tokens: 8,
+    }
+    if (model.startsWith('openai/gpt-5.6')) payload.reasoning_effort = 'none'
+    const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Lovable-API-Key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    const latency_ms = Date.now() - start
+    if (!resp.ok) {
+      const txt = await resp.text()
+      return { ok: false, latency_ms, error: describeError(resp.status, txt) }
+    }
+    await resp.json()
+    return { ok: true, latency_ms }
+  } catch (e: any) {
+    return { ok: false, latency_ms: Date.now() - start, error: e?.message || String(e) }
+  }
+}
+
 // Cache em memória para listagens de modelos (5 min)
 type ModelInfo = { id: string; displayName: string; description?: string }
 const _modelsCache: Record<string, { value: ModelInfo[]; expires: number }> = {}
