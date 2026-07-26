@@ -260,6 +260,16 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
 
           </TabsContent>
 
+          <TabsContent value="base" className="mt-0 space-y-4">
+            <StepKnowledgeCheckEditor
+              value={validation.kb_check}
+              isQuestion={kind === 'PERGUNTA'}
+              onChange={(next) => setValidation({ kb_check: next })}
+            />
+          </TabsContent>
+
+
+
           <TabsContent value="naosei" className="mt-0 space-y-4">
             <StepUnexpectedAnswerEditor
               value={validation.unexpected_answer}
