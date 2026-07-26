@@ -42,6 +42,41 @@ export function slugify(input: string, fallback: string): string {
   return base || fallback;
 }
 
+const MSG_LABEL = /^\s*msg\s*[a-z]?\s*\d+\s*[-–:]?\s*$/i;
+
+/**
+ * Quebra o conteúdo de uma caixa de texto do Bizagi em mensagens separadas.
+ * Linhas como "Msg 1", "Msg B2" funcionam como separadores e são descartadas.
+ */
+export function splitAnnotationMessages(raw: string): string[] {
+  const lines = (raw || '').split('\n');
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  lines.forEach((line) => {
+    if (MSG_LABEL.test(line)) {
+      if (current.length) chunks.push(current);
+      current = [];
+      return;
+    }
+    current.push(line);
+  });
+  if (current.length) chunks.push(current);
+  const out = chunks.map((c) => c.join('\n').trim()).filter(Boolean);
+  return out.length ? out : raw.trim() ? [raw.trim()] : [];
+}
+
+/** Deduz o tipo de resposta a partir do texto da pergunta. */
+function guessAnswerType(text: string): string {
+  const t = text.toLowerCase();
+  if (/e-?mail/.test(t)) return 'EMAIL';
+  if (/nome completo|seu nome/.test(t)) return 'NOME';
+  if (/\bdata\b|desde quando|qual foi a data/.test(t)) return 'DATA';
+  if (/idade|quantos anos/.test(t)) return 'NUMERO';
+  if (/^(você|voce|está|esta|possui|tem |trabalha|se sim)/.test(t)) return 'SIM_NAO';
+  return 'TEXTO_LIVRE';
+}
+
+
 interface RawNode {
   id: string;
   kind: 'task' | 'gateway' | 'start' | 'end' | 'event';
