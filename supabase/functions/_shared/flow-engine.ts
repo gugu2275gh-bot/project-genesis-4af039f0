@@ -674,8 +674,10 @@ export function advanceFlow(
   state: FlowRunState,
   message: string,
   lang: FlowLang = 'pt-BR',
+  opts: { ack?: string } = {},
 ): FlowTurnResult {
   const index = indexSteps(steps)
+
   if (!state?.current_step) return startFlow(steps, lang)
   if (state.finished) {
     return { messages: [], outbound: [], state, reasked: false, finished: true, handoff: !!state.handoff, path: [], captured: [] }
