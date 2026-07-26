@@ -730,6 +730,35 @@ export function advanceFlow(
     captured: [],
   })
 
+  /** Última saída possível: nunca repetir a mesma pergunta em loop. */
+  const escalate = (): FlowTurnResult => {
+    const v = (step.validation || {}) as Record<string, unknown>
+    const fallbackCode = String(v.fallback_step_code || '').trim()
+    if (fallbackCode && index.get(fallbackCode)) {
+      return run(index, fallbackCode, { ...state, attempts: 0, unknown_attempts: 0 }, lang)
+    }
+    // Data aproximada, quando o cliente já tiver dado alguma pista.
+    if (String(step.answer_type || '') === 'DATA') {
+      const approx = parseApproxDate(message)
+      if (approx) return advanceWith(approx)
+    }
+    const required = (v as any).required !== false
+    if (!required) return advanceWith('')
+
+    // Etapa obrigatória sem saída: encerra o bot e passa para atendimento humano.
+    const text = defaultHandoffFallback(lang)
+    return {
+      messages: [text],
+      outbound: [{ text, step_code: step.step_code }],
+      state: { ...state, attempts: 0, unknown_attempts: 0, finished: true, handoff: true },
+      reasked: false,
+      finished: true,
+      handoff: true,
+      path: [step.step_code],
+      captured: [],
+    }
+  }
+
   /**
    * Aplica a tratativa configurada para a situação. Devolve `null` quando o
    * modo é INSISTIR (o chamador decide qual repergunta enviar).
@@ -773,8 +802,8 @@ export function advanceFlow(
     const tries = (state.unknown_attempts || 0) + 1
     const applied = applyRule('unknown', tries)
     if (applied) return applied
-    // INSISTIR (ou ENCAMINHAR sem etapa de destino): repergunta padrão.
-    return stay(defaultReask(), { unknown_attempts: tries })
+    // INSISTIR (ou ENCAMINHAR sem destino) com tentativas esgotadas: sai do loop.
+    return escalate()
   }
 
   const result = validateAnswer(step, message)
@@ -786,11 +815,17 @@ export function advanceFlow(
           : 'invalid_format'
     const rule = ruleFor(cfg, kind)
 
-    // Modo aproximado: aceita data incompleta ("03/2024", "em 2023") e segue.
+    // Data aproximada ("Maio de 2026", "03/2024", "em 2023"): aceita quando o
+    // modo aproximado está ligado em QUALQUER tratativa da etapa ou quando o
+    // agente já ofereceu ao cliente a alternativa de mês/ano (unknown usado).
     if (
-      rule.mode === 'ACEITAR_APROXIMADO' &&
       String(step.answer_type || '') === 'DATA' &&
-      result.reason === 'invalid_date'
+      result.reason === 'invalid_date' &&
+      (
+        rule.mode === 'ACEITAR_APROXIMADO' ||
+        cfg.unknown.mode === 'ACEITAR_APROXIMADO' ||
+        (cfg.unknown.enabled && (state.unknown_attempts || 0) > 0)
+      )
     ) {
       const approx = parseApproxDate(message)
       if (approx) return advanceWith(approx)
@@ -801,7 +836,7 @@ export function advanceFlow(
       const tries = (state.unknown_attempts || 0) + 1
       const applied = applyRule(kind, tries)
       if (applied) return applied
-      return stay(defaultReask(result.reason), { unknown_attempts: tries })
+      return escalate()
     }
 
     const attempts = (state.attempts || 0) + 1
@@ -814,13 +849,12 @@ export function advanceFlow(
       return run(index, fallbackCode, { ...state, attempts: 0, unknown_attempts: 0 }, lang)
     }
 
-    // Esgotou as reperguntas sem etapa de fallback, mas a etapa permite pular.
-    if (
-      attempts > maxReasks &&
-      !fallbackCode &&
-      (rule.mode === 'PULAR' || rule.mode === 'ACEITAR_APROXIMADO')
-    ) {
-      return advanceWith(rule.fallback_value)
+    // Esgotou as reperguntas: nunca repete a mesma pergunta indefinidamente.
+    if (attempts > maxReasks) {
+      if (!fallbackCode && (rule.mode === 'PULAR' || rule.mode === 'ACEITAR_APROXIMADO')) {
+        return advanceWith(rule.fallback_value)
+      }
+      return escalate()
     }
 
     const reask = defaultReask(result.reason)
@@ -837,6 +871,7 @@ export function advanceFlow(
     }
 
   }
+
 
 
 
