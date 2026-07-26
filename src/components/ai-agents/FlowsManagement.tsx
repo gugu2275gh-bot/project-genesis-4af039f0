@@ -244,8 +244,10 @@ function StepDialog({
           <StepValidationEditor
             validation={validation}
             stepCodes={otherCodes}
+            answerType={draft.answer_type}
             onChange={(patch) => set({ validation: { ...validation, ...patch } })}
           />
+
 
           <div className="space-y-2">
             {[
