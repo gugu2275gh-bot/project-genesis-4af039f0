@@ -271,19 +271,27 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
 
             <div className="flex items-center justify-between">
               <Label>Ramificações (respostas possíveis)</Label>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  setBranches([
-                    ...branches,
-                    { id: `b_${Date.now()}`, label: '', match_type: 'IGUAL', value: '', next_step_code: null },
-                  ])
-                }
-              >
-                <Plus className="h-4 w-4 mr-1" /> Resposta
-              </Button>
+              <div className="flex items-center gap-1">
+                {missingOptions.length > 0 && (
+                  <Button size="sm" variant="secondary" onClick={generateBranches}>
+                    Gerar opções ({missingOptions.length})
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setBranches([
+                      ...branches,
+                      { id: `b_${Date.now()}`, label: '', match_type: 'IGUAL', value: '', next_step_code: null },
+                    ])
+                  }
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Resposta
+                </Button>
+              </div>
             </div>
+
 
             {branches.length === 0 && (
               <p className="text-xs text-muted-foreground">
