@@ -158,7 +158,82 @@ Deno.serve(async (req) => {
       steps = data || []
     }
 
+    // Também carrega o fluxo de pré-handoff quando o agente tiver um.
+    if (config.pre_handoff_flow_id && config.pre_handoff_flow_id !== config.flow_id) {
+      const { data } = await service
+        .from('ai_agent_flow_steps')
+        .select('*')
+        .eq('flow_id', config.pre_handoff_flow_id)
+        .order('order_index', { ascending: true })
+      if ((data || []).length) steps = [...(data || []), ...steps]
+    }
+
+    // ------------------------------------------------------------------
+    // EXECUÇÃO DETERMINÍSTICA DO FLUXO DESENHADO
+    // Quando o fluxo tem uma etapa de INÍCIO, o simulador executa o grafo
+    // (mensagens exatas, validações e ramificações) em vez de deixar o LLM
+    // improvisar. Ao terminar o fluxo, cai no modo livre com o LLM.
+    // ------------------------------------------------------------------
+    const runtimeCfg = (config.runtime_config && typeof config.runtime_config === 'object') ? config.runtime_config : {}
+    const startStep = findStartStep(steps)
+    const visualFlowEnabled =
+      runtimeCfg.execute_visual_flow !== false && !!startStep && stepKindOf(startStep) === 'INICIO'
+
+    const flowState = (session.flow_state && typeof session.flow_state === 'object') ? session.flow_state : {}
+
+    if (visualFlowEnabled && !flowState.finished) {
+      const lang = String(config.default_language || 'pt-BR')
+      const firstTurn = !flowState.current_step
+      const turn = firstTurn
+        ? startFlow(steps, lang as any)
+        : advanceFlow(steps, flowState, message, lang as any)
+
+      await service.from('ai_agent_test_messages').insert({
+        session_id,
+        agent_id: agent.id,
+        role: 'user',
+        content: message,
+        created_by: auth.userId,
+      })
+
+      await service
+        .from('ai_agent_test_sessions')
+        .update({ flow_state: turn.state, updated_at: new Date().toISOString() })
+        .eq('id', session_id)
+
+      const reply = turn.messages.join('\n\n')
+      if (reply) {
+        await service.from('ai_agent_test_messages').insert({
+          session_id,
+          agent_id: agent.id,
+          role: 'assistant',
+          content: reply,
+          provider: 'flow-engine',
+          model: `fluxo:${config.flow_id || ''}`,
+          latency_ms: 0,
+          created_by: auth.userId,
+        })
+
+        return json({
+          reply,
+          provider: 'flow-engine',
+          model: 'fluxo determinístico',
+          latency_ms: 0,
+          tokens_used: 0,
+          flow: {
+            current_step: turn.state.current_step,
+            reasked: turn.reasked,
+            finished: turn.finished,
+            handoff: turn.handoff,
+            path: turn.path,
+          },
+        })
+      }
+      // Fluxo concluído sem mensagem nova → segue para o modo livre (LLM).
+    }
+
     const systemPrompt = buildSystemPrompt(config, steps)
+
 
     // Histórico já persistido
     const { data: prior } = await service
