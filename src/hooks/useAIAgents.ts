@@ -116,7 +116,8 @@ export function useDuplicateAgent() {
     mutationFn: async (agent: AIAgent) => {
       const { data: userData } = await supabase.auth.getUser();
       const {
-        id, created_at, updated_at, created_by, updated_by, current_version, ...rest
+        id, created_at, updated_at, created_by, updated_by, current_version,
+        is_production, production_synced_at, ...rest
       } = agent as any;
       // O fluxo NÃO é duplicado: o novo agente aponta para o mesmo flow_id.
       const { data, error } = await db
@@ -125,6 +126,7 @@ export function useDuplicateAgent() {
           ...rest,
           name: `${agent.name} (cópia)`,
           status: 'RASCUNHO',
+          is_production: false,
           current_version: 1,
           created_by: userData?.user?.id ?? null,
           updated_by: userData?.user?.id ?? null,
