@@ -78,7 +78,7 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
           <TabsTrigger value="pergunta">Mensagens</TabsTrigger>
           <TabsTrigger value="respostas">Respostas</TabsTrigger>
           <TabsTrigger value="validacao">Validação</TabsTrigger>
-          <TabsTrigger value="naosei">Se não souber</TabsTrigger>
+          <TabsTrigger value="naosei">Resposta inesperada</TabsTrigger>
           <TabsTrigger value="comportamento">Comportamento</TabsTrigger>
         </TabsList>
 
