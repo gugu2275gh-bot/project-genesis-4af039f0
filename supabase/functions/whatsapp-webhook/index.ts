@@ -452,6 +452,7 @@ import {
   enforceResponseLanguage,
   generateAIResponse,
   generateAIResponseOpenAI,
+  trimIncompleteSentence,
 } from './lib/ai.ts'
 
 
@@ -3297,6 +3298,14 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
 
             // BPMN-3 MODO PÓS-HANDOFF: se H1-H3 já foram enviados, anexa o sufixo
             // localizado de "aguarde um especialista" ao final da resposta (uma única bolha).
+            // Rede de segurança: se a resposta terminou cortada (limite de tokens),
+            // remove a frase incompleta antes de enviar ao cliente.
+            try {
+              const beforeTrim = aiResponseClean
+              aiResponseClean = trimIncompleteSentence(aiResponseClean)
+              if (beforeTrim !== aiResponseClean) console.log('[TRIM_INCOMPLETE] frase truncada removida')
+            } catch (_) { /* noop */ }
+
             const wasHandoffSentBefore = !!funnelStateLive.handoff_sent
             if (wasHandoffSentBefore) {
               const suffix = getPostHandoffWaitSuffix(detectedChatLanguage)

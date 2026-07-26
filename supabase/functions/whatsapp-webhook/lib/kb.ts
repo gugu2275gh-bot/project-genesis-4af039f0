@@ -116,7 +116,75 @@ async function generateQueryEmbedding(
   }
 }
 
-/** Retrieve relevant knowledge base content for the AI context (semantic + lexical fallback) */
+/** Siglas/termos curtos relevantes no domínio (ex.: TIE, NIE, EX17) */
+const ACRONYM_RE = /\b([a-z]{2,5}\d{0,3})\b/g
+const ACRONYM_STOPWORDS = new Set([
+  'que', 'the', 'com', 'por', 'para', 'como', 'uma', 'meu', 'sua', 'seu', 'nao', 'sim',
+  'qual', 'onde', 'quem', 'isso', 'esse', 'essa', 'você', 'voce', 'tem', 'ser', 'sao',
+  'and', 'for', 'what', 'is', 'de', 'do', 'da', 'em', 'no', 'na', 'ou', 'e',
+])
+
+/** Extrai siglas do texto original (privilegia tokens em MAIÚSCULAS) */
+function extractAcronyms(text: string): string[] {
+  const out = new Set<string>()
+  for (const m of (text || '').matchAll(/\b[A-ZÀ-Ú]{2,6}\d{0,3}\b/g)) {
+    out.add(m[0].toLowerCase())
+  }
+  const normalized = normalizeForSearch(text)
+  for (const m of normalized.matchAll(ACRONYM_RE)) {
+    const token = m[1]
+    if (token.length >= 2 && token.length <= 5 && !ACRONYM_STOPWORDS.has(token)) out.add(token)
+  }
+  return Array.from(out)
+}
+
+/** Busca léxica (palavras-chave + siglas) na base de conhecimento */
+async function lexicalSearch(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userMessage: string,
+  limit = 8,
+  // deno-lint-ignore no-explicit-any
+): Promise<any[]> {
+  const { data: kbEntries } = await supabase
+    .from('knowledge_base')
+    .select('content, file_name, chunk_index')
+    .eq('is_active', true)
+    .order('file_name')
+    .order('chunk_index')
+
+  if (!kbEntries?.length) return []
+
+  const validEntries = kbEntries.filter((entry: any) => !isInvalidKnowledgeChunk(entry.content))
+  if (!validEntries.length) return []
+
+  const normalizedQuestion = normalizeForSearch(userMessage)
+  const keywords = normalizedQuestion.split(/\s+/).filter((w) => w.length > 2)
+  const acronyms = extractAcronyms(userMessage)
+
+  const scoredChunks = validEntries.map((entry: any) => {
+    const normalizedContent = normalizeForSearch(entry.content)
+    const normalizedFile = normalizeForSearch(entry.file_name || '')
+    const keywordScore = keywords.reduce((acc, kw) => acc + (normalizedContent.includes(kw) ? 1 : 0), 0)
+    const phraseBonus = normalizedContent.includes(normalizedQuestion) ? 5 : 0
+    // Siglas (TIE, NIE, EX17...) valem muito: match exato de palavra inteira.
+    const acronymScore = acronyms.reduce((acc, ac) => {
+      const wordRe = new RegExp(`(^|[^a-z0-9])${ac}([^a-z0-9]|$)`)
+      let s = 0
+      if (wordRe.test(normalizedContent)) s += 4
+      if (wordRe.test(normalizedFile)) s += 6
+      return acc + s
+    }, 0)
+    return { ...entry, score: keywordScore + phraseBonus + acronymScore }
+  })
+
+  return scoredChunks
+    .filter((chunk: any) => chunk.score > 0)
+    .sort((a: any, b: any) => b.score - a.score)
+    .slice(0, limit)
+}
+
+/** Retrieve relevant knowledge base content for the AI context (busca híbrida: semântica + léxica) */
 export async function getKnowledgeBaseContext(
   // deno-lint-ignore no-explicit-any
   supabase: any,
@@ -145,77 +213,58 @@ export async function getKnowledgeBaseContext(
     }
   }
 
-  // 1) Try semantic search first
+  // 1) Semântica (limiar mais permissivo) e 2) léxica rodam SEMPRE e são mescladas.
+  let semantic: any[] = []
   const queryEmbedding = await generateQueryEmbedding(supabase, userMessage)
   if (queryEmbedding) {
     const { data: semanticMatches, error: semErr } = await supabase.rpc('match_knowledge_base', {
       query_embedding: queryEmbedding as unknown as string,
-      match_count: 8,
-      similarity_threshold: 0.3,
+      match_count: 12,
+      similarity_threshold: 0.2,
     })
-    if (!semErr && Array.isArray(semanticMatches) && semanticMatches.length > 0) {
-      let valid = semanticMatches.filter((entry: any) => !isInvalidKnowledgeChunk(entry.content))
-      if (valid.length > 0) {
-        if (normalizedHint) {
-          const hintTokens = normalizedHint.split(/\s+/).filter((w) => w.length > 3)
-          valid = valid
-            .map((chunk: any) => {
-              const fname = normalizeForSearch(chunk.file_name || '')
-              const hits = hintTokens.reduce((acc, t) => acc + (fname.includes(t) ? 1 : 0), 0)
-              const boost = hits >= 2 ? 0.25 : hits === 1 ? 0.1 : 0
-              return { ...chunk, similarity: (chunk.similarity || 0) + boost, _boost: boost }
-            })
-            .sort((a: any, b: any) => b.similarity - a.similarity)
-        }
-        const top3 = valid.slice(0, 3).map((c: any) => `${c.file_name}#${c.chunk_index}=${c.similarity?.toFixed(3)}${c._boost ? `(+${c._boost})` : ''}`).join(' | ')
-        console.log(`[KB] Semantic returned ${valid.length} chunks. Top3: ${top3}`)
-        const seen = new Set(topicPreloaded.map((c) => `${c.file_name}#${c.chunk_index}`))
-        const semanticRest = valid.filter((c: any) => !seen.has(`${c.file_name}#${c.chunk_index}`))
-        const merged = [
-          ...topicPreloaded.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Tópico]\n${c.content}`),
-          ...semanticRest.map((c: any) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Sim: ${c.similarity?.toFixed(2)}]\n${c.content}`),
-        ]
-        return merged.join('\n\n').substring(0, 3500)
+    if (semErr) console.error('[KB] Semantic search error:', semErr)
+    if (Array.isArray(semanticMatches)) {
+      semantic = semanticMatches.filter((entry: any) => !isInvalidKnowledgeChunk(entry.content))
+      if (normalizedHint) {
+        const hintTokens = normalizedHint.split(/\s+/).filter((w) => w.length > 3)
+        semantic = semantic
+          .map((chunk: any) => {
+            const fname = normalizeForSearch(chunk.file_name || '')
+            const hits = hintTokens.reduce((acc, t) => acc + (fname.includes(t) ? 1 : 0), 0)
+            const boost = hits >= 2 ? 0.25 : hits === 1 ? 0.1 : 0
+            return { ...chunk, similarity: (chunk.similarity || 0) + boost, _boost: boost }
+          })
+          .sort((a: any, b: any) => b.similarity - a.similarity)
       }
     }
-    if (semErr) console.error('[KB] Semantic search error:', semErr)
   }
 
-  // 2) Fallback to lexical keyword search
-  console.log('[KB] Falling back to lexical search')
-  const { data: kbEntries } = await supabase
-    .from('knowledge_base')
-    .select('content, file_name, chunk_index')
-    .eq('is_active', true)
-    .order('file_name')
-    .order('chunk_index')
+  const lexical = await lexicalSearch(supabase, userMessage, 8)
 
-  if (!kbEntries?.length) return ''
+  const key = (c: any) => `${c.file_name}#${c.chunk_index}`
+  const seen = new Set(topicPreloaded.map(key))
+  const parts: string[] = topicPreloaded.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Tópico]\n${c.content}`)
 
-  const validEntries = kbEntries.filter((entry: any) => !isInvalidKnowledgeChunk(entry.content))
-  if (!validEntries.length) return ''
+  // Léxico primeiro quando houver match forte (siglas como TIE/NIE ficam no topo).
+  const strongLexical = lexical.filter((c: any) => c.score >= 4)
+  for (const c of strongLexical) {
+    if (seen.has(key(c))) continue
+    seen.add(key(c))
+    parts.push(`[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Léxico]\n${c.content}`)
+  }
+  for (const c of semantic) {
+    if (seen.has(key(c))) continue
+    seen.add(key(c))
+    parts.push(`[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Sim: ${c.similarity?.toFixed(2)}]\n${c.content}`)
+  }
+  for (const c of lexical) {
+    if (seen.has(key(c))) continue
+    seen.add(key(c))
+    parts.push(`[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Léxico]\n${c.content}`)
+  }
 
-  const normalizedQuestion = normalizeForSearch(userMessage)
-  const keywords = normalizedQuestion.split(/\s+/).filter((w) => w.length > 2)
+  console.log(`[KB] hybrid: semantic=${semantic.length} lexical=${lexical.length} (strong=${strongLexical.length}) topic=${topicPreloaded.length} merged=${parts.length}`)
 
-  const scoredChunks = validEntries.map((entry: any) => {
-    const normalizedContent = normalizeForSearch(entry.content)
-    const keywordScore = keywords.reduce((acc, kw) => acc + (normalizedContent.includes(kw) ? 1 : 0), 0)
-    const phraseBonus = normalizedContent.includes(normalizedQuestion) ? 5 : 0
-    return { ...entry, score: keywordScore + phraseBonus }
-  })
-
-  const relevant = scoredChunks
-    .filter((chunk: any) => chunk.score > 0)
-    .sort((a: any, b: any) => b.score - a.score)
-    .slice(0, 8)
-
-  const selected = relevant.length > 0 ? relevant : validEntries.slice(0, 8)
-  const seen = new Set(topicPreloaded.map((c) => `${c.file_name}#${c.chunk_index}`))
-  const lexicalRest = selected.filter((c: any) => !seen.has(`${c.file_name}#${c.chunk_index}`))
-
-  return [
-    ...topicPreloaded.map((c) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index} | Tópico]\n${c.content}`),
-    ...lexicalRest.map((c: any) => `[Fonte: ${c.file_name} | Bloco ${c.chunk_index}]\n${c.content}`),
-  ].join('\n\n').substring(0, 3500)
+  return parts.join('\n\n').substring(0, 3500)
 }
+

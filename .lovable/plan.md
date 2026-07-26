@@ -1,40 +1,29 @@
-## Objetivo
+## Diagnóstico (confirmado nos logs e no banco)
 
-Trocar o conceito de **"Se não souber"** por **"Resposta diferente do esperado"** e disponibilizar essa aba/bloco em **todos** os editores de etapa — inclusive o diálogo "Editar etapa" da lista (onde hoje ela não aparece, causa do que você viu na etapa 13).
+Turno de 26/07 19:22, lead `8de53dd1…` ("o que é tie"):
 
-O escopo passa a cobrir qualquer resposta fora do esperado, não só "não sei":
-- cliente diz que não sabe / não lembra;
-- resposta em formato inválido (ex.: data fora de DD/MM/AAAA);
-- resposta fora das opções previstas (não bate com nenhum caminho);
-- resposta vazia, off-topic ou uma pergunta de volta.
+1. **A KB foi consultada, mas trouxe o conteúdo errado.** Log: `[KB] Semantic returned 2 chunks. Top3: OK - Estancia por estudos.pdf#2=0.367 | OK - Arraigo Sociolaboral.pdf#3=0.317` — nenhum trecho sobre TIE. No banco existem **18 chunks ativos que mencionam TIE**, todos com embedding. Causa: a query enviada é curtíssima (`len=32`, praticamente só "o que é tie"), o limiar de similaridade é `0.3` e a sigla "TIE" tem sinal semântico fraco no `text-embedding-3-small`; não há fallback léxico quando o resultado semântico existe mas é irrelevante (o código só cai no léxico se o semântico retornar **zero** chunks — `whatsapp-webhook/lib/kb.ts:156-182`).
+2. **Como a KB veio irrelevante e `kb_strict_mode = false`**, o modelo respondeu com conhecimento próprio (por acaso correto, mas sem fonte).
+3. **A resposta saiu cortada** ("…autorização de residência ou"): o log mostra `gemini/gemini-3.6-flash` em 429 → fallback `gemini-3-flash-preview` com `maxOutputTokens: 700`, mas **sem `thinkingConfig` (só aplicado a `gemini-2.*`)** — o raciocínio consome o orçamento e a saída é cortada em `MAX_TOKENS` (`length: 110`).
 
-## Interface (por etapa)
+## Correções propostas
 
-Bloco/aba **"Resposta diferente do esperado"** com:
+### 1. Recall da base de conhecimento (`whatsapp-webhook/lib/kb.ts`)
+- Rodar **busca híbrida sempre**: semântica + léxica, mesclando e deduplicando por `file_name#chunk_index`, em vez de usar a léxica só quando a semântica retorna vazio.
+- Baixar o limiar semântico para `0.2` e aumentar `match_count` para 12, mantendo o corte final por tamanho de contexto.
+- Melhorar o score léxico: reconhecer **siglas/termos curtos** (TIE, NIE, TIS, EX-17) com match exato em maiúsculas (hoje o filtro `w.length > 2`/`> 3` descarta boa parte) e dar peso alto quando a sigla aparece no `file_name` ou no conteúdo.
+- Logar quantos chunks vieram de cada via (`[KB] semantic=X lexical=Y merged=Z`).
 
-1. **Tipo de desvio** — lista com as 4 situações acima. Cada uma pode ter tratamento próprio, ou usar a regra padrão da etapa.
-2. **Comportamento** por situação:
-   - Insistir na pergunta (padrão)
-   - Aceitar valor aproximado (para datas/números)
-   - Pular a etapa gravando um valor de reserva
-   - Ir para a etapa de fallback
-3. **Mensagem de acolhimento** multi-idioma (PT/ES/EN/FR) com tradução automática, específica de cada situação.
-4. **Tentativas antes de aplicar** o comportamento.
-5. **Valor gravado ao pular**.
-6. **Frases extras** que caracterizam o desvio (além das já reconhecidas automaticamente nos 4 idiomas).
+### 2. Truncamento da resposta (`whatsapp-webhook/lib/ai.ts`)
+- Aplicar `thinkingConfig: { thinkingBudget: 0 }` também para Gemini 3.x (a família aceita o campo; hoje só entra em `gemini-2.*`).
+- Subir `maxOutputTokens` de 700 para 1200 no modo pós-handoff.
+- Detectar `finishReason === 'MAX_TOKENS'` e, nesse caso, tentar o próximo modelo da cascata em vez de enviar texto cortado.
+- Rede de segurança final: se o texto terminar sem pontuação de fim de frase, cortar a última frase incompleta antes de enviar.
 
-Em todos os modos a **sequência do fluxo não muda**: ao aceitar ou pular, segue para a mesma próxima etapa configurada.
+### 3. (Opcional, recomendo) Rate limit do Gemini
+O modelo primário `gemini-3.6-flash` está batendo cota gratuita (20 req/dia). Sugiro trocar o primeiro item da cascata em Configurações > LLM para um provedor sem esse teto (Lovable AI Gateway), mantendo Gemini como fallback.
 
-## Onde aparece
-
-- Editor visual (`flow-builder/StepInspector.tsx`) — aba renomeada.
-- Diálogo "Editar etapa" da lista de etapas (`FlowsManagement.tsx`) — bloco novo, hoje ausente.
-Ambos gravam no mesmo lugar, então o que for configurado em um aparece no outro.
-
-## Detalhes técnicos
-
-- `src/types/ai-agent-flow-builder.ts`: renomear `UnknownAnswerConfig` → `UnexpectedAnswerConfig` e ampliar a estrutura para um mapa por situação (`unknown` | `invalid_format` | `no_match` | `off_topic`), cada uma com `mode`, `messages`, `attempts`, `fallback_value`, `phrases`. O normalizador aceita o formato antigo (`validation.unknown_answer` plano) e converte para a nova forma, sem migração de banco.
-- `StepUnknownAnswerEditor.tsx` → `StepUnexpectedAnswerEditor.tsx`, com seletor de situação e os campos acima.
-- `FlowsManagement.tsx`: importar e renderizar o editor no `StepDialog`, gravando em `validation.unexpected_answer`.
-- `supabase/functions/_shared/flow-engine.ts`: classificar o desvio (não sabe / formato inválido / sem correspondência / off-topic) e aplicar a regra da situação correspondente, com fallback para a regra `unknown` quando a situação não estiver configurada. Mantém a detecção multi-idioma e `parseApproxDate` já existentes.
-- Testes: estender `supabase/functions/ai-agent-sandbox/unknown-answer_test.ts` (renomeado para `unexpected-answer_test.ts`) cobrindo cada situação e a retrocompatibilidade com configurações antigas.
+## Verificação
+- Reexecutar a pergunta "o que é tie" no sandbox e conferir no log que os chunks retornados são do documento de TIE.
+- Conferir que a resposta chega completa (frase terminada) com o sufixo de "aguarde um especialista".
+- Rodar a suíte de testes existente das edge functions.

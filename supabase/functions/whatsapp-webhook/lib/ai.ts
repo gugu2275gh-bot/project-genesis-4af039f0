@@ -125,6 +125,20 @@ export async function enforceResponseLanguage(
   return responseText
 }
 
+
+/**
+ * Remove a última frase incompleta (sem pontuação final) de uma resposta que
+ * foi cortada pelo limite de tokens do modelo.
+ */
+export function trimIncompleteSentence(text: string): string {
+  const t = (text || '').trim()
+  if (!t) return ''
+  if (/[.!?…:)\]"'\u201d]$/.test(t)) return t
+  const cut = Math.max(t.lastIndexOf('.'), t.lastIndexOf('!'), t.lastIndexOf('?'), t.lastIndexOf('…'))
+  if (cut > 30) return t.slice(0, cut + 1).trim()
+  return t
+}
+
 export async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
   currentMessage: string,
@@ -183,10 +197,13 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
   const RETRY_DELAYS = [2000, 4000]
 
   let lastError: unknown = null
+  let truncatedFallback = ''
 
   for (const item of cascade) {
     const { provider, model } = item
     console.log(`[AI cascade] Trying ${provider}/${model}`)
+
+    let disableThinkingCfg = false
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       const controller = new AbortController()
@@ -195,10 +212,15 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
       try {
         let response: Response
         if (provider === 'gemini') {
-          // thinkingBudget só é aceito na família Gemini 2.x; Gemini 3+ retorna HTTP 400.
-          const generationConfig: Record<string, unknown> = { maxOutputTokens: 700 }
+          // Orçamento maior: o modo pós-handoff (KB) responde em 2-5 frases e
+          // estava sendo cortado em MAX_TOKENS quando o modelo "pensa".
+          const generationConfig: Record<string, unknown> = { maxOutputTokens: 1200 }
           if (/^gemini-2\./.test(model)) {
             generationConfig.thinkingConfig = { thinkingBudget: 0 }
+          } else if (/^gemini-3/.test(model) && !disableThinkingCfg) {
+            // Gemini 3.x aceita thinkingLevel; reduz o raciocínio para não
+            // consumir o orçamento de saída (causava respostas truncadas).
+            generationConfig.thinkingConfig = { thinkingLevel: 'low' }
           }
           response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -235,7 +257,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
           const endpoint = isLovable
             ? 'https://ai.gateway.lovable.dev/v1/chat/completions'
             : 'https://api.openai.com/v1/chat/completions'
-          const payload: Record<string, unknown> = { model, messages: oaMessages, max_tokens: 700 }
+          const payload: Record<string, unknown> = { model, messages: oaMessages, max_tokens: 1200 }
           if (isLovable && model.startsWith('openai/gpt-5.6')) payload.reasoning_effort = 'none'
           response = await fetch(endpoint, {
             method: 'POST',
@@ -260,6 +282,13 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 
           // 429 RESOURCE_EXHAUSTED: provider tells us to wait 7-60s. Local 2s retry is useless;
           // skip straight to the next provider in the cascade.
+          // Alguns modelos Gemini recusam thinkingConfig com HTTP 400: refaz sem o campo.
+          if (response.status === 400 && provider === 'gemini' && !disableThinkingCfg && /thinking/i.test(errorText)) {
+            disableThinkingCfg = true
+            console.log(`[AI cascade] ${provider}/${model} rejeitou thinkingConfig; refazendo sem o campo`)
+            continue
+          }
+
           if (response.status === 429) {
             console.log(`[AI cascade] ${provider}/${model} rate-limited (429), skipping retries and trying next provider`)
             break
@@ -280,6 +309,16 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
           result = extractGeminiText(data)
         } else {
           result = data?.choices?.[0]?.message?.content?.trim() || ''
+        }
+
+        const finishReason = provider === 'gemini'
+          ? data?.candidates?.[0]?.finishReason
+          : data?.choices?.[0]?.finish_reason
+        if (finishReason === 'MAX_TOKENS' || finishReason === 'length') {
+          console.warn(`[AI cascade] ${provider}/${model} atingiu MAX_TOKENS (resposta truncada); tentando próximo modelo`)
+          lastError = new Error(`${provider}/${model} truncated (MAX_TOKENS)`)
+          if (result) truncatedFallback = truncatedFallback || trimIncompleteSentence(result)
+          break
         }
 
         if (!result) {
@@ -305,6 +344,11 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
         break
       }
     }
+  }
+
+  if (truncatedFallback) {
+    console.warn('[AI cascade] Todos os modelos falharam; usando resposta truncada saneada')
+    return await enforceResponseLanguage(truncatedFallback, forcedLanguage, apiKey)
   }
 
   throw new Error(`All models in cascade failed: ${lastError instanceof Error ? lastError.message : 'unknown error'}`)
