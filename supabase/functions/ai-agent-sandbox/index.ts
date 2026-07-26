@@ -3,6 +3,8 @@
 // NÃO envia mensagens reais pelo WhatsApp e NÃO utiliza Twilio.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
 import { buildSystemPrompt } from './lib/prompt-builder.ts'
+import { advanceFlow, findStartStep, startFlow, stepKindOf } from '../_shared/flow-engine.ts'
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -121,7 +123,7 @@ Deno.serve(async (req) => {
 
     const { data: session, error: sessErr } = await service
       .from('ai_agent_test_sessions')
-      .select('id, agent_id, agent_version_id')
+      .select('id, agent_id, agent_version_id, flow_state')
       .eq('id', session_id)
       .single()
     if (sessErr || !session) return json({ error: 'sessão não encontrada' }, 404)
@@ -156,7 +158,86 @@ Deno.serve(async (req) => {
       steps = data || []
     }
 
+    // Também carrega o fluxo de pré-handoff quando o agente tiver um.
+    if (config.pre_handoff_flow_id && config.pre_handoff_flow_id !== config.flow_id) {
+      const { data } = await service
+        .from('ai_agent_flow_steps')
+        .select('*')
+        .eq('flow_id', config.pre_handoff_flow_id)
+        .order('order_index', { ascending: true })
+      if ((data || []).length) steps = [...(data || []), ...steps]
+    }
+
+    // ------------------------------------------------------------------
+    // EXECUÇÃO DETERMINÍSTICA DO FLUXO DESENHADO
+    // Quando o fluxo tem uma etapa de INÍCIO, o simulador executa o grafo
+    // (mensagens exatas, validações e ramificações) em vez de deixar o LLM
+    // improvisar. Ao terminar o fluxo, cai no modo livre com o LLM.
+    // ------------------------------------------------------------------
+    const runtimeCfg = (config.runtime_config && typeof config.runtime_config === 'object') ? config.runtime_config : {}
+    const startStep = findStartStep(steps)
+    const visualFlowEnabled =
+      runtimeCfg.execute_visual_flow !== false && !!startStep && stepKindOf(startStep) === 'INICIO'
+
+    const flowState = (session.flow_state && typeof session.flow_state === 'object') ? session.flow_state : {}
+
+    let userMessageStored = false
+
+    if (visualFlowEnabled && !flowState.finished) {
+      const lang = String(config.default_language || 'pt-BR')
+      const firstTurn = !flowState.current_step
+      const turn = firstTurn
+        ? startFlow(steps, lang as any)
+        : advanceFlow(steps, flowState, message, lang as any)
+
+      await service.from('ai_agent_test_messages').insert({
+        session_id,
+        agent_id: agent.id,
+        role: 'user',
+        content: message,
+        created_by: auth.userId,
+      })
+      userMessageStored = true
+
+
+      await service
+        .from('ai_agent_test_sessions')
+        .update({ flow_state: turn.state, updated_at: new Date().toISOString() })
+        .eq('id', session_id)
+
+      const reply = turn.messages.join('\n\n')
+      if (reply) {
+        await service.from('ai_agent_test_messages').insert({
+          session_id,
+          agent_id: agent.id,
+          role: 'assistant',
+          content: reply,
+          provider: 'flow-engine',
+          model: `fluxo:${config.flow_id || ''}`,
+          latency_ms: 0,
+          created_by: auth.userId,
+        })
+
+        return json({
+          reply,
+          provider: 'flow-engine',
+          model: 'fluxo determinístico',
+          latency_ms: 0,
+          tokens_used: 0,
+          flow: {
+            current_step: turn.state.current_step,
+            reasked: turn.reasked,
+            finished: turn.finished,
+            handoff: turn.handoff,
+            path: turn.path,
+          },
+        })
+      }
+      // Fluxo concluído sem mensagem nova → segue para o modo livre (LLM).
+    }
+
     const systemPrompt = buildSystemPrompt(config, steps)
+
 
     // Histórico já persistido
     const { data: prior } = await service
@@ -165,15 +246,18 @@ Deno.serve(async (req) => {
       .eq('session_id', session_id)
       .order('created_at', { ascending: true })
 
-    await service.from('ai_agent_test_messages').insert({
-      session_id,
-      agent_id: agent.id,
-      role: 'user',
-      content: message,
-      created_by: auth.userId,
-    })
+    if (!userMessageStored) {
+      await service.from('ai_agent_test_messages').insert({
+        session_id,
+        agent_id: agent.id,
+        role: 'user',
+        content: message,
+        created_by: auth.userId,
+      })
+    }
 
-    const history = [...(prior || []), { role: 'user', content: message }]
+
+    const history = userMessageStored ? [...(prior || [])] : [...(prior || []), { role: "user", content: message }]
 
     const provider = String(config.provider || 'gemini')
     const model = String(config.model || 'gemini-2.5-flash')
