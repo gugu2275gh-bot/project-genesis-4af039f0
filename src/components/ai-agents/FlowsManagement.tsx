@@ -226,6 +226,7 @@ function FlowSteps({ flow }: { flow: AgentFlow }) {
             <TableHead>Ordem</TableHead>
             <TableHead>Código</TableHead>
             <TableHead>Nome</TableHead>
+            <TableHead>Fase</TableHead>
             <TableHead>Tipo</TableHead>
             <TableHead>Próxima</TableHead>
             <TableHead className="text-right">Ações</TableHead>
@@ -233,13 +234,14 @@ function FlowSteps({ flow }: { flow: AgentFlow }) {
         </TableHeader>
         <TableBody>
           {(steps || []).length === 0 && (
-            <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Nenhuma etapa cadastrada</TableCell></TableRow>
+            <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Nenhuma etapa cadastrada</TableCell></TableRow>
           )}
           {(steps || []).map((s) => (
             <TableRow key={s.id}>
               <TableCell>{s.order_index}</TableCell>
               <TableCell className="font-mono text-xs">{s.step_code}</TableCell>
               <TableCell>{s.name}</TableCell>
+              <TableCell><Badge variant="outline">{phaseLabel(s.phase)}</Badge></TableCell>
               <TableCell>{ANSWER_TYPES.find((t) => t.value === s.answer_type)?.label || s.answer_type}</TableCell>
               <TableCell className="font-mono text-xs">{s.next_step_code || '—'}</TableCell>
               <TableCell className="text-right space-x-1">
@@ -260,10 +262,12 @@ function FlowSteps({ flow }: { flow: AgentFlow }) {
           open={open}
           onOpenChange={setOpen}
           flowId={flow.id}
+          flowPhase={(flow.phase || 'GERAL') as FlowPhase}
           step={editing}
           nextIndex={(steps?.length || 0) + 1}
         />
       )}
+
     </div>
   );
 }
