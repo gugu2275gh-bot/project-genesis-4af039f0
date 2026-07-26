@@ -68,6 +68,8 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
   const [dirty, setDirty] = useState(false);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [importOpen, setImportOpen] = useState(false);
+  const deleteStepRef = useRef<(id: string) => void>(() => {});
+
 
 
   useEffect(() => {
