@@ -13,6 +13,7 @@
 import {
   inferFieldMapping,
   prependMessage,
+  stepKindOf,
   validateAnswer,
   type FlowLang,
   type FlowStep,
@@ -256,6 +257,30 @@ export function renderIntakeGreeting(
     .replace(/\{localizacao\}/g, fieldValues['funnel.location_known'] || '')
     .replace(/\s{2,}/g, ' ')
     .trim()
+}
+
+/**
+ * Remove as mensagens das etapas INFORMATIVAS de abertura (as que vêm antes da
+ * primeira pergunta) quando a saudação do intake já cumpre esse papel — evita
+ * mandar duas saudações seguidas.
+ */
+export function dropOpeningMessages(turn: FlowTurnResult, steps: FlowStep[]): FlowTurnResult {
+  const byCode = new Map((steps || []).map((s) => [s.step_code, s]))
+  const drop = new Set<string>()
+  for (const code of turn.path || []) {
+    const step = byCode.get(code)
+    if (!step) continue
+    const kind = stepKindOf(step)
+    if (kind === 'INICIO') continue
+    if (kind === 'INFORMATIVA') {
+      drop.add(code)
+      continue
+    }
+    break // chegou na primeira pergunta: para de suprimir
+  }
+  if (!drop.size) return turn
+  const outbound = (turn.outbound || []).filter((m: any) => !drop.has(String(m.step_code)))
+  return { ...turn, outbound, messages: outbound.map((m: any) => m.text) }
 }
 
 /** Prefixa a saudação do intake (personalizada ou padrão) no turno. */

@@ -25,6 +25,7 @@ import {
   type FlowTurnResult,
 } from '../../_shared/flow-engine.ts'
 import {
+  dropOpeningMessages,
   normalizeIntakeConfig,
   prependIntakeGreeting,
   renderAckMessage,
@@ -148,30 +149,6 @@ export async function loadVisualFlowPlan(supabase: any): Promise<VisualFlowPlan>
     console.warn('[VISUAL_FLOW] erro ao montar plano (fallback legado):', e instanceof Error ? e.message : e)
     return EMPTY_PLAN
   }
-}
-
-/**
- * Remove as mensagens das etapas INFORMATIVAS de abertura (as que vêm antes da
- * primeira pergunta) quando a saudação do intake já cumpre esse papel — evita
- * mandar duas saudações seguidas.
- */
-export function dropOpeningMessages(turn: FlowTurnResult, steps: FlowStep[]): FlowTurnResult {
-  const byCode = new Map((steps || []).map((s) => [s.step_code, s]))
-  const drop = new Set<string>()
-  for (const code of turn.path || []) {
-    const step = byCode.get(code)
-    if (!step) continue
-    const kind = stepKindOf(step)
-    if (kind === 'INICIO') continue
-    if (kind === 'INFORMATIVA') {
-      drop.add(code)
-      continue
-    }
-    break // chegou na primeira pergunta: para de suprimir
-  }
-  if (!drop.size) return turn
-  const outbound = (turn.outbound || []).filter((m: any) => !drop.has(String(m.step_code)))
-  return { ...turn, outbound, messages: outbound.map((m: any) => m.text) }
 }
 
 /** Executa o turno do cliente no grafo (start no 1º turno, advance depois). */
