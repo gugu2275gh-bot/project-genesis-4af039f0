@@ -30,17 +30,24 @@ import { answerAside, composeAnswerAndReask, defaultAsideAck, looksLikeQuestion 
 const ASSIST_TIMEOUT_MS = 6000
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T | null> {
+  let timer: number | undefined
+  const guard = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      console.warn(`[FLOW_TURN] ${label} excedeu ${ms}ms — seguindo sem esperar`)
+      resolve(null)
+    }, ms)
+  })
   return Promise.race([
     p.catch((e) => {
       console.warn(`[FLOW_TURN] ${label} falhou:`, e instanceof Error ? e.message : e)
       return null
     }),
-    new Promise<null>((resolve) => setTimeout(() => {
-      console.warn(`[FLOW_TURN] ${label} excedeu ${ms}ms — seguindo sem esperar`)
-      resolve(null)
-    }, ms)),
-  ])
+    guard,
+  ]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer)
+  })
 }
+
 
 export interface FlowTurnDeps {
   /** Frase fixa de reconhecimento (aba "Primeira mensagem"). */
