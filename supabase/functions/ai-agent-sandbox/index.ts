@@ -243,7 +243,10 @@ Deno.serve(async (req) => {
             finished: turn.finished,
             handoff: turn.handoff,
             path: turn.path,
+            lang: sessionLang,
+            lang_locked: sessionLangLocked,
           },
+
         })
       }
       // Fluxo concluído sem mensagem nova → segue para o modo livre (LLM).
