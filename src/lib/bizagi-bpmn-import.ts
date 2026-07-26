@@ -255,29 +255,49 @@ export function parseBizagiBpmn(
 
     const pos = shapePos.get(n.id);
 
+    // Mensagens vindas das caixas de texto associadas (fallback: documentação)
+    const annotations = annotationsByNode.get(n.id) || [];
+    const msgs = annotations.flatMap(splitAnnotationMessages);
+    if (n.kind === 'task' && msgs.length === 0 && n.documentation) msgs.push(n.documentation);
+
+    const lastMsg = msgs[msgs.length - 1] || '';
+    const isQuestion = /\?\s*$/.test(lastMsg);
+    const stepKind =
+      n.kind === 'start' ? 'INICIO' : n.kind === 'end' ? 'FIM' : isQuestion ? 'PERGUNTA' : 'INFORMATIVA';
+    const isHandoff = n.kind === 'end' || /especialista|handoff/i.test(`${n.name} ${lastMsg}`);
+
+    if (n.kind === 'task' && msgs.length === 0) {
+      warnings.push(`A etapa "${n.name || code}" ficou sem texto de mensagem — preencha manualmente.`);
+    }
+
     return {
       id: `tmp_bpmn_${n.id}_${i}`,
       flow_id: opts.flowId,
       step_code: code,
       name: n.name || (n.kind === 'start' ? 'Início' : n.kind === 'end' ? 'Fim' : `Etapa ${i + 1}`),
       description: n.documentation || '',
-      message: '',
-      messages: {},
+      message: msgs[0] || '',
+      messages: msgs.length ? { 'pt-BR': msgs } : {},
       reask_messages: {},
       phase: opts.phase,
-      answer_type: 'TEXTO_LIVRE',
-      validation: { ...DEFAULT_STEP_VALIDATION, required: n.kind === 'task' },
+      answer_type: stepKind === 'PERGUNTA' ? guessAnswerType(lastMsg) : 'TEXTO_LIVRE',
+      validation: {
+        ...DEFAULT_STEP_VALIDATION,
+        required: stepKind === 'PERGUNTA',
+        step_kind: stepKind,
+      },
       next_step_code: nextCode,
       exit_condition: '',
       allow_parallel_question: true,
       allow_free_answer: true,
-      handoff: false,
+      handoff: stepKind === 'FIM' ? isHandoff : false,
       branches,
       order_index: startIndex + i + 1,
       created_at: now,
       updated_at: now,
       _bpmn_pos: pos,
     } as unknown as AgentFlowStep;
+
   });
 
   // Normaliza posições do BPMN para o canvas
