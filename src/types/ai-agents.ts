@@ -248,8 +248,10 @@ export const DEFAULT_CAPABILITIES: AgentCapabilities = {
 
 export const DEFAULT_BEHAVIOR: AgentBehavior = {
   personality: 'PROFISSIONAL',
-  tone: '',
-  allowed_languages: ['pt'],
+  tone: 'CORDIAL_ACOLHEDOR',
+  tone_custom: '',
+  allowed_languages: ['pt-BR', 'es', 'en', 'fr'],
+
   required_rules: [],
   forbidden_rules: [],
   forbidden_information: [],
