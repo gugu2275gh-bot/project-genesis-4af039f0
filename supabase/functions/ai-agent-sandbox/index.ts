@@ -257,7 +257,21 @@ Deno.serve(async (req) => {
       // Fluxo concluído sem mensagem nova → segue para o modo livre (LLM).
     }
 
-    const systemPrompt = buildSystemPrompt(config, steps)
+    // Modo livre (LLM): se o idioma já foi travado durante o fluxo, mantém.
+    if (!sessionLangLocked) {
+      const freeRes = resolveFlowLanguage(flowState.lang, message, config.default_language)
+      sessionLang = freeRes.lang
+      sessionLangLocked = freeRes.locked
+      if (freeRes.locked) {
+        await service
+          .from('ai_agent_test_sessions')
+          .update({ flow_state: { ...flowState, lang: sessionLang }, updated_at: new Date().toISOString() })
+          .eq('id', session_id)
+      }
+    }
+
+    const systemPrompt = `${buildSystemPrompt(config, steps)}\n\n${getFlowLanguageDirective(sessionLang)}`
+
 
 
     // Histórico já persistido
