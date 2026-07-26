@@ -381,6 +381,42 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
                     }
                   />
                 </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-xs font-normal text-muted-foreground">
+                      Equivalentes aceitos (outros idiomas), separados por vírgula
+                    </Label>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={b.match_type === 'QUALQUER' || translatingId === b.id}
+                      onClick={() => translateBranch(b)}
+                    >
+                      {translatingId === b.id ? 'Traduzindo…' : 'Traduzir'}
+                    </Button>
+                  </div>
+                  <Input
+                    placeholder="ej: sí, yes, oui"
+                    disabled={b.match_type === 'QUALQUER'}
+                    value={(b.synonyms || []).join(', ')}
+                    onChange={(e) =>
+                      setBranches(
+                        branches.map((x) =>
+                          x.id === b.id
+                            ? {
+                                ...x,
+                                synonyms: e.target.value
+                                  .split(',')
+                                  .map((s) => s.trim())
+                                  .filter(Boolean),
+                              }
+                            : x,
+                        ),
+                      )
+                    }
+                  />
+                </div>
+
                 <Select
                   value={b.next_step_code || '__none__'}
                   onValueChange={(v) =>
