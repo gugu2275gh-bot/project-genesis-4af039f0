@@ -404,7 +404,7 @@ export function startFlow(steps: FlowStep[], lang: FlowLang = 'pt-BR'): FlowTurn
   const index = indexSteps(steps)
   const start = findStartStep(steps)
   if (!start) {
-    return { messages: [], state: { finished: true }, reasked: false, finished: true, handoff: false, path: [], captured: [] }
+    return { messages: [], outbound: [], state: { finished: true }, reasked: false, finished: true, handoff: false, path: [], captured: [] }
   }
   return run(index, start.step_code, { answers: {}, visited: [], attempts: 0, lang }, lang)
 }
