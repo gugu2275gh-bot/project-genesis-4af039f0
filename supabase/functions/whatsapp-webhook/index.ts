@@ -1014,7 +1014,9 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
                     routingScore = finalScore
 
                     // Send improved disambiguation via Twilio
+                    // Fluxo visual ativo: nunca enviar menu de setores no meio do fluxo.
                     try {
+                      if (visualFlowActive) throw new Error('__skip_disambiguation_visual_flow__')
                       const sectorLabels: Record<string, string> = {
                         'Financeiro': '💰 Pagamentos e cobranças',
                         'Jurídico': '⚖️ Documentos e processos legais',
@@ -1151,6 +1153,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
     let reactivationLeadOverride: string | null = null
 
     try {
+      if (visualFlowActive) throw new Error('__skip_reactivation_visual_flow__')
       const reactivationResponse = await fetch(
         `${Deno.env.get('SUPABASE_URL')}/functions/v1/smart-reactivation`,
         {
@@ -1313,7 +1316,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
     // ("ok", "obrigada", "vale", "gracias", "thanks", "hum", emoji-only, etc.),
     // NÃO deve haver reengajamento pela IA. O especialista humano assumirá.
     try {
-      if (!aiPausedByHuman) {
+      if (!aiPausedByHuman && !visualFlowActive) {
         const { data: fs } = await supabase
           .from('lead_funnel_state')
           .select('pre_handoff_sent, handoff_sent')
@@ -1429,7 +1432,8 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
     const botEnabled = configMap['whatsapp_bot_enabled'] === 'true'
     const geminiApiKey = Deno.env.get('CBAsesoria_Key')
 
-    if (botEnabled && geminiApiKey && !aiPausedByHuman && !skipAIAgent) {
+    // O fluxo visual é determinístico: roda mesmo sem bot/LLM habilitados.
+    if ((botEnabled && geminiApiKey || visualFlowActive) && !aiPausedByHuman && !skipAIAgent) {
       console.log('AI agent is enabled (Gemini 2.0 Flash), generating response...')
 
       try {
