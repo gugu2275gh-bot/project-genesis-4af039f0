@@ -139,7 +139,7 @@ Deno.test('formato inválido usa tratativa própria quando ativada', () => {
   const s1 = advanceFlow(steps, baseState, 'ontem', 'pt-BR')
   assertEquals(s1.state.current_step, 'DATA_ENTRADA')
   assertEquals(s1.messages[0], 'Formato estranho, pode repetir?')
-  const s2 = advanceFlow(steps, s1.state, 'sei lá quando', 'pt-BR')
+  const s2 = advanceFlow(steps, s1.state, 'anteontem', 'pt-BR')
   assertEquals(s2.state.current_step, 'PROXIMA')
   assertEquals(s2.state.answers.DATA_ENTRADA, 'FORMATO INVALIDO')
 })
