@@ -127,10 +127,12 @@ export async function loadVisualFlowPlan(supabase: any): Promise<VisualFlowPlan>
     const handId = runtime.flowIds?.handoff || null
     if (!preId && !handId) return EMPTY_PLAN
 
+    const versions = await fetchFlowVersions(supabase, [preId, handId].filter(Boolean) as string[])
+    const intakeFlowId = preId || handId
     const [preSteps, handSteps, intake] = await Promise.all([
-      fetchSteps(supabase, preId),
-      fetchSteps(supabase, handId),
-      fetchIntakeConfig(supabase, preId || handId),
+      fetchSteps(supabase, preId, versions[String(preId)] || ''),
+      fetchSteps(supabase, handId, versions[String(handId)] || ''),
+      fetchIntakeConfig(supabase, intakeFlowId, versions[String(intakeFlowId)] || ''),
     ])
     const steps = mergeFlows(preSteps, handSteps)
     const start = findStartStep(steps)
@@ -148,6 +150,30 @@ export async function loadVisualFlowPlan(supabase: any): Promise<VisualFlowPlan>
   }
 }
 
+/**
+ * Remove as mensagens das etapas INFORMATIVAS de abertura (as que vêm antes da
+ * primeira pergunta) quando a saudação do intake já cumpre esse papel — evita
+ * mandar duas saudações seguidas.
+ */
+export function dropOpeningMessages(turn: FlowTurnResult, steps: FlowStep[]): FlowTurnResult {
+  const byCode = new Map((steps || []).map((s) => [s.step_code, s]))
+  const drop = new Set<string>()
+  for (const code of turn.path || []) {
+    const step = byCode.get(code)
+    if (!step) continue
+    const kind = stepKindOf(step)
+    if (kind === 'INICIO') continue
+    if (kind === 'INFORMATIVA') {
+      drop.add(code)
+      continue
+    }
+    break // chegou na primeira pergunta: para de suprimir
+  }
+  if (!drop.size) return turn
+  const outbound = (turn.outbound || []).filter((m: any) => !drop.has(String(m.step_code)))
+  return { ...turn, outbound, messages: outbound.map((m: any) => m.text) }
+}
+
 /** Executa o turno do cliente no grafo (start no 1º turno, advance depois). */
 /**
  * Primeiro turno com aproveitamento da 1ª frase do cliente.
@@ -162,7 +188,17 @@ export async function runVisualFlowFirstTurn(
   lang: FlowLang,
   callLLM: ((prompt: string) => Promise<string>) | null,
 ): Promise<FlowTurnResult> {
-  if (!plan.intake?.enabled || !callLLM) return startFlow(plan.steps, lang)
+  const logIntake = (payload: Record<string, unknown>) =>
+    console.log('[VISUAL_FLOW][INTAKE]', JSON.stringify(payload))
+
+  if (!plan.intake?.enabled) {
+    logIntake({ reason: 'disabled' })
+    return startFlow(plan.steps, lang)
+  }
+  if (!callLLM) {
+    logIntake({ reason: 'no_llm' })
+    return startFlow(plan.steps, lang)
+  }
 
   /** Abertura sem aproveitamento: usa a "Saudação padrão" quando configurada. */
   const plainStart = (): FlowTurnResult =>
@@ -172,20 +208,30 @@ export async function runVisualFlowFirstTurn(
   try {
     intake = await runIntake({ message, steps: plan.steps, lang, config: plan.intake, callLLM })
   } catch (e) {
-    console.warn('[VISUAL_FLOW] intake falhou (segue fluxo normal):', e instanceof Error ? e.message : e)
+    logIntake({ reason: 'exception', detail: e instanceof Error ? e.message : String(e) })
     return plainStart()
   }
 
   const prefilledCodes = Object.keys(intake.prefilled || {})
-  if (!prefilledCodes.length) return plainStart()
+  logIntake({
+    reason: intake.reason,
+    detail: intake.detail,
+    fields: intake.fieldValues,
+    steps: prefilledCodes,
+    greeting: !!intake.greeting,
+  })
 
-  console.log('[VISUAL_FLOW][INTAKE]', JSON.stringify({ fields: intake.fieldValues, steps: prefilledCodes }))
+  // Nada entendido: abertura normal (com a saudação padrão, se configurada).
+  if (!prefilledCodes.length && !intake.greeting) return plainStart()
 
-  return prependIntakeGreeting(
-    startFlowWithPrefill(plan.steps, lang, intake.prefilled),
-    intake.greeting,
-  )
+  const base = prefilledCodes.length
+    ? startFlowWithPrefill(plan.steps, lang, intake.prefilled)
+    : startFlow(plan.steps, lang)
+
+  // A saudação personalizada substitui a abertura informativa do fluxo.
+  return prependIntakeGreeting(dropOpeningMessages(base, plan.steps), intake.greeting)
 }
+
 
 export function runVisualFlowTurn(
   plan: VisualFlowPlan,
