@@ -348,9 +348,13 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
           <ListOrdered className="h-4 w-4" /> Etapas de "{flow.name}"
         </p>
         <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setView('intake')}>
+            <Sparkles className="h-4 w-4 mr-1" /> Primeira mensagem
+          </Button>
           <Button size="sm" variant="outline" onClick={() => setView('canvas')}>
             <Workflow className="h-4 w-4 mr-1" /> Editor visual
           </Button>
+
           <Button size="sm" onClick={() => { setEditing(null); setOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Nova etapa
           </Button>
