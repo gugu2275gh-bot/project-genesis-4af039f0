@@ -173,21 +173,64 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
     setDirty(true);
   };
 
-  const deleteStep = (id: string) => {
-    const step = steps.find((s) => s.id === id);
-    if (!step) return;
-    if (!step.id.startsWith('tmp_')) setRemovedIds((prev) => [...prev, step.id]);
-    setSteps((prev) =>
-      prev
-        .filter((s) => s.id !== id)
-        .map((s) => ({
-          ...s,
-          next_step_code: s.next_step_code === step.step_code ? null : s.next_step_code,
-          branches: normalizeBranches((s as any).branches).map((b) =>
-            b.next_step_code === step.step_code ? { ...b, next_step_code: null } : b,
-          ),
-        })) as AgentFlowStep[],
-    );
+  const deleteStep = useCallback(
+    (id: string) => {
+      const step = steps.find((s) => s.id === id);
+      if (!step) return;
+      const refs = steps.filter(
+        (s) =>
+          s.id !== id &&
+          (s.next_step_code === step.step_code ||
+            normalizeBranches((s as any).branches).some((b) => b.next_step_code === step.step_code)),
+      );
+      const msg = refs.length
+        ? `Excluir a etapa "${step.name || step.step_code}"? ${refs.length} ligação(ões) de outras etapas serão removidas.`
+        : `Excluir a etapa "${step.name || step.step_code}"?`;
+      if (!window.confirm(msg)) return;
+      if (!step.id.startsWith('tmp_')) setRemovedIds((prev) => [...prev, step.id]);
+      setSteps((prev) =>
+        prev
+          .filter((s) => s.id !== id)
+          .map((s) => ({
+            ...s,
+            next_step_code: s.next_step_code === step.step_code ? null : s.next_step_code,
+            branches: normalizeBranches((s as any).branches).map((b) =>
+              b.next_step_code === step.step_code ? { ...b, next_step_code: null } : b,
+            ),
+          })) as AgentFlowStep[],
+      );
+      setSelectedId(null);
+      setDirty(true);
+    },
+    [steps],
+  );
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' || !selectedId) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return;
+      if (el?.isContentEditable) return;
+      deleteStep(selectedId);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedId, deleteStep]);
+
+  const applyImport = (result: ImportedFlow, mode: 'REPLACE' | 'APPEND') => {
+    if (mode === 'REPLACE') {
+      setRemovedIds((prev) => [...prev, ...steps.filter((s) => !s.id.startsWith('tmp_')).map((s) => s.id)]);
+      setSteps(result.steps);
+      setPositions(
+        Object.keys(result.positions).length ? result.positions : autoLayout(result.steps),
+      );
+    } else {
+      const existing = new Set(steps.map((s) => s.step_code));
+      const imported = result.steps.filter((s) => !existing.has(s.step_code));
+      const merged = [...steps, ...imported];
+      setSteps(merged);
+      setPositions(autoLayout(merged));
+    }
     setSelectedId(null);
     setDirty(true);
   };
@@ -196,6 +239,7 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
     setPositions(autoLayout(steps));
     setDirty(true);
   };
+
 
   const handleSave = async () => {
     await saveCanvas.mutateAsync({ flowId: flow.id, steps, positions, removedIds });
