@@ -249,6 +249,21 @@ function StepDialog({
             onChange={(patch) => set({ validation: { ...validation, ...patch } })}
           />
 
+          {stepKindOf({ validation, handoff: draft.handoff }) === 'PERGUNTA' && (
+            <>
+              <Separator />
+              <p className="text-sm font-medium">Resposta diferente do esperado</p>
+              <StepUnexpectedAnswerEditor
+                value={validation.unexpected_answer}
+                legacyValue={validation.unknown_answer}
+                fallbackStepCode={validation.fallback_step_code}
+                onChange={(next) => set({ validation: { ...validation, unexpected_answer: next } })}
+              />
+            </>
+          )}
+
+
+
 
           <div className="space-y-2">
             {[
