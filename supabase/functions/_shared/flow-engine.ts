@@ -55,6 +55,9 @@ export interface FlowRunState {
   visited?: string[]
   /** Tentativas inválidas na etapa atual. */
   attempts?: number
+  /** Vezes que o cliente disse "não sei" na etapa atual. */
+  unknown_attempts?: number
+
   /** Fluxo concluído (chegou a uma etapa FIM). */
   finished?: boolean
   /** Handoff disparado pela etapa final. */
