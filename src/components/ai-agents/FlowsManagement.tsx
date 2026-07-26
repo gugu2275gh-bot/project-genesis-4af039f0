@@ -10,8 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Pencil, Trash2, ListOrdered, Workflow, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, ListOrdered, Workflow, AlertTriangle, Sparkles } from 'lucide-react';
+import { FlowIntakeSettings } from '@/components/ai-agents/FlowIntakeSettings';
 import { FlowCanvas } from '@/components/ai-agents/flow-builder/FlowCanvas';
+
 import { FlowErrorBoundary } from '@/components/ai-agents/flow-builder/FlowErrorBoundary';
 import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
