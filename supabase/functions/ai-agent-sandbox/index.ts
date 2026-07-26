@@ -4,6 +4,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
 import { buildSystemPrompt } from './lib/prompt-builder.ts'
 import { advanceFlow, findStartStep, startFlow, stepKindOf } from '../_shared/flow-engine.ts'
+import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
+
 
 
 const corsHeaders = {
@@ -182,10 +184,24 @@ Deno.serve(async (req) => {
     const flowState = (session.flow_state && typeof session.flow_state === 'object') ? session.flow_state : {}
 
     let userMessageStored = false
+    let sessionLang: any = 'pt-BR'
+    let sessionLangLocked = false
+
+
+    // Idioma do turno: travado no `flow_state` assim que a primeira resposta
+    // do cliente permite identificá-lo; antes disso usa o padrão do agente.
+    const firstTurnGlobal = !flowState.current_step
+    const langResolution = resolveFlowLanguage(
+      flowState.lang,
+      firstTurnGlobal ? '' : message,
+      config.default_language,
+    )
+    sessionLang = langResolution.lang
+    sessionLangLocked = langResolution.locked
 
     if (visualFlowEnabled && !flowState.finished) {
-      const lang = String(config.default_language || 'pt-BR')
-      const firstTurn = !flowState.current_step
+      const lang = sessionLang
+      const firstTurn = firstTurnGlobal
       const turn = firstTurn
         ? startFlow(steps, lang as any)
         : advanceFlow(steps, flowState, message, lang as any)
@@ -200,10 +216,12 @@ Deno.serve(async (req) => {
       userMessageStored = true
 
 
+      const nextFlowState = { ...turn.state, ...(sessionLangLocked ? { lang: sessionLang } : {}) }
       await service
         .from('ai_agent_test_sessions')
-        .update({ flow_state: turn.state, updated_at: new Date().toISOString() })
+        .update({ flow_state: nextFlowState, updated_at: new Date().toISOString() })
         .eq('id', session_id)
+
 
       const reply = turn.messages.join('\n\n')
       if (reply) {
@@ -230,13 +248,30 @@ Deno.serve(async (req) => {
             finished: turn.finished,
             handoff: turn.handoff,
             path: turn.path,
+            lang: sessionLang,
+            lang_locked: sessionLangLocked,
           },
+
         })
       }
       // Fluxo concluído sem mensagem nova → segue para o modo livre (LLM).
     }
 
-    const systemPrompt = buildSystemPrompt(config, steps)
+    // Modo livre (LLM): se o idioma já foi travado durante o fluxo, mantém.
+    if (!sessionLangLocked) {
+      const freeRes = resolveFlowLanguage(flowState.lang, message, config.default_language)
+      sessionLang = freeRes.lang
+      sessionLangLocked = freeRes.locked
+      if (freeRes.locked) {
+        await service
+          .from('ai_agent_test_sessions')
+          .update({ flow_state: { ...flowState, lang: sessionLang }, updated_at: new Date().toISOString() })
+          .eq('id', session_id)
+      }
+    }
+
+    const systemPrompt = `${buildSystemPrompt(config, steps)}\n\n${getFlowLanguageDirective(sessionLang)}`
+
 
 
     // Histórico já persistido
@@ -306,6 +341,8 @@ Deno.serve(async (req) => {
       latency_ms: latency,
       tokens_used: result.tokens,
       system_prompt_preview: systemPrompt.slice(0, 2000),
+      flow: { lang: sessionLang, lang_locked: sessionLangLocked },
+
     })
   } catch (e: any) {
     return json({ error: e?.message || String(e) }, 500)

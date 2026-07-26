@@ -14,9 +14,17 @@ import {
   useTestMessages,
 } from '@/hooks/useAIAgents';
 
+const LANG_LABELS: Record<string, string> = {
+  'pt-BR': 'Português (BR)',
+  es: 'Espanhol',
+  en: 'Inglês',
+  fr: 'Francês',
+};
+
 interface Props {
   initialAgentId?: string | null;
 }
+
 
 export function AgentSandbox({ initialAgentId }: Props) {
   const { data: agents } = useAIAgents();
@@ -24,6 +32,8 @@ export function AgentSandbox({ initialAgentId }: Props) {
   const [versionId, setVersionId] = useState<string>('current');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [input, setInput] = useState('');
+  const [detectedLang, setDetectedLang] = useState<string | null>(null);
+
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const { data: versions } = useAgentVersions(agentId || undefined);
@@ -38,7 +48,9 @@ export function AgentSandbox({ initialAgentId }: Props) {
   useEffect(() => {
     setSessionId(null);
     setVersionId('current');
+    setDetectedLang(null);
   }, [agentId]);
+
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -60,8 +72,11 @@ export function AgentSandbox({ initialAgentId }: Props) {
     if (!id) return;
     const text = input;
     setInput('');
-    await send.mutateAsync({ sessionId: id, message: text });
+    const res = await send.mutateAsync({ sessionId: id, message: text });
+    const lang = (res as any)?.flow?.lang;
+    if (lang) setDetectedLang(lang);
   };
+
 
   const agent = (agents || []).find((a) => a.id === agentId);
 
@@ -103,7 +118,11 @@ export function AgentSandbox({ initialAgentId }: Props) {
           <div className="space-y-2">
             <Label>&nbsp;</Label>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setSessionId(null)} disabled={!agentId}>
+              <Button
+                variant="outline"
+                onClick={() => { setSessionId(null); setDetectedLang(null); }}
+                disabled={!agentId}
+              >
                 <RotateCcw className="h-4 w-4 mr-1" /> Novo teste
               </Button>
             </div>
@@ -115,7 +134,11 @@ export function AgentSandbox({ initialAgentId }: Props) {
             <Badge variant="outline">{agent.provider}</Badge>
             <Badge variant="outline">{agent.model}</Badge>
             <Badge variant="outline">temp {agent.temperature}</Badge>
+            <Badge variant="secondary">
+              idioma: {detectedLang ? LANG_LABELS[detectedLang] || detectedLang : 'aguardando 1ª resposta'}
+            </Badge>
           </div>
+
         )}
 
         <div className="h-[380px] overflow-y-auto rounded-md border p-4 space-y-3 bg-muted/30">
