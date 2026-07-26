@@ -246,13 +246,16 @@ Deno.serve(async (req) => {
       .eq('session_id', session_id)
       .order('created_at', { ascending: true })
 
-    await service.from('ai_agent_test_messages').insert({
-      session_id,
-      agent_id: agent.id,
-      role: 'user',
-      content: message,
-      created_by: auth.userId,
-    })
+    if (!userMessageStored) {
+      await service.from('ai_agent_test_messages').insert({
+        session_id,
+        agent_id: agent.id,
+        role: 'user',
+        content: message,
+        created_by: auth.userId,
+      })
+    }
+
 
     const history = [...(prior || []), { role: 'user', content: message }]
 
