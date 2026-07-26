@@ -1452,25 +1452,28 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         } catch (_) { /* ignore */ }
         const combinedSample = [...recentUserMsgs, currentCustomerMessage].join(' \n ').trim()
 
+        // Sinal positivo: prioriza a mensagem ATUAL (1ª mensagem inclusive);
+        // se ela for neutra, usa o histórico recente como material extra.
+        const positiveSignal =
+          detectChatLanguageOrNull(currentCustomerMessage) ?? detectChatLanguageOrNull(combinedSample)
+
         if (isFirstInteraction) {
-          const positive = detectChatLanguageOrNull(combinedSample)
-          if (positive) {
-            detectedChatLanguage = positive
+          if (positiveSignal) {
+            detectedChatLanguage = positiveSignal
             const currentLangCode = langCodeMap[detectedChatLanguage]
             await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
             contact.preferred_language = currentLangCode
-            console.log('Language locked (first detection):', detectedChatLanguage, 'sample:', combinedSample.slice(0, 120))
+            console.log('Language locked (first message, positive):', detectedChatLanguage, 'sample:', currentCustomerMessage.slice(0, 120))
           } else {
             detectedChatLanguage = 'pt-BR'
             console.log('Language provisional pt-BR (no positive signal yet); will re-detect on next inbound')
           }
         } else if (contact.preferred_language && preferredLangMap[contact.preferred_language]) {
-          // Re-detecção suave: nos primeiros turnos, se o cliente começa a escrever claramente
-          // em outro idioma, permite trocar o lock uma vez (cobre caso do 1º msg ser typo curto).
+          // Re-detecção precoce: enquanto o cliente ainda está na fase de captação,
+          // um sinal positivo claro em outro idioma corrige o lock.
           const locked = preferredLangMap[contact.preferred_language]
-          const positive = detectChatLanguageOrNull(combinedSample)
-          if (positive && positive !== locked && recentUserMsgs.length <= 4) {
-            detectedChatLanguage = positive
+          if (positiveSignal && positiveSignal !== locked && recentUserMsgs.length <= 8) {
+            detectedChatLanguage = positiveSignal
             const currentLangCode = langCodeMap[detectedChatLanguage]
             await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
             contact.preferred_language = currentLangCode
@@ -1479,12 +1482,16 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
             detectedChatLanguage = locked
             console.log('Language locked (from contact):', detectedChatLanguage)
           }
-        } else {
-          detectedChatLanguage = detectChatLanguageOrNull(combinedSample) ?? 'pt-BR'
+        } else if (positiveSignal) {
+          detectedChatLanguage = positiveSignal
           const currentLangCode = langCodeMap[detectedChatLanguage]
           await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
           contact.preferred_language = currentLangCode
-          console.log('Language locked (fallback detection):', detectedChatLanguage)
+          console.log('Language locked (positive detection):', detectedChatLanguage)
+        } else {
+          // Sem sinal positivo: NÃO persiste lock — apenas usa pt-BR neste turno.
+          detectedChatLanguage = 'pt-BR'
+          console.log('Language provisional pt-BR (no lock persisted)')
         }
 
         // Wave 4: carregar estado persistente do funil
