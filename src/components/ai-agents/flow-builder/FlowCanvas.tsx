@@ -22,7 +22,10 @@ import { StepInspector } from './StepInspector';
 import { autoLayout } from '@/lib/flow-layout';
 import { validateFlow } from '@/lib/flow-validation';
 import { useFlowSteps, useSaveFlowCanvas } from '@/hooks/useAIAgents';
+import { ImportBizagiDialog } from './ImportBizagiDialog';
+import type { ImportedFlow } from '@/lib/bizagi-bpmn-import';
 import type { AgentFlow, AgentFlowStep, FlowPhase } from '@/types/ai-agents';
+
 import {
   DEFAULT_STEP_VALIDATION,
   normalizeBranches,
