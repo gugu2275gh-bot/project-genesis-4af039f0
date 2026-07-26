@@ -70,8 +70,21 @@ export interface FlowCapturedField {
   value: string
 }
 
+/**
+ * Mensagem de saída com o metadado da etapa que a originou.
+ * `quick_reply` é decidido EXCLUSIVAMENTE pela configuração da etapa —
+ * a camada de envio nunca pode inferir botões pelo texto.
+ */
+export interface FlowOutboundMessage {
+  text: string
+  step_code: string
+  quick_reply: boolean
+}
+
 export interface FlowTurnResult {
   messages: string[]
+  /** Mesmas mensagens de `messages`, com metadado por etapa. */
+  outbound: FlowOutboundMessage[]
   state: FlowRunState
   /** true quando a etapa atual não aceitou a resposta. */
   reasked: boolean
@@ -83,6 +96,17 @@ export interface FlowTurnResult {
   /** Respostas com `field_mapping` capturadas neste turno. */
   captured: FlowCapturedField[]
 }
+
+/**
+ * Botões Sim/Não só quando a etapa está marcada com `validation.quick_reply`
+ * E a resposta esperada é binária. Padrão: desligado.
+ */
+export function quickReplyOf(step: FlowStep): boolean {
+  const v = (step?.validation || {}) as Record<string, unknown>
+  const answerType = String(step?.answer_type || '').toUpperCase()
+  return v.quick_reply === true && answerType === 'SIM_NAO'
+}
+
 
 
 const MAX_STEPS_PER_TURN = 25
@@ -307,6 +331,7 @@ function run(
   captured: FlowCapturedField[] = [],
 ): FlowTurnResult {
   const messages: string[] = []
+  const outbound: FlowOutboundMessage[] = []
   const path: string[] = []
   const visited = new Set(state.visited || [])
   let code: string | null = fromCode
@@ -321,7 +346,13 @@ function run(
 
     // Nunca reenviar mensagens de uma etapa já executada (evita loops).
     if (!visited.has(code)) {
-      messages.push(...messagesOf(step, lang))
+      const texts = messagesOf(step, lang)
+      messages.push(...texts)
+      const qr = quickReplyOf(step)
+      for (let i = 0; i < texts.length; i++) {
+        // Só a última mensagem da etapa carrega a pergunta binária.
+        outbound.push({ text: texts[i], step_code: step.step_code, quick_reply: qr && i === texts.length - 1 })
+      }
       visited.add(code)
     }
 
@@ -329,6 +360,7 @@ function run(
     if (kind === 'PERGUNTA') {
       return {
         messages,
+        outbound,
         state: { ...state, current_step: code, visited: [...visited], attempts: 0, finished: false },
         reasked: false,
         finished: false,
@@ -340,6 +372,7 @@ function run(
     if (kind === 'FIM') {
       return {
         messages,
+        outbound,
         state: { ...state, current_step: code, visited: [...visited], finished: true, handoff: sawHandoff || !!step.handoff },
         reasked: false,
         finished: true,
@@ -355,6 +388,7 @@ function run(
 
   return {
     messages,
+    outbound,
     state: { ...state, current_step: code, visited: [...visited], finished: true, handoff: sawHandoff || !!state.handoff },
     reasked: false,
     finished: true,
@@ -364,12 +398,13 @@ function run(
   }
 }
 
+
 /** Primeiro turno: envia as mensagens de abertura até a primeira pergunta. */
 export function startFlow(steps: FlowStep[], lang: FlowLang = 'pt-BR'): FlowTurnResult {
   const index = indexSteps(steps)
   const start = findStartStep(steps)
   if (!start) {
-    return { messages: [], state: { finished: true }, reasked: false, finished: true, handoff: false, path: [], captured: [] }
+    return { messages: [], outbound: [], state: { finished: true }, reasked: false, finished: true, handoff: false, path: [], captured: [] }
   }
   return run(index, start.step_code, { answers: {}, visited: [], attempts: 0, lang }, lang)
 }
@@ -384,7 +419,7 @@ export function advanceFlow(
   const index = indexSteps(steps)
   if (!state?.current_step) return startFlow(steps, lang)
   if (state.finished) {
-    return { messages: [], state, reasked: false, finished: true, handoff: !!state.handoff, path: [], captured: [] }
+    return { messages: [], outbound: [], state, reasked: false, finished: true, handoff: !!state.handoff, path: [], captured: [] }
   }
 
   const step = index.get(state.current_step)
@@ -409,6 +444,7 @@ export function advanceFlow(
 
     return {
       messages: reask ? [reask] : [],
+      outbound: reask ? [{ text: reask, step_code: step.step_code, quick_reply: quickReplyOf(step) }] : [],
       state: { ...state, attempts },
       reasked: true,
       finished: false,
@@ -416,6 +452,7 @@ export function advanceFlow(
       path: [step.step_code],
       captured: [],
     }
+
   }
 
 
@@ -427,6 +464,7 @@ export function advanceFlow(
   if (!nextCode) {
     return {
       messages: [],
+      outbound: [],
       state: { ...nextState, finished: true },
       reasked: false,
       finished: true,
@@ -434,6 +472,7 @@ export function advanceFlow(
       path: [step.step_code],
       captured,
     }
+
   }
   return run(index, nextCode, nextState, lang, captured)
 }

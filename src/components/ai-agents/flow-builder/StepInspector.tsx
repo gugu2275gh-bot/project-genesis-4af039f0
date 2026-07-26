@@ -250,8 +250,10 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
             <StepValidationEditor
               validation={validation}
               stepCodes={otherCodes}
+              answerType={step.answer_type}
               onChange={(patch) => setValidation(patch)}
             />
+
           </TabsContent>
 
           <TabsContent value="comportamento" className="mt-0 space-y-4">

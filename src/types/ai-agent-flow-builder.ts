@@ -167,6 +167,9 @@ export interface StepValidation {
   fallback_step_code?: string;
   /** Natureza da etapa (início, pergunta, informativa, fim). */
   step_kind?: StepKind;
+  /** Enviar a pergunta como botões Sim/Não no WhatsApp (só para SIM_NAO). */
+  quick_reply?: boolean;
+
   [key: string]: unknown;
 }
 

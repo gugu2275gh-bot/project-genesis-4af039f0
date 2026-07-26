@@ -104,9 +104,23 @@ async function sha256Hex(input: string): Promise<string> {
  */
 export async function sendOutgoingIdempotent(
   supabase: any,
-  args: { phone: string; leadId: string | null; body: string; windowSeconds?: number; language?: ChatLanguage },
+  args: {
+    phone: string
+    leadId: string | null
+    body: string
+    windowSeconds?: number
+    language?: ChatLanguage
+    /**
+     * 'auto' (padrão legado): heurística por texto pode virar botões.
+     * 'on'  : botões Sim/Não porque a ETAPA DO FLUXO pediu.
+     * 'off' : nunca botões (fluxo visual ativo sem quick_reply na etapa).
+     */
+    quickReply?: 'auto' | 'on' | 'off'
+  },
 ): Promise<{ sent: boolean; reason?: string }> {
   const { phone, leadId, body, language } = args
+  const quickReplyMode = args.quickReply ?? 'auto'
+
   const windowSec = args.windowSeconds ?? 60
   const norm = normalizeForDedup(body)
   if (!norm) return { sent: false, reason: 'empty_body' }
@@ -150,9 +164,12 @@ export async function sendOutgoingIdempotent(
     }
   }
 
-  // Quick Reply para perguntas binárias SIM/NÃO conhecidas do fluxo.
-  // Se falhar, cai em texto normal (não altera fallback existente de templates HSM).
-  if (language && isBinaryYesNoQuestion(body)) {
+  // Quick Reply: SÓ quando a etapa do fluxo pediu ('on') ou, no modo legado
+  // ('auto'), quando o texto casa com uma pergunta binária conhecida.
+  // Com fluxo visual ativo o modo é 'on'/'off' — a heurística nunca é consultada.
+  const wantsQuickReply = quickReplyMode === 'on'
+    || (quickReplyMode === 'auto' && isBinaryYesNoQuestion(body))
+  if (language && wantsQuickReply) {
     try {
       await sendYesNoQuickReply(phone, sanitizeOutgoingText(body), language)
       return { sent: true }
@@ -160,6 +177,7 @@ export async function sendOutgoingIdempotent(
       console.warn('[QUICK_REPLY] falhou, caindo em texto:', qrErr instanceof Error ? qrErr.message : qrErr)
     }
   }
+
 
   await sendWhatsAppMessage(phone, body)
   return { sent: true }

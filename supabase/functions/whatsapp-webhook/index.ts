@@ -1597,12 +1597,25 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
             await supabase.from('lead_funnel_state').update(funnelPatch).eq('lead_id', lead.id)
             funnelState = { ...(funnelState as any), ...funnelPatch }
 
-            const flowParts = (turn.messages || []).map((m: string) => String(m || '').trim()).filter(Boolean)
-            for (let i = 0; i < flowParts.length; i++) {
-              const part = flowParts[i]
+            // Mensagens do fluxo: texto e formato vêm SÓ da configuração da etapa.
+            // `quick_reply` da etapa decide botões; heurística legada fica desligada.
+            const flowOutbound = ((turn.outbound && turn.outbound.length
+              ? turn.outbound
+              : (turn.messages || []).map((m: string) => ({ text: m, step_code: turn.state.current_step, quick_reply: false }))
+            ) as Array<{ text: string; step_code?: string | null; quick_reply?: boolean }>)
+              .map((o) => ({ ...o, text: String(o.text || '').trim() }))
+              .filter((o) => !!o.text)
+            const flowParts = flowOutbound.map((o) => o.text)
+            for (let i = 0; i < flowOutbound.length; i++) {
+              const part = flowOutbound[i].text
               const sendRes = await sendOutgoingIdempotent(supabase, {
-                phone: phoneNumber, leadId: lead.id, body: part, language: detectedChatLanguage,
+                phone: phoneNumber,
+                leadId: lead.id,
+                body: part,
+                language: detectedChatLanguage,
+                quickReply: flowOutbound[i].quick_reply ? 'on' : 'off',
               })
+
               if (sendRes.sent) {
                 await supabase.from('mensagens_cliente').insert({
                   id_lead: lead.id,

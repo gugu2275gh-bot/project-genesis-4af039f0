@@ -11,13 +11,16 @@ interface Props {
   validation: StepValidation;
   /** Códigos das demais etapas (para "pular se etapa concluída"). */
   stepCodes: string[];
+  /** Tipo de resposta da etapa — habilita opções específicas (ex.: botões Sim/Não). */
+  answerType?: string | null;
   onChange: (patch: Partial<StepValidation>) => void;
 }
 
 /** Campos de validação e comportamento da resposta, sem exigir JSON. */
-export function StepValidationEditor({ validation, stepCodes, onChange }: Props) {
+export function StepValidationEditor({ validation, stepCodes, answerType, onChange }: Props) {
   const [showRaw, setShowRaw] = useState(false);
   const [rawDraft, setRawDraft] = useState<string | null>(null);
+  const isYesNo = String(answerType || '').toUpperCase() === 'SIM_NAO';
 
   return (
     <div className="space-y-4">
@@ -28,6 +31,22 @@ export function StepValidationEditor({ validation, stepCodes, onChange }: Props)
           onCheckedChange={(v) => onChange({ required: v })}
         />
       </div>
+
+      {isYesNo && (
+        <div className="flex items-center justify-between rounded-md border p-3">
+          <div>
+            <Label className="font-normal">Enviar como botões (Sim/Não)</Label>
+            <p className="text-xs text-muted-foreground">
+              Desligado: a pergunta vai como texto puro. Nenhuma regra fora do fluxo cria botões.
+            </p>
+          </div>
+          <Switch
+            checked={validation.quick_reply === true}
+            onCheckedChange={(v) => onChange({ quick_reply: v })}
+          />
+        </div>
+      )}
+
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">

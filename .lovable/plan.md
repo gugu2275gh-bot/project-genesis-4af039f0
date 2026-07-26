@@ -1,39 +1,31 @@
-## O que validei
+## Regra a garantir
 
-Li o bypass em `whatsapp-webhook/index.ts` (linhas ~1500-1606), a ponte `lib/visual-flow.ts` e o motor `_shared/flow-engine.ts`.
+Com um fluxo configurado, **tudo que o cliente recebe vem exclusivamente da configuração da etapa** — texto, idioma e formato de envio. Nenhuma heurística legada pode alterar a mensagem. Botões só aparecem se a etapa estiver marcada para isso.
 
-Funciona como esperado: quando o agente de produção aponta um fluxo com etapa de INÍCIO válida, o motor determinístico roda, grava `visual_flow_state`, aplica `field_mapping` no CRM, envia as mensagens e retorna antes do funil legado.
+## Causa confirmada do print
 
-Mas a validação encontrou **6 pontos onde o atendimento pode sair do fluxo antes dele terminar**. Todos são reais no código atual:
+Os botões [Sí]/[No] não vieram do fluxo:
 
-1. **O bypass está dentro do `if (botEnabled && geminiApiKey && ...)`** (linha 1401). Se a chave da IA falhar ou o bot for desligado, um cliente no meio do fluxo cai no comportamento legado. O fluxo é determinístico e não precisa de LLM para rodar.
-2. **Silêncios automáticos pausam o fluxo** (linhas 1280-1332): se o cliente responder "ok", "obrigado", "vale", "gracias" ou só emoji, a IA é pausada — mas essas podem ser respostas legítimas de uma etapa do fluxo (ex.: confirmação Sim/Não).
-3. **Reativação inteligente** (linhas 1118-1192): `DIRECT_ROUTE`/`SEND_MESSAGE` marcam `skipAIAgent = true` e mandam mensagem própria, atropelando um fluxo em andamento.
-4. **Desambiguação de setor** (linha ~996) envia mensagem de menu numerado no meio do fluxo.
-5. **Fallback silencioso para o legado**: qualquer erro dentro do bloco (`catch` da linha 1604), ou um turno que não gere mensagem, devolve o cliente ao funil legado mesmo com fluxo já iniciado.
-6. **Sandbox x produção**: o simulador já usa `mergeFlows`, mas não replica essas travas, então o teste pode passar e a produção desviar.
+- `lib/twilio.ts:157` chama `sendYesNoQuickReply(...)` sempre que `isBinaryYesNoQuestion(body)` for verdadeiro.
+- `lib/quick-reply.ts` decide isso por **regex sobre o texto de saída** (`YESNO_QUESTION_PATTERNS`), com padrões do roteiro antigo — inclusive `ya estas en espana`.
+- Como a etapa de localização do fluxo tem exatamente esse texto em `es`, a camada de envio converteu a mensagem em template `twilio/quick-reply` sozinha, ignorando a configuração da etapa.
 
-## O que proponho fazer
+Os logs confirmam que o motor do fluxo comandou o turno (`[VISUAL_FLOW] step: msg_7_perguntar_localizacao`); o desvio foi só no envio.
 
-**A. Trava dura de fluxo ativo (núcleo)**
-- Carregar `visual_flow_state` e o plano do fluxo **antes** de reativação, desambiguação, buffers e checagens de pausa.
-- Criar a condição `flowActive = plano habilitado && fluxo não finalizado`.
-- Enquanto `flowActive`: pular reativação inteligente, desambiguação de setor, silêncio por "ok/obrigado" e a dependência de `botEnabled`/chave da IA. Continuam valendo apenas as proteções que evitam mensagem duplicada (buffer de mensagens novas, anti-duplicidade e lock concorrente) e a pausa real por atendente humano (`origem = SISTEMA`), que é intervenção humana explícita.
+## Plano
 
-**B. Sem saída acidental para o legado**
-- Com fluxo iniciado e não finalizado, o handler termina o turno no motor de fluxo, mesmo se o turno não gerar mensagem (loga e sai em silêncio, em vez de cair no funil antigo).
-- Erros dentro do bloco passam a re-perguntar a etapa atual / sair em silêncio, sem repassar o turno para o legado — o estado do fluxo é preservado.
-
-**C. Saída controlada só no fim**
-- O legado (ou o modo livre com LLM) só volta a comandar quando `finished = true`, sinalizado explicitamente no `visual_flow_state` e no funil (`step = 'livre'`, `handoff_sent` quando aplicável).
-
-**D. Paridade e testes**
-- Aplicar o mesmo encadeamento pré-handoff → handoff no simulador.
-- Testes Deno cobrindo: fluxo com resposta "ok"/"obrigado" no meio (não pode pausar), fluxo com falha da IA (deve continuar), erro na aplicação de campos do CRM (não pode desviar), reinício de fluxo já finalizado (não pode reiniciar) e conclusão com handoff.
+1. **Envio governado pelo fluxo.** Adicionar a opção `quickReply: 'auto' | 'on' | 'off'` no envio (`sendMessage` / `sendOutgoingIdempotent`). Quando a mensagem for originada pelo motor visual, o valor vem da etapa — nunca de regex. Sem valor explícito da etapa: `off`.
+2. **Botões viram configuração da etapa.** Novo campo `quick_reply` (boolean, padrão `false`) dentro do JSONB `validation`, editável apenas quando `answer_type = SIM_NAO`, exposto no inspetor do editor visual e na edição em tabela ("Enviar como botões Sim/Não").
+3. **Bloquear a heurística legada sob fluxo ativo.** `isBinaryYesNoQuestion` passa a valer somente no modo `auto` (atendimentos sem fluxo, LLM/funil legado). Com fluxo ativo, ela nunca é consultada.
+4. **Auditar outros desvios na camada de envio** (sanitização, quebra de mensagens, sufixos, fallback de template) para garantir que nenhum deles reescreva o texto definido na etapa; o que não for imposto pelo WhatsApp fica desativado sob fluxo ativo.
+5. **Retorno do botão.** Quando `quick_reply` estiver ligado, o `ButtonPayload` YES/NO continua normalizado para "sim"/"não" e validado pela etapa `SIM_NAO` do fluxo.
+6. **Testes Deno**: (a) fluxo ativo + `quick_reply` desligado → texto puro, sem botões, mesmo com texto que casa com a regex legada; (b) `quick_reply` ligado → quick reply; (c) sem fluxo → comportamento legado inalterado; (d) texto enviado é idêntico ao configurado na etapa.
 
 ## Detalhes técnicos
 
-- `loadVisualFlowPlan` passa a ser chamado logo após resolver `lead`/`contact`, com cache na requisição, e a flag `flowActive` propaga por todo o handler.
-- `runtime_config.execute_visual_flow = false` continua sendo o escape manual para voltar ao legado.
-- Nenhuma mudança de schema é necessária: `visual_flow_state` e `field_mapping` já existem.
-- Arquivos: `supabase/functions/whatsapp-webhook/index.ts`, `.../lib/visual-flow.ts`, `supabase/functions/ai-agent-sandbox/index.ts` e novo `_shared/flow-engine_strict_test.ts`.
+- `supabase/functions/whatsapp-webhook/lib/twilio.ts`: parâmetro `quickReply`, default `'auto'`, com curto-circuito para `'off'`.
+- `supabase/functions/whatsapp-webhook/index.ts` (bloco `[VISUAL_FLOW]`) e `lib/visual-flow.ts`: propagar a decisão por mensagem vinda da etapa.
+- `supabase/functions/_shared/flow-engine.ts`: incluir no resultado do turno o metadado de cada mensagem (etapa de origem + `quick_reply`).
+- Front: `src/components/ai-agents/flow-builder/StepInspector.tsx` e `src/components/ai-agents/FlowsManagement.tsx` — switch "Enviar como botões (Sim/Não)".
+- Sandbox (`ai-agent-sandbox`) recebe o mesmo metadado para exibir a etapa como botões no simulador, mantendo paridade.
+- Sem migração de schema: o campo entra no JSONB `validation` já existente.
