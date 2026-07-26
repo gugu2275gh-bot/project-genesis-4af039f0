@@ -74,17 +74,20 @@ function LoadingSpinner() {
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  
-  if (loading) {
+
+  // Só mostra o spinner quando ainda não sabemos quem é o usuário; revalidações
+  // em segundo plano não podem desmontar a tela (perde rascunhos de editores).
+  if (loading && !user) {
     return <LoadingSpinner />;
   }
-  
+
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
-  
+
   return <>{children}</>;
 }
+
 
 function AppRoutes() {
   const { user } = useAuth();
