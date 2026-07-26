@@ -395,7 +395,15 @@ export function FlowsManagement() {
         ))
       )}
 
-      <Dialog open={!!current} onOpenChange={(o) => !o && setSelected(null)}>
+      <Dialog
+        open={!!current}
+        onOpenChange={(o) => {
+          if (o) return;
+          if (editorDirty && !window.confirm('Há alterações não salvas no desenho. Fechar mesmo assim?')) return;
+          setEditorDirty(false);
+          setSelected(null);
+        }}
+      >
         <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -407,11 +415,13 @@ export function FlowsManagement() {
                     (current as any).phase}
                 </Badge>
               )}
+              {editorDirty && <Badge variant="secondary">Alterações não salvas</Badge>}
             </DialogTitle>
           </DialogHeader>
-          {current && <FlowSteps flow={current} />}
+          {current && <FlowSteps flow={current} onDirtyChange={setEditorDirty} />}
         </DialogContent>
       </Dialog>
+
 
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
