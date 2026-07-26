@@ -72,12 +72,21 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step.answer_type, validation.options, branches, step.id]);
 
-  const messages: MultiLangText =
-    step.messages && Object.keys(step.messages || {}).length > 0
-      ? step.messages
-      : step.message
-        ? { 'pt-BR': step.message }
-        : {};
+  const messages = useMemo(
+    () => normalizeMessages(step.messages, step.message),
+    [step.messages, step.message],
+  );
+  const kind = stepKindOf(step);
+  const total = messageCount(messages);
+
+  const updateMessages = (next: ReturnType<typeof normalizeMessages>) => {
+    const first = next['pt-BR'];
+    onChange({
+      messages: next as any,
+      message: (Array.isArray(first) ? first[0] : first) || '',
+    });
+  };
+
 
   return (
     <div className="flex h-full flex-col">
