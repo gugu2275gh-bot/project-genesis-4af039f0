@@ -53,21 +53,24 @@ Deno.test('Fred: aproveita nome, localização, entrada e interesse; para no e-m
     callLLM: llmWith(FRED),
   })
 
-  assertEquals(Object.keys(res.prefilled).sort(), ['entrada', 'interesse', 'local', 'nome'])
+  // "Fred" (só primeiro nome) não satisfaz a etapa de NOME COMPLETO, mas é
+  // usado na saudação; as demais respostas são aproveitadas.
+  assertEquals(Object.keys(res.prefilled).sort(), ['entrada', 'interesse', 'local'])
   assert(res.greeting.includes('Fred'))
+  assert(res.greeting.toLowerCase().includes('espanha'))
 
   const turn = startFlowWithPrefill(STEPS, 'pt-BR', res.prefilled)
-  assertEquals(turn.state.current_step, 'email')
-  assertEquals(turn.messages, ['Olá!', 'Qual seu e-mail?'])
+  assertEquals(turn.state.current_step, 'nome')
+  assertEquals(turn.messages, ['Olá!', 'Qual seu nome completo?'])
   // Nenhuma pergunta aproveitada é reenviada.
-  for (const q of ['nome', 'Espanha', 'data de entrada', 'busca hoje']) {
+  for (const q of ['Espanha', 'data de entrada', 'busca hoje']) {
     assert(!turn.messages.join(' ').toLowerCase().includes(q.toLowerCase()))
   }
   // Dados aproveitados vão para o CRM.
   const fields = turn.captured.map((c) => c.field).sort()
-  assert(fields.includes('contact.full_name'))
   assert(fields.includes('funnel.location_known'))
   assert(fields.includes('funnel.interest_confirmed'))
+  assert(fields.includes('funnel.entry_date_confirmed'))
 })
 
 Deno.test('Robert: fora da Espanha segue o ramo "nao" e responde em inglês', async () => {
@@ -81,10 +84,15 @@ Deno.test('Robert: fora da Espanha segue o ramo "nao" e responde em inglês', as
 
   assertEquals(res.prefilled['local'], 'nao')
   const turn = startFlowWithPrefill(STEPS, 'en', res.prefilled)
-  // Pulou a data de entrada (ramo "nao") e a pergunta de interesse (aproveitada).
-  assertEquals(turn.state.current_step, 'email')
-  assertEquals(turn.messages, ['Hello!', 'Your email?'])
+  assertEquals(turn.state.current_step, 'nome')
+  assertEquals(turn.messages, ['Hello!', 'What is your full name?'])
   assert(res.greeting.includes('Robert'))
+  assert(res.greeting.includes('not in Spain yet'))
+
+  // Após o nome, o ramo "nao" pula a data de entrada e o interesse já respondido.
+  const next = advanceFlow(STEPS, turn.state, 'Robert Smith', 'en')
+  assertEquals(next.state.current_step, 'email')
+  assertEquals(next.messages, ['Your email?'])
 })
 
 Deno.test('Continuidade: turno seguinte avança sem reabrir etapas aproveitadas', async () => {
@@ -93,13 +101,17 @@ Deno.test('Continuidade: turno seguinte avança sem reabrir etapas aproveitadas'
     steps: STEPS, lang: 'pt-BR', config: CFG, callLLM: llmWith(FRED),
   })
   const first = startFlowWithPrefill(STEPS, 'pt-BR', res.prefilled)
-  const second = advanceFlow(STEPS, first.state, 'fred@mail.com', 'pt-BR')
+  const second = advanceFlow(STEPS, first.state, 'Fred Souza', 'pt-BR')
+  assertEquals(second.state.current_step, 'email')
+  assertEquals(second.messages, ['Qual seu e-mail?'])
 
-  assert(second.finished)
-  assert(second.handoff)
-  assertEquals(second.messages, ['Vou te encaminhar.'])
-  assertEquals(second.state.answers['nome'], 'Fred')
-  assertEquals(second.state.answers['email'], 'fred@mail.com')
+  const third = advanceFlow(STEPS, second.state, 'fred@mail.com', 'pt-BR')
+  assert(third.finished)
+  assert(third.handoff)
+  assertEquals(third.messages, ['Vou te encaminhar.'])
+  assertEquals(third.state.answers['nome'], 'Fred Souza')
+  assertEquals(third.state.answers['interesse'], 'estudar')
+  assertEquals(third.state.answers['email'], 'fred@mail.com')
 })
 
 Deno.test('Confiança abaixo do mínimo é descartada', () => {
@@ -108,29 +120,29 @@ Deno.test('Confiança abaixo do mínimo é descartada', () => {
 })
 
 Deno.test('Campo desligado na configuração é ignorado', async () => {
-  const cfg = normalizeIntakeConfig({ enabled: true, fields: ['contact.full_name'] })
+  const cfg = normalizeIntakeConfig({ enabled: true, fields: ['funnel.location_known'] })
   const res = await runIntake({
     message: 'Oi. Meu nome é Fred. Estou na Espanha tem 5 dias, e quero estudar',
     steps: STEPS, lang: 'pt-BR', config: cfg, callLLM: llmWith(FRED),
   })
-  assertEquals(Object.keys(res.prefilled), ['nome'])
+  assertEquals(Object.keys(res.prefilled), ['local'])
   const turn = startFlowWithPrefill(STEPS, 'pt-BR', res.prefilled)
-  assertEquals(turn.state.current_step, 'local')
+  assertEquals(turn.state.current_step, 'nome')
 })
 
 Deno.test('Prefill inválido para a etapa é descartado sem quebrar o fluxo', () => {
   const prefilled = prefillFromFieldValues(
     STEPS,
-    { 'funnel.location_known': 'talvez', 'contact.full_name': 'Fred' },
+    { 'funnel.location_known': 'talvez', 'contact.full_name': 'Fred Souza' },
   )
   assertEquals(prefilled['local'], undefined)
-  assertEquals(prefilled['nome'], 'Fred')
+  assertEquals(prefilled['nome'], 'Fred Souza')
   const turn = startFlowWithPrefill(STEPS, 'pt-BR', prefilled)
   assertEquals(turn.state.current_step, 'local')
 })
 
 Deno.test('Todas as perguntas aproveitadas: fluxo conclui no 1º turno com handoff', () => {
-  const prefilled = { nome: 'Fred', local: 'nao', interesse: 'estudar', email: 'f@x.com' }
+  const prefilled = { nome: 'Fred Souza', local: 'nao', interesse: 'estudar', email: 'f@x.com' }
   const turn = startFlowWithPrefill(STEPS, 'pt-BR', prefilled)
   assert(turn.finished)
   assert(turn.handoff)
@@ -166,12 +178,12 @@ Deno.test('Reconhecimento humano: só em respostas abertas', () => {
   assert(ack.length > 0)
 
   // Etapa aberta (interesse) → ack aparece antes da próxima pergunta.
-  const state = { current_step: 'interesse', answers: { nome: 'Fred', local: 'nao' }, visited: ['inicio', 'nome', 'local'], lang: 'pt-BR' }
+  const state = { current_step: 'interesse', answers: { nome: 'Fred Souza', local: 'nao' }, visited: ['inicio', 'nome', 'local'], lang: 'pt-BR' }
   const open = advanceFlow(STEPS, state, 'quero estudar', 'pt-BR', { ack })
   assertEquals(open.messages[0], ack)
 
   // Etapa Sim/Não → sem ack.
-  const yesNoState = { current_step: 'local', answers: { nome: 'Fred' }, visited: ['inicio', 'nome'], lang: 'pt-BR' }
+  const yesNoState = { current_step: 'local', answers: { nome: 'Fred Souza' }, visited: ['inicio', 'nome'], lang: 'pt-BR' }
   const yesNo = advanceFlow(STEPS, yesNoState, 'não', 'pt-BR', { ack })
   assert(yesNo.messages[0] !== ack)
 
@@ -185,7 +197,7 @@ Deno.test('ack_enabled por etapa sobrepõe o padrão', () => {
     s.step_code === 'local' ? { ...s, validation: { ack_enabled: true } } : s
   )
   const ack = renderAckMessage(DEFAULT_INTAKE_CONFIG, 'pt-BR')
-  const state = { current_step: 'local', answers: { nome: 'Fred' }, visited: ['inicio', 'nome'], lang: 'pt-BR' }
+  const state = { current_step: 'local', answers: { nome: 'Fred Souza' }, visited: ['inicio', 'nome'], lang: 'pt-BR' }
   const turn = advanceFlow(steps, state, 'não', 'pt-BR', { ack })
   assertEquals(turn.messages[0], ack)
 })
