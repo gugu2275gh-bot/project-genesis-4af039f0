@@ -93,11 +93,12 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
         id: s.id,
         type: 'step',
         position: positions[s.step_code] || { x: 0, y: 0 },
-        data: { step: s, hasIssue: errorCodes.has(s.step_code) },
+        data: { step: s, hasIssue: errorCodes.has(s.step_code), onDelete: (id: string) => deleteStepRef.current(id) },
         selected: selectedId === s.id,
       })),
     [steps, positions, selectedId, errorCodes],
   );
+
 
   const edges: Edge[] = useMemo(() => {
     const byCode = new Map(steps.map((s) => [s.step_code, s]));
