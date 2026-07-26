@@ -183,9 +183,20 @@ Deno.serve(async (req) => {
 
     let userMessageStored = false
 
+    // Idioma do turno: travado no `flow_state` assim que a primeira resposta
+    // do cliente permite identificá-lo; antes disso usa o padrão do agente.
+    const firstTurnGlobal = !flowState.current_step
+    const langResolution = resolveFlowLanguage(
+      flowState.lang,
+      firstTurnGlobal ? '' : message,
+      config.default_language,
+    )
+    sessionLang = langResolution.lang
+    sessionLangLocked = langResolution.locked
+
     if (visualFlowEnabled && !flowState.finished) {
-      const lang = String(config.default_language || 'pt-BR')
-      const firstTurn = !flowState.current_step
+      const lang = sessionLang
+      const firstTurn = firstTurnGlobal
       const turn = firstTurn
         ? startFlow(steps, lang as any)
         : advanceFlow(steps, flowState, message, lang as any)
@@ -200,10 +211,12 @@ Deno.serve(async (req) => {
       userMessageStored = true
 
 
+      const nextFlowState = { ...turn.state, ...(sessionLangLocked ? { lang: sessionLang } : {}) }
       await service
         .from('ai_agent_test_sessions')
-        .update({ flow_state: turn.state, updated_at: new Date().toISOString() })
+        .update({ flow_state: nextFlowState, updated_at: new Date().toISOString() })
         .eq('id', session_id)
+
 
       const reply = turn.messages.join('\n\n')
       if (reply) {
