@@ -52,6 +52,7 @@ import NPSSurvey from "./pages/nps/NPSSurvey";
 // Settings Pages
 import Settings from "./pages/settings/Settings";
 import WebhookLogs from "./pages/settings/WebhookLogs";
+import AIAgents from "./pages/ai-agents/AIAgents";
 
 // Portal Pages
 import PortalDashboard from "./pages/portal/PortalDashboard";
@@ -138,6 +139,9 @@ function AppRoutes() {
         {/* Settings */}
         <Route path="/settings" element={<Settings />} />
         <Route path="/settings/webhook-logs" element={<WebhookLogs />} />
+
+        {/* Agentes de IA */}
+        <Route path="/ai-agents" element={<AIAgents />} />
       </Route>
 
       {/* Portal do Cliente - Rota separada */}
