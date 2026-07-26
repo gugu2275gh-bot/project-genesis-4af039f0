@@ -12,6 +12,7 @@ import { MultiLangField } from '@/components/ai-agents/MultiLangField';
 import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
 import { StepUnexpectedAnswerEditor } from '@/components/ai-agents/flow-builder/StepUnexpectedAnswerEditor';
+import { StepKnowledgeCheckEditor } from '@/components/ai-agents/flow-builder/StepKnowledgeCheckEditor';
 import { ANSWER_TYPES, FLOW_PHASES, STEP_FIELD_MAPPINGS, type AgentFlowStep } from '@/types/ai-agents';
 
 import {
