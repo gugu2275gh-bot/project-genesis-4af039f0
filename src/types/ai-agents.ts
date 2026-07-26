@@ -1,6 +1,47 @@
 export type AgentProvider = 'gemini' | 'openai' | 'lovable';
 export type AgentStatus = 'ATIVO' | 'INATIVO' | 'RASCUNHO';
 
+/** Idiomas suportados pelo agente. */
+export type AgentLanguage = 'pt-BR' | 'es' | 'en' | 'fr';
+
+export const AGENT_LANGUAGES: { code: AgentLanguage; label: string }[] = [
+  { code: 'pt-BR', label: 'Português' },
+  { code: 'es', label: 'Espanhol' },
+  { code: 'en', label: 'Inglês' },
+  { code: 'fr', label: 'Francês' },
+];
+
+/** Texto com uma versão por idioma. */
+export type MultiLangText = Partial<Record<AgentLanguage, string>>;
+
+/** Fase do fluxo de atendimento. */
+export type FlowPhase = 'PRE_HANDOFF' | 'HANDOFF' | 'GERAL';
+
+export const FLOW_PHASES: { value: FlowPhase; label: string; description: string }[] = [
+  {
+    value: 'PRE_HANDOFF',
+    label: 'Pré-handoff',
+    description: 'Etapas que o agente executa sozinho, antes de encaminhar para um atendente.',
+  },
+  {
+    value: 'HANDOFF',
+    label: 'Handoff',
+    description: 'Etapas executadas no momento do encaminhamento e depois dele.',
+  },
+  { value: 'GERAL', label: 'Geral', description: 'Etapas que valem para as duas fases.' },
+];
+
+export const TONE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'CORDIAL_ACOLHEDOR', label: 'Cordial e acolhedor' },
+  { value: 'PROFISSIONAL_OBJETIVO', label: 'Profissional e objetivo' },
+  { value: 'FORMAL', label: 'Formal' },
+  { value: 'CONSULTIVO', label: 'Consultivo' },
+  { value: 'INFORMAL_PROXIMO', label: 'Informal e próximo' },
+  { value: 'EMPATICO', label: 'Empático' },
+  { value: 'DIRETO', label: 'Direto' },
+  { value: 'PERSONALIZADO', label: 'Personalizado…' },
+];
+
 export interface AgentCapabilities {
   answer_questions: boolean;
   use_knowledge_base: boolean;
@@ -13,6 +54,8 @@ export interface AgentCapabilities {
 export interface AgentBehavior {
   personality: string;
   tone: string;
+  /** Texto livre quando `tone` = PERSONALIZADO. */
+  tone_custom?: string;
   allowed_languages: string[];
   required_rules: string[];
   forbidden_rules: string[];
@@ -20,7 +63,16 @@ export interface AgentBehavior {
   on_unknown: string;
   on_off_topic: string;
   on_handoff: string;
+  /** Versões por idioma dos textos voltados ao cliente. */
+  i18n?: {
+    on_unknown?: MultiLangText;
+    on_off_topic?: MultiLangText;
+    on_handoff?: MultiLangText;
+    fallback_message?: MultiLangText;
+    handoff_message?: MultiLangText;
+  };
 }
+
 
 export interface AIAgent {
   id: string;
