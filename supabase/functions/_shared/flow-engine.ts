@@ -70,8 +70,21 @@ export interface FlowCapturedField {
   value: string
 }
 
+/**
+ * Mensagem de saída com o metadado da etapa que a originou.
+ * `quick_reply` é decidido EXCLUSIVAMENTE pela configuração da etapa —
+ * a camada de envio nunca pode inferir botões pelo texto.
+ */
+export interface FlowOutboundMessage {
+  text: string
+  step_code: string
+  quick_reply: boolean
+}
+
 export interface FlowTurnResult {
   messages: string[]
+  /** Mesmas mensagens de `messages`, com metadado por etapa. */
+  outbound: FlowOutboundMessage[]
   state: FlowRunState
   /** true quando a etapa atual não aceitou a resposta. */
   reasked: boolean
@@ -83,6 +96,17 @@ export interface FlowTurnResult {
   /** Respostas com `field_mapping` capturadas neste turno. */
   captured: FlowCapturedField[]
 }
+
+/**
+ * Botões Sim/Não só quando a etapa está marcada com `validation.quick_reply`
+ * E a resposta esperada é binária. Padrão: desligado.
+ */
+export function quickReplyOf(step: FlowStep): boolean {
+  const v = (step?.validation || {}) as Record<string, unknown>
+  const answerType = String(step?.answer_type || '').toUpperCase()
+  return v.quick_reply === true && answerType === 'SIM_NAO'
+}
+
 
 
 const MAX_STEPS_PER_TURN = 25
