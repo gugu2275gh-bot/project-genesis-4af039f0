@@ -278,6 +278,7 @@ Deno.serve(async (req) => {
       return json({
         gemini_key_present: !!Deno.env.get('CBAsesoria_Key'),
         openai_key_present: !!Deno.env.get('OPENAI_API_KEY'),
+        lovable_key_present: !!Deno.env.get('LOVABLE_API_KEY'),
       })
     }
 
@@ -289,6 +290,7 @@ Deno.serve(async (req) => {
         return json({
           gemini_key_present: !!Deno.env.get('CBAsesoria_Key'),
           openai_key_present: !!Deno.env.get('OPENAI_API_KEY'),
+          lovable_key_present: !!Deno.env.get('LOVABLE_API_KEY'),
         })
       }
 
@@ -297,6 +299,7 @@ Deno.serve(async (req) => {
         const force = !!body?.force
         if (provider === 'gemini') return json(await listGeminiModels(force))
         if (provider === 'openai') return json(await listOpenAIModels(force))
+        if (provider === 'lovable') return json({ models: LOVABLE_MODELS, cached: false })
         return json({ error: 'provider inválido' }, 400)
       }
 
@@ -306,6 +309,7 @@ Deno.serve(async (req) => {
 
       if (provider === 'gemini') return json(await testGemini(model))
       if (provider === 'openai') return json(await testOpenAI(model))
+      if (provider === 'lovable') return json(await testLovable(model))
       return json({ error: 'provider inválido' }, 400)
     }
 
