@@ -45,6 +45,15 @@ async function requireAdmin(req: Request) {
   return { userId }
 }
 
+function describeError(status: number, raw: string): string {
+  try {
+    const parsed = JSON.parse(raw)
+    const msg = parsed?.error?.message || parsed?.message || parsed?.error?.status
+    if (msg) return `HTTP ${status}: ${String(msg)}`
+  } catch (_) { /* corpo não-JSON */ }
+  return `HTTP ${status}: ${raw.slice(0, 300)}`
+}
+
 async function testGemini(model: string): Promise<{ ok: boolean; latency_ms: number; error?: string }> {
   const key = Deno.env.get('CBAsesoria_Key')
   if (!key) return { ok: false, latency_ms: 0, error: 'CBAsesoria_Key não configurada' }
@@ -68,7 +77,7 @@ async function testGemini(model: string): Promise<{ ok: boolean; latency_ms: num
     const latency_ms = Date.now() - start
     if (!resp.ok) {
       const txt = await resp.text()
-      return { ok: false, latency_ms, error: `HTTP ${resp.status}: ${txt.slice(0, 200)}` }
+      return { ok: false, latency_ms, error: describeError(resp.status, txt) }
     }
     return { ok: true, latency_ms }
   } catch (e: any) {
@@ -100,8 +109,40 @@ async function testOpenAI(model: string): Promise<{ ok: boolean; latency_ms: num
     const latency_ms = Date.now() - start
     if (!resp.ok) {
       const txt = await resp.text()
-      return { ok: false, latency_ms, error: `HTTP ${resp.status}: ${txt.slice(0, 200)}` }
+      return { ok: false, latency_ms, error: describeError(resp.status, txt) }
     }
+    return { ok: true, latency_ms }
+  } catch (e: any) {
+    return { ok: false, latency_ms: Date.now() - start, error: e?.message || String(e) }
+  }
+}
+
+async function testLovable(model: string): Promise<{ ok: boolean; latency_ms: number; error?: string }> {
+  const key = Deno.env.get('LOVABLE_API_KEY')
+  if (!key) return { ok: false, latency_ms: 0, error: 'LOVABLE_API_KEY não configurada' }
+  const start = Date.now()
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 20000)
+    const payload: Record<string, unknown> = {
+      model,
+      messages: [{ role: 'user', content: 'Responda apenas "ok".' }],
+      max_tokens: 8,
+    }
+    if (model.startsWith('openai/gpt-5.6')) payload.reasoning_effort = 'none'
+    const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Lovable-API-Key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    const latency_ms = Date.now() - start
+    if (!resp.ok) {
+      const txt = await resp.text()
+      return { ok: false, latency_ms, error: describeError(resp.status, txt) }
+    }
+    await resp.json()
     return { ok: true, latency_ms }
   } catch (e: any) {
     return { ok: false, latency_ms: Date.now() - start, error: e?.message || String(e) }
@@ -123,6 +164,20 @@ const OPENAI_FALLBACK: ModelInfo[] = [
   { id: 'gpt-4o-mini', displayName: 'gpt-4o-mini' },
   { id: 'gpt-4o', displayName: 'gpt-4o' },
 ]
+
+// Catálogo do Lovable AI Gateway (ids fixos suportados pelo gateway)
+const LOVABLE_MODELS: ModelInfo[] = [
+  { id: 'google/gemini-3.6-flash', displayName: 'Gemini 3.6 Flash (Lovable AI)' },
+  { id: 'google/gemini-3.5-flash', displayName: 'Gemini 3.5 Flash (Lovable AI)' },
+  { id: 'google/gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite (Lovable AI)' },
+  { id: 'google/gemini-3.1-pro-preview', displayName: 'Gemini 3.1 Pro Preview (Lovable AI)' },
+  { id: 'google/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash (Lovable AI)' },
+  { id: 'openai/gpt-5.5', displayName: 'GPT-5.5 (Lovable AI)' },
+  { id: 'openai/gpt-5.4-mini', displayName: 'GPT-5.4 Mini (Lovable AI)' },
+  { id: 'openai/gpt-5.4-nano', displayName: 'GPT-5.4 Nano (Lovable AI)' },
+]
+
+
 
 async function listGeminiModels(force = false): Promise<{ models: ModelInfo[]; cached: boolean; error?: string }> {
   const cacheKey = 'gemini'
@@ -223,6 +278,7 @@ Deno.serve(async (req) => {
       return json({
         gemini_key_present: !!Deno.env.get('CBAsesoria_Key'),
         openai_key_present: !!Deno.env.get('OPENAI_API_KEY'),
+        lovable_key_present: !!Deno.env.get('LOVABLE_API_KEY'),
       })
     }
 
@@ -234,6 +290,7 @@ Deno.serve(async (req) => {
         return json({
           gemini_key_present: !!Deno.env.get('CBAsesoria_Key'),
           openai_key_present: !!Deno.env.get('OPENAI_API_KEY'),
+          lovable_key_present: !!Deno.env.get('LOVABLE_API_KEY'),
         })
       }
 
@@ -242,6 +299,7 @@ Deno.serve(async (req) => {
         const force = !!body?.force
         if (provider === 'gemini') return json(await listGeminiModels(force))
         if (provider === 'openai') return json(await listOpenAIModels(force))
+        if (provider === 'lovable') return json({ models: LOVABLE_MODELS, cached: false })
         return json({ error: 'provider inválido' }, 400)
       }
 
@@ -251,6 +309,7 @@ Deno.serve(async (req) => {
 
       if (provider === 'gemini') return json(await testGemini(model))
       if (provider === 'openai') return json(await testOpenAI(model))
+      if (provider === 'lovable') return json(await testLovable(model))
       return json({ error: 'provider inválido' }, 400)
     }
 

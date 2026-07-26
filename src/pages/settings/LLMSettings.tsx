@@ -14,7 +14,7 @@ import {
   CheckCircle2, XCircle, Loader2, Activity, RefreshCw, Download, Upload,
 } from 'lucide-react';
 
-type Provider = 'gemini' | 'openai';
+type Provider = 'gemini' | 'openai' | 'lovable';
 interface CascadeItem { provider: Provider; model: string; enabled: boolean; }
 interface LLMSettingsRow {
   id: string;
@@ -55,7 +55,7 @@ export default function LLMSettings() {
         body: { action: 'status' },
       });
       if (error) throw error;
-      return data as { gemini_key_present: boolean; openai_key_present: boolean };
+      return data as { gemini_key_present: boolean; openai_key_present: boolean; lovable_key_present: boolean };
     },
   });
 
@@ -207,6 +207,10 @@ export default function LLMSettings() {
             label="OpenAI (OPENAI_API_KEY)"
             present={!!keyStatus?.openai_key_present}
           />
+          <KeyRow
+            label="Lovable AI Gateway (LOVABLE_API_KEY)"
+            present={!!keyStatus?.lovable_key_present}
+          />
           <div className="flex gap-2 pt-2">
             <Button variant="outline" size="sm" onClick={() => refetchStatus()}>
               Atualizar status
@@ -265,11 +269,19 @@ export default function LLMSettings() {
                 <Badge variant={item.provider === 'gemini' ? 'default' : 'secondary'} className="uppercase">
                   {item.provider}
                 </Badge>
-                <span className="font-mono text-sm flex-1">{item.model}</span>
-                {result && (
-                  <span className={`text-xs flex items-center gap-1 ${result.ok ? 'text-green-600' : 'text-destructive'}`}>
-                    {result.ok ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                    {result.ok ? `${result.latency_ms}ms` : (result.error || 'falha').slice(0, 40)}
+                <div className="flex-1 min-w-0">
+                  <span className="font-mono text-sm break-all">{item.model}</span>
+                  {result && !result.ok && (
+                    <p className="text-xs text-destructive flex items-start gap-1 mt-1" title={result.error}>
+                      <XCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                      <span className="break-words">{result.error || 'falha'}</span>
+                    </p>
+                  )}
+                </div>
+                {result?.ok && (
+                  <span className="text-xs flex items-center gap-1 text-green-600">
+                    <CheckCircle2 className="h-3 w-3" />
+                    {result.latency_ms}ms
                   </span>
                 )}
                 <Button
@@ -337,8 +349,8 @@ function AddItemRow({ onAdd }: { onAdd: (provider: Provider, model: string) => v
   const { toast } = useToast();
   const [provider, setProvider] = useState<Provider>('gemini');
   const [model, setModel] = useState<string>('');
-  const [models, setModels] = useState<Record<Provider, ModelInfo[]>>({ gemini: [], openai: [] });
-  const [loading, setLoading] = useState<Record<Provider, boolean>>({ gemini: false, openai: false });
+  const [models, setModels] = useState<Record<Provider, ModelInfo[]>>({ gemini: [], openai: [], lovable: [] });
+  const [loading, setLoading] = useState<Record<Provider, boolean>>({ gemini: false, openai: false, lovable: false });
 
   const loadModels = async (p: Provider, force = false) => {
     if (!force && models[p].length > 0) return;
@@ -370,10 +382,11 @@ function AddItemRow({ onAdd }: { onAdd: (provider: Provider, model: string) => v
   return (
     <div className="flex items-center gap-2 pt-3 border-t">
       <Select value={provider} onValueChange={(v) => { setProvider(v as Provider); setModel(''); }}>
-        <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="gemini">Gemini</SelectItem>
+          <SelectItem value="gemini">Gemini (chave própria)</SelectItem>
           <SelectItem value="openai">OpenAI</SelectItem>
+          <SelectItem value="lovable">Lovable AI</SelectItem>
         </SelectContent>
       </Select>
       <Select value={model} onValueChange={setModel} disabled={isLoading}>

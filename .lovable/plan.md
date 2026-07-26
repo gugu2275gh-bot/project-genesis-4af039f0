@@ -1,69 +1,33 @@
-# Auto-preencher `location_known='spain'` a partir do opener
+## O que está acontecendo
 
-Objetivo: quando a cliente afirmar espontaneamente que **está/mora/vive na Espanha** (sem que a pergunta canônica tenha sido feita), gravar `location_known='spain'` automaticamente, registrar rastreio via `override_applied`, e no próximo turno confirmar de leve em vez de re-perguntar cru.
+O botão "Testar" envia `provider: gemini` + `model: gemini-3.6-flash` para a edge function `llm-config`, que chama **direto** a API do Google:
 
-Nunca auto-preenche `outside` (falso negativo é pior — bloqueia serviços válidos).
-
-## Escopo por arquivo
-
-### 1. `supabase/functions/whatsapp-webhook/lib/questions.ts`
-Adicionar `detectSpainResidenceClaim(text)` — regex conservador multilíngue que só casa presente + verbo de residência + Espanha/cidade ES. Retorna `{ matched: boolean, evidence: string }`.
-
-Padrões aceitos (whitelist, presente do indicativo):
-- **PT:** `estou (aqui )?(na |em )espanha`, `moro (na |em )espanha`, `vivo (na |em )espanha`, `estou em <cidade ES>`, `moro em <cidade ES>`, `vivo em <cidade ES>`, `to[u]? (na |em )espanha`, `resido (na |em )espanha`
-- **ES:** `estoy en españa`, `vivo en españa`, `resido en españa`, `me encuentro en españa`, `estoy en <ciudad>`, `vivo en <ciudad>`
-- **EN:** `i(')?m (currently )?in spain`, `i live in spain`, `i(')?m living in spain`, `i reside in spain`, `i(')?m in <city>`
-- **FR:** `je suis (actuellement )?en espagne`, `j'habite en espagne`, `je vis en espagne`, `je réside en espagne`
-
-Rejeitados explicitamente (retorna false):
-- Tempo passado: `estive`, `estava`, `fui`, `morei`, `vivi`, `was in`, `used to live`, `j'étais`
-- Futuro/intenção: `vou (para|pra)`, `quero ir`, `penso em ir`, `voy a`, `quiero ir`, `i want to go`, `i'm going to`, `je vais`
-- Terceiros: `minha família (está|mora) na espanha`, `mi familia vive en españa`, etc.
-- Menções condicionais: `se eu for`, `quando eu chegar`, `if I go`
-
-Usar cidades de `spanish-cities.json` para a variante "estou em <cidade>".
-
-### 2. `supabase/functions/whatsapp-webhook/lib/overrides.ts` (`computeDeterministicFunnelPatch`)
-Após o bloco `prevHasLocationQ` (linha 91), adicionar bloco novo:
-
-```
-// Auto-detecção conservadora: cliente declara espontaneamente que está na Espanha.
-// Só aciona quando location ainda NÃO foi perguntada/confirmada nem gravada como outside.
-// Nunca auto-marca 'outside' — apenas 'spain' com sinais fortes de presente.
-if (patch.location_known === undefined) {
-  const claim = detectSpainResidenceClaim(msg)
-  if (claim.matched) {
-    patch.location_known = 'spain'
-    ;(patch as any).__location_source = 'auto_opener_claim'
-    ;(patch as any).__location_evidence = claim.evidence
-  }
-}
+```text
+POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=CBAsesoria_Key
 ```
 
-### 3. Local de chamada de `computeDeterministicFunnelPatch` em `index.ts`
-Onde o patch é aplicado via `applyTurnUpdates`, ler `__location_source` e passar `override_applied: 'auto_location_spain_from_opener'` no `meta`. Remover os campos `__*` do patch antes do UPDATE (não são colunas). Logar `[AUTO_LOCATION] spain from "<evidence>"`.
+O HTTP 400 vem do próprio Google: esse identificador não existe na API direta (Generative Language / AI Studio). O nome `gemini-3.6-flash` é o alias usado pelo **Lovable AI Gateway** (`google/gemini-3.6-flash`), não pela API direta com chave própria. Ou seja: o modelo foi adicionado à cascata, mas não há como a chave atual falar com ele — e a mesma falha aconteceria em produção, quando o agente WhatsApp tentar usá-lo (ele só cairia para o próximo modelo da cascata).
 
-Guard extra: só aplica se `state.location_known === null` (não sobrescreve nada já confirmado, nem downgrade — `applyTurnUpdates` já bloqueia downgrade, mas explicitar aqui evita ruído no log).
+Detalhe agravante: a UI corta o erro em 40 caracteres (`HTTP 400: { "error": { "code": 400`), escondendo a mensagem real do Google, que normalmente diz qual é o problema.
 
-### 4. Confirmação leve no próximo turno
-Em vez de deixar o LLM pular direto para "Qual a data de entrada?", injetar uma diretiva no prompt quando `state.location_known === 'spain'` **e** foi marcada por auto-detecção neste turno (flag transitória `justAutoDetectedSpain` em `ConversationContext`).
+## Correção proposta
 
-Diretiva (nos 4 idiomas) inserida em `buildStateDirective` ou no bloco de prompt do ramo Inside:
+1. **Mostrar o erro completo** (confirma o diagnóstico e ajuda em falhas futuras)
+   - Em `src/pages/settings/LLMSettings.tsx`, exibir a mensagem completa em tooltip/linha expansível em vez de `.slice(0, 40)`.
+   - Em `supabase/functions/llm-config/index.ts`, extrair `error.message` do JSON do Google em vez de devolver o corpo bruto truncado.
 
-- **PT:** "A cliente mencionou que está na Espanha. Confirme de leve E já pergunte a data de entrada NA MESMA frase. Ex.: 'Perfeito, então você já está morando na Espanha, certo? Me conta desde quando chegou.'"
-- **ES / EN / FR:** equivalentes.
+2. **Tornar o Gemini 3.6 realmente utilizável — novo provider `lovable`**
+   - Adicionar o provider "Lovable AI" (chave `LOVABLE_API_KEY`, endpoint `https://ai.gateway.lovable.dev/v1/chat/completions`).
+   - `llm-config`: incluir `lovable` em `status`, `list_models` (catálogo fixo: `google/gemini-3.6-flash`, `google/gemini-3.5-flash`, `google/gemini-3.1-flash-lite`, `openai/gpt-5.5`, `openai/gpt-5.4-mini`) e `test`.
+   - `supabase/functions/whatsapp-webhook/lib/ai.ts`: a cascata passa a suportar itens `provider: 'lovable'`, chamando o gateway no formato OpenAI-compatível.
+   - `LLMSettings.tsx`: tipo `Provider` ganha `'lovable'`, novo switch de provedor e opção no seletor de adicionar modelo.
 
-Isso mantém a regra "uma pergunta por vez" (a confirmação é declarativa + 1 pergunta), evita re-perguntar cru, e dá à cliente chance de corrigir se detectamos errado.
+3. **Evitar reincidência**
+   - Ao adicionar um modelo, validar que o id está na lista retornada pelo provider; se não estiver, avisar antes de salvar.
+   - Ajustar a entrada quebrada existente: remover `gemini/gemini-3.6-flash` da cascata e sugerir `lovable/google/gemini-3.6-flash` no lugar.
 
-### 5. Testes — `supabase/functions/whatsapp-webhook/location_autodetect_test.ts` (novo)
-Cobrir:
-- ✅ Positivos PT/ES/EN/FR: "estou na Espanha", "moro em Madrid", "estoy en España", "vivo en Barcelona", "I'm in Spain", "je suis en Espagne", "j'habite à Valencia"
-- ❌ Negativos (não devem marcar): "estive na Espanha ano passado", "quero ir pra Espanha", "minha família mora na Espanha", "vou pra Madrid mês que vem", "used to live in Spain", "je vais en Espagne"
-- ❌ Nunca marca `outside` por auto-detecção
-- ✅ Não sobrescreve `location_known` já confirmado
-- ✅ Registra `override_applied` correto
+## Detalhes técnicos
 
-## Fora de escopo
-- Detecção de cidade específica para preencher `empadronado_city` (etapa separada, não pedido aqui).
-- Alterações no ramo Outside.
-- Mudança nas travas existentes de anti-downgrade / hard-lock de localização.
+- A cascata fica em `llm_settings.cascade` (JSON), então nenhuma migration de schema é necessária — apenas atualizar a linha existente para remover o item inválido.
+- `LOVABLE_API_KEY` é secret server-side; usada só nas edge functions (`llm-config` e `whatsapp-webhook`), nunca no frontend.
+- Se preferir manter apenas a chave própria do Google, a alternativa é remover o `gemini-3.6-flash` e usar os ids válidos da API direta (ex.: `gemini-flash-latest`, `gemini-2.5-flash`), sem o passo 2.
