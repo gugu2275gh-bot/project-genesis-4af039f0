@@ -341,6 +341,8 @@ Deno.serve(async (req) => {
       latency_ms: latency,
       tokens_used: result.tokens,
       system_prompt_preview: systemPrompt.slice(0, 2000),
+      flow: { lang: sessionLang, lang_locked: sessionLangLocked },
+
     })
   } catch (e: any) {
     return json({ error: e?.message || String(e) }, 500)
