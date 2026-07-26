@@ -1660,27 +1660,28 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
               })
 
               if (sendRes.sent) {
-                await supabase.from('mensagens_cliente').insert({
+                // Persistência fora do caminho crítico: não atrasa o próximo balão.
+                fireAndForget(supabase.from('mensagens_cliente').insert({
                   id_lead: lead.id,
                   phone_id: parseInt(phoneNumber),
                   mensagem_IA: part,
                   origem: 'IA',
-                })
-                await supabase.from('interactions').insert({
+                }), 'persist_msg')
+                fireAndForget(supabase.from('interactions').insert({
                   lead_id: lead.id,
                   contact_id: contact.id,
                   channel: 'WHATSAPP',
                   direction: 'OUTBOUND',
                   content: part,
                   origin_bot: true,
-                })
+                }), 'persist_interaction')
               } else {
                 console.log(`[VISUAL_FLOW] send skipped (${sendRes.reason})`)
               }
-              if (i < flowParts.length - 1) await new Promise((r) => setTimeout(r, 350))
+              if (i < flowParts.length - 1) await new Promise((r) => setTimeout(r, 150))
             }
 
-            await logTurn({
+            fireAndForget(logTurn({
               supabase,
               exit_reason: flowParts.length ? 'REPLIED' : 'NO_REPLY',
               lead_id: lead.id,
@@ -1689,8 +1690,8 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
               message_id: message.messageId,
               inbound_text: message.body,
               response_chars: flowParts.reduce((a: number, p: string) => a + p.length, 0),
-              details: { engine: 'visual-flow', step: turn.state.current_step, parts: flowParts.length },
-            })
+              details: { engine: 'visual-flow', step: turn.state.current_step, parts: flowParts.length, perf: __perf.snapshot() },
+            }), 'log_turn')
 
             // TRAVA: enquanto o fluxo não terminou, o turno SEMPRE encerra aqui —
             // mesmo sem mensagem gerada. Só um fluxo concluído (`finished`)
@@ -3497,24 +3498,24 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                   origem: 'IA',
                 })
 
-                await supabase.from('interactions').insert({
+                fireAndForget(supabase.from('interactions').insert({
                   lead_id: lead.id,
                   contact_id: contact.id,
                   channel: 'WHATSAPP',
                   direction: 'OUTBOUND',
                   content: part,
                   origin_bot: true,
-                })
+                }), 'persist_interaction')
               }
 
               if (i < parts.length - 1) {
-                await new Promise(r => setTimeout(r, 350))
+                await new Promise(r => setTimeout(r, 150))
               }
             }
 
             console.log('AI response sent and stored successfully (parts:', parts.length, ')')
 
-            await logTurn({
+            fireAndForget(logTurn({
               supabase,
               exit_reason: 'REPLIED',
               lead_id: lead.id,
@@ -3525,8 +3526,8 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               response_chars: parts.reduce((a: number, p: string) => a + (p?.length || 0), 0),
               funnel_step_before: funnelStateLive?.step ?? null,
               funnel_step_after: funnelStateLive?.step ?? null,
-              details: { parts: parts.length },
-            })
+              details: { parts: parts.length, perf: __perf.snapshot() },
+            }), 'log_turn')
 
             // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3.
             // Combina o que foi enviado NESTE turno com o transcript histórico do assistente
