@@ -531,8 +531,72 @@ export function advanceFlow(
   const step = index.get(state.current_step)
   if (!step) return startFlow(steps, lang)
 
+  const unknownCfg = unknownAnswerOf(step)
+
+  /** Avança usando a saída padrão da etapa (não altera a sequência do fluxo). */
+  const advanceWith = (value: string): FlowTurnResult => {
+    const answers = { ...(state.answers || {}), [step.step_code]: value }
+    const captured = value ? captureOf(step, value) : []
+    const nextCode = resolveNextCode(step, '')
+    const nextState: FlowRunState = { ...state, answers, attempts: 0, unknown_attempts: 0 }
+    if (!nextCode) {
+      return {
+        messages: [], outbound: [], state: { ...nextState, finished: true },
+        reasked: false, finished: true, handoff: false, path: [step.step_code], captured,
+      }
+    }
+    return run(index, nextCode, nextState, lang, captured)
+  }
+
+  const stay = (text: string, patch: Partial<FlowRunState>): FlowTurnResult => ({
+    messages: text ? [text] : [],
+    outbound: text ? [{ text, step_code: step.step_code, quick_reply: quickReplyOf(step) }] : [],
+    state: { ...state, ...patch },
+    reasked: true,
+    finished: false,
+    handoff: false,
+    path: [step.step_code],
+    captured: [],
+  })
+
+  // 1) Cliente disse que não sabe/não lembra → comportamento configurado na etapa.
+  if (isUnknownAnswer(message, unknownCfg)) {
+    const tries = (state.unknown_attempts || 0) + 1
+    if (tries <= unknownCfg.attempts) {
+      return stay(unknownMessageOf(unknownCfg, lang), { unknown_attempts: tries })
+    }
+    const v = (step.validation || {}) as Record<string, unknown>
+    switch (unknownCfg.mode) {
+      case 'PULAR':
+      case 'ACEITAR_APROXIMADO':
+        return advanceWith(unknownCfg.fallback_value)
+      case 'ENCAMINHAR': {
+        const fallbackCode = String(v.fallback_step_code || '').trim()
+        if (fallbackCode && index.get(fallbackCode)) {
+          return run(index, fallbackCode, { ...state, attempts: 0, unknown_attempts: 0 }, lang)
+        }
+        break
+      }
+      default:
+        break
+    }
+    // INSISTIR (ou ENCAMINHAR sem etapa de destino): repergunta padrão.
+    const insist = reaskOf(step, lang) || messagesOf(step, lang).slice(-1)[0] || ''
+    return stay(insist, { unknown_attempts: tries })
+  }
+
   const result = validateAnswer(step, message)
   if (!result.valid) {
+    // Modo aproximado: aceita data incompleta ("03/2024", "em 2023") e segue.
+    if (
+      unknownCfg.mode === 'ACEITAR_APROXIMADO' &&
+      String(step.answer_type || '') === 'DATA' &&
+      result.reason === 'invalid_date'
+    ) {
+      const approx = parseApproxDate(message)
+      if (approx) return advanceWith(approx)
+    }
+
     const attempts = (state.attempts || 0) + 1
     const v = (step.validation || {}) as Record<string, unknown>
     const maxReasks = Number.isFinite(Number(v.max_reasks)) ? Number(v.max_reasks) : 2
@@ -540,7 +604,16 @@ export function advanceFlow(
 
     // Esgotou as reperguntas e existe etapa de fallback: desvia o fluxo.
     if (fallbackCode && attempts > maxReasks && index.get(fallbackCode)) {
-      return run(index, fallbackCode, { ...state, attempts: 0 }, lang)
+      return run(index, fallbackCode, { ...state, attempts: 0, unknown_attempts: 0 }, lang)
+    }
+
+    // Esgotou as reperguntas sem etapa de fallback, mas a etapa permite pular.
+    if (
+      attempts > maxReasks &&
+      !fallbackCode &&
+      (unknownCfg.mode === 'PULAR' || unknownCfg.mode === 'ACEITAR_APROXIMADO')
+    ) {
+      return advanceWith(unknownCfg.fallback_value)
     }
 
     const reask = reaskOf(step, lang)
@@ -566,7 +639,7 @@ export function advanceFlow(
   const answers = { ...(state.answers || {}), [step.step_code]: value }
   const captured = captureOf(step, value)
   const nextCode = resolveNextCode(step, value)
-  const nextState: FlowRunState = { ...state, answers, attempts: 0 }
+  const nextState: FlowRunState = { ...state, answers, attempts: 0, unknown_attempts: 0 }
   if (!nextCode) {
     return {
       messages: [],
