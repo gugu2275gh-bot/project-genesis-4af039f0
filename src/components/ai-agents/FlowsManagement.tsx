@@ -94,6 +94,9 @@ function StepDialog({
         : {};
   const reask: MultiLangText =
     draft.reask_messages && typeof draft.reask_messages === 'object' ? draft.reask_messages : {};
+  /** Mensagem com "?" indica pergunta — usada para alertar tipo de etapa incoerente. */
+  const looksLikeQuestion = JSON.stringify(messages || {}).includes('?');
+
 
 
   const handleSave = async () => {
