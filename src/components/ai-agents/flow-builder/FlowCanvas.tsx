@@ -181,15 +181,12 @@ function FlowCanvasInner({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChan
 
   const patchStep = useCallback((id: string, patch: Partial<AgentFlowStep>) => {
     setSteps((prev) => {
-      let next = prev.map((s) => (s.id === id ? ({ ...s, ...patch } as AgentFlowStep) : s));
-      if (patch.step_code !== undefined) {
-        const raw = slugStepCode(String(patch.step_code));
-        const current = prev.find((s) => s.id === id);
-        if (current && raw && raw !== current.step_code) {
-          next = renameStepCode(next.map((s) => (s.id === id ? { ...s, step_code: current.step_code } : s)), id, raw, idOf);
-        } else {
-          next = next.map((s) => (s.id === id ? { ...s, step_code: raw } : s));
-        }
+      const { step_code, ...rest } = patch as any;
+      let next = prev.map((s) => (s.id === id ? ({ ...s, ...rest } as AgentFlowStep) : s));
+      if (step_code !== undefined) {
+        const code = slugStepCode(String(step_code));
+        // Renomear reaponta as referências das demais etapas automaticamente.
+        next = renameStepCode(next, id, code, idOf);
       }
       return next;
     });
@@ -197,23 +194,21 @@ function FlowCanvasInner({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChan
   }, []);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
-    let moved = false;
-    let finished = false;
-    setPositions((prev) => {
-      let next = prev;
-      changes.forEach((c) => {
-        if (c.type === 'position' && (c as any).position) {
-          next = { ...next, [c.id]: (c as any).position };
-          moved = true;
-          if ((c as any).dragging === false) finished = true;
-        }
+    const moves = changes.filter((c) => c.type === 'position' && (c as any).position) as any[];
+    if (moves.length) {
+      setPositions((prev) => {
+        const next = { ...prev };
+        moves.forEach((c) => {
+          next[c.id] = c.position;
+        });
+        return next;
       });
-      return moved ? next : prev;
-    });
+      if (moves.some((c) => c.dragging === false)) setDirty(true);
+    }
     const sel = changes.find((c) => c.type === 'select') as any;
-    if (sel) setSelectedId(sel.selected ? sel.id : (prev) => (prev === sel.id ? null : prev) as any);
-    if (finished) setDirty(true);
+    if (sel?.selected) setSelectedId(sel.id);
   }, []);
+
 
   const onConnect = useCallback(
     (conn: Connection) => {
