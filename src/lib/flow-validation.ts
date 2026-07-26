@@ -1,5 +1,6 @@
 import type { AgentFlowStep } from '@/types/ai-agents';
-import { normalizeBranches, type FlowIssue } from '@/types/ai-agent-flow-builder';
+import { normalizeBranches, stepKindOf, type FlowIssue } from '@/types/ai-agent-flow-builder';
+
 
 /** Todas as saídas de uma etapa (ramificações + caminho padrão). */
 export function outgoingCodes(step: AgentFlowStep): string[] {
