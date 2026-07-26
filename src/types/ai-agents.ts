@@ -156,15 +156,27 @@ export interface AgentVersion {
   created_by: string | null;
 }
 
+export interface AgentFlowIntakeConfig {
+  enabled?: boolean;
+  fields?: string[];
+  min_confidence?: number;
+  greeting_default?: MultiLangText;
+  greeting_personalized?: MultiLangText;
+  ack_message?: MultiLangText;
+}
+
 export interface AgentFlow {
   id: string;
   name: string;
   description: string | null;
   status: string;
   phase: FlowPhase;
+  /** Tratamento da primeira mensagem do cliente (aproveitamento de dados). */
+  intake_config?: AgentFlowIntakeConfig | null;
   created_at: string;
   updated_at: string;
 }
+
 
 
 export type AnswerType =
