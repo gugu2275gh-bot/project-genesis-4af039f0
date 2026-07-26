@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAgentFlows, useAgentVersions, useSaveAgent } from '@/hooks/useAIAgents';
+import { AgentTextsEditor } from '@/components/ai-agents/AgentTextsEditor';
 import {
   AIAgent,
   DEFAULT_BEHAVIOR,
@@ -41,6 +42,10 @@ const emptyDraft = () => ({
   flow_id: null as string | null,
   capabilities: { ...DEFAULT_CAPABILITIES },
   behavior: { ...DEFAULT_BEHAVIOR },
+  is_production: false,
+  prompt_flow: '',
+  model_cascade: [] as { provider: string; model: string }[],
+  runtime_config: {} as Record<string, unknown>,
 });
 
 const CAP_LABELS: { key: keyof AgentCapabilities; label: string }[] = [
@@ -93,6 +98,9 @@ export function AgentFormDialog({ open, onOpenChange, agent, readOnly }: Props) 
             ...agent,
             capabilities: { ...DEFAULT_CAPABILITIES, ...(agent.capabilities || {}) },
             behavior: { ...DEFAULT_BEHAVIOR, ...(agent.behavior || {}) },
+            prompt_flow: agent.prompt_flow || '',
+            model_cascade: Array.isArray(agent.model_cascade) ? agent.model_cascade : [],
+            runtime_config: agent.runtime_config || {},
           }
         : emptyDraft(),
     );
@@ -101,6 +109,17 @@ export function AgentFormDialog({ open, onOpenChange, agent, readOnly }: Props) 
   const set = (patch: Record<string, unknown>) => setDraft((d: any) => ({ ...d, ...patch }));
   const setBehavior = (patch: Partial<AgentBehavior>) =>
     setDraft((d: any) => ({ ...d, behavior: { ...d.behavior, ...patch } }));
+  const setRuntime = (patch: Record<string, unknown>) =>
+    setDraft((d: any) => ({ ...d, runtime_config: { ...(d.runtime_config || {}), ...patch } }));
+  const setCascade = (index: number, patch: Record<string, string>) =>
+    setDraft((d: any) => ({
+      ...d,
+      model_cascade: (d.model_cascade || []).map((it: any, i: number) => (i === index ? { ...it, ...patch } : it)),
+    }));
+  const addCascade = () =>
+    setDraft((d: any) => ({ ...d, model_cascade: [...(d.model_cascade || []), { provider: 'gemini', model: '' }] }));
+  const removeCascade = (index: number) =>
+    setDraft((d: any) => ({ ...d, model_cascade: (d.model_cascade || []).filter((_: any, i: number) => i !== index) }));
   const setCap = (key: keyof AgentCapabilities, v: boolean) =>
     setDraft((d: any) => ({ ...d, capabilities: { ...d.capabilities, [key]: v } }));
 
@@ -109,6 +128,9 @@ export function AgentFormDialog({ open, onOpenChange, agent, readOnly }: Props) 
     const {
       created_at, updated_at, created_by, updated_by, current_version, ...payload
     } = draft;
+    payload.model_cascade = (payload.model_cascade || []).filter(
+      (i: any) => i && i.provider && String(i.model || '').trim(),
+    );
     await save.mutateAsync(payload);
     onOpenChange(false);
   };
@@ -128,6 +150,8 @@ export function AgentFormDialog({ open, onOpenChange, agent, readOnly }: Props) 
             <TabsTrigger value="comportamento">Comportamento do agente</TabsTrigger>
             <TabsTrigger value="capacidades">Capacidades</TabsTrigger>
             <TabsTrigger value="fluxo">Fluxo</TabsTrigger>
+            <TabsTrigger value="producao">Produção</TabsTrigger>
+            {agent && <TabsTrigger value="textos">Textos do roteiro</TabsTrigger>}
             {agent && <TabsTrigger value="versoes">Versões</TabsTrigger>}
           </TabsList>
 
@@ -317,6 +341,106 @@ export function AgentFormDialog({ open, onOpenChange, agent, readOnly }: Props) 
               </p>
             </div>
           </TabsContent>
+
+          <TabsContent value="producao" className="space-y-4">
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <Label className="font-normal">Este é o agente em produção (WhatsApp)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Quando ativo, o atendimento real passa a usar o prompt, os textos e a cascata deste agente.
+                </p>
+              </div>
+              <Switch
+                disabled={readOnly}
+                checked={!!draft.is_production}
+                onCheckedChange={(v) => set({ is_production: v })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Prompt do fluxo (produção)</Label>
+              <Textarea
+                rows={12}
+                disabled={readOnly}
+                className="font-mono text-xs"
+                value={draft.prompt_flow || ''}
+                onChange={(e) => set({ prompt_flow: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Placeholders disponíveis: {'{{LANGUAGE_DIRECTIVE}}'}, {'{{CONTACT_NAME_BLOCK}}'},
+                {' '}{'{{SERVICES_BLOCK}}'}, {'{{KB_BLOCK}}'}. Deixe vazio para manter o prompt padrão do sistema.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Cascata de modelos</Label>
+              {(draft.model_cascade || []).map((item: any, idx: number) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Select
+                    disabled={readOnly}
+                    value={item.provider}
+                    onValueChange={(v) => setCascade(idx, { provider: v })}
+                  >
+                    <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gemini">Gemini (Google)</SelectItem>
+                      <SelectItem value="openai">OpenAI</SelectItem>
+                      <SelectItem value="lovable">Lovable AI</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    disabled={readOnly}
+                    value={item.model}
+                    placeholder="gemini-3-flash-preview"
+                    onChange={(e) => setCascade(idx, { model: e.target.value })}
+                  />
+                  {!readOnly && (
+                    <Button variant="ghost" size="sm" onClick={() => removeCascade(idx)}>Remover</Button>
+                  )}
+                </div>
+              ))}
+              {!readOnly && (
+                <Button variant="outline" size="sm" onClick={addCascade}>Adicionar modelo</Button>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Vazio = mantém a cascata configurada em Configurações {'>'} LLM.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <Label className="font-normal">Bot do WhatsApp ativo</Label>
+                <Switch
+                  disabled={readOnly}
+                  checked={draft.runtime_config?.whatsapp_bot_enabled !== false}
+                  onCheckedChange={(v) => setRuntime({ whatsapp_bot_enabled: v })}
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <Label className="font-normal">Modo estrito da base de conhecimento</Label>
+                <Switch
+                  disabled={readOnly}
+                  checked={!!draft.runtime_config?.kb_strict_mode}
+                  onCheckedChange={(v) => setRuntime({ kb_strict_mode: v })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Mensagem quando a base não tem a resposta</Label>
+                <Textarea
+                  rows={2}
+                  disabled={readOnly}
+                  value={(draft.runtime_config?.kb_strict_fallback_message as string) || ''}
+                  onChange={(e) => setRuntime({ kb_strict_fallback_message: e.target.value })}
+                />
+              </div>
+            </div>
+          </TabsContent>
+
+          {agent && (
+            <TabsContent value="textos">
+              <AgentTextsEditor agentId={agent.id} readOnly={readOnly} />
+            </TabsContent>
+          )}
 
           {agent && (
             <TabsContent value="versoes" className="space-y-2">

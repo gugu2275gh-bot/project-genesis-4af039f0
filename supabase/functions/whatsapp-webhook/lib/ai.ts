@@ -8,6 +8,7 @@ import {
   looksPortuguese,
 } from './language.ts'
 import { extractGeminiText } from './kb.ts'
+import { getAgentRuntime } from './agent-runtime.ts'
 
 export function extractTextFromOpenAIResponse(data: Record<string, unknown>): string {
   const choice0 = Array.isArray(data.choices) && data.choices.length > 0
@@ -325,6 +326,19 @@ const DEFAULT_CASCADE: CascadeItem[] = [
 
 async function loadLLMCascade(): Promise<CascadeItem[]> {
   const now = Date.now()
+
+  // Prioridade 1: cascata definida no agente de produção (AGENTE 1.0).
+  const agentCascade = getAgentRuntime()?.modelCascade
+  if (Array.isArray(agentCascade) && agentCascade.length > 0) {
+    const items = agentCascade
+      .filter((i: any) => i && i.provider && i.model)
+      .map((i: any) => ({ provider: String(i.provider), model: String(i.model) }))
+    if (items.length > 0) {
+      console.log('[AI cascade] Usando cascata do agente de produção')
+      return items
+    }
+  }
+
   if (_cascadeCache && _cascadeCache.expires > now) return _cascadeCache.value
 
   try {

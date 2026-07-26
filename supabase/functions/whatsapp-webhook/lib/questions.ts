@@ -1,6 +1,7 @@
 // @ts-nocheck
 // Wave 3b step 4: question detectors + localized model phrases
 import { type ChatLanguage, normalizeForLanguageChecks, getPromptTemplates } from './language.ts'
+import { t as agentText, textVariants } from './agent-runtime.ts'
 import { isValidSpanishCity } from './spanish-cities.ts'
 
 export function isStructuredQuestionAnswer(text: string): boolean {
@@ -147,10 +148,11 @@ export function looksLikeIncompleteEntryDateWithoutYear(text: string): boolean {
 }
 
 export function getEntryDateNeedsYearQuestion(language: ChatLanguage): string {
-  if (language === 'es') return 'Necesito la fecha completa, con día, mes y año. Por favor, envíala en el formato DD/MM/AAAA (ejemplo: 22/05/2025). ¿Cuál fue la fecha exacta de tu entrada en España?'
-  if (language === 'en') return 'I need the full date, including day, month and year. Please send it in the format DD/MM/YYYY (example: 22/05/2025). What was the exact date you entered Spain?'
-  if (language === 'fr') return 'J’ai besoin de la date complète, avec le jour, le mois et l’année. Merci de l’envoyer au format JJ/MM/AAAA (exemple : 22/05/2025). Quelle était la date exacte de votre entrée en Espagne ?'
-  return 'Preciso da data completa, com dia, mês e ano. Por favor, envie no formato DD/MM/AAAA (exemplo: 22/05/2025). Qual foi a data exata da sua entrada na Espanha?'
+  let def = 'Preciso da data completa, com dia, mês e ano. Por favor, envie no formato DD/MM/AAAA (exemplo: 22/05/2025). Qual foi a data exata da sua entrada na Espanha?'
+  if (language === 'es') def = 'Necesito la fecha completa, con día, mes y año. Por favor, envíala en el formato DD/MM/AAAA (ejemplo: 22/05/2025). ¿Cuál fue la fecha exacta de tu entrada en España?'
+  if (language === 'en') def = 'I need the full date, including day, month and year. Please send it in the format DD/MM/YYYY (example: 22/05/2025). What was the exact date you entered Spain?'
+  if (language === 'fr') def = 'J’ai besoin de la date complète, avec le jour, le mois et l’année. Merci de l’envoyer au format JJ/MM/AAAA (exemple : 22/05/2025). Quelle était la date exacte de votre entrée en Espagne ?'
+  return agentText('inside.entryDateNeedsYear', language, def)
 }
 
 export function isQuestionAboutInterest(question: string): boolean {
@@ -218,10 +220,11 @@ export function isPotentialInterestAnswer(text: string): boolean {
 }
 
 export function getLocationQuestion(language: ChatLanguage): string {
-  if (language === 'es') return '¿Hoy ya estás en España?'
-  if (language === 'en') return 'Are you already in Spain today?'
-  if (language === 'fr') return 'Êtes-vous déjà en Espagne aujourd’hui ?'
-  return 'Hoje você já está na Espanha?'
+  let def = 'Hoje você já está na Espanha?'
+  if (language === 'es') def = '¿Hoy ya estás en España?'
+  if (language === 'en') def = 'Are you already in Spain today?'
+  if (language === 'fr') def = 'Êtes-vous déjà en Espagne aujourd’hui ?'
+  return agentText('location.question', language, def)
 }
 
 /**
@@ -249,62 +252,78 @@ export function isQuestionAboutEmpadronamientoCity(question: string): boolean {
 }
 
 export function getEmpadronadoQuestion(language: ChatLanguage): string {
-  if (language === 'es') return '¿Estás empadronado?'
-  if (language === 'en') return 'Are you registered (empadronado)?'
-  if (language === 'fr') return 'Êtes-vous empadronado ?'
-  return 'você está empadronado?'
+  let def = 'você está empadronado?'
+  if (language === 'es') def = '¿Estás empadronado?'
+  if (language === 'en') def = 'Are you registered (empadronado)?'
+  if (language === 'fr') def = 'Êtes-vous empadronado ?'
+  return agentText('inside.empadronado', language, def)
 }
 
 export function getEmpadronamientoSinceQuestion(language: ChatLanguage): string {
-  if (language === 'es') return '¿Desde cuándo estás empadronado?\n\nSolo la fecha DD/MM/AAAA'
-  if (language === 'en') return 'Since when are you registered (empadronado)?\n\nOnly the date DD/MM/YYYY'
-  if (language === 'fr') return 'Depuis quand êtes-vous empadronado ?\n\nUniquement la date JJ/MM/AAAA'
-  return 'Desde quando está empadronado?\n\nsomente a data DD/MM/AAAA'
+  let def = 'Desde quando está empadronado?\n\nsomente a data DD/MM/AAAA'
+  if (language === 'es') def = '¿Desde cuándo estás empadronado?\n\nSolo la fecha DD/MM/AAAA'
+  if (language === 'en') def = 'Since when are you registered (empadronado)?\n\nOnly the date DD/MM/YYYY'
+  if (language === 'fr') def = 'Depuis quand êtes-vous empadronado ?\n\nUniquement la date JJ/MM/AAAA'
+  return agentText('inside.empadronadoSince', language, def)
 }
 
 export function getEmpadronamientoCityQuestion(language: ChatLanguage): string {
-  if (language === 'es') return '¿En qué ciudad fuiste empadronado?'
-  if (language === 'en') return 'In which city were you registered (empadronado)?'
-  if (language === 'fr') return 'Dans quelle ville avez-vous été empadronado ?'
-  return 'Em qual cidade você foi empadronado?'
+  let def = 'Em qual cidade você foi empadronado?'
+  if (language === 'es') def = '¿En qué ciudad fuiste empadronado?'
+  if (language === 'en') def = 'In which city were you registered (empadronado)?'
+  if (language === 'fr') def = 'Dans quelle ville avez-vous été empadronado ?'
+  return agentText('inside.empadronadoCity', language, def)
 }
 
 export function getInvalidSpanishCityReprompt(language: ChatLanguage): string {
-  if (language === 'es') return 'No reconocí esa ciudad como un municipio español. ¿Puedes confirmar el nombre del municipio de España donde estás empadronado?'
-  if (language === 'en') return 'I did not recognize that as a Spanish municipality. Could you confirm the name of the city in Spain where you are registered (empadronado)?'
-  if (language === 'fr') return 'Je n’ai pas reconnu cette ville comme une commune espagnole. Pouvez-vous confirmer le nom de la ville en Espagne où vous êtes empadronado ?'
-  return 'Não reconheci essa cidade como um município espanhol. Pode confirmar o nome da cidade na Espanha onde você está empadronado?'
+  let def = 'Não reconheci essa cidade como um município espanhol. Pode confirmar o nome da cidade na Espanha onde você está empadronado?'
+  if (language === 'es') def = 'No reconocí esa ciudad como un municipio español. ¿Puedes confirmar el nombre del municipio de España donde estás empadronado?'
+  if (language === 'en') def = 'I did not recognize that as a Spanish municipality. Could you confirm the name of the city in Spain where you are registered (empadronado)?'
+  if (language === 'fr') def = 'Je n’ai pas reconnu cette ville comme une commune espagnole. Pouvez-vous confirmer le nom de la ville en Espagne où vous êtes empadronado ?'
+  return agentText('inside.invalidCity', language, def)
 }
 
 export function getOutsideSpainAgeQuestion(language: ChatLanguage): string {
-  if (language === 'es') return '¿Cuál es tu edad?'
-  if (language === 'en') return 'How old are you?'
-  if (language === 'fr') return 'Quel âge avez-vous ?'
-  return 'Qual sua idade?'
+  let def = 'Qual sua idade?'
+  if (language === 'es') def = '¿Cuál es tu edad?'
+  if (language === 'en') def = 'How old are you?'
+  if (language === 'fr') def = 'Quel âge avez-vous ?'
+  return agentText('outside.age', language, def)
 }
 
 // D1 Bizagi (Msg 6): após o cliente declarar interesse, listar serviços atendidos
 // pela CB e validar antes de pedir a localização.
 export function getServicesOfferedMessage(language: ChatLanguage): string {
+  let def = 'Na CB trabalhamos com: residência (NIE/TIE), nacionalidade espanhola, arraigo (social, laboral, familiar, formação), reagrupamento familiar, homologação de diploma e autorização de regresso.'
   if (language === 'es') {
-    return 'En CB trabajamos con: residencia (NIE/TIE), nacionalidad española, arraigo (social, laboral, familiar, formación), reagrupación familiar, homologación de títulos y autorización de regreso.'
+    def = 'En CB trabajamos con: residencia (NIE/TIE), nacionalidad española, arraigo (social, laboral, familiar, formación), reagrupación familiar, homologación de títulos y autorización de regreso.'
   }
   if (language === 'en') {
-    return 'At CB we handle: residence (NIE/TIE), Spanish nationality, arraigo (social, labor, family, training), family reunification, diploma homologation and return authorization.'
+    def = 'At CB we handle: residence (NIE/TIE), Spanish nationality, arraigo (social, labor, family, training), family reunification, diploma homologation and return authorization.'
   }
   if (language === 'fr') {
-    return 'Chez CB, nous traitons : résidence (NIE/TIE), nationalité espagnole, arraigo (social, professionnel, familial, formation), regroupement familial, homologation de diplômes et autorisation de retour.'
+    def = 'Chez CB, nous traitons : résidence (NIE/TIE), nationalité espagnole, arraigo (social, professionnel, familial, formation), regroupement familial, homologation de diplômes et autorisation de retour.'
   }
-  return 'Na CB trabalhamos com: residência (NIE/TIE), nacionalidade espanhola, arraigo (social, laboral, familiar, formação), reagrupamento familiar, homologação de diploma e autorização de regresso.'
+  return agentText('services.offered', language, def)
 }
 
 export function isServicesOfferedMessage(text: string): boolean {
   const n = normalizeForLanguageChecks(text || '')
   if (!n) return false
   // tokens-âncora multi-idioma estáveis
-  return /(arraigo)/.test(n)
+  if (/(arraigo)/.test(n)
     && /(reagrupa|reagrupacion|reunification|regroupement)/.test(n)
-    && /(homologa|homologation)/.test(n)
+    && /(homologa|homologation)/.test(n)) return true
+  return transcriptHasCustomTextLocal('services.offered', text)
+}
+
+function transcriptHasCustomTextLocal(key: string, text: string): boolean {
+  const n = normalizeForLanguageChecks(text || '')
+  if (!n) return false
+  return textVariants(key).some((variant) => {
+    const v = normalizeForLanguageChecks(String(variant)).slice(0, 60).trim()
+    return v.length >= 12 && n.includes(v)
+  })
 }
 
 // BPMN v2 (CB_pre-handoff_v2.bpm): pré-handoff + handoff = 3 mensagens distintas (H1, H2, H3),
@@ -313,48 +332,71 @@ export function isServicesOfferedMessage(text: string): boolean {
 
 // H1 ||| H2  — texto literal do diagrama
 export function getPreHandoffSummaryMessage(language: ChatLanguage): string {
+  let def = 'Perfeito, já consigo ter uma visão inicial do seu caso.|||Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
   if (language === 'es') {
-    return 'Perfecto, ya puedo tener una visión inicial de tu caso.|||En CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
+    def = 'Perfecto, ya puedo tener una visión inicial de tu caso.|||En CB analizamos cada caso de forma individual, siempre buscando el camino más seguro y dentro de la ley.'
   }
   if (language === 'en') {
-    return 'Perfect, I can already get an initial view of your case.|||At CB we analyze each case individually, always looking for the safest path within the law.'
+    def = 'Perfect, I can already get an initial view of your case.|||At CB we analyze each case individually, always looking for the safest path within the law.'
   }
   if (language === 'fr') {
-    return 'Parfait, je peux déjà avoir une première vision de votre cas.|||Chez CB, nous analysons chaque cas individuellement, en cherchant toujours la voie la plus sûre et conforme à la loi.'
+    def = 'Parfait, je peux déjà avoir une première vision de votre cas.|||Chez CB, nous analysons chaque cas individuellement, en cherchant toujours la voie la plus sûre et conforme à la loi.'
   }
-  return 'Perfeito, já consigo ter uma visão inicial do seu caso.|||Na CB analisamos cada caso de forma individual, sempre buscando o caminho mais seguro e dentro da lei.'
+  return agentText('handoff.preSummary', language, def)
 }
 
 // H3 — texto literal do diagrama (única bolha; H4 removida na v2)
 export function getHandoffTransferMessage(language: ChatLanguage): string {
+  let def = 'Vou encaminhar suas informações para um especialista analisar com mais profundidade.'
   if (language === 'es') {
-    return 'Voy a remitir tu información a un especialista para que la analice con más profundidad.'
+    def = 'Voy a remitir tu información a un especialista para que la analice con más profundidad.'
   }
   if (language === 'en') {
-    return 'I will forward your information to a specialist to analyze it in more depth.'
+    def = 'I will forward your information to a specialist to analyze it in more depth.'
   }
   if (language === 'fr') {
-    return 'Je vais transmettre vos informations à un spécialiste pour qu’il les analyse plus en profondeur.'
+    def = 'Je vais transmettre vos informations à un spécialiste pour qu’il les analyse plus en profondeur.'
   }
-  return 'Vou encaminhar suas informações para um especialista analisar com mais profundidade.'
+  return agentText('handoff.transfer', language, def)
 }
 
 // Sufixo localizado anexado a cada resposta de KB no MODO PÓS-HANDOFF (após H3).
 export function getPostHandoffWaitSuffix(language: ChatLanguage): string {
-  if (language === 'es') return 'En breve uno de nuestros especialistas podrá ayudarte con eso. Por favor, aguarda.'
-  if (language === 'en') return 'One of our specialists will be able to help you with this shortly. Please wait.'
-  if (language === 'fr') return 'Un de nos spécialistes pourra vous aider avec cela très bientôt. Merci de patienter.'
-  return 'Em breve um de nossos especialistas poderá lhe ajudar com isso. Por favor aguarde.'
+  let def = 'Em breve um de nossos especialistas poderá lhe ajudar com isso. Por favor aguarde.'
+  if (language === 'es') def = 'En breve uno de nuestros especialistas podrá ayudarte con eso. Por favor, aguarda.'
+  if (language === 'en') def = 'One of our specialists will be able to help you with this shortly. Please wait.'
+  if (language === 'fr') def = 'Un de nos spécialistes pourra vous aider avec cela très bientôt. Merci de patienter.'
+  return agentText('handoff.postWaitSuffix', language, def)
 }
 
 const PRE_HANDOFF_SUMMARY_RE = /(vis[ãa]o inicial do seu caso|visi[óo]n inicial de tu caso|initial view of your case|premi[èe]re vision de votre cas)/i
 // BPMN v2: âncoras só de H3 (H4 removida)
 const HANDOFF_TRANSFER_RE = /(encaminhar suas informa[çc][õo]es|remitir tu informaci[óo]n|forward your information|transmettre vos informations)/i
+
+/**
+ * Verifica se o transcript contém algum dos textos customizados (por idioma)
+ * configurados no agente de produção para a chave informada.
+ * Mantém os detectores funcionando mesmo quando o admin reescreve as mensagens.
+ */
+export function transcriptHasCustomText(key: string, transcript: string): boolean {
+  const n = normalizeForLanguageChecks(transcript || '')
+  if (!n) return false
+  return textVariants(key).some((variant) => {
+    for (const bubble of String(variant).split('|||')) {
+      const v = normalizeForLanguageChecks(bubble).slice(0, 60).trim()
+      if (v.length >= 12 && n.includes(v)) return true
+    }
+    return false
+  })
+}
+
 export function preHandoffSummarySent(transcript: string): boolean {
   return PRE_HANDOFF_SUMMARY_RE.test(transcript || '')
+    || transcriptHasCustomText('handoff.preSummary', transcript)
 }
 export function handoffTransferSent(transcript: string): boolean {
   return HANDOFF_TRANSFER_RE.test(transcript || '')
+    || transcriptHasCustomText('handoff.transfer', transcript)
 }
 
 /**
@@ -413,10 +455,11 @@ export function getOutsideSpainNextQuestion(
   const askedFormacaoInTranscript = /\b(forma[çc][ãa]o superior|formaci[óo]n superior|higher education|college degree)\b/i.test(assistantTranscript)
 
   const reaskPrefix = (lang: ChatLanguage): string => {
-    if (lang === 'es') return 'Por favor, responde solo con *sí* o *no*. '
-    if (lang === 'en') return 'Please answer only with *yes* or *no*. '
-    if (lang === 'fr') return 'Merci de répondre uniquement par *oui* ou *non*. '
-    return 'Por favor, responda apenas com *sim* ou *não*. '
+    let def = 'Por favor, responda apenas com *sim* ou *não*. '
+    if (lang === 'es') def = 'Por favor, responde solo con *sí* o *no*. '
+    if (lang === 'en') def = 'Please answer only with *yes* or *no*. '
+    if (lang === 'fr') def = 'Merci de répondre uniquement par *oui* ou *non*. '
+    return agentText('outside.yesNoReaskPrefix', lang, def)
   }
 
   // Pular A3 quando já temos a informação implícita: cliente está na Espanha
@@ -434,24 +477,27 @@ export function getOutsideSpainNextQuestion(
   if (!askedIdade) return getOutsideSpainAgeQuestion(language)
   if (!skipEuropa && !answeredEuropa) {
     const prefix = askedEuropaInTranscript ? reaskPrefix(language) : ''
-    if (language === 'es') return prefix + '¿Estuviste en Europa en los últimos 6 meses?'
-    if (language === 'en') return prefix + 'Have you been in Europe in the last 6 months?'
-    if (language === 'fr') return prefix + 'Êtes-vous allé en Europe au cours des 6 derniers mois ?'
-    return prefix + 'você esteve na Europa nos últimos 6 meses?'
+    let def = 'você esteve na Europa nos últimos 6 meses?'
+    if (language === 'es') def = '¿Estuviste en Europa en los últimos 6 meses?'
+    if (language === 'en') def = 'Have you been in Europe in the last 6 months?'
+    if (language === 'fr') def = 'Êtes-vous allé en Europe au cours des 6 derniers mois ?'
+    return prefix + agentText('outside.europe6m', language, def)
   }
   if (!answeredFamiliar) {
     const prefix = askedFamiliarInTranscript ? reaskPrefix(language) : ''
-    if (language === 'es') return prefix + '¿Tienes algún familiar europeo o residente legal en España?'
-    if (language === 'en') return prefix + 'Do you have a European family member or a legal resident in Spain?'
-    if (language === 'fr') return prefix + 'Avez-vous un membre de votre famille européen ou résident légal en Espagne ?'
-    return prefix + 'possui familiar europeu ou residente legal na espanha?'
+    let def = 'possui familiar europeu ou residente legal na espanha?'
+    if (language === 'es') def = '¿Tienes algún familiar europeo o residente legal en España?'
+    if (language === 'en') def = 'Do you have a European family member or a legal resident in Spain?'
+    if (language === 'fr') def = 'Avez-vous un membre de votre famille européen ou résident légal en Espagne ?'
+    return prefix + agentText('outside.euFamily', language, def)
   }
   if (!answeredRemoto) {
     const prefix = askedRemotoInTranscript ? reaskPrefix(language) : ''
-    if (language === 'es') return prefix + '¿Trabajas de forma remota?'
-    if (language === 'en') return prefix + 'Do you work remotely?'
-    if (language === 'fr') return prefix + 'Travaillez-vous à distance ?'
-    return prefix + 'você trabalha remoto?'
+    let def = 'você trabalha remoto?'
+    if (language === 'es') def = '¿Trabajas de forma remota?'
+    if (language === 'en') def = 'Do you work remotely?'
+    if (language === 'fr') def = 'Travaillez-vous à distance ?'
+    return prefix + agentText('outside.remoteWork', language, def)
   }
   // A6 (formação superior) removida do fluxo.
 
@@ -488,38 +534,43 @@ export function hasValidEmail(text: string): boolean {
 }
 
 export function getEmailReaskQuestion(language: ChatLanguage): string {
-  if (language === 'es') return 'Necesito un correo electrónico válido para enviarte las orientaciones. ¿Cuál es tu mejor email? (ejemplo: nombre@gmail.com)'
-  if (language === 'en') return 'I need a valid email address to send you the next steps. What is your best email? (e.g. name@gmail.com)'
-  if (language === 'fr') return 'J’ai besoin d’une adresse e-mail valide pour vous envoyer les informations. Quel est votre meilleur e-mail ? (ex. nom@gmail.com)'
-  return 'Preciso de um e-mail válido para te enviar as orientações. Qual é o seu melhor e-mail? (ex.: nome@gmail.com)'
+  let def = 'Preciso de um e-mail válido para te enviar as orientações. Qual é o seu melhor e-mail? (ex.: nome@gmail.com)'
+  if (language === 'es') def = 'Necesito un correo electrónico válido para enviarte las orientaciones. ¿Cuál es tu mejor email? (ejemplo: nombre@gmail.com)'
+  if (language === 'en') def = 'I need a valid email address to send you the next steps. What is your best email? (e.g. name@gmail.com)'
+  if (language === 'fr') def = 'J’ai besoin d’une adresse e-mail valide pour vous envoyer les informations. Quel est votre meilleur e-mail ? (ex. nom@gmail.com)'
+  return agentText('email.reask', language, def)
 }
 
 export function getEmailQuestion(language: ChatLanguage): string {
-  if (language === 'es') return '¿Cuál es el mejor email para enviarte orientaciones y dar seguimiento a tu caso?'
-  if (language === 'en') return 'What is the best email to send you guidance and follow up on your case?'
-  if (language === 'fr') return 'Quel est le meilleur e-mail pour vous envoyer des orientations et suivre votre dossier ?'
-  return 'Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?'
+  let def = 'Qual é o melhor e-mail para te enviarmos orientações e acompanhar seu caso?'
+  if (language === 'es') def = '¿Cuál es el mejor email para enviarte orientaciones y dar seguimiento a tu caso?'
+  if (language === 'en') def = 'What is the best email to send you guidance and follow up on your case?'
+  if (language === 'fr') def = 'Quel est le meilleur e-mail pour vous envoyer des orientations et suivre votre dossier ?'
+  return agentText('email.question', language, def)
 }
 
 export function getFullNameReaskQuestion(language: ChatLanguage): string {
-  if (language === 'es') return 'Gracias. Para continuar, necesito tu *nombre y apellido* (nombre completo). ¿Puedes enviármelo?'
-  if (language === 'en') return 'Thanks. To continue, I need your *first and last name* (full name). Could you send it?'
-  if (language === 'fr') return 'Merci. Pour continuer, j’ai besoin de votre *prénom et nom* (nom complet). Pouvez-vous me l’envoyer ?'
-  return 'Obrigado. Para seguir, preciso do seu *nome e sobrenome* (nome completo). Pode me enviar?'
+  let def = 'Obrigado. Para seguir, preciso do seu *nome e sobrenome* (nome completo). Pode me enviar?'
+  if (language === 'es') def = 'Gracias. Para continuar, necesito tu *nombre y apellido* (nombre completo). ¿Puedes enviármelo?'
+  if (language === 'en') def = 'Thanks. To continue, I need your *first and last name* (full name). Could you send it?'
+  if (language === 'fr') def = 'Merci. Pour continuer, j’ai besoin de votre *prénom et nom* (nom complet). Pouvez-vous me l’envoyer ?'
+  return agentText('name.reask', language, def)
 }
 
 export function getFullNameRequiredReaskQuestion(language: ChatLanguage): string {
-  if (language === 'es') return 'Para poder atender tu caso, *necesito tu nombre completo* (nombre y apellido). Sin esa información no puedo continuar. ¿Puedes informarlo, por favor?'
-  if (language === 'en') return 'To handle your case I *need your full name* (first and last name). I can’t continue without it. Could you please share it?'
-  if (language === 'fr') return 'Pour traiter votre dossier, j’ai *besoin de votre nom complet* (prénom et nom). Je ne peux pas continuer sans cette information. Pouvez-vous me l’indiquer ?'
-  return 'Para conseguir atender seu caso, *preciso do seu nome completo* (nome e sobrenome). Sem essa informação não consigo continuar. Pode me informar, por favor?'
+  let def = 'Para conseguir atender seu caso, *preciso do seu nome completo* (nome e sobrenome). Sem essa informação não consigo continuar. Pode me informar, por favor?'
+  if (language === 'es') def = 'Para poder atender tu caso, *necesito tu nombre completo* (nombre y apellido). Sin esa información no puedo continuar. ¿Puedes informarlo, por favor?'
+  if (language === 'en') def = 'To handle your case I *need your full name* (first and last name). I can’t continue without it. Could you please share it?'
+  if (language === 'fr') def = 'Pour traiter votre dossier, j’ai *besoin de votre nom complet* (prénom et nom). Je ne peux pas continuer sans cette information. Pouvez-vous me l’indiquer ?'
+  return agentText('name.requiredReask', language, def)
 }
 
 export function getLocationSpainRequiredReaskQuestion(language: ChatLanguage): string {
-  if (language === 'es') return 'Necesito saber si estás en España (Sí o No).'
-  if (language === 'en') return 'I need to know whether you are in Spain (Yes or No).'
-  if (language === 'fr') return "J'ai besoin de savoir si vous êtes en Espagne (Oui ou Non)."
-  return 'Preciso saber se você está na Espanha (Sim ou Não).'
+  let def = 'Preciso saber se você está na Espanha (Sim ou Não).'
+  if (language === 'es') def = 'Necesito saber si estás en España (Sí o No).'
+  if (language === 'en') def = 'I need to know whether you are in Spain (Yes or No).'
+  if (language === 'fr') def = "J'ai besoin de savoir si vous êtes en Espagne (Oui ou Non)."
+  return agentText('location.requiredReask', language, def)
 }
 
 export type YesNoClassification = 'yes' | 'no' | 'ambiguous'
@@ -607,10 +658,11 @@ export function classifyYesNo(text: string): YesNoClassification {
 }
 
 export function getEmailRequiredReaskQuestion(language: ChatLanguage): string {
-  if (language === 'es') return 'Necesito *un correo electrónico válido* para enviarte las orientaciones y dar seguimiento a tu caso. Sin eso no puedo continuar. ¿Cuál es tu mejor email? (ej.: nombre@gmail.com)'
-  if (language === 'en') return 'I *need a valid email address* to send you the next steps and follow up on your case. I can’t continue without it. What is your best email? (e.g. name@gmail.com)'
-  if (language === 'fr') return 'J’ai *besoin d’une adresse e-mail valide* pour vous envoyer les orientations et suivre votre dossier. Je ne peux pas continuer sans cela. Quel est votre meilleur e-mail ? (ex. nom@gmail.com)'
-  return 'Preciso de *um e-mail válido* para te enviar as orientações e acompanhar seu caso. Sem isso não consigo continuar. Qual é o seu melhor e-mail? (ex.: nome@gmail.com)'
+  let def = 'Preciso de *um e-mail válido* para te enviar as orientações e acompanhar seu caso. Sem isso não consigo continuar. Qual é o seu melhor e-mail? (ex.: nome@gmail.com)'
+  if (language === 'es') def = 'Necesito *un correo electrónico válido* para enviarte las orientaciones y dar seguimiento a tu caso. Sin eso no puedo continuar. ¿Cuál es tu mejor email? (ej.: nombre@gmail.com)'
+  if (language === 'en') def = 'I *need a valid email address* to send you the next steps and follow up on your case. I can’t continue without it. What is your best email? (e.g. name@gmail.com)'
+  if (language === 'fr') def = 'J’ai *besoin d’une adresse e-mail valide* pour vous envoyer les orientations et suivre votre dossier. Je ne peux pas continuer sans cela. Quel est votre meilleur e-mail ? (ex. nom@gmail.com)'
+  return agentText('email.requiredReask', language, def)
 }
 
 /**
@@ -629,10 +681,11 @@ export function countAlphaWords(text: string): number {
 // ============================================================================
 
 function getInsideSpainEntryDateQuestion(language: ChatLanguage): string {
-  if (language === 'es') return '¿Cuál fue la fecha exacta de entrada en España? Solo la fecha DD/MM/AAAA'
-  if (language === 'en') return 'What was the exact date of entry into Spain? Only the date DD/MM/YYYY'
-  if (language === 'fr') return "Quelle a été la date exacte d'entrée en Espagne ? Uniquement la date JJ/MM/AAAA"
-  return 'Qual foi a data exata de entrada na espanha? somente a data DD/MM/AAAA'
+  let def = 'Qual foi a data exata de entrada na espanha? somente a data DD/MM/AAAA'
+  if (language === 'es') def = '¿Cuál fue la fecha exacta de entrada en España? Solo la fecha DD/MM/AAAA'
+  if (language === 'en') def = 'What was the exact date of entry into Spain? Only the date DD/MM/YYYY'
+  if (language === 'fr') def = "Quelle a été la date exacte d'entrée en Espagne ? Uniquement la date JJ/MM/AAAA"
+  return agentText('inside.entryDate', language, def)
 }
 
 /**

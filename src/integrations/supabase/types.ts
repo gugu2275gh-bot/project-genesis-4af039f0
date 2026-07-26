@@ -27,9 +27,11 @@ export type Database = {
           handoff: boolean
           id: string
           message: string
+          messages: Json
           name: string
           next_step_code: string | null
           order_index: number
+          reask_messages: Json
           step_code: string
           updated_at: string
           updated_by: string | null
@@ -47,9 +49,11 @@ export type Database = {
           handoff?: boolean
           id?: string
           message?: string
+          messages?: Json
           name: string
           next_step_code?: string | null
           order_index?: number
+          reask_messages?: Json
           step_code: string
           updated_at?: string
           updated_by?: string | null
@@ -67,9 +71,11 @@ export type Database = {
           handoff?: boolean
           id?: string
           message?: string
+          messages?: Json
           name?: string
           next_step_code?: string | null
           order_index?: number
+          reask_messages?: Json
           step_code?: string
           updated_at?: string
           updated_by?: string | null
@@ -232,6 +238,56 @@ export type Database = {
           },
         ]
       }
+      ai_agent_texts: {
+        Row: {
+          agent_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          label: string
+          order_index: number
+          text_key: string
+          translations: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          label?: string
+          order_index?: number
+          text_key: string
+          translations?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          label?: string
+          order_index?: number
+          text_key?: string
+          translations?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_texts_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_agent_versions: {
         Row: {
           agent_id: string
@@ -292,13 +348,17 @@ export type Database = {
           flow_id: string | null
           handoff_message: string
           id: string
+          is_production: boolean
           max_tokens: number
           model: string
+          model_cascade: Json
           name: string
           parent_agent_id: string | null
           prompt_base: string
           prompt_behavior: string
+          prompt_flow: string
           provider: string
+          runtime_config: Json
           status: string
           temperature: number
           updated_at: string
@@ -316,13 +376,17 @@ export type Database = {
           flow_id?: string | null
           handoff_message?: string
           id?: string
+          is_production?: boolean
           max_tokens?: number
           model?: string
+          model_cascade?: Json
           name: string
           parent_agent_id?: string | null
           prompt_base?: string
           prompt_behavior?: string
+          prompt_flow?: string
           provider?: string
+          runtime_config?: Json
           status?: string
           temperature?: number
           updated_at?: string
@@ -340,13 +404,17 @@ export type Database = {
           flow_id?: string | null
           handoff_message?: string
           id?: string
+          is_production?: boolean
           max_tokens?: number
           model?: string
+          model_cascade?: Json
           name?: string
           parent_agent_id?: string | null
           prompt_base?: string
           prompt_behavior?: string
+          prompt_flow?: string
           provider?: string
+          runtime_config?: Json
           status?: string
           temperature?: number
           updated_at?: string

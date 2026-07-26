@@ -415,6 +415,11 @@ import { buildConversationContext } from './lib/conversation-context.ts'
 import { decideTurn, applyTurnDecision, type TurnDecision } from './lib/turn-orchestrator.ts'
 import { resolveCurrentStep, getStepDef } from './lib/flow-machine.ts'
 
+// AGENTE 1.0 — configuração editável em Configurações > Agentes de IA
+import { loadProductionAgentRuntime, getAgentRuntime } from './lib/agent-runtime.ts'
+import { DEFAULT_PROMPT_FLOW, renderPromptFlow } from './lib/prompt-template.ts'
+import { collectAgentDefaults } from './lib/agent-defaults.ts'
+
 export {
   FULL_NAME_DENYLIST_PATTERNS,
   isLikelyFullNameAnswer,
@@ -453,6 +458,38 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
   // WhatsApp webhook verification (GET request)
   if (req.method === 'GET') {
     const url = new URL(req.url)
+
+    // Configuração ATUAL do agente de produção (somente ADMIN autenticado).
+    // Usado pela tela Configurações > Agentes de IA para importar/sincronizar o AGENTE 1.0.
+    if (url.searchParams.get('action') === 'agent_defaults') {
+      const authHeader = req.headers.get('Authorization') || ''
+      const jwt = authHeader.replace(/^Bearer\s+/i, '').trim()
+      if (!jwt) {
+        return new Response(JSON.stringify({ error: 'unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const admin = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      )
+      const { data: userData, error: userErr } = await admin.auth.getUser(jwt)
+      if (userErr || !userData?.user) {
+        return new Response(JSON.stringify({ error: 'unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const { data: isAdmin } = await admin.rpc('has_role', { _user_id: userData.user.id, _role: 'ADMIN' })
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ error: 'forbidden' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify(collectAgentDefaults()), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const mode = url.searchParams.get('hub.mode')
     const token = url.searchParams.get('hub.verify_token')
     const challenge = url.searchParams.get('hub.challenge')
@@ -484,6 +521,10 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
     __supabaseOuter = supabase
+
+    // Carrega a configuração do agente marcado como "em produção" (AGENTE 1.0).
+    // Sem agente configurado, o comportamento atual em código continua valendo.
+    await loadProductionAgentRuntime(supabase)
 
 
     // Parse request body - handle both JSON and form-encoded (Twilio)
@@ -1316,6 +1357,15 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       configMap[c.key] = c.value
     })
 
+    // Overrides do agente de produção (runtime_config) sobre o system_config
+    const __agentRuntimeCfg = getAgentRuntime()?.runtimeConfig || {}
+    for (const key of ['whatsapp_bot_enabled', 'kb_strict_mode', 'kb_strict_fallback_message']) {
+      const value = (__agentRuntimeCfg as Record<string, unknown>)[key]
+      if (value !== undefined && value !== null && String(value).trim() !== '') {
+        configMap[key] = String(value)
+      }
+    }
+
     const botEnabled = configMap['whatsapp_bot_enabled'] === 'true'
     const geminiApiKey = Deno.env.get('CBAsesoria_Key')
 
@@ -1561,8 +1611,19 @@ Seu objetivo é, ao longo de uma conversa fluida, descobrir:
 - Transição entre temas: natural, como uma conversa real, sem "agora vou te perguntar X".`
 
         // Always use the structured flow as base prompt; custom prompt is appended as extra guidelines
-        let systemPrompt = defaultSystemPrompt
-        const customPrompt = configMap['whatsapp_bot_system_prompt']
+        // O agente de produção pode sobrescrever o roteiro (prompt_flow) e as diretrizes (prompt_base).
+        const __agentRuntime = getAgentRuntime()
+        const __promptFlowTemplate = (__agentRuntime?.promptFlow || '').trim()
+        let systemPrompt = __promptFlowTemplate
+          ? renderPromptFlow(__promptFlowTemplate, {
+              LANGUAGE_DIRECTIVE: getLanguageDirective(detectedChatLanguage),
+              CONTACT_NAME_BLOCK: `${promptContactName || 'ainda não informado pelo cliente'}. ${promptContactName ? 'Use o primeiro nome de vez em quando, não em toda mensagem (soa artificial).' : 'NÃO use o nome do perfil do WhatsApp como nome do cliente.'}`,
+              TODAY: new Date().toISOString().slice(0, 10),
+              ASK_NAME: t.askName,
+              ASK_LOCATION_SPAIN: t.askLocationSpain,
+            })
+          : defaultSystemPrompt
+        const customPrompt = (__agentRuntime?.promptBase || '').trim() || configMap['whatsapp_bot_system_prompt']
         if (customPrompt) {
           systemPrompt += `\n\n## DIRETRIZES ADICIONAIS DA EMPRESA
 As diretrizes abaixo podem estar em português, mas devem ser interpretadas apenas como referência de regras.
