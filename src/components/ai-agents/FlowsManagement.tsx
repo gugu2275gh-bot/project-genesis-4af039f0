@@ -73,7 +73,6 @@ function StepDialog({
       answer_type: 'TEXTO_LIVRE',
       field_mapping: null,
       next_step_code: '',
-      exit_condition: '',
       branches: [],
       allow_parallel_question: true,
       allow_free_answer: true,
@@ -222,10 +221,6 @@ function StepDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Condição de saída</Label>
-              <Input value={draft.exit_condition || ''} onChange={(e) => set({ exit_condition: e.target.value })} />
             </div>
           </div>
 

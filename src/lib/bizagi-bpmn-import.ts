@@ -287,7 +287,6 @@ export function parseBizagiBpmn(
         step_kind: stepKind,
       },
       next_step_code: nextCode,
-      exit_condition: '',
       allow_parallel_question: true,
       allow_free_answer: true,
       handoff: stepKind === 'FIM' ? isHandoff : false,

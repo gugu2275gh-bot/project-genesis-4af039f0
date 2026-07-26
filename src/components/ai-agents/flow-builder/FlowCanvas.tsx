@@ -66,7 +66,6 @@ function newStep(flowId: string, phase: FlowPhase, existingCodes: string[], inde
     answer_type: 'TEXTO_LIVRE',
     validation: { ...DEFAULT_STEP_VALIDATION } as any,
     next_step_code: null,
-    exit_condition: '',
     allow_parallel_question: true,
     allow_free_answer: true,
     handoff: false,

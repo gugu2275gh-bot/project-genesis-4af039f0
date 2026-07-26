@@ -238,7 +238,8 @@ export interface AgentFlowStep {
   field_mapping: string | null;
   validation: Record<string, unknown>;
   next_step_code: string | null;
-  exit_condition: string | null;
+  /** @deprecated sem uso — mantido apenas por compatibilidade com o banco. */
+  exit_condition?: string | null;
   allow_parallel_question: boolean;
   allow_free_answer: boolean;
   handoff: boolean;
