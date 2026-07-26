@@ -150,25 +150,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    let steps: any[] = []
-    if (config.flow_id) {
+    const fetchSteps = async (flowId: string | null | undefined) => {
+      if (!flowId) return [] as any[]
       const { data } = await service
         .from('ai_agent_flow_steps')
         .select('*')
-        .eq('flow_id', config.flow_id)
+        .eq('flow_id', flowId)
         .order('order_index', { ascending: true })
-      steps = data || []
+      return data || []
     }
 
-    // Também carrega o fluxo de pré-handoff quando o agente tiver um.
-    if (config.pre_handoff_flow_id && config.pre_handoff_flow_id !== config.flow_id) {
-      const { data } = await service
-        .from('ai_agent_flow_steps')
-        .select('*')
-        .eq('flow_id', config.pre_handoff_flow_id)
-        .order('order_index', { ascending: true })
-      if ((data || []).length) steps = [...(data || []), ...steps]
-    }
+    // Pré-handoff (ou o fluxo legado do agente) + handoff encadeados,
+    // exatamente como a produção executa.
+    const preFlowId = config.pre_handoff_flow_id || config.flow_id || null
+    const handFlowId = config.handoff_flow_id || null
+    const [preSteps, handSteps] = await Promise.all([fetchSteps(preFlowId), fetchSteps(handFlowId)])
+    let steps: any[] = mergeFlows(preSteps, handSteps)
+
 
     // ------------------------------------------------------------------
     // EXECUÇÃO DETERMINÍSTICA DO FLUXO DESENHADO
