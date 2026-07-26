@@ -464,6 +464,7 @@ export function advanceFlow(
   if (!nextCode) {
     return {
       messages: [],
+      outbound: [],
       state: { ...nextState, finished: true },
       reasked: false,
       finished: true,
@@ -471,6 +472,7 @@ export function advanceFlow(
       path: [step.step_code],
       captured,
     }
+
   }
   return run(index, nextCode, nextState, lang, captured)
 }
