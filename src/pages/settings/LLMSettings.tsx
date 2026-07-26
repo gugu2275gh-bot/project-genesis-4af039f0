@@ -269,11 +269,19 @@ export default function LLMSettings() {
                 <Badge variant={item.provider === 'gemini' ? 'default' : 'secondary'} className="uppercase">
                   {item.provider}
                 </Badge>
-                <span className="font-mono text-sm flex-1">{item.model}</span>
-                {result && (
-                  <span className={`text-xs flex items-center gap-1 ${result.ok ? 'text-green-600' : 'text-destructive'}`}>
-                    {result.ok ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                    {result.ok ? `${result.latency_ms}ms` : (result.error || 'falha').slice(0, 40)}
+                <div className="flex-1 min-w-0">
+                  <span className="font-mono text-sm break-all">{item.model}</span>
+                  {result && !result.ok && (
+                    <p className="text-xs text-destructive flex items-start gap-1 mt-1" title={result.error}>
+                      <XCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                      <span className="break-words">{result.error || 'falha'}</span>
+                    </p>
+                  )}
+                </div>
+                {result?.ok && (
+                  <span className="text-xs flex items-center gap-1 text-green-600">
+                    <CheckCircle2 className="h-3 w-3" />
+                    {result.latency_ms}ms
                   </span>
                 )}
                 <Button
