@@ -191,7 +191,21 @@ export default function AIAgents({ embedded = false }: { embedded?: boolean } = 
                                 <DropdownMenuItem onClick={() => openTest(a)}>
                                   <FlaskConical className="h-4 w-4 mr-2" /> Testar
                                 </DropdownMenuItem>
+                                {!a.is_production && (
+                                  <DropdownMenuItem onClick={() => promote.mutate(a)}>
+                                    <Rocket className="h-4 w-4 mr-2" /> Colocar em produção
+                                  </DropdownMenuItem>
+                                )}
+                                {!a.is_production && a.status !== 'ATIVO' && (
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setToDelete(a)}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
+
                             </DropdownMenu>
                           </TableCell>
                         </TableRow>
