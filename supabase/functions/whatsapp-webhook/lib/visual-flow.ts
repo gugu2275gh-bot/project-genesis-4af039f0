@@ -16,6 +16,7 @@ import {
   findStartStep,
   mergeFlows,
   startFlow,
+  startFlowWithPrefill,
   stepKindOf,
   type FlowCapturedField,
   type FlowLang,
@@ -23,6 +24,7 @@ import {
   type FlowStep,
   type FlowTurnResult,
 } from '../../_shared/flow-engine.ts'
+import { normalizeIntakeConfig, runIntake, type IntakeConfig } from '../../_shared/flow-intake.ts'
 import { getAgentRuntime } from './agent-runtime.ts'
 import { cached } from './perf.ts'
 
@@ -32,9 +34,33 @@ export interface VisualFlowPlan {
   steps: FlowStep[]
   preHandoffFlowId: string | null
   handoffFlowId: string | null
+  /** Configuração de aproveitamento da 1ª mensagem (aba "Primeira mensagem"). */
+  intake: IntakeConfig
 }
 
-const EMPTY_PLAN: VisualFlowPlan = { enabled: false, steps: [], preHandoffFlowId: null, handoffFlowId: null }
+const EMPTY_PLAN: VisualFlowPlan = {
+  enabled: false,
+  steps: [],
+  preHandoffFlowId: null,
+  handoffFlowId: null,
+  intake: normalizeIntakeConfig(null),
+}
+
+async function fetchIntakeConfig(supabase: any, flowId: string | null): Promise<IntakeConfig> {
+  if (!flowId) return normalizeIntakeConfig(null)
+  return await cached<IntakeConfig>(`flow-intake:${flowId}`, 60_000, async () => {
+    const { data, error } = await supabase
+      .from('ai_agent_flows')
+      .select('intake_config')
+      .eq('id', flowId)
+      .maybeSingle()
+    if (error) {
+      console.warn('[VISUAL_FLOW] falha ao carregar intake_config:', error.message)
+      return normalizeIntakeConfig(null)
+    }
+    return normalizeIntakeConfig(data?.intake_config)
+  })
+}
 
 async function fetchSteps(supabase: any, flowId: string | null): Promise<FlowStep[]> {
   if (!flowId) return []
@@ -70,7 +96,11 @@ export async function loadVisualFlowPlan(supabase: any): Promise<VisualFlowPlan>
     const handId = runtime.flowIds?.handoff || null
     if (!preId && !handId) return EMPTY_PLAN
 
-    const [preSteps, handSteps] = await Promise.all([fetchSteps(supabase, preId), fetchSteps(supabase, handId)])
+    const [preSteps, handSteps, intake] = await Promise.all([
+      fetchSteps(supabase, preId),
+      fetchSteps(supabase, handId),
+      fetchIntakeConfig(supabase, preId || handId),
+    ])
     const steps = mergeFlows(preSteps, handSteps)
     const start = findStartStep(steps)
     const enabled = !!start && stepKindOf(start) === 'INICIO' && steps.length > 0
@@ -80,7 +110,7 @@ export async function loadVisualFlowPlan(supabase: any): Promise<VisualFlowPlan>
       return EMPTY_PLAN
     }
 
-    return { enabled, steps, preHandoffFlowId: preId, handoffFlowId: handId }
+    return { enabled, steps, preHandoffFlowId: preId, handoffFlowId: handId, intake }
   } catch (e) {
     console.warn('[VISUAL_FLOW] erro ao montar plano (fallback legado):', e instanceof Error ? e.message : e)
     return EMPTY_PLAN
@@ -88,6 +118,45 @@ export async function loadVisualFlowPlan(supabase: any): Promise<VisualFlowPlan>
 }
 
 /** Executa o turno do cliente no grafo (start no 1º turno, advance depois). */
+/**
+ * Primeiro turno com aproveitamento da 1ª frase do cliente.
+ *
+ * Extrai nome/localização/intenção/datas, marca as perguntas correspondentes
+ * como respondidas e retoma o fluxo na PRIMEIRA pergunta ainda pendente,
+ * prefixando uma saudação humana que reconhece os dados aproveitados.
+ */
+export async function runVisualFlowFirstTurn(
+  plan: VisualFlowPlan,
+  message: string,
+  lang: FlowLang,
+  callLLM: ((prompt: string) => Promise<string>) | null,
+): Promise<FlowTurnResult> {
+  if (!plan.intake?.enabled || !callLLM) return startFlow(plan.steps, lang)
+
+  let intake
+  try {
+    intake = await runIntake({ message, steps: plan.steps, lang, config: plan.intake, callLLM })
+  } catch (e) {
+    console.warn('[VISUAL_FLOW] intake falhou (segue fluxo normal):', e instanceof Error ? e.message : e)
+    return startFlow(plan.steps, lang)
+  }
+
+  const prefilledCodes = Object.keys(intake.prefilled || {})
+  if (!prefilledCodes.length) return startFlow(plan.steps, lang)
+
+  console.log('[VISUAL_FLOW][INTAKE]', JSON.stringify({ fields: intake.fieldValues, steps: prefilledCodes }))
+
+  const turn = startFlowWithPrefill(plan.steps, lang, intake.prefilled)
+  if (intake.greeting) {
+    turn.messages = [intake.greeting, ...(turn.messages || [])]
+    turn.outbound = [
+      { text: intake.greeting, step_code: 'intake', quick_reply: false },
+      ...(turn.outbound || []),
+    ]
+  }
+  return turn
+}
+
 export function runVisualFlowTurn(
   plan: VisualFlowPlan,
   state: FlowRunState,
