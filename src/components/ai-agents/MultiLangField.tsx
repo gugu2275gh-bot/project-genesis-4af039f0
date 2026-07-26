@@ -32,14 +32,23 @@ export function MultiLangField({
 }: Props) {
   const [lang, setLang] = useState<AgentLanguage>(baseLanguage);
   const translate = useAgentTranslate();
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
 
   const handleTranslate = async () => {
     const source = value[baseLanguage] || '';
     if (!source.trim()) return;
     const targets = AGENT_LANGUAGES.map((l) => l.code).filter((c) => c !== baseLanguage);
-    const result = await translate.mutateAsync({ text: source, source: baseLanguage, targets });
-    onChange({ ...value, ...result });
+    try {
+      const result = await translate.mutateAsync({ text: source, source: baseLanguage, targets });
+      // Falhas nunca podem derrubar a edição em andamento: mantemos o texto base.
+      if (!mounted.current) return;
+      onChange({ ...value, ...result });
+    } catch {
+      /* erro já exibido em toast pelo hook */
+    }
   };
+
 
   return (
     <div className="space-y-2">
