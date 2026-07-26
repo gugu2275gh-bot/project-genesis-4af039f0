@@ -25,12 +25,11 @@ interface LLMSettingsRow {
 }
 interface ModelInfo { id: string; displayName: string; description?: string }
 
+// Sem conversões automáticas de provedor: o item é usado exatamente como configurado.
 function normalizeCascadeItem(item: CascadeItem): CascadeItem {
-  if (item.provider === 'gemini' && item.model === 'gemini-3.6-flash') {
-    return { ...item, provider: 'lovable', model: 'google/gemini-3.6-flash' };
-  }
   return item;
 }
+
 
 function getProviderLabel(provider: Provider) {
   if (provider === 'lovable') return 'Lovable AI';

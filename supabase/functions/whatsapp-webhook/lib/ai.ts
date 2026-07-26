@@ -194,6 +194,11 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
       try {
         let response: Response
         if (provider === 'gemini') {
+          // thinkingBudget só é aceito na família Gemini 2.x; Gemini 3+ retorna HTTP 400.
+          const generationConfig: Record<string, unknown> = { maxOutputTokens: 2048 }
+          if (/^gemini-2\./.test(model)) {
+            generationConfig.thinkingConfig = { thinkingBudget: 0 }
+          }
           response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
             {
@@ -202,14 +207,12 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
               body: JSON.stringify({
                 system_instruction: { parts: [{ text: fullSystemPrompt }] },
                 contents: geminiContents,
-                generationConfig: {
-                  maxOutputTokens: 2048,
-                  thinkingConfig: { thinkingBudget: 0 },
-                },
+                generationConfig,
               }),
               signal: controller.signal,
             },
           )
+
         } else if (provider === 'openai' || provider === 'lovable') {
           const isLovable = provider === 'lovable'
           const keyName = isLovable ? 'LOVABLE_API_KEY' : 'OPENAI_API_KEY'
@@ -308,12 +311,11 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 
 // Cache em memória da cascata (TTL curto p/ refletir mudanças do admin sem polling pesado)
 type CascadeItem = { provider: 'gemini' | 'openai' | 'lovable'; model: string }
+// Sem conversões automáticas de provedor: usa o que está salvo em llm_settings.
 function normalizeCascadeItem(item: CascadeItem): CascadeItem {
-  if (item.provider === 'gemini' && item.model === 'gemini-3.6-flash') {
-    return { provider: 'lovable', model: 'google/gemini-3.6-flash' }
-  }
   return item
 }
+
 let _cascadeCache: { value: CascadeItem[]; expires: number } | null = null
 const DEFAULT_CASCADE: CascadeItem[] = [
   { provider: 'gemini', model: 'gemini-3-flash-preview' },

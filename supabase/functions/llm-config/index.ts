@@ -55,16 +55,17 @@ function describeError(status: number, raw: string): string {
 }
 
 async function testGemini(model: string): Promise<{ ok: boolean; latency_ms: number; error?: string }> {
-  if (model === 'gemini-3.6-flash') {
-    return await testLovable('google/gemini-3.6-flash')
-  }
-
   const key = Deno.env.get('CBAsesoria_Key')
   if (!key) return { ok: false, latency_ms: 0, error: 'CBAsesoria_Key não configurada' }
   const start = Date.now()
   try {
     const ctrl = new AbortController()
     const t = setTimeout(() => ctrl.abort(), 15000)
+    // thinkingBudget só é válido na família Gemini 2.x; Gemini 3+ rejeita (HTTP 400).
+    const generationConfig: Record<string, unknown> = { maxOutputTokens: 8 }
+    if (/^gemini-2\./.test(model)) {
+      generationConfig.thinkingConfig = { thinkingBudget: 0 }
+    }
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
       {
@@ -72,11 +73,12 @@ async function testGemini(model: string): Promise<{ ok: boolean; latency_ms: num
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: 'Responda apenas "ok".' }] }],
-          generationConfig: { maxOutputTokens: 8, thinkingConfig: { thinkingBudget: 0 } },
+          generationConfig,
         }),
         signal: ctrl.signal,
       },
     )
+
     clearTimeout(t)
     const latency_ms = Date.now() - start
     if (!resp.ok) {
