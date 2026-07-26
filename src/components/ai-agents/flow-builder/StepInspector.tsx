@@ -15,11 +15,19 @@ import {
   ANSWER_FORMATS,
   BRANCH_MATCH_TYPES,
   SKIP_MODES,
+  STEP_KINDS,
+  messageAt,
+  messageCount,
   normalizeBranches,
+  normalizeMessages,
   normalizeValidation,
+  removeMessageAt,
+  setMessageAt,
+  stepKindOf,
   type FlowBranch,
   type StepValidation,
 } from '@/types/ai-agent-flow-builder';
+
 
 interface Props {
   step: AgentFlowStep;
@@ -64,12 +72,21 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step.answer_type, validation.options, branches, step.id]);
 
-  const messages: MultiLangText =
-    step.messages && Object.keys(step.messages || {}).length > 0
-      ? step.messages
-      : step.message
-        ? { 'pt-BR': step.message }
-        : {};
+  const messages = useMemo(
+    () => normalizeMessages(step.messages, step.message),
+    [step.messages, step.message],
+  );
+  const kind = stepKindOf(step);
+  const total = messageCount(messages);
+
+  const updateMessages = (next: ReturnType<typeof normalizeMessages>) => {
+    const first = next['pt-BR'];
+    onChange({
+      messages: next as any,
+      message: (Array.isArray(first) ? first[0] : first) || '',
+    });
+  };
+
 
   return (
     <div className="flex h-full flex-col">
@@ -83,7 +100,7 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
 
       <Tabs defaultValue="pergunta" className="flex-1 overflow-hidden flex flex-col">
         <TabsList className="mx-4 mt-3 grid grid-cols-4">
-          <TabsTrigger value="pergunta">Pergunta</TabsTrigger>
+          <TabsTrigger value="pergunta">Mensagens</TabsTrigger>
           <TabsTrigger value="respostas">Respostas</TabsTrigger>
           <TabsTrigger value="validacao">Validação</TabsTrigger>
           <TabsTrigger value="comportamento">Comportamento</TabsTrigger>
@@ -101,6 +118,28 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
                 <Input value={step.name} onChange={(e) => onChange({ name: e.target.value })} />
               </div>
             </div>
+
+            <div className="space-y-2">
+              <Label>Tipo de etapa</Label>
+              <Select
+                value={kind}
+                onValueChange={(v) =>
+                  onChange({
+                    validation: { ...validation, step_kind: v as any } as any,
+                    ...(v === 'FIM' ? {} : {}),
+                  })
+                }
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {STEP_KINDS.map((k) => <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {STEP_KINDS.find((k) => k.value === kind)?.hint}
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label>Fase</Label>
               <Select value={step.phase || 'GERAL'} onValueChange={(v) => onChange({ phase: v as any })}>
@@ -114,22 +153,65 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
               <Label>Descrição interna</Label>
               <Textarea rows={2} value={step.description || ''} onChange={(e) => onChange({ description: e.target.value })} />
             </div>
-            <MultiLangField
-              label="Pergunta enviada ao cliente"
-              hint="Escreva em português e traduza automaticamente para os demais idiomas."
-              value={messages}
-              onChange={(v) => onChange({ messages: v, message: v['pt-BR'] || '' })}
-              rows={3}
-            />
-            <MultiLangField
-              label="Repergunta (resposta inválida)"
-              value={step.reask_messages || {}}
-              onChange={(v) => onChange({ reask_messages: v })}
-              rows={2}
-            />
+
+            {Array.from({ length: total }).map((_, i) => (
+              <div key={i} className="space-y-2 rounded-md border p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Mensagem {i + 1} de {total}
+                  </span>
+                  {total > 1 && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      title="Remover mensagem"
+                      onClick={() => updateMessages(removeMessageAt(messages, i))}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <MultiLangField
+                  label={
+                    kind === 'PERGUNTA' && i === total - 1
+                      ? 'Texto enviado ao cliente (pergunta)'
+                      : 'Texto enviado ao cliente'
+                  }
+                  hint={i === 0 ? 'Escreva em português e traduza automaticamente para os demais idiomas.' : undefined}
+                  value={messageAt(messages, i)}
+                  onChange={(v) => updateMessages(setMessageAt(messages, i, v))}
+                  rows={3}
+                />
+              </div>
+            ))}
+
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => updateMessages(setMessageAt(messages, total, {}))}
+            >
+              <Plus className="h-4 w-4 mr-1" /> Adicionar mensagem em sequência
+            </Button>
+
+            {kind === 'PERGUNTA' && (
+              <MultiLangField
+                label="Repergunta (resposta inválida)"
+                value={step.reask_messages || {}}
+                onChange={(v) => onChange({ reask_messages: v })}
+                rows={2}
+              />
+            )}
           </TabsContent>
 
+
           <TabsContent value="respostas" className="mt-0 space-y-4">
+            {kind !== 'PERGUNTA' && (
+              <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                Esta etapa é do tipo "{STEP_KINDS.find((k) => k.value === kind)?.label}" e não espera resposta
+                do cliente. Use apenas a próxima etapa padrão abaixo.
+              </p>
+            )}
+            {kind === 'PERGUNTA' && (
             <div className="space-y-2">
               <Label>Tipo de resposta esperada</Label>
               <Select value={step.answer_type} onValueChange={(v) => onChange({ answer_type: v as any })}>
@@ -139,6 +221,8 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
                 </SelectContent>
               </Select>
             </div>
+            )}
+
 
             {['SELECAO', 'BOTOES', 'MULTIPLA_ESCOLHA'].includes(step.answer_type) && (
               <div className="space-y-2">

@@ -4,7 +4,14 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, MessageSquare, UserCheck, SkipForward, Trash2 } from 'lucide-react';
 import { ANSWER_TYPES, type AgentFlowStep } from '@/types/ai-agents';
-import { firstText, normalizeBranches, normalizeValidation } from '@/types/ai-agent-flow-builder';
+import {
+  STEP_KINDS,
+  messageCount,
+  messageList,
+  normalizeBranches,
+  normalizeValidation,
+  stepKindOf,
+} from '@/types/ai-agent-flow-builder';
 
 export type StepNodeData = {
   step: AgentFlowStep;
@@ -17,7 +24,11 @@ function StepNodeComponent({ data, selected, id }: NodeProps) {
   const { step, hasIssue, onDelete } = data as unknown as StepNodeData;
   const branches = normalizeBranches((step as any).branches);
   const validation = normalizeValidation(step.validation);
-  const message = firstText(step.messages, step.message);
+  const kind = stepKindOf(step);
+  const msgs = messageList(step.messages as any, 'pt-BR');
+  const message = msgs[0] || step.message || '';
+  const extra = Math.max(0, messageCount(step.messages as any) - 1);
+
 
   return (
     <div
@@ -60,17 +71,26 @@ function StepNodeComponent({ data, selected, id }: NodeProps) {
       <div className="px-3 py-2 space-y-2">
         <p className="text-xs text-muted-foreground line-clamp-2 flex gap-1">
           <MessageSquare className="h-3 w-3 mt-0.5 shrink-0" />
-          <span>{message || 'Sem pergunta definida'}</span>
+          <span>{message || 'Sem mensagem definida'}</span>
         </p>
+        {extra > 0 && (
+          <p className="text-[10px] text-muted-foreground">+ {extra} mensagem(ns) em sequência</p>
+        )}
         <div className="flex flex-wrap gap-1">
-          <Badge variant="secondary" className="text-[10px]">
-            {ANSWER_TYPES.find((t) => t.value === step.answer_type)?.label || step.answer_type}
+          <Badge variant={kind === 'PERGUNTA' ? 'secondary' : 'default'} className="text-[10px]">
+            {STEP_KINDS.find((k) => k.value === kind)?.label || kind}
           </Badge>
-          {validation.required === false && (
+          {kind === 'PERGUNTA' && (
+            <Badge variant="secondary" className="text-[10px]">
+              {ANSWER_TYPES.find((t) => t.value === step.answer_type)?.label || step.answer_type}
+            </Badge>
+          )}
+          {kind === 'PERGUNTA' && validation.required === false && (
             <Badge variant="outline" className="text-[10px]">Opcional</Badge>
           )}
         </div>
       </div>
+
 
       <div className="border-t">
         {branches.map((b, i) => (

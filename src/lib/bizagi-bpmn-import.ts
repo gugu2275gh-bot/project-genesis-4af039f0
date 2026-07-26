@@ -42,6 +42,41 @@ export function slugify(input: string, fallback: string): string {
   return base || fallback;
 }
 
+const MSG_LABEL = /^\s*msg\s*[a-z]?\s*\d+\s*[-–:]?\s*$/i;
+
+/**
+ * Quebra o conteúdo de uma caixa de texto do Bizagi em mensagens separadas.
+ * Linhas como "Msg 1", "Msg B2" funcionam como separadores e são descartadas.
+ */
+export function splitAnnotationMessages(raw: string): string[] {
+  const lines = (raw || '').split('\n');
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  lines.forEach((line) => {
+    if (MSG_LABEL.test(line)) {
+      if (current.length) chunks.push(current);
+      current = [];
+      return;
+    }
+    current.push(line);
+  });
+  if (current.length) chunks.push(current);
+  const out = chunks.map((c) => c.join('\n').trim()).filter(Boolean);
+  return out.length ? out : raw.trim() ? [raw.trim()] : [];
+}
+
+/** Deduz o tipo de resposta a partir do texto da pergunta. */
+function guessAnswerType(text: string): string {
+  const t = text.toLowerCase();
+  if (/e-?mail/.test(t)) return 'EMAIL';
+  if (/nome completo|seu nome/.test(t)) return 'NOME';
+  if (/\bdata\b|desde quando|qual foi a data/.test(t)) return 'DATA';
+  if (/idade|quantos anos/.test(t)) return 'NUMERO';
+  if (/^(você|voce|está|esta|possui|tem |trabalha|se sim)/.test(t)) return 'SIM_NAO';
+  return 'TEXTO_LIVRE';
+}
+
+
 interface RawNode {
   id: string;
   kind: 'task' | 'gateway' | 'start' | 'end' | 'event';
@@ -107,6 +142,28 @@ export function parseBizagiBpmn(
       name: el.getAttribute('name') || '',
     }))
     .filter((f) => f.source && f.target);
+
+  // Caixas de texto (textAnnotation) ligadas às tarefas por association.
+  const annotationText = new Map<string, string>();
+  all(doc, ['textAnnotation']).forEach((el) => {
+    const id = el.getAttribute('id');
+    if (!id) return;
+    const textEl = Array.from(el.children).find((c) => localName(c) === 'text');
+    const raw = (textEl?.textContent ?? el.textContent ?? '').replace(/\r/g, '').trim();
+    if (raw) annotationText.set(id, raw);
+  });
+
+  const annotationsByNode = new Map<string, string[]>();
+  all(doc, ['association']).forEach((el) => {
+    const a = el.getAttribute('sourceRef') || '';
+    const b = el.getAttribute('targetRef') || '';
+    const [annId, nodeId] = annotationText.has(a) ? [a, b] : annotationText.has(b) ? [b, a] : ['', ''];
+    if (!annId || !nodeId) return;
+    const list = annotationsByNode.get(nodeId) || [];
+    list.push(annotationText.get(annId) as string);
+    annotationsByNode.set(nodeId, list);
+  });
+
 
   // Posições do diagrama (BPMNShape -> bpmnElement)
   const shapePos = new Map<string, { x: number; y: number }>();
@@ -198,29 +255,49 @@ export function parseBizagiBpmn(
 
     const pos = shapePos.get(n.id);
 
+    // Mensagens vindas das caixas de texto associadas (fallback: documentação)
+    const annotations = annotationsByNode.get(n.id) || [];
+    const msgs = annotations.flatMap(splitAnnotationMessages);
+    if (n.kind === 'task' && msgs.length === 0 && n.documentation) msgs.push(n.documentation);
+
+    const lastMsg = msgs[msgs.length - 1] || '';
+    const isQuestion = /\?\s*$/.test(lastMsg);
+    const stepKind =
+      n.kind === 'start' ? 'INICIO' : n.kind === 'end' ? 'FIM' : isQuestion ? 'PERGUNTA' : 'INFORMATIVA';
+    const isHandoff = n.kind === 'end' || /especialista|handoff/i.test(`${n.name} ${lastMsg}`);
+
+    if (n.kind === 'task' && msgs.length === 0) {
+      warnings.push(`A etapa "${n.name || code}" ficou sem texto de mensagem — preencha manualmente.`);
+    }
+
     return {
       id: `tmp_bpmn_${n.id}_${i}`,
       flow_id: opts.flowId,
       step_code: code,
       name: n.name || (n.kind === 'start' ? 'Início' : n.kind === 'end' ? 'Fim' : `Etapa ${i + 1}`),
       description: n.documentation || '',
-      message: '',
-      messages: {},
+      message: msgs[0] || '',
+      messages: msgs.length ? { 'pt-BR': msgs } : {},
       reask_messages: {},
       phase: opts.phase,
-      answer_type: 'TEXTO_LIVRE',
-      validation: { ...DEFAULT_STEP_VALIDATION, required: n.kind === 'task' },
+      answer_type: stepKind === 'PERGUNTA' ? guessAnswerType(lastMsg) : 'TEXTO_LIVRE',
+      validation: {
+        ...DEFAULT_STEP_VALIDATION,
+        required: stepKind === 'PERGUNTA',
+        step_kind: stepKind,
+      },
       next_step_code: nextCode,
       exit_condition: '',
       allow_parallel_question: true,
       allow_free_answer: true,
-      handoff: false,
+      handoff: stepKind === 'FIM' ? isHandoff : false,
       branches,
       order_index: startIndex + i + 1,
       created_at: now,
       updated_at: now,
       _bpmn_pos: pos,
     } as unknown as AgentFlowStep;
+
   });
 
   // Normaliza posições do BPMN para o canvas
