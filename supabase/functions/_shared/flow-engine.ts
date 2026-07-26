@@ -57,6 +57,8 @@ export interface FlowRunState {
   attempts?: number
   /** Vezes que o cliente disse "não sei" na etapa atual. */
   unknown_attempts?: number
+  /** Tentativas rejeitadas pela checagem na base de conhecimento. */
+  kb_attempts?: number
 
   /** Fluxo concluído (chegou a uma etapa FIM). */
   finished?: boolean
