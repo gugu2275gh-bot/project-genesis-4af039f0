@@ -223,6 +223,8 @@ export interface AgentFlowStep {
   phase: FlowPhase;
 
   answer_type: AnswerType;
+  /** Campo do CRM onde a resposta desta etapa é gravada (null = nenhum). */
+  field_mapping: string | null;
   validation: Record<string, unknown>;
   next_step_code: string | null;
   exit_condition: string | null;
