@@ -31,6 +31,7 @@ export type Database = {
           name: string
           next_step_code: string | null
           order_index: number
+          phase: string
           reask_messages: Json
           step_code: string
           updated_at: string
@@ -53,6 +54,7 @@ export type Database = {
           name: string
           next_step_code?: string | null
           order_index?: number
+          phase?: string
           reask_messages?: Json
           step_code: string
           updated_at?: string
@@ -75,6 +77,7 @@ export type Database = {
           name?: string
           next_step_code?: string | null
           order_index?: number
+          phase?: string
           reask_messages?: Json
           step_code?: string
           updated_at?: string
@@ -98,6 +101,7 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          phase: string
           status: string
           updated_at: string
           updated_by: string | null
@@ -108,6 +112,7 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          phase?: string
           status?: string
           updated_at?: string
           updated_by?: string | null
@@ -118,6 +123,7 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          phase?: string
           status?: string
           updated_at?: string
           updated_by?: string | null
@@ -346,6 +352,7 @@ export type Database = {
           description: string | null
           fallback_message: string
           flow_id: string | null
+          handoff_flow_id: string | null
           handoff_message: string
           id: string
           is_production: boolean
@@ -354,8 +361,10 @@ export type Database = {
           model_cascade: Json
           name: string
           parent_agent_id: string | null
+          pre_handoff_flow_id: string | null
           prompt_base: string
           prompt_behavior: string
+          prompt_blocks: Json
           prompt_flow: string
           provider: string
           runtime_config: Json
@@ -374,6 +383,7 @@ export type Database = {
           description?: string | null
           fallback_message?: string
           flow_id?: string | null
+          handoff_flow_id?: string | null
           handoff_message?: string
           id?: string
           is_production?: boolean
@@ -382,8 +392,10 @@ export type Database = {
           model_cascade?: Json
           name: string
           parent_agent_id?: string | null
+          pre_handoff_flow_id?: string | null
           prompt_base?: string
           prompt_behavior?: string
+          prompt_blocks?: Json
           prompt_flow?: string
           provider?: string
           runtime_config?: Json
@@ -402,6 +414,7 @@ export type Database = {
           description?: string | null
           fallback_message?: string
           flow_id?: string | null
+          handoff_flow_id?: string | null
           handoff_message?: string
           id?: string
           is_production?: boolean
@@ -410,8 +423,10 @@ export type Database = {
           model_cascade?: Json
           name?: string
           parent_agent_id?: string | null
+          pre_handoff_flow_id?: string | null
           prompt_base?: string
           prompt_behavior?: string
+          prompt_blocks?: Json
           prompt_flow?: string
           provider?: string
           runtime_config?: Json
@@ -429,10 +444,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "ai_agents_handoff_flow_id_fkey"
+            columns: ["handoff_flow_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agent_flows"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "ai_agents_parent_agent_id_fkey"
             columns: ["parent_agent_id"]
             isOneToOne: false
             referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_agents_pre_handoff_flow_id_fkey"
+            columns: ["pre_handoff_flow_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agent_flows"
             referencedColumns: ["id"]
           },
         ]
