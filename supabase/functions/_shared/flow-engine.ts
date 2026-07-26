@@ -885,7 +885,7 @@ export function advanceFlow(
       const tries = (state.unknown_attempts || 0) + 1
       const applied = applyRule('no_match', tries)
       if (applied) return applied
-      return stay(defaultReask(), { unknown_attempts: tries })
+      return escalate()
     }
   }
 
