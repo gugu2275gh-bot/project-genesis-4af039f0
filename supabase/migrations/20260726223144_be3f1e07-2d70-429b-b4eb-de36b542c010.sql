@@ -1,0 +1,1 @@
+ALTER TABLE public.ai_agent_flows ADD COLUMN IF NOT EXISTS intake_config jsonb NOT NULL DEFAULT '{}'::jsonb;

@@ -107,6 +107,7 @@ export type Database = {
           created_by: string | null
           description: string | null
           id: string
+          intake_config: Json
           name: string
           phase: string
           status: string
@@ -119,6 +120,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          intake_config?: Json
           name: string
           phase?: string
           status?: string
@@ -131,6 +133,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          intake_config?: Json
           name?: string
           phase?: string
           status?: string

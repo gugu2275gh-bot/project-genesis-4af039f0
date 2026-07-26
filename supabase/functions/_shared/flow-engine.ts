@@ -525,6 +525,19 @@ function run(
     path.push(code)
     if (step.handoff) sawHandoff = true
 
+    const kind = stepKindOf(step)
+
+    // Pergunta já respondida (ex.: dados aproveitados da 1ª mensagem):
+    // não repergunta e não reenvia a mensagem — segue pelo ramo da resposta.
+    const knownAnswer = kind === 'PERGUNTA' ? String(state.answers?.[code] ?? '').trim() : ''
+    if (kind === 'PERGUNTA' && knownAnswer) {
+      visited.add(code)
+      const next = resolveNextCode(step, knownAnswer)
+      if (!next || next === code) break
+      code = next
+      continue
+    }
+
     // Nunca reenviar mensagens de uma etapa já executada (evita loops).
     if (!visited.has(code)) {
       const texts = messagesOf(step, lang)
@@ -537,7 +550,6 @@ function run(
       visited.add(code)
     }
 
-    const kind = stepKindOf(step)
     if (kind === 'PERGUNTA') {
       return {
         messages,
@@ -550,6 +562,7 @@ function run(
         captured,
       }
     }
+
     if (kind === 'FIM') {
       return {
         messages,
@@ -589,6 +602,44 @@ export function startFlow(steps: FlowStep[], lang: FlowLang = 'pt-BR'): FlowTurn
   }
   return run(index, start.step_code, { answers: {}, visited: [], attempts: 0, lang }, lang)
 }
+
+/**
+ * Primeiro turno com dados já aproveitados da 1ª mensagem do cliente.
+ *
+ * `prefilled` é um mapa `step_code -> resposta`. As etapas correspondentes são
+ * marcadas como respondidas e o motor percorre o grafo desde o INÍCIO,
+ * parando na PRIMEIRA pergunta ainda sem resposta (não na etapa seguinte à
+ * última aproveitada).
+ */
+export function startFlowWithPrefill(
+  steps: FlowStep[],
+  lang: FlowLang = 'pt-BR',
+  prefilled: Record<string, string> = {},
+): FlowTurnResult {
+  const index = indexSteps(steps)
+  const start = findStartStep(steps)
+  if (!start) {
+    return { messages: [], outbound: [], state: { finished: true }, reasked: false, finished: true, handoff: false, path: [], captured: [] }
+  }
+
+  // Só aceita respostas que passem na validação da própria etapa.
+  const answers: Record<string, string> = {}
+  const captured: FlowCapturedField[] = []
+  for (const [code, raw] of Object.entries(prefilled || {})) {
+    const step = index.get(code)
+    if (!step) continue
+    const value = String(raw ?? '').trim()
+    if (!value) continue
+    const check = validateAnswer(step, value)
+    if (!check.valid) continue
+    answers[code] = check.value ?? value
+    captured.push(...captureOf(step, answers[code]))
+  }
+
+  return run(index, start.step_code, { answers, visited: [], attempts: 0, lang }, lang, captured)
+}
+
+
 
 /** Processa a resposta do cliente na etapa corrente e avança o grafo. */
 export function advanceFlow(

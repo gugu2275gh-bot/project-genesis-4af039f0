@@ -10,8 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Pencil, Trash2, ListOrdered, Workflow, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, ListOrdered, Workflow, AlertTriangle, Sparkles } from 'lucide-react';
+import { FlowIntakeSettings } from '@/components/ai-agents/FlowIntakeSettings';
 import { FlowCanvas } from '@/components/ai-agents/flow-builder/FlowCanvas';
+
 import { FlowErrorBoundary } from '@/components/ai-agents/flow-builder/FlowErrorBoundary';
 import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
@@ -287,13 +289,32 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
   const del = useDeleteFlowStep();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AgentFlowStep | null>(null);
-  const [view, setView] = useState<'canvas' | 'table'>('canvas');
+  const [view, setView] = useState<'canvas' | 'table' | 'intake'>('canvas');
   const [canvasDirty, setCanvasDirty] = useState(false);
 
   const setDirty = (d: boolean) => {
     setCanvasDirty(d);
     onDirtyChange?.(d);
   };
+
+  const leaveCanvas = (next: 'table' | 'intake') => {
+    if (canvasDirty && !window.confirm('Há alterações não salvas no desenho. Sair mesmo assim?')) return;
+    setDirty(false);
+    setView(next);
+  };
+
+  if (view === 'intake') {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-end">
+          <Button size="sm" variant="outline" onClick={() => setView('canvas')}>
+            <Workflow className="h-4 w-4 mr-1" /> Voltar ao editor visual
+          </Button>
+        </div>
+        <FlowIntakeSettings key={flow.id} flow={flow} />
+      </div>
+    );
+  }
 
   if (view === 'canvas') {
     return (
@@ -302,21 +323,14 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
           <p className="text-sm font-medium flex items-center gap-2">
             <Workflow className="h-4 w-4" /> Desenho de "{flow.name}"
           </p>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              if (
-                canvasDirty &&
-                !window.confirm('Há alterações não salvas no desenho. Sair mesmo assim?')
-              )
-                return;
-              setDirty(false);
-              setView('table');
-            }}
-          >
-            <ListOrdered className="h-4 w-4 mr-1" /> Ver em tabela
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => leaveCanvas('intake')}>
+              <Sparkles className="h-4 w-4 mr-1" /> Primeira mensagem
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => leaveCanvas('table')}>
+              <ListOrdered className="h-4 w-4 mr-1" /> Ver em tabela
+            </Button>
+          </div>
         </div>
         <FlowErrorBoundary resetKey={flow.id}>
           <FlowCanvas key={flow.id} flow={flow} onDirtyChange={setDirty} />
@@ -326,6 +340,7 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
   }
 
 
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -333,9 +348,13 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
           <ListOrdered className="h-4 w-4" /> Etapas de "{flow.name}"
         </p>
         <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setView('intake')}>
+            <Sparkles className="h-4 w-4 mr-1" /> Primeira mensagem
+          </Button>
           <Button size="sm" variant="outline" onClick={() => setView('canvas')}>
             <Workflow className="h-4 w-4 mr-1" /> Editor visual
           </Button>
+
           <Button size="sm" onClick={() => { setEditing(null); setOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Nova etapa
           </Button>

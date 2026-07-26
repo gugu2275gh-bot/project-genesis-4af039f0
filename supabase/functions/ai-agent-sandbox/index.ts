@@ -3,7 +3,8 @@
 // NÃO envia mensagens reais pelo WhatsApp e NÃO utiliza Twilio.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
 import { buildSystemPrompt } from './lib/prompt-builder.ts'
-import { advanceFlow, findStartStep, mergeFlows, startFlow, stepKindOf } from '../_shared/flow-engine.ts'
+import { advanceFlow, findStartStep, mergeFlows, startFlow, startFlowWithPrefill, stepKindOf } from '../_shared/flow-engine.ts'
+import { normalizeIntakeConfig, runIntake } from '../_shared/flow-intake.ts'
 import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
 
 
@@ -164,7 +165,20 @@ Deno.serve(async (req) => {
     // exatamente como a produção executa.
     const preFlowId = config.pre_handoff_flow_id || config.flow_id || null
     const handFlowId = config.handoff_flow_id || null
-    const [preSteps, handSteps] = await Promise.all([fetchSteps(preFlowId), fetchSteps(handFlowId)])
+    const fetchIntake = async (flowId: string | null | undefined) => {
+      if (!flowId) return normalizeIntakeConfig(null)
+      const { data } = await service
+        .from('ai_agent_flows')
+        .select('intake_config')
+        .eq('id', flowId)
+        .maybeSingle()
+      return normalizeIntakeConfig((data as any)?.intake_config)
+    }
+    const [preSteps, handSteps, intakeConfig] = await Promise.all([
+      fetchSteps(preFlowId),
+      fetchSteps(handFlowId),
+      fetchIntake(preFlowId || handFlowId),
+    ])
     let steps: any[] = mergeFlows(preSteps, handSteps)
 
 
@@ -200,9 +214,35 @@ Deno.serve(async (req) => {
     if (visualFlowEnabled && !flowState.finished) {
       const lang = sessionLang
       const firstTurn = firstTurnGlobal
-      const turn = firstTurn
-        ? startFlow(steps, lang as any)
-        : advanceFlow(steps, flowState, message, lang as any)
+      let turn
+      if (firstTurn && intakeConfig.enabled) {
+        let intakeRes = { prefilled: {} as Record<string, string>, greeting: '', fieldValues: {} as Record<string, string> }
+        try {
+          intakeRes = await runIntake({
+            message,
+            steps,
+            lang: lang as any,
+            config: intakeConfig,
+            callLLM: async (prompt: string) => {
+              const out = await callOpenAICompatible('lovable', 'google/gemini-2.5-flash-lite', 'Você extrai dados. Responda apenas JSON.', [{ role: 'user', content: prompt }], 0, 400)
+              return out.text
+            },
+          })
+        } catch (e) {
+          console.warn('[SANDBOX][INTAKE] falhou:', e instanceof Error ? e.message : e)
+        }
+        if (Object.keys(intakeRes.prefilled || {}).length) {
+          turn = startFlowWithPrefill(steps, lang as any, intakeRes.prefilled)
+          if (intakeRes.greeting) {
+            turn.messages = [intakeRes.greeting, ...(turn.messages || [])]
+            turn.outbound = [{ text: intakeRes.greeting, step_code: 'intake', quick_reply: false }, ...(turn.outbound || [])]
+          }
+        } else {
+          turn = startFlow(steps, lang as any)
+        }
+      } else {
+        turn = firstTurn ? startFlow(steps, lang as any) : advanceFlow(steps, flowState, message, lang as any)
+      }
 
       await service.from('ai_agent_test_messages').insert({
         session_id,
