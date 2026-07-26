@@ -211,11 +211,13 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
             },
           )
         } else if (provider === 'openai' || provider === 'lovable') {
-          const openaiKey = Deno.env.get('OPENAI_API_KEY')
-          if (!openaiKey) {
+          const isLovable = provider === 'lovable'
+          const keyName = isLovable ? 'LOVABLE_API_KEY' : 'OPENAI_API_KEY'
+          const providerKey = Deno.env.get(keyName)
+          if (!providerKey) {
             clearTimeout(timeoutId)
-            console.warn(`[AI cascade] Skipping ${provider}/${model}: OPENAI_API_KEY not configured`)
-            lastError = new Error('OPENAI_API_KEY not configured')
+            console.warn(`[AI cascade] Skipping ${provider}/${model}: ${keyName} not configured`)
+            lastError = new Error(`${keyName} not configured`)
             break
           }
           const oaMessages = [
@@ -226,13 +228,17 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
             })),
             { role: 'user' as const, content: currentMessage },
           ]
-          response = await fetch('https://api.openai.com/v1/chat/completions', {
+          const endpoint = isLovable
+            ? 'https://ai.gateway.lovable.dev/v1/chat/completions'
+            : 'https://api.openai.com/v1/chat/completions'
+          const payload: Record<string, unknown> = { model, messages: oaMessages, max_tokens: 1000 }
+          if (isLovable && model.startsWith('openai/gpt-5.6')) payload.reasoning_effort = 'none'
+          response = await fetch(endpoint, {
             method: 'POST',
-            headers: {
-              Authorization: `Bearer ${openaiKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ model, messages: oaMessages, max_tokens: 1000 }),
+            headers: isLovable
+              ? { 'Lovable-API-Key': providerKey, 'Content-Type': 'application/json' }
+              : { Authorization: `Bearer ${providerKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
             signal: controller.signal,
           })
         } else {
