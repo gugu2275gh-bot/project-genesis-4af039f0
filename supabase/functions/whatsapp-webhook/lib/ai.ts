@@ -351,6 +351,7 @@ async function loadLLMCascade(): Promise<CascadeItem[]> {
       .filter(c => {
         if (c.provider === 'gemini') return row.gemini_enabled !== false
         if (c.provider === 'openai') return row.openai_enabled !== false
+        if (c.provider === 'lovable') return true
         return false
       })
       .map(c => ({ provider: c.provider, model: c.model }))
