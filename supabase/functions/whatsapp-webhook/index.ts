@@ -869,6 +869,37 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
     }).select('id').single()
     void insertedMsg
 
+    // ============================================================
+    // TRAVA DE FLUXO VISUAL ATIVO
+    // ------------------------------------------------------------
+    // Carregado ANTES de reativação, desambiguação e heurísticas de
+    // silêncio: enquanto o fluxo configurado no agente não terminar,
+    // nada pode desviar o atendimento.
+    // ============================================================
+    let visualFlowPlan = { enabled: false, steps: [], preHandoffFlowId: null, handoffFlowId: null } as Awaited<ReturnType<typeof loadVisualFlowPlan>>
+    let visualFlowActive = false
+    let visualFlowSavedState: Record<string, unknown> = {}
+    try {
+      visualFlowPlan = await loadVisualFlowPlan(supabase)
+      if (visualFlowPlan.enabled) {
+        const { data: vfRow } = await supabase
+          .from('lead_funnel_state')
+          .select('visual_flow_state')
+          .eq('lead_id', lead.id)
+          .maybeSingle()
+        const saved = vfRow?.visual_flow_state
+        visualFlowSavedState = saved && typeof saved === 'object' ? { ...saved } : {}
+        visualFlowActive = !visualFlowSavedState.finished
+      }
+    } catch (vfLoadErr) {
+      console.warn('[VISUAL_FLOW] falha ao carregar plano:', vfLoadErr instanceof Error ? vfLoadErr.message : vfLoadErr)
+    }
+    if (visualFlowActive) {
+      console.log('[VISUAL_FLOW] fluxo ativo — desvios (reativação, desambiguação, silêncios) desativados neste turno')
+    }
+
+
+
     // ========== MULTICHAT SECTOR ROUTING (REFINED) ==========
     let routedSector: string | null = null
 
