@@ -194,6 +194,11 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
       try {
         let response: Response
         if (provider === 'gemini') {
+          // thinkingBudget só é aceito na família Gemini 2.x; Gemini 3+ retorna HTTP 400.
+          const generationConfig: Record<string, unknown> = { maxOutputTokens: 2048 }
+          if (/^gemini-2\./.test(model)) {
+            generationConfig.thinkingConfig = { thinkingBudget: 0 }
+          }
           response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
             {
@@ -202,14 +207,12 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
               body: JSON.stringify({
                 system_instruction: { parts: [{ text: fullSystemPrompt }] },
                 contents: geminiContents,
-                generationConfig: {
-                  maxOutputTokens: 2048,
-                  thinkingConfig: { thinkingBudget: 0 },
-                },
+                generationConfig,
               }),
               signal: controller.signal,
             },
           )
+
         } else if (provider === 'openai' || provider === 'lovable') {
           const isLovable = provider === 'lovable'
           const keyName = isLovable ? 'LOVABLE_API_KEY' : 'OPENAI_API_KEY'
