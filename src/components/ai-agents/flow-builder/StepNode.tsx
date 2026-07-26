@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { AlertTriangle, MessageSquare, UserCheck, SkipForward } from 'lucide-react';
+import { AlertTriangle, MessageSquare, UserCheck, SkipForward, Trash2 } from 'lucide-react';
 import { ANSWER_TYPES, type AgentFlowStep } from '@/types/ai-agents';
 import { firstText, normalizeBranches, normalizeValidation } from '@/types/ai-agent-flow-builder';
 
