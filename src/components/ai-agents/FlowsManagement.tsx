@@ -287,13 +287,32 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
   const del = useDeleteFlowStep();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AgentFlowStep | null>(null);
-  const [view, setView] = useState<'canvas' | 'table'>('canvas');
+  const [view, setView] = useState<'canvas' | 'table' | 'intake'>('canvas');
   const [canvasDirty, setCanvasDirty] = useState(false);
 
   const setDirty = (d: boolean) => {
     setCanvasDirty(d);
     onDirtyChange?.(d);
   };
+
+  const leaveCanvas = (next: 'table' | 'intake') => {
+    if (canvasDirty && !window.confirm('Há alterações não salvas no desenho. Sair mesmo assim?')) return;
+    setDirty(false);
+    setView(next);
+  };
+
+  if (view === 'intake') {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-end">
+          <Button size="sm" variant="outline" onClick={() => setView('canvas')}>
+            <Workflow className="h-4 w-4 mr-1" /> Voltar ao editor visual
+          </Button>
+        </div>
+        <FlowIntakeSettings key={flow.id} flow={flow} />
+      </div>
+    );
+  }
 
   if (view === 'canvas') {
     return (
@@ -302,21 +321,14 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
           <p className="text-sm font-medium flex items-center gap-2">
             <Workflow className="h-4 w-4" /> Desenho de "{flow.name}"
           </p>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              if (
-                canvasDirty &&
-                !window.confirm('Há alterações não salvas no desenho. Sair mesmo assim?')
-              )
-                return;
-              setDirty(false);
-              setView('table');
-            }}
-          >
-            <ListOrdered className="h-4 w-4 mr-1" /> Ver em tabela
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => leaveCanvas('intake')}>
+              <Sparkles className="h-4 w-4 mr-1" /> Primeira mensagem
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => leaveCanvas('table')}>
+              <ListOrdered className="h-4 w-4 mr-1" /> Ver em tabela
+            </Button>
+          </div>
         </div>
         <FlowErrorBoundary resetKey={flow.id}>
           <FlowCanvas key={flow.id} flow={flow} onDirtyChange={setDirty} />
@@ -324,6 +336,7 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
       </div>
     );
   }
+
 
 
   return (
