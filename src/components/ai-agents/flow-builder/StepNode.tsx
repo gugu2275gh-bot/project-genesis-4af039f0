@@ -4,7 +4,14 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, MessageSquare, UserCheck, SkipForward, Trash2 } from 'lucide-react';
 import { ANSWER_TYPES, type AgentFlowStep } from '@/types/ai-agents';
-import { firstText, normalizeBranches, normalizeValidation } from '@/types/ai-agent-flow-builder';
+import {
+  STEP_KINDS,
+  messageCount,
+  messageList,
+  normalizeBranches,
+  normalizeValidation,
+  stepKindOf,
+} from '@/types/ai-agent-flow-builder';
 
 export type StepNodeData = {
   step: AgentFlowStep;
@@ -17,7 +24,11 @@ function StepNodeComponent({ data, selected, id }: NodeProps) {
   const { step, hasIssue, onDelete } = data as unknown as StepNodeData;
   const branches = normalizeBranches((step as any).branches);
   const validation = normalizeValidation(step.validation);
-  const message = firstText(step.messages, step.message);
+  const kind = stepKindOf(step);
+  const msgs = messageList(step.messages as any, 'pt-BR');
+  const message = msgs[0] || step.message || '';
+  const extra = Math.max(0, messageCount(step.messages as any) - 1);
+
 
   return (
     <div
