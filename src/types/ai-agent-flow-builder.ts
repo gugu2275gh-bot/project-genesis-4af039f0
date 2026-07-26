@@ -266,6 +266,8 @@ export function renameStepCode<T extends CodeRefStep>(
   if (!target) return steps;
   const oldCode = target.step_code;
   if (oldCode === newCode) return steps;
+  if (!newCode) return steps.map((s) => (idOf(s) === stepId ? { ...s, step_code: '' } : s));
+
   return steps.map((s) => {
     if (idOf(s) === stepId) return { ...s, step_code: newCode };
     if (!oldCode) return s;
