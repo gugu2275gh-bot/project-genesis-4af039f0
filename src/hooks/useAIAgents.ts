@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type {
   AIAgent,
@@ -7,6 +7,7 @@ import type {
   AgentFlowStep,
   AgentTestMessage,
   AgentTestSession,
+  AgentText,
   AgentVersion,
 } from '@/types/ai-agents';
 
@@ -343,5 +344,166 @@ export function useSendTestMessage() {
       qc.invalidateQueries({ queryKey: ['ai_agent_test_messages', vars.sessionId] });
       toast({ title: 'Erro no teste', description: e.message, variant: 'destructive' });
     },
+  });
+}
+
+/* --------------------- TEXTOS DO ROTEIRO (AGENTE 1.0) -------------------- */
+
+export function useAgentTexts(agentId?: string) {
+  return useQuery({
+    queryKey: ['ai_agent_texts', agentId],
+    enabled: !!agentId,
+    queryFn: async () => {
+      const { data, error } = await db
+        .from('ai_agent_texts')
+        .select('*')
+        .eq('agent_id', agentId)
+        .order('order_index', { ascending: true });
+      if (error) throw error;
+      return (data || []) as AgentText[];
+    },
+  });
+}
+
+export function useSaveAgentTexts() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async ({
+      agentId,
+      texts,
+    }: {
+      agentId: string;
+      texts: { text_key: string; translations: Record<string, string> }[];
+    }) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id ?? null;
+      for (const t of texts) {
+        const { error } = await db
+          .from('ai_agent_texts')
+          .update({ translations: t.translations, updated_by: userId })
+          .eq('agent_id', agentId)
+          .eq('text_key', t.text_key);
+        if (error) throw error;
+      }
+    },
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['ai_agent_texts', vars.agentId] });
+      toast({ title: 'Textos do agente atualizados' });
+    },
+    onError: (e: any) =>
+      toast({ title: 'Erro ao salvar textos', description: e.message, variant: 'destructive' }),
+  });
+}
+
+/* ------------- SINCRONIZAÇÃO COM A CONFIGURAÇÃO EM PRODUÇÃO -------------- */
+
+/**
+ * Importa a configuração que o agente de WhatsApp está realmente executando
+ * (prompt do fluxo, textos por idioma e etapas) e cria/atualiza o "AGENTE 1.0".
+ * O agente resultante é marcado como `is_production`, de modo que qualquer
+ * alteração feita na tela passa a valer no atendimento real.
+ */
+export function useSyncAgentDefaults() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async () => {
+      await supabase.auth.refreshSession();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('Sessão expirada. Faça login novamente.');
+
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/whatsapp-webhook?action=agent_defaults`,
+        { headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_PUBLISHABLE_KEY } },
+      );
+      if (!res.ok) throw new Error(`Falha ao ler a configuração atual (${res.status})`);
+      const defaults = (await res.json()) as {
+        prompt_flow: string;
+        texts: { text_key: string; label: string; group: string; order_index: number; translations: Record<string, string> }[];
+        steps: { step_code: string; name: string; description?: string | null; answer_type?: string; next_step_code?: string | null; order_index: number; messages: Record<string, string> }[];
+      };
+
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id ?? null;
+
+      // 1) Agente de produção (cria na primeira vez)
+      const { data: existing, error: exErr } = await db
+        .from('ai_agents')
+        .select('*')
+        .eq('is_production', true)
+        .maybeSingle();
+      if (exErr) throw exErr;
+
+      let agent = existing as AIAgent | null;
+      if (!agent) {
+        const { data, error } = await db
+          .from('ai_agents')
+          .insert({
+            name: 'AGENTE 1.0',
+            description: 'Agente que atende no WhatsApp hoje (configuração em produção).',
+            provider: 'gemini',
+            model: 'gemini-3-flash-preview',
+            status: 'ATIVO',
+            is_production: true,
+            temperature: 0.7,
+            max_tokens: 1024,
+            default_language: 'pt',
+            prompt_flow: defaults.prompt_flow,
+            created_by: userId,
+            updated_by: userId,
+          })
+          .select('*')
+          .single();
+        if (error) throw error;
+        agent = data as AIAgent;
+      } else {
+        const { error } = await db
+          .from('ai_agents')
+          .update({ prompt_flow: agent.prompt_flow || defaults.prompt_flow, updated_by: userId })
+          .eq('id', agent.id);
+        if (error) throw error;
+      }
+
+      // 2) Textos por idioma — só insere os que ainda não existem (não sobrescreve edições)
+      const { data: currentTexts, error: txErr } = await db
+        .from('ai_agent_texts')
+        .select('text_key')
+        .eq('agent_id', agent.id);
+      if (txErr) throw txErr;
+      const known = new Set((currentTexts || []).map((t: any) => t.text_key));
+
+      const missing = defaults.texts
+        .filter((t) => !known.has(t.text_key))
+        .map((t) => ({
+          agent_id: agent!.id,
+          text_key: t.text_key,
+          label: t.label,
+          description: t.group,
+          translations: t.translations,
+          order_index: t.order_index,
+          created_by: userId,
+          updated_by: userId,
+        }));
+
+      if (missing.length > 0) {
+        const { error } = await db.from('ai_agent_texts').insert(missing);
+        if (error) throw error;
+      }
+
+      return { agentId: agent.id, imported: missing.length };
+    },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['ai_agents'] });
+      qc.invalidateQueries({ queryKey: ['ai_agent_texts'] });
+      toast({
+        title: 'Configuração de produção sincronizada',
+        description: r.imported > 0 ? `${r.imported} textos importados do agente ativo.` : 'Nenhum texto novo — já estava atualizado.',
+      });
+    },
+    onError: (e: any) =>
+      toast({ title: 'Erro ao sincronizar', description: e.message, variant: 'destructive' }),
   });
 }
