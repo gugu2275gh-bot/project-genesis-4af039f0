@@ -77,17 +77,37 @@ export function validateFlow(steps: AgentFlowStep[]): FlowIssue[] {
       }
     });
 
-    if (outgoingCodes(s).length === 0 && !s.handoff) {
+    if (outgoingCodes(s).length === 0 && !s.handoff && stepKindOf(s) !== 'FIM') {
       issues.push({
         level: 'warning',
         message: `A etapa "${s.step_code}" não tem próxima etapa nem encaminhamento para humano.`,
         stepCode: s.step_code,
       });
     }
+
+    if (stepKindOf(s) === 'PERGUNTA' && !firstMessage(s)) {
+      issues.push({
+        level: 'warning',
+        message: `A etapa "${s.step_code}" não tem pergunta definida.`,
+        stepCode: s.step_code,
+      });
+    }
   });
 
-  const ordered = [...steps].sort((a, b) => a.order_index - b.order_index);
-  ordered.slice(1).forEach((s) => {
+  const starts = steps.filter((s) => stepKindOf(s) === 'INICIO');
+  if (starts.length > 1) {
+    issues.push({
+      level: 'error',
+      message: `O fluxo tem ${starts.length} etapas marcadas como "Início". Deixe apenas uma.`,
+      stepCode: starts[1].step_code,
+    });
+  }
+
+  const entryCode =
+    starts[0]?.step_code || [...steps].sort((a, b) => a.order_index - b.order_index)[0]?.step_code;
+
+  ordered().forEach((s) => {
+    if (s.step_code === entryCode) return;
     if (!targeted.has(s.step_code)) {
       issues.push({
         level: 'warning',
@@ -96,6 +116,11 @@ export function validateFlow(steps: AgentFlowStep[]): FlowIssue[] {
       });
     }
   });
+
+  function ordered() {
+    return [...steps].sort((a, b) => a.order_index - b.order_index);
+  }
+
 
   findCycles(steps).forEach((cycle) => {
     issues.push({
