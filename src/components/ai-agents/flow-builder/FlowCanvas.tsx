@@ -67,6 +67,8 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const [importOpen, setImportOpen] = useState(false);
+
 
   useEffect(() => {
     if (!savedSteps) return;
