@@ -414,6 +414,8 @@ import { logTurn } from './lib/turn-log.ts'
 import { buildConversationContext } from './lib/conversation-context.ts'
 import { decideTurn, applyTurnDecision, type TurnDecision } from './lib/turn-orchestrator.ts'
 import { resolveCurrentStep, getStepDef } from './lib/flow-machine.ts'
+import { loadVisualFlowPlan, runVisualFlowTurn, applyCapturedFields } from './lib/visual-flow.ts'
+
 
 // AGENTE 1.0 — configuração editável em Configurações > Agentes de IA
 import { loadProductionAgentRuntime, getAgentRuntime } from './lib/agent-runtime.ts'
