@@ -746,6 +746,19 @@ export function advanceFlow(
 
 
   const value = result.value ?? ''
+
+  // 2) Resposta válida, mas fora das opções/caminhos previstos na etapa.
+  if (cfg.no_match.enabled) {
+    const branches = Array.isArray(step.branches) ? step.branches : []
+    const strict = branches.length > 0 && branches.every((b) => String(b?.value || '').trim() && b?.match_type !== 'QUALQUER')
+    if (strict && !branches.some((b) => branchMatches(b, value))) {
+      const tries = (state.unknown_attempts || 0) + 1
+      const applied = applyRule('no_match', tries)
+      if (applied) return applied
+      return stay(defaultReask(), { unknown_attempts: tries })
+    }
+  }
+
   const answers = { ...(state.answers || {}), [step.step_code]: value }
   const captured = captureOf(step, value)
   const nextCode = resolveNextCode(step, value)
