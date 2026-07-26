@@ -525,6 +525,19 @@ function run(
     path.push(code)
     if (step.handoff) sawHandoff = true
 
+    const kind = stepKindOf(step)
+
+    // Pergunta já respondida (ex.: dados aproveitados da 1ª mensagem):
+    // não repergunta e não reenvia a mensagem — segue pelo ramo da resposta.
+    const knownAnswer = kind === 'PERGUNTA' ? String(state.answers?.[code] ?? '').trim() : ''
+    if (kind === 'PERGUNTA' && knownAnswer) {
+      visited.add(code)
+      const next = resolveNextCode(step, knownAnswer)
+      if (!next || next === code) break
+      code = next
+      continue
+    }
+
     // Nunca reenviar mensagens de uma etapa já executada (evita loops).
     if (!visited.has(code)) {
       const texts = messagesOf(step, lang)
@@ -537,7 +550,6 @@ function run(
       visited.add(code)
     }
 
-    const kind = stepKindOf(step)
     if (kind === 'PERGUNTA') {
       return {
         messages,
@@ -550,6 +562,7 @@ function run(
         captured,
       }
     }
+
     if (kind === 'FIM') {
       return {
         messages,
