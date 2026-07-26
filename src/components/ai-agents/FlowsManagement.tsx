@@ -325,6 +325,8 @@ export function FlowsManagement() {
   const delFlow = useDeleteFlow();
   const [selected, setSelected] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editorDirty, setEditorDirty] = useState(false);
+
   const [draft, setDraft] = useState<any>({ name: '', description: '', status: 'RASCUNHO', phase: 'PRE_HANDOFF' });
 
   const current = (flows || []).find((f) => f.id === selected) || null;
