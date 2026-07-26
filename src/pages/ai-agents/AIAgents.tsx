@@ -28,7 +28,7 @@ function statusVariant(status: string) {
 }
 
 export default function AIAgents({ embedded = false }: { embedded?: boolean } = {}) {
-  const { hasRole, loading } = useAuth();
+  const { hasRole, loading, user } = useAuth();
   const { data: agents, isLoading } = useAIAgents();
   const toggleStatus = useToggleAgentStatus();
   const duplicate = useDuplicateAgent();
@@ -41,7 +41,9 @@ export default function AIAgents({ embedded = false }: { embedded?: boolean } = 
   const [editing, setEditing] = useState<AIAgent | null>(null);
   const [sandboxAgentId, setSandboxAgentId] = useState<string | null>(null);
 
-  if (loading) {
+  // Só bloqueia a tela na primeira carga; revalidações de sessão não podem
+  // desmontar o editor de fluxos e perder o rascunho.
+  if (loading && !user) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -49,7 +51,8 @@ export default function AIAgents({ embedded = false }: { embedded?: boolean } = 
     );
   }
 
-  if (!hasRole('ADMIN')) return <Navigate to="/dashboard" replace />;
+  if (!loading && !hasRole('ADMIN')) return <Navigate to="/dashboard" replace />;
+
 
   const filtered = (agents || []).filter((a) =>
     a.name.toLowerCase().includes(search.toLowerCase()) ||
