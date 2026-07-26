@@ -60,8 +60,11 @@ export function AgentSandbox({ initialAgentId }: Props) {
     if (!id) return;
     const text = input;
     setInput('');
-    await send.mutateAsync({ sessionId: id, message: text });
+    const res = await send.mutateAsync({ sessionId: id, message: text });
+    const lang = (res as any)?.flow?.lang;
+    if (lang) setDetectedLang(lang);
   };
+
 
   const agent = (agents || []).find((a) => a.id === agentId);
 
