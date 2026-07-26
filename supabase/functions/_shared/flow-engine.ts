@@ -314,7 +314,9 @@ export function mergeFlows(preSteps: FlowStep[], handoffSteps: FlowStep[]): Flow
 // Execução
 
 function captureOf(step: FlowStep, value: string): FlowCapturedField[] {
-  const field = String(step?.field_mapping || '').trim()
+  // Destino explícito ("Salvar resposta em") tem prioridade; sem ele, o motor
+  // infere pelo tipo/código da etapa para que a resposta não fique só no JSON.
+  const field = inferFieldMapping(step)
   if (!field) return []
   return [{ step_code: step.step_code, field, value }]
 }
@@ -477,3 +479,54 @@ export function advanceFlow(
   return run(index, nextCode, nextState, lang, captured)
 }
 
+
+// ---------------------------------------------------------------------------
+// Inferência de destino (quando a etapa não tem "Salvar resposta em")
+
+function normSlug(v: unknown): string {
+  return String(v || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+}
+
+/**
+ * Descobre onde gravar a resposta de uma etapa que não tem `field_mapping`
+ * configurado, olhando o tipo de resposta e o código/nome da etapa.
+ * Só devolve destino quando o casamento é SEGURO — na dúvida devolve null
+ * (a resposta continua salva apenas em `answers`).
+ */
+export function inferFieldMapping(step: FlowStep): string | null {
+  const explicit = String(step?.field_mapping || '').trim()
+  if (explicit) return explicit
+
+  const slug = `${normSlug(step?.step_code)}_${normSlug(step?.name)}`
+  const type = String(step?.answer_type || '').toUpperCase()
+
+  if (type === 'EMAIL' || /\be_?mail\b/.test(slug)) return 'contact.email'
+  if (type === 'NOME' || /nome_completo|full_name|nombre_completo/.test(slug)) return 'contact.full_name'
+
+  if (/empadronamento|empadronado|empadronamiento/.test(slug)) {
+    if (/cidade|ciudad|city/.test(slug)) return 'funnel.empadronado_city'
+    if (/desde|quando|since|data|fecha/.test(slug) || type === 'DATA') return 'contact.empadronamiento_since'
+    return 'funnel.empadronado_confirmed'
+  }
+  if (/desde_quando/.test(slug) && type === 'DATA') return 'contact.empadronamiento_since'
+
+  if (/(data|fecha|date).*(entrada|chegada|llegada|arrival)|entrada_na_espanha|arrival/.test(slug)) {
+    return 'funnel.entry_date_confirmed'
+  }
+  if (/localizacao|localizacion|location|esta_no_brasil|fora_da_espanha|na_espanha/.test(slug) && type === 'SIM_NAO') {
+    return 'funnel.location_known'
+  }
+  if (/idade|edad|age/.test(slug)) return 'outside.age'
+  if (/europa|europe/.test(slug) && /6|seis/.test(slug)) return 'outside.europe_6m'
+  if (/familiar_europeu|familiar_ue|eu_family|comunitario/.test(slug)) return 'outside.eu_family'
+  if (/remoto|remote|teletrabalho/.test(slug)) return 'outside.remote_work'
+  if (/formacao_superior|educacao|education|escolaridade|estudos_superiores/.test(slug)) return 'contact.education_level'
+  if (/interesse|interes|interest|o_que_busca|busca_hoje/.test(slug)) return 'funnel.interest_confirmed'
+  if (/cenario|situacao|situacion|scenario/.test(slug)) return 'funnel.interest_confirmed'
+
+  return null
+}

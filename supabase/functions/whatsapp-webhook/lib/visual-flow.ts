@@ -101,15 +101,64 @@ export function runVisualFlowTurn(
 // ---------------------------------------------------------------------------
 // Persistência das respostas nos campos do CRM
 
-const YES_VALUES = new Set(['sim', 'si', 'sí', 'yes', 'oui', 'true'])
+const YES_VALUES = new Set(['sim', 'si', 'sí', 'yes', 'oui', 'true', 's', 'y'])
+const NO_VALUES = new Set(['nao', 'não', 'no', 'non', 'false', 'n'])
 
 function toYesNo(value: string): 'yes' | 'no' {
   return YES_VALUES.has(String(value || '').trim().toLowerCase()) ? 'yes' : 'no'
 }
 
+/** Sim/Não → boolean. Devolve null quando a resposta não é claramente sim/não. */
+function toBoolOrNull(value: string): boolean | null {
+  const v = String(value || '').trim().toLowerCase()
+  if (YES_VALUES.has(v)) return true
+  if (NO_VALUES.has(v)) return false
+  return null
+}
+
+/** DD/MM/YYYY (formato único do sistema) → YYYY-MM-DD. Inválido → null. */
+function toIsoDateOrNull(value: string): string | null {
+  const m = String(value || '').trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/)
+  if (!m) {
+    const iso = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    return iso ? iso[0] : null
+  }
+  const [, d, mo, y] = m
+  const day = Number(d), month = Number(mo), year = Number(y)
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null
+  const dt = new Date(Date.UTC(year, month - 1, day))
+  if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) return null
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+/** Idade em anos → data de nascimento aproximada (ano). Fora de 14..100 → null. */
+function ageToBirthYear(value: string): number | null {
+  const n = Number(String(value || '').replace(/\D+/g, ''))
+  if (!Number.isFinite(n) || n < 14 || n > 100) return null
+  return new Date().getUTCFullYear() - n
+}
+
+const SERVICE_INTEREST_HINTS: Array<[RegExp, string]> = [
+  [/estud|student|estudia|curso|faculdade|master|mestrado/i, 'VISTO_ESTUDANTE'],
+  [/trabalh|emprego|job|work|contrato de trabajo|laboral/i, 'VISTO_TRABALHO'],
+  [/reagrupa|reagrupaci|family reunif/i, 'REAGRUPAMENTO'],
+  [/renova|renew|renovaci/i, 'RENOVACAO_RESIDENCIA'],
+  [/nacionalidade por casamento|nacionalidad por matrimonio|casamento|matrimonio|marriage/i, 'NACIONALIDADE_CASAMENTO'],
+  [/nacionalidade|nacionalidad|citizenship|cidadania/i, 'NACIONALIDADE_RESIDENCIA'],
+  [/comunitari|familiar europeu|eu family/i, 'RESIDENCIA_PARENTE_COMUNITARIO'],
+]
+
+function inferServiceInterest(value: string): string | null {
+  const v = String(value || '')
+  if (v.trim().length < 3) return null
+  for (const [re, label] of SERVICE_INTEREST_HINTS) if (re.test(v)) return label
+  return null
+}
+
 /**
- * Aplica as respostas capturadas (`field_mapping`) nas tabelas do CRM.
- * Cada campo é opcional; um erro em um campo não interrompe os demais.
+ * Aplica as respostas capturadas (`field_mapping`, explícito ou inferido) nas
+ * tabelas do CRM. Cada campo é opcional; um erro em um campo não interrompe os
+ * demais nem o fluxo.
  */
 export async function applyCapturedFields(
   supabase: any,
@@ -120,6 +169,7 @@ export async function applyCapturedFields(
 
   const contactPatch: Record<string, unknown> = {}
   const funnelPatch: Record<string, unknown> = {}
+  const leadPatch: Record<string, unknown> = {}
   const outside: Record<string, unknown> = { ...(params.outsideProgress || {}) }
   let outsideTouched = false
 
@@ -139,37 +189,138 @@ export async function applyCapturedFields(
           funnelPatch.email_confirmed = true
         }
         break
-      case 'funnel.interest_confirmed':
-        if (value) funnelPatch.interest_confirmed = value
+      case 'contact.spain_arrival_date': {
+        const iso = toIsoDateOrNull(value)
+        if (iso) {
+          contactPatch.spain_arrival_date = iso
+          funnelPatch.entry_date_confirmed = value
+        }
         break
-      case 'funnel.location_known':
-        funnelPatch.location_known = toYesNo(value) === 'yes' ? 'spain' : 'outside'
+      }
+      case 'contact.empadronamiento_since': {
+        const iso = toIsoDateOrNull(value)
+        if (iso) contactPatch.empadronamiento_since = iso
         break
-      case 'funnel.entry_date_confirmed':
-        if (value) funnelPatch.entry_date_confirmed = value
+      }
+      case 'contact.empadronamiento_city':
+        if (value) {
+          contactPatch.empadronamiento_city = value
+          funnelPatch.empadronado_city = value
+        }
         break
-      case 'funnel.empadronado_confirmed':
-        funnelPatch.empadronado_confirmed = toYesNo(value) === 'yes'
+      case 'contact.is_empadronado': {
+        const b = toBoolOrNull(value)
+        if (b !== null) {
+          contactPatch.is_empadronado = b
+          funnelPatch.empadronado_confirmed = b
+        }
         break
-      case 'funnel.empadronado_city':
-        if (value) funnelPatch.empadronado_city = value
+      }
+      case 'contact.education_level': {
+        const b = toBoolOrNull(value)
+        if (b !== null) contactPatch.education_level = b ? 'SUPERIOR' : 'NAO_SUPERIOR'
+        else if (value) contactPatch.education_level = value
         break
-      case 'outside.age':
-        outside.a2_age = value
-        outsideTouched = true
-        break
-      case 'outside.europe_6m':
-        outside.a3_europe_6m = toYesNo(value)
-        outsideTouched = true
-        break
-      case 'outside.eu_family':
-        outside.a4_eu_family = toYesNo(value)
-        outsideTouched = true
-        break
-      case 'outside.remote_work':
+      }
+      case 'contact.works_remotely': {
+        const b = toBoolOrNull(value)
+        if (b !== null) contactPatch.works_remotely = b
         outside.a5_remote = toYesNo(value)
         outsideTouched = true
         break
+      }
+      case 'contact.has_eu_family_member': {
+        const b = toBoolOrNull(value)
+        if (b !== null) contactPatch.has_eu_family_member = b
+        outside.a4_eu_family = toYesNo(value)
+        outsideTouched = true
+        break
+      }
+      case 'contact.eu_entry_last_6_months': {
+        const b = toBoolOrNull(value)
+        if (b !== null) contactPatch.eu_entry_last_6_months = b
+        outside.a3_europe_6m = toYesNo(value)
+        outsideTouched = true
+        break
+      }
+      case 'contact.birth_date': {
+        const iso = toIsoDateOrNull(value)
+        if (iso) contactPatch.birth_date = iso
+        break
+      }
+      case 'funnel.interest_confirmed':
+        if (value) {
+          funnelPatch.interest_confirmed = value
+          const svc = inferServiceInterest(value)
+          if (svc) {
+            leadPatch.service_interest = svc
+            leadPatch.interest_confirmed = true
+          }
+        }
+        break
+      case 'funnel.location_known': {
+        const inSpain = toYesNo(value) === 'yes'
+        funnelPatch.location_known = inSpain ? 'spain' : 'outside'
+        contactPatch.is_in_spain = inSpain
+        break
+      }
+      case 'funnel.entry_date_confirmed': {
+        if (value) funnelPatch.entry_date_confirmed = value
+        const iso = toIsoDateOrNull(value)
+        if (iso) contactPatch.spain_arrival_date = iso
+        break
+      }
+      case 'funnel.empadronado_confirmed': {
+        const b = toBoolOrNull(value)
+        if (b !== null) {
+          funnelPatch.empadronado_confirmed = b
+          contactPatch.is_empadronado = b
+        }
+        break
+      }
+      case 'funnel.empadronado_city':
+        if (value) {
+          funnelPatch.empadronado_city = value
+          contactPatch.empadronamiento_city = value
+        }
+        break
+      case 'outside.age': {
+        outside.a2_age = value
+        outsideTouched = true
+        const year = ageToBirthYear(value)
+        if (year) contactPatch.birth_date = `${year}-01-01`
+        break
+      }
+      case 'outside.europe_6m': {
+        outside.a3_europe_6m = toYesNo(value)
+        outsideTouched = true
+        const b = toBoolOrNull(value)
+        if (b !== null) contactPatch.eu_entry_last_6_months = b
+        break
+      }
+      case 'outside.eu_family': {
+        outside.a4_eu_family = toYesNo(value)
+        outsideTouched = true
+        const b = toBoolOrNull(value)
+        if (b !== null) contactPatch.has_eu_family_member = b
+        break
+      }
+      case 'outside.remote_work': {
+        outside.a5_remote = toYesNo(value)
+        outsideTouched = true
+        const b = toBoolOrNull(value)
+        if (b !== null) contactPatch.works_remotely = b
+        break
+      }
+      case 'lead.service_interest': {
+        const svc = inferServiceInterest(value)
+        if (svc) {
+          leadPatch.service_interest = svc
+          leadPatch.interest_confirmed = true
+        }
+        if (value) funnelPatch.interest_confirmed = value
+        break
+      }
       default:
         // Campo desconhecido: a resposta continua salva em `answers`.
         break
@@ -187,6 +338,14 @@ export async function applyCapturedFields(
   }
 
   try {
+    if (Object.keys(leadPatch).length) {
+      await supabase.from('leads').update(leadPatch).eq('id', leadId)
+    }
+  } catch (e) {
+    console.warn('[VISUAL_FLOW] falha ao atualizar lead:', e instanceof Error ? e.message : e)
+  }
+
+  try {
     if (Object.keys(funnelPatch).length) {
       funnelPatch.updated_at = new Date().toISOString()
       await supabase.from('lead_funnel_state').update(funnelPatch).eq('lead_id', leadId)
@@ -194,7 +353,14 @@ export async function applyCapturedFields(
   } catch (e) {
     console.warn('[VISUAL_FLOW] falha ao atualizar funil:', e instanceof Error ? e.message : e)
   }
+
+  console.log('[VISUAL_FLOW] campos gravados:', JSON.stringify({
+    contact: Object.keys(contactPatch),
+    lead: Object.keys(leadPatch),
+    funnel: Object.keys(funnelPatch),
+  }))
 }
+
 
 /**
  * A etapa atual espera uma resposta curta (Sim/Não, opção, data, número)?
