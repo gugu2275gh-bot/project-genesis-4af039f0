@@ -51,10 +51,7 @@ async function sweep(supabase: any, supabaseUrl: string, serviceKey: string) {
 
   if (candErr) {
     console.error('[watchdog] query error:', candErr.message)
-    return new Response(JSON.stringify({ ok: false, error: candErr.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return { error: candErr.message, scanned: 0, recovered: [] as any[] }
   }
 
   const seen = new Set<string>()
@@ -203,8 +200,33 @@ async function sweep(supabase: any, supabaseUrl: string, serviceKey: string) {
     }
   }
 
+  return { scanned: stalled.length, recovered }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const supabase = createClient(supabaseUrl, serviceKey)
+
+  const cycles: any[] = []
+  for (let i = 0; i < SWEEP_CYCLES; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, SWEEP_INTERVAL_MS))
+    try {
+      cycles.push(await sweep(supabase, supabaseUrl, serviceKey))
+    } catch (e) {
+      cycles.push({ error: e instanceof Error ? e.message : String(e), scanned: 0, recovered: [] })
+    }
+  }
+
   return new Response(
-    JSON.stringify({ ok: true, scanned: stalled.length, recovered }),
+    JSON.stringify({
+      ok: true,
+      cycles,
+      scanned: cycles.reduce((a, c) => a + (c.scanned || 0), 0),
+      recovered: cycles.flatMap((c) => c.recovered || []),
+    }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
   )
 })
