@@ -126,6 +126,23 @@ function StepDialog({
               <Input value={draft.name} onChange={(e) => set({ name: e.target.value })} />
             </div>
             <div className="space-y-2">
+              <Label>Tipo de etapa</Label>
+              <Select
+                value={validation.step_kind || 'PERGUNTA'}
+                onValueChange={(v) => set({ validation: { ...validation, step_kind: v } })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {STEP_KINDS.map((k) => (
+                    <SelectItem key={k.value} value={k.value}>{k.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                {STEP_KINDS.find((k) => k.value === (validation.step_kind || 'PERGUNTA'))?.hint}
+              </p>
+            </div>
+            <div className="space-y-2">
               <Label>Fase</Label>
               <Select value={draft.phase || flowPhase} onValueChange={(v) => set({ phase: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -137,6 +154,14 @@ function StepDialog({
               </Select>
             </div>
           </div>
+          {looksLikeQuestion && (validation.step_kind || 'PERGUNTA') !== 'PERGUNTA' && (
+            <p className="flex items-center gap-1 text-xs text-amber-600">
+              <AlertTriangle className="h-3 w-3" />
+              Esta etapa faz uma pergunta, mas não é do tipo "Pergunta": o agente envia a mensagem e
+              segue direto para a próxima etapa, sem esperar a resposta.
+            </p>
+          )}
+
           <div className="space-y-2">
             <Label>Descrição</Label>
             <Textarea rows={2} value={draft.description || ''} onChange={(e) => set({ description: e.target.value })} />
