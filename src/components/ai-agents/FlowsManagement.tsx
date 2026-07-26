@@ -37,12 +37,14 @@ function StepDialog({
   open,
   onOpenChange,
   flowId,
+  flowPhase,
   step,
   nextIndex,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   flowId: string;
+  flowPhase: FlowPhase;
   step?: AgentFlowStep | null;
   nextIndex: number;
 }) {
@@ -53,6 +55,9 @@ function StepDialog({
       name: '',
       description: '',
       message: '',
+      messages: {},
+      reask_messages: {},
+      phase: flowPhase,
       answer_type: 'TEXTO_LIVRE',
       next_step_code: '',
       exit_condition: '',
@@ -64,9 +69,25 @@ function StepDialog({
   );
   const set = (patch: Record<string, unknown>) => setDraft((d: any) => ({ ...d, ...patch }));
 
+  const messages: MultiLangText =
+    draft.messages && typeof draft.messages === 'object' && Object.keys(draft.messages).length > 0
+      ? draft.messages
+      : draft.message
+        ? { 'pt-BR': draft.message }
+        : {};
+  const reask: MultiLangText =
+    draft.reask_messages && typeof draft.reask_messages === 'object' ? draft.reask_messages : {};
+
   const handleSave = async () => {
     const { created_at, updated_at, ...rest } = draft;
-    await save.mutateAsync({ ...rest, flow_id: flowId });
+    await save.mutateAsync({
+      ...rest,
+      messages,
+      reask_messages: reask,
+      message: messages['pt-BR'] || '',
+      phase: draft.phase || flowPhase,
+      flow_id: flowId,
+    });
     onOpenChange(false);
   };
 
@@ -86,15 +107,36 @@ function StepDialog({
               <Label>Nome *</Label>
               <Input value={draft.name} onChange={(e) => set({ name: e.target.value })} />
             </div>
+            <div className="space-y-2">
+              <Label>Fase</Label>
+              <Select value={draft.phase || flowPhase} onValueChange={(v) => set({ phase: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FLOW_PHASES.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Descrição</Label>
             <Textarea rows={2} value={draft.description || ''} onChange={(e) => set({ description: e.target.value })} />
           </div>
-          <div className="space-y-2">
-            <Label>Mensagem enviada ao cliente</Label>
-            <Textarea rows={3} value={draft.message || ''} onChange={(e) => set({ message: e.target.value })} />
-          </div>
+          <MultiLangField
+            label="Mensagem enviada ao cliente"
+            hint="Escreva em português e use a tradução automática para os demais idiomas."
+            value={messages}
+            onChange={(v) => set({ messages: v, message: v['pt-BR'] || '' })}
+            rows={3}
+          />
+          <MultiLangField
+            label="Repergunta (quando a resposta não for válida)"
+            value={reask}
+            onChange={(v) => set({ reask_messages: v })}
+            rows={2}
+          />
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Tipo de resposta esperada</Label>
