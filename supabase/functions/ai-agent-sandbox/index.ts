@@ -3,7 +3,7 @@
 // NÃO envia mensagens reais pelo WhatsApp e NÃO utiliza Twilio.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
 import { buildSystemPrompt } from './lib/prompt-builder.ts'
-import { advanceFlow, findStartStep, startFlow, stepKindOf } from '../_shared/flow-engine.ts'
+import { advanceFlow, findStartStep, mergeFlows, startFlow, stepKindOf } from '../_shared/flow-engine.ts'
 import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
 
 
