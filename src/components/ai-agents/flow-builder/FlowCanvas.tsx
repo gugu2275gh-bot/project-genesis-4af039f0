@@ -233,7 +233,17 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[1fr_360px]">
-        <div className="h-[620px] rounded-lg border bg-muted/20">
+        <div className="relative h-[620px] min-h-[520px] rounded-lg border bg-muted/20">
+          {steps.length === 0 && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 text-center">
+              <p className="text-sm text-muted-foreground max-w-xs">
+                Este fluxo ainda não tem etapas. Crie a primeira etapa para começar a desenhar.
+              </p>
+              <Button size="sm" onClick={addStep}>
+                <Plus className="h-4 w-4 mr-1" /> Criar primeira etapa
+              </Button>
+            </div>
+          )}
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -250,6 +260,7 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
             <MiniMap pannable zoomable />
           </ReactFlow>
         </div>
+
 
         <div className="rounded-lg border">
           {selected ? (
