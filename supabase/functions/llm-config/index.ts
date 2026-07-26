@@ -77,7 +77,7 @@ async function testGemini(model: string): Promise<{ ok: boolean; latency_ms: num
     const latency_ms = Date.now() - start
     if (!resp.ok) {
       const txt = await resp.text()
-      return { ok: false, latency_ms, error: `HTTP ${resp.status}: ${txt.slice(0, 200)}` }
+      return { ok: false, latency_ms, error: describeError(resp.status, txt) }
     }
     return { ok: true, latency_ms }
   } catch (e: any) {
