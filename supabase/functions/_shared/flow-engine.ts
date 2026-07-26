@@ -399,9 +399,22 @@ const DATE_REASK: Record<string, string> = {
   fr: 'J’ai besoin de la date complète au format JJ/MM/AAAA (par exemple, 24/01/2026). Pouvez-vous l’envoyer ainsi ?',
 }
 
+/** Mensagem de encerramento quando a etapa não pode ser resolvida pelo bot. */
+const HANDOFF_FALLBACK: Record<string, string> = {
+  'pt-BR': 'Sem problema — vou passar seu atendimento para um especialista da equipe, que continua com você por aqui.',
+  es: 'Sin problema — voy a pasar tu caso a un especialista del equipo, que sigue contigo por aquí.',
+  en: 'No problem — I will pass your case to a specialist from our team, who will continue with you here.',
+  fr: 'Pas de souci — je transmets votre dossier à un spécialiste de l’équipe, qui poursuivra avec vous ici.',
+}
+
+export function defaultHandoffFallback(lang: FlowLang): string {
+  return HANDOFF_FALLBACK[String(lang)] || HANDOFF_FALLBACK['pt-BR']
+}
+
 export function defaultDateReask(lang: FlowLang): string {
   return DATE_REASK[String(lang)] || DATE_REASK['pt-BR']
 }
+
 
 export function validateAnswer(step: FlowStep, raw: string): { valid: boolean; value?: string; reason?: string } {
   const text = String(raw || '').trim()
