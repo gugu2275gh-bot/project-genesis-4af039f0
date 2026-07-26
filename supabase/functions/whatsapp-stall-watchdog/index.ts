@@ -34,10 +34,9 @@ async function sweep(supabase: any, supabaseUrl: string, serviceKey: string) {
     .maybeSingle()
   const botEnabled = (cfg?.value ?? 'true') !== 'false'
   if (!botEnabled) {
-    return new Response(JSON.stringify({ ok: true, skipped: 'bot disabled' }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+    return { skipped: 'bot disabled', scanned: 0, recovered: [] as any[] }
   }
+
 
   // Find candidate leads: latest mensagens_cliente row in window is inbound (WHATSAPP)
   // and older than threshold.
