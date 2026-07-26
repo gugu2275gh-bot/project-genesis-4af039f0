@@ -58,7 +58,7 @@ export function MultiLangField({
           type="button"
           variant="ghost"
           size="sm"
-          disabled={disabled || translate.isPending || !(value[baseLanguage] || '').trim()}
+          disabled={disabled || translate.isPending || !String(value[baseLanguage] ?? '').trim()}
           onClick={handleTranslate}
         >
           {translate.isPending ? (
@@ -75,7 +75,7 @@ export function MultiLangField({
           {AGENT_LANGUAGES.map((l) => (
             <TabsTrigger key={l.code} value={l.code} className="text-xs">
               {l.label}
-              {!(value[l.code] || '').trim() && <span className="ml-1 text-muted-foreground">•</span>}
+              {!String(value[l.code] ?? '').trim() && <span className="ml-1 text-muted-foreground">•</span>}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -84,7 +84,7 @@ export function MultiLangField({
             <Textarea
               rows={rows}
               disabled={disabled}
-              value={value[l.code] || ''}
+              value={String(value[l.code] ?? '')}
               onChange={(e) => onChange({ ...value, [l.code]: e.target.value })}
               placeholder={l.code === baseLanguage ? 'Escreva o texto base aqui' : 'Traduza ou escreva manualmente'}
             />
