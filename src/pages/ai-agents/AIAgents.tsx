@@ -233,6 +233,31 @@ export default function AIAgents({ embedded = false }: { embedded?: boolean } = 
         agent={editing}
         readOnly={readOnly}
       />
+
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir agente</AlertDialogTitle>
+            <AlertDialogDescription>
+              O agente "{toDelete?.name}" e todo o seu histórico de versões, textos e testes serão
+              removidos definitivamente. O fluxo de atendimento vinculado não é excluído.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (toDelete) removeAgent.mutate(toDelete);
+                setToDelete(null);
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+
   );
 }
