@@ -1,48 +1,51 @@
 ## Objetivo
 
-O idioma deve ser identificado já na **primeira mensagem do cliente** — tanto no Sandbox de testes quanto no atendimento real do WhatsApp — e travado a partir daí, sem "voltar" para português por engano.
+Hoje o WhatsApp de produção ignora os fluxos desenhados: `whatsapp-webhook` roda o funil legado em código (`flow-machine.ts` + `turn-orchestrator.ts` + textos do agente). Os campos `pre_handoff_flow_id` / `handoff_flow_id` / `flow_id` do agente só são lidos pelo simulador (`ai-agent-sandbox`). O objetivo é: **quando o agente de produção tiver fluxo configurado, o motor determinístico do fluxo comanda o atendimento; o funil legado só roda quando nenhum fluxo estiver configurado.**
 
-## O que foi verificado no código
+## Escopo aprovado
 
-**Sandbox** (`supabase/functions/ai-agent-sandbox/index.ts`): no primeiro turno a mensagem do cliente é descartada da detecção:
+- Fluxo substitui **todo o pré-handoff** (perguntas, validações, ramificações, reperguntas). O LLM só entra depois do fluxo terminar (modo livre / base de conhecimento).
+- Etapas ganham um campo configurável **"Salvar resposta em"** para alimentar o CRM.
+- Ao terminar o pré-handoff, o **fluxo de handoff é encadeado automaticamente**.
 
-```ts
-const firstTurnGlobal = !flowState.current_step
-const langResolution = resolveFlowLanguage(
-  flowState.lang,
-  firstTurnGlobal ? '' : message,   // <- 1ª mensagem nunca é analisada
-  config.default_language,
-)
-```
-Resultado: a saudação sai sempre no idioma padrão e a detecção só ocorre do 2º turno em diante.
+## O que será feito
 
-**Produção** (`supabase/functions/whatsapp-webhook/index.ts`, bloco "LANGUAGE LOCK", ~linha 1435): a 1ª interação já analisa a mensagem, mas há dois furos:
-- No ramo final (contato sem `preferred_language` e que não é primeira interação), o código faz `detectChatLanguageOrNull(sample) ?? 'pt-BR'` e **grava** esse pt-BR no contato. Um sinal inconclusivo trava português permanentemente.
-- A "re-detecção suave" só roda quando já existe lock e apenas enquanto `recentUserMsgs.length <= 4`; depois disso um lock errado nunca mais é corrigido.
+### 1. Banco de dados
+- `ai_agent_flow_steps`: nova coluna `field_mapping text` (nulo = não salva em campo).
+- `lead_funnel_state`: nova coluna `visual_flow_state jsonb default '{}'` para guardar `current_step`, `answers`, `lang`, `reask_count`, `finished`, `path`.
+- Grants/RLS seguem os padrões já existentes nessas tabelas.
 
-## Mudanças
+### 2. Motor de fluxo compartilhado (`_shared/flow-engine.ts`)
+- Suporte a **encadeamento de fluxos**: quando o pré-handoff termina (etapa `FIM`/`handoff = true`), o motor inicia o fluxo de handoff sem perder o estado.
+- Exposição do `field_mapping` no resultado do turno, para o chamador persistir os valores.
+- Continua determinístico: mensagens exatas, `validation`, `branches`, `next_step_code`, `fallback_step_code`, datas DD/MM/AAAA e detecção de idioma já implementadas.
 
-### 1. Sandbox — detectar na 1ª mensagem
-- Passar sempre `message` para `resolveFlowLanguage`, inclusive no primeiro turno.
-- `startFlow(steps, lang)` recebe o idioma detectado → a saudação já sai traduzida.
-- Persistir `flow_state.lang` apenas quando houver sinal positivo (nunca travar por fallback).
+### 3. Produção (`whatsapp-webhook`)
+- Carregar, junto com o agente de produção, as etapas de `pre_handoff_flow_id`, `handoff_flow_id` e `flow_id`.
+- Se houver etapa de INÍCIO válida e `runtime_config.execute_visual_flow !== false`:
+  - **bypass** de `decideTurn` / `flow-machine` / heurísticas de nome, e-mail, localização, empadronado e pré-handoff;
+  - o turno é resolvido por `startFlow` / `advanceFlow`, e as mensagens do fluxo são enviadas via o mesmo dispatcher de WhatsApp atual (respeitando janela de 24h e templates);
+  - estado salvo em `lead_funnel_state.visual_flow_state`; `pre_handoff_sent` / `handoff_sent` continuam sendo marcados para os SLAs e notificações existentes.
+- Sem fluxo configurado → comportamento atual intacto (fallback total).
+- Depois do fluxo (handoff concluído): modo livre com LLM/KB, exatamente como hoje.
 
-### 2. Produção — nunca travar sem sinal positivo
-- No ramo de fallback, só gravar `contacts.preferred_language` quando `detectChatLanguageOrNull` retornar um idioma; caso contrário usar pt-BR **apenas no turno atual**, sem persistir.
-- Ampliar a janela de re-detecção precoce: permitir corrigir o lock enquanto o cliente ainda não passou da fase de captação (usar o número de mensagens do cliente, hoje `<= 4`, elevado para `<= 8`), e sempre que o lock atual tiver vindo de fallback e não de sinal positivo.
-- Registrar a origem do lock (positivo vs. provisório) em log para diagnóstico.
+### 4. Persistência das respostas no CRM
+- Cada resposta validada com `field_mapping` preenchido grava no destino correspondente (`contacts.full_name`, `contacts.email`, `lead_funnel_state.location_known`, `entry_date_confirmed`, `empadronado_confirmed`, `empadronado_city`, `interest_confirmed`, entre outros).
+- Todas as respostas, mapeadas ou não, ficam também em `lead_funnel_state.answers` pelo `step_code`.
 
-### 3. Detector compartilhado
-- Consolidar o sandbox e o webhook sobre `supabase/functions/_shared/language-detect.ts`, incorporando os padrões que hoje só existem em `whatsapp-webhook/lib/language.ts` (e vice-versa), para os dois ambientes se comportarem igual.
-- Reforçar sinais curtos comuns em 1ª mensagem: "hola", "buenas", "hi", "hello", "bonjour", "oi", "bom dia", saudações com typos.
-- Mensagens neutras (só um nome, número, "ok") continuam **inconclusivas** e não travam idioma.
+### 5. UI
+- `StepInspector` (editor visual) e o diálogo de etapa da tabela ganham o seletor **"Salvar resposta em"** com a lista de campos do CRM.
+- Na tela do agente, indicar claramente que, havendo fluxo selecionado, ele **tem precedência** sobre prompts/heurísticas do pré-handoff.
 
-### 4. UI do Sandbox
-- `src/components/ai-agents/AgentSandbox.tsx`: badge mostrando `detectado (travado)` ou `padrão (aguardando sinal)`, com reset correto em "Novo teste".
+### 6. Simulador
+- `ai-agent-sandbox` passa a carregar também o `handoff_flow_id` e a usar o mesmo encadeamento, garantindo paridade simulador ↔ produção.
 
-### 5. Testes
-- `supabase/functions/ai-agent-sandbox/language-detect_test.ts`: 1ª mensagem em ES/EN/FR/PT trava imediatamente; mensagem neutra não trava e a seguinte trava; idioma travado por sinal positivo não é redetectado.
+### 7. Testes
+- Testes Deno: fluxo assume o pré-handoff, encadeia handoff, grava `field_mapping`, ignora heurísticas legadas, e fallback para o legado quando não há fluxo.
+- Regressões existentes do webhook devem continuar passando.
 
 ## Detalhes técnicos
-- Sem mudanças de schema: usa `contacts.preferred_language` e `ai_agent_test_sessions.flow_state.lang` já existentes.
-- Verificação: `deno test` das edge functions + typecheck do frontend; deploy de `ai-agent-sandbox` e `whatsapp-webhook`.
+
+- Ponto de corte em `whatsapp-webhook/index.ts` logo antes de `decideTurn` (linha ~1516): se `visualFlowEnabled`, resolve o turno pelo motor e pula todo o bloco legado até o dispatcher.
+- `resolveFlowLanguage` continua definindo o idioma já na 1ª mensagem.
+- Idempotência preservada: dedupe de mensagens e `pre_handoff_sent` / `handoff_sent` continuam bloqueando reenvios.
