@@ -136,7 +136,7 @@ export async function loadProductionAgentRuntime(supabase: any): Promise<AgentRu
   try {
     const { data: agent, error } = await supabase
       .from('ai_agents')
-      .select('id, name, prompt_base, prompt_flow, prompt_blocks, model_cascade, runtime_config, status, is_production')
+      .select('id, name, prompt_base, prompt_flow, prompt_blocks, model_cascade, runtime_config, status, is_production, flow_id, pre_handoff_flow_id, handoff_flow_id')
       .eq('is_production', true)
       .maybeSingle()
 
@@ -169,6 +169,11 @@ export async function loadProductionAgentRuntime(supabase: any): Promise<AgentRu
       modelCascade: Array.isArray(agent.model_cascade) ? agent.model_cascade : EMPTY_CASCADE,
       runtimeConfig: (agent.runtime_config && typeof agent.runtime_config === 'object') ? agent.runtime_config : {},
       texts,
+      flowIds: {
+        pre_handoff: agent.pre_handoff_flow_id || null,
+        handoff: agent.handoff_flow_id || null,
+        legacy: agent.flow_id || null,
+      },
     }
     setAgentRuntime(runtime)
     return runtime
