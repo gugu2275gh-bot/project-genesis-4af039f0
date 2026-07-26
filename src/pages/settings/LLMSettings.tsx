@@ -25,6 +25,19 @@ interface LLMSettingsRow {
 }
 interface ModelInfo { id: string; displayName: string; description?: string }
 
+function normalizeCascadeItem(item: CascadeItem): CascadeItem {
+  if (item.provider === 'gemini' && item.model === 'gemini-3.6-flash') {
+    return { ...item, provider: 'lovable', model: 'google/gemini-3.6-flash' };
+  }
+  return item;
+}
+
+function getProviderLabel(provider: Provider) {
+  if (provider === 'lovable') return 'Lovable AI';
+  if (provider === 'openai') return 'OpenAI';
+  return 'Gemini';
+}
+
 const SUPABASE_PROJECT_REF = 'xdnliyuogkoxckbesktx';
 const SECRETS_URL = `https://supabase.com/dashboard/project/${SUPABASE_PROJECT_REF}/settings/functions`;
 
@@ -59,7 +72,14 @@ export default function LLMSettings() {
     },
   });
 
-  useEffect(() => { if (settings) setDraft(settings); }, [settings]);
+  useEffect(() => {
+    if (settings) {
+      setDraft({
+        ...settings,
+        cascade: settings.cascade.map(normalizeCascadeItem),
+      });
+    }
+  }, [settings]);
 
   const saveMutation = useMutation({
     mutationFn: async (payload: LLMSettingsRow) => {
@@ -68,7 +88,7 @@ export default function LLMSettings() {
         .update({
           gemini_enabled: payload.gemini_enabled,
           openai_enabled: payload.openai_enabled,
-          cascade: payload.cascade as any,
+          cascade: payload.cascade.map(normalizeCascadeItem) as any,
         })
         .eq('id', payload.id);
       if (error) throw error;
@@ -115,10 +135,10 @@ export default function LLMSettings() {
         throw new Error('Formato inválido: campos obrigatórios ausentes.');
       }
       const cascade: CascadeItem[] = parsed.cascade.map((c: any) => {
-        if ((c.provider !== 'gemini' && c.provider !== 'openai') || typeof c.model !== 'string' || typeof c.enabled !== 'boolean') {
+        if ((c.provider !== 'gemini' && c.provider !== 'openai' && c.provider !== 'lovable') || typeof c.model !== 'string' || typeof c.enabled !== 'boolean') {
           throw new Error('Item de cascata inválido.');
         }
-        return { provider: c.provider, model: c.model, enabled: c.enabled };
+        return normalizeCascadeItem({ provider: c.provider, model: c.model, enabled: c.enabled });
       });
       setDraft({ ...draft, gemini_enabled: parsed.gemini_enabled, openai_enabled: parsed.openai_enabled, cascade });
       toast({ title: 'Configuração importada', description: 'Revise os valores e clique em Salvar para aplicar.' });
@@ -129,11 +149,12 @@ export default function LLMSettings() {
 
 
   const handleTest = async (item: CascadeItem) => {
-    const key = `${item.provider}/${item.model}`;
+    const normalizedItem = normalizeCascadeItem(item);
+    const key = `${normalizedItem.provider}/${normalizedItem.model}`;
     setTesting(t => ({ ...t, [key]: true }));
     try {
       const { data, error } = await supabase.functions.invoke('llm-config', {
-        body: { action: 'test', provider: item.provider, model: item.model },
+        body: { action: 'test', provider: normalizedItem.provider, model: normalizedItem.model },
       });
       if (error) throw error;
       setTestResults(r => ({ ...r, [key]: data as any }));
@@ -171,7 +192,7 @@ export default function LLMSettings() {
       toast({ title: 'Já adicionado', description: `${provider}/${model} já está na cascata.`, variant: 'destructive' });
       return;
     }
-    setDraft({ ...draft, cascade: [...draft.cascade, { provider, model, enabled: true }] });
+    setDraft({ ...draft, cascade: [...draft.cascade, normalizeCascadeItem({ provider, model, enabled: true })] });
   };
 
   if (isLoading || !draft) {
@@ -253,7 +274,8 @@ export default function LLMSettings() {
           <CardDescription>O agente tenta cada modelo nesta ordem. Modelos desabilitados são pulados.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {draft.cascade.map((item, idx) => {
+          {draft.cascade.map((rawItem, idx) => {
+            const item = normalizeCascadeItem(rawItem);
             const key = `${item.provider}/${item.model}`;
             const result = testResults[key];
             return (
@@ -266,8 +288,8 @@ export default function LLMSettings() {
                     <ArrowDown className="h-3 w-3" />
                   </Button>
                 </div>
-                <Badge variant={item.provider === 'gemini' ? 'default' : 'secondary'} className="uppercase">
-                  {item.provider}
+                <Badge variant={item.provider === 'gemini' ? 'default' : item.provider === 'lovable' ? 'outline' : 'secondary'} className="uppercase">
+                  {getProviderLabel(item.provider)}
                 </Badge>
                 <div className="flex-1 min-w-0">
                   <span className="font-mono text-sm break-all">{item.model}</span>

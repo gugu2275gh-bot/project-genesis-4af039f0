@@ -308,6 +308,12 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 
 // Cache em memória da cascata (TTL curto p/ refletir mudanças do admin sem polling pesado)
 type CascadeItem = { provider: 'gemini' | 'openai' | 'lovable'; model: string }
+function normalizeCascadeItem(item: CascadeItem): CascadeItem {
+  if (item.provider === 'gemini' && item.model === 'gemini-3.6-flash') {
+    return { provider: 'lovable', model: 'google/gemini-3.6-flash' }
+  }
+  return item
+}
 let _cascadeCache: { value: CascadeItem[]; expires: number } | null = null
 const DEFAULT_CASCADE: CascadeItem[] = [
   { provider: 'gemini', model: 'gemini-3-flash-preview' },
@@ -354,7 +360,7 @@ async function loadLLMCascade(): Promise<CascadeItem[]> {
         if (c.provider === 'lovable') return true
         return false
       })
-      .map(c => ({ provider: c.provider, model: c.model }))
+      .map(c => normalizeCascadeItem({ provider: c.provider, model: c.model }))
 
     const effective = filtered.length > 0 ? filtered : DEFAULT_CASCADE
     _cascadeCache = { value: effective, expires: now + 30_000 }
