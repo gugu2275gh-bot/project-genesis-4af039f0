@@ -24,6 +24,8 @@ import {
   type FlowTurnResult,
 } from '../../_shared/flow-engine.ts'
 import { getAgentRuntime } from './agent-runtime.ts'
+import { cached } from './perf.ts'
+
 
 export interface VisualFlowPlan {
   enabled: boolean
