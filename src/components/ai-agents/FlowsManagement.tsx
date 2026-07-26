@@ -48,6 +48,7 @@ function StepDialog({
   flowPhase,
   step,
   nextIndex,
+  allSteps,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -55,6 +56,7 @@ function StepDialog({
   flowPhase: FlowPhase;
   step?: AgentFlowStep | null;
   nextIndex: number;
+  allSteps: AgentFlowStep[];
 }) {
   const save = useSaveFlowStep();
   const [draft, setDraft] = useState<any>(
@@ -69,6 +71,7 @@ function StepDialog({
       answer_type: 'TEXTO_LIVRE',
       next_step_code: '',
       exit_condition: '',
+      branches: [],
       allow_parallel_question: true,
       allow_free_answer: true,
       handoff: false,
@@ -76,6 +79,12 @@ function StepDialog({
     },
   );
   const set = (patch: Record<string, unknown>) => setDraft((d: any) => ({ ...d, ...patch }));
+
+  const validation = normalizeValidation(draft.validation);
+  const otherCodes = allSteps
+    .filter((s) => s.id !== draft.id)
+    .map((s) => s.step_code)
+    .filter(Boolean);
 
   const messages: MultiLangText =
     draft.messages && typeof draft.messages === 'object' && Object.keys(draft.messages).length > 0
@@ -85,6 +94,7 @@ function StepDialog({
         : {};
   const reask: MultiLangText =
     draft.reask_messages && typeof draft.reask_messages === 'object' ? draft.reask_messages : {};
+
 
   const handleSave = async () => {
     const { created_at, updated_at, ...rest } = draft;
