@@ -7,6 +7,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
+/** Prefixo usado no reenvio quando a deduplicação descartaria a repergunta. */
+const FLOW_RETRY_PREFIX: Record<string, string> = {
+  'pt-BR': 'Só para confirmar:',
+  es: 'Solo para confirmar:',
+  en: 'Just to confirm:',
+  fr: 'Juste pour confirmer :',
+}
+
+
+
 interface WhatsAppMessage {
   from: string;
   body: string;
