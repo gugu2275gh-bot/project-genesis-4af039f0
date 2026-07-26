@@ -236,7 +236,7 @@ export function AgentFormDialog({ open, onOpenChange, agent, readOnly }: Props) 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-none w-screen h-screen sm:rounded-none p-6 overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {readOnly ? 'Visualizar agente' : agent ? 'Editar agente' : 'Novo agente'}
