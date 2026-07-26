@@ -150,10 +150,12 @@ export const SKIP_MODES: { value: SkipMode; label: string }[] = [
   { value: 'UMA_VEZ_POR_CONTATO', label: 'Perguntar apenas uma vez por contato' },
 ];
 
-/** O que fazer quando o cliente diz que não sabe / não lembra a resposta. */
-export type UnknownAnswerMode = 'INSISTIR' | 'ACEITAR_APROXIMADO' | 'PULAR' | 'ENCAMINHAR';
+/** O que fazer quando a resposta é diferente do esperado. */
+export type UnexpectedAnswerMode = 'INSISTIR' | 'ACEITAR_APROXIMADO' | 'PULAR' | 'ENCAMINHAR';
+/** @deprecated use UnexpectedAnswerMode */
+export type UnknownAnswerMode = UnexpectedAnswerMode;
 
-export const UNKNOWN_ANSWER_MODES: { value: UnknownAnswerMode; label: string; hint: string }[] = [
+export const UNEXPECTED_ANSWER_MODES: { value: UnexpectedAnswerMode; label: string; hint: string }[] = [
   {
     value: 'INSISTIR',
     label: 'Insistir na pergunta',
@@ -162,12 +164,12 @@ export const UNKNOWN_ANSWER_MODES: { value: UnknownAnswerMode; label: string; hi
   {
     value: 'ACEITAR_APROXIMADO',
     label: 'Aceitar valor aproximado',
-    hint: 'Pede uma estimativa; se o cliente continuar sem saber, grava o valor de reserva e segue.',
+    hint: 'Pede uma estimativa; se o cliente continuar sem responder no formato, grava o valor de reserva e segue.',
   },
   {
     value: 'PULAR',
     label: 'Pular a etapa',
-    hint: 'Aceita o "não sei", grava o valor de reserva e segue para a próxima etapa normal.',
+    hint: 'Aceita o desvio, grava o valor de reserva e segue para a próxima etapa normal.',
   },
   {
     value: 'ENCAMINHAR',
@@ -176,20 +178,57 @@ export const UNKNOWN_ANSWER_MODES: { value: UnknownAnswerMode; label: string; hi
   },
 ];
 
-/** Configuração por etapa para respostas do tipo "não sei / não lembro". */
-export interface UnknownAnswerConfig {
-  mode: UnknownAnswerMode;
+/** @deprecated use UNEXPECTED_ANSWER_MODES */
+export const UNKNOWN_ANSWER_MODES = UNEXPECTED_ANSWER_MODES;
+
+/** Situações em que a resposta é diferente do esperado. */
+export type DeviationKind = 'unknown' | 'invalid_format' | 'no_match' | 'off_topic';
+
+export const DEVIATION_KINDS: { value: DeviationKind; label: string; hint: string }[] = [
+  {
+    value: 'unknown',
+    label: 'Cliente não sabe / não lembra',
+    hint: 'Ex.: "não sei", "no recuerdo", "I don\'t know". É a regra padrão das demais situações.',
+  },
+  {
+    value: 'invalid_format',
+    label: 'Formato inválido',
+    hint: 'A resposta não bate com o formato esperado (data, e-mail, número, nome completo).',
+  },
+  {
+    value: 'no_match',
+    label: 'Fora das opções previstas',
+    hint: 'A resposta não corresponde a nenhum caminho/opção configurado na etapa.',
+  },
+  {
+    value: 'off_topic',
+    label: 'Resposta vazia / fora do assunto',
+    hint: 'Cliente não respondeu, mudou de assunto ou devolveu uma pergunta.',
+  },
+];
+
+/** Tratativa de uma situação de desvio. */
+export interface UnexpectedRule {
+  /** Quando falso, a situação segue a regra de "não sabe / não lembra". */
+  enabled: boolean;
+  mode: UnexpectedAnswerMode;
   /** Mensagem de acolhimento, por idioma. */
   messages: MultiLangText;
   /** Quantas vezes acolher antes de aplicar o comportamento. */
   attempts: number;
   /** Valor gravado quando o agente aceita/pula. */
   fallback_value: string;
-  /** Frases adicionais que indicam "não sei". */
+  /** Frases adicionais que caracterizam o desvio. */
   phrases: string[];
 }
 
-export const DEFAULT_UNKNOWN_ANSWER: UnknownAnswerConfig = {
+/** Configuração por etapa para respostas diferentes do esperado. */
+export type UnexpectedAnswerConfig = Record<DeviationKind, UnexpectedRule>;
+/** @deprecated formato antigo (plano), mantido para leitura. */
+export type UnknownAnswerConfig = UnexpectedRule;
+
+export const DEFAULT_UNEXPECTED_RULE: UnexpectedRule = {
+  enabled: false,
   mode: 'INSISTIR',
   messages: {},
   attempts: 1,
@@ -197,12 +236,13 @@ export const DEFAULT_UNKNOWN_ANSWER: UnknownAnswerConfig = {
   phrases: [],
 };
 
-export function normalizeUnknownAnswer(raw: unknown): UnknownAnswerConfig {
-  const v = (raw && typeof raw === 'object' ? raw : {}) as Partial<UnknownAnswerConfig>;
-  const mode = UNKNOWN_ANSWER_MODES.some((m) => m.value === v.mode)
-    ? (v.mode as UnknownAnswerMode)
+export function normalizeUnexpectedRule(raw: unknown, enabledDefault = false): UnexpectedRule {
+  const v = (raw && typeof raw === 'object' ? raw : {}) as Partial<UnexpectedRule>;
+  const mode = UNEXPECTED_ANSWER_MODES.some((m) => m.value === v.mode)
+    ? (v.mode as UnexpectedAnswerMode)
     : 'INSISTIR';
   return {
+    enabled: typeof v.enabled === 'boolean' ? v.enabled : enabledDefault,
     mode,
     messages: (v.messages && typeof v.messages === 'object' ? v.messages : {}) as MultiLangText,
     attempts: Number.isFinite(Number(v.attempts)) ? Math.max(0, Number(v.attempts)) : 1,
@@ -210,6 +250,26 @@ export function normalizeUnknownAnswer(raw: unknown): UnknownAnswerConfig {
     phrases: Array.isArray(v.phrases) ? v.phrases.map((p) => String(p ?? '')).filter(Boolean) : [],
   };
 }
+
+/**
+ * Lê a configuração nova (`unexpected_answer`) e, na falta dela, converte o
+ * formato antigo e plano (`unknown_answer`) sem precisar migrar o banco.
+ */
+export function normalizeUnexpectedAnswer(raw: unknown, legacy?: unknown): UnexpectedAnswerConfig {
+  const v = (raw && typeof raw === 'object' ? raw : {}) as Partial<UnexpectedAnswerConfig>;
+  const hasNew = DEVIATION_KINDS.some((k) => v[k.value] && typeof v[k.value] === 'object');
+  const unknownRaw = hasNew ? v.unknown : legacy;
+  return {
+    unknown: { ...normalizeUnexpectedRule(unknownRaw, true), enabled: true },
+    invalid_format: normalizeUnexpectedRule(hasNew ? v.invalid_format : undefined),
+    no_match: normalizeUnexpectedRule(hasNew ? v.no_match : undefined),
+    off_topic: normalizeUnexpectedRule(hasNew ? v.off_topic : undefined),
+  };
+}
+
+/** @deprecated use normalizeUnexpectedRule */
+export const normalizeUnknownAnswer = (raw: unknown) => normalizeUnexpectedRule(raw, true);
+
 
 /** Conteúdo estruturado da coluna `validation` (jsonb). */
 export interface StepValidation {
