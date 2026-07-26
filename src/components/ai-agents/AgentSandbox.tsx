@@ -24,6 +24,8 @@ export function AgentSandbox({ initialAgentId }: Props) {
   const [versionId, setVersionId] = useState<string>('current');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [input, setInput] = useState('');
+  const [detectedLang, setDetectedLang] = useState<string | null>(null);
+
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const { data: versions } = useAgentVersions(agentId || undefined);
