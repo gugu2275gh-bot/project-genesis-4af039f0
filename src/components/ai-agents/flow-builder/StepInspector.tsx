@@ -1,32 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Trash2, X } from 'lucide-react';
 import { MultiLangField } from '@/components/ai-agents/MultiLangField';
-import { useAgentTranslate } from '@/hooks/useAgentTranslate';
-import { AGENT_LANGUAGES, ANSWER_TYPES, FLOW_PHASES, type AgentFlowStep, type MultiLangText } from '@/types/ai-agents';
+import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
+import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
+import { ANSWER_TYPES, FLOW_PHASES, type AgentFlowStep } from '@/types/ai-agents';
 
 import {
-  ANSWER_FORMATS,
-  BRANCH_MATCH_TYPES,
-  SKIP_MODES,
   STEP_KINDS,
   messageAt,
   messageCount,
-  normalizeBranches,
   normalizeMessages,
   normalizeValidation,
   removeMessageAt,
   setMessageAt,
   stepKindOf,
-  type FlowBranch,
   type StepValidation,
 } from '@/types/ai-agent-flow-builder';
 
@@ -39,22 +34,8 @@ interface Props {
   onClose: () => void;
 }
 
-const AUTO_BRANCH_TYPES = ['SIM_NAO', 'SELECAO', 'BOTOES', 'MULTIPLA_ESCOLHA'];
-
 export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: Props) {
-  const branches = useMemo(() => normalizeBranches((step as any).branches), [step]);
   const validation = useMemo(() => normalizeValidation(step.validation), [step]);
-  const [optionInput, setOptionInput] = useState('');
-  const translate = useAgentTranslate();
-  const [translatingId, setTranslatingId] = useState<string | null>(null);
-  const branchesRef = useRef<FlowBranch[]>(branches);
-  const mounted = useRef(true);
-
-  useEffect(() => {
-    branchesRef.current = branches;
-  }, [branches]);
-
-  useEffect(() => () => { mounted.current = false; }, []);
 
   const otherCodes = allSteps.filter((s) => s.id !== step.id).map((s) => s.step_code).filter(Boolean);
   const duplicateCode = otherCodes.includes(step.step_code);
@@ -62,62 +43,6 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
 
   const setValidation = (patch: Partial<StepValidation>) =>
     onChange({ validation: { ...validation, ...patch } as any });
-
-  const setBranches = (next: FlowBranch[]) => onChange({ branches: next } as any);
-
-  /**
-   * Traduz o valor da ramificação para os demais idiomas e guarda como
-   * sinônimos, para que a resposta do cliente seja reconhecida em qualquer um.
-   */
-  const translateBranch = async (b: FlowBranch) => {
-    const source = (b.value || b.label || '').trim();
-    if (!source) return;
-    setTranslatingId(b.id);
-    try {
-      const result = await translate.mutateAsync({
-        text: source,
-        source: 'pt-BR',
-        targets: AGENT_LANGUAGES.map((l) => l.code).filter((c) => c !== 'pt-BR'),
-      });
-      const extra = Object.values(result)
-        .map((v) => String(v ?? '').trim())
-        .filter((v) => v && v.toLowerCase() !== source.toLowerCase());
-      if (!mounted.current || extra.length === 0) return;
-      const latestBranches = branchesRef.current;
-      const latestBranch = latestBranches.find((x) => x.id === b.id);
-      if (!latestBranch) return;
-      const merged = Array.from(new Set([...(latestBranch.synonyms || []), ...extra]));
-      setBranches(latestBranches.map((x) => (x.id === b.id ? { ...x, synonyms: merged } : x)));
-    } catch {
-      /* toast já exibido pelo hook */
-    } finally {
-      if (mounted.current) setTranslatingId(null);
-    }
-  };
-
-
-  /** Opções sugeridas para o tipo de resposta atual. */
-  const suggestedOptions = AUTO_BRANCH_TYPES.includes(step.answer_type)
-    ? step.answer_type === 'SIM_NAO'
-      ? ['Sim', 'Não']
-      : validation.options || []
-    : [];
-  const missingOptions = suggestedOptions.filter((o) => !branches.some((b) => b.value === o));
-
-  /** Cria ramificações a partir das opções — apenas quando o usuário pede. */
-  const generateBranches = () => {
-    if (missingOptions.length === 0) return;
-    setBranches([
-      ...branches,
-      ...missingOptions.map((o, i) => ({
-        id: `b_${Date.now()}_${i}`,
-        label: o,
-        match_type: 'IGUAL' as const,
-        value: o,
-        next_step_code: null,
-      })),
-    ]);
-  };
 
   const messages = useMemo(
     () => normalizeMessages(step.messages, step.message),
@@ -133,6 +58,7 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
       message: (Array.isArray(first) ? first[0] : first) || '',
     });
   };
+
 
 
 
