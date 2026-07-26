@@ -54,9 +54,31 @@ const EMPTY_PLAN: VisualFlowPlan = {
   intake: normalizeIntakeConfig(null),
 }
 
-async function fetchIntakeConfig(supabase: any, flowId: string | null): Promise<IntakeConfig> {
+/**
+ * Versão dos fluxos (`updated_at`), usada como sufixo das chaves de cache.
+ * Assim que o admin salva o fluxo, o cache de etapas/intake é invalidado —
+ * antes disso uma alteração podia demorar até 60s para valer no atendimento.
+ */
+async function fetchFlowVersions(supabase: any, ids: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {}
+  const clean = ids.filter(Boolean)
+  if (!clean.length) return out
+  try {
+    const { data, error } = await supabase
+      .from('ai_agent_flows')
+      .select('id, updated_at')
+      .in('id', clean)
+    if (error) return out
+    for (const row of data || []) out[String(row.id)] = String(row.updated_at || '')
+  } catch {
+    /* silencioso: sem versão, o cache continua valendo por TTL */
+  }
+  return out
+}
+
+async function fetchIntakeConfig(supabase: any, flowId: string | null, version = ''): Promise<IntakeConfig> {
   if (!flowId) return normalizeIntakeConfig(null)
-  return await cached<IntakeConfig>(`flow-intake:${flowId}`, 60_000, async () => {
+  return await cached<IntakeConfig>(`flow-intake:${flowId}:${version}`, 60_000, async () => {
     const { data, error } = await supabase
       .from('ai_agent_flows')
       .select('intake_config')
@@ -70,10 +92,10 @@ async function fetchIntakeConfig(supabase: any, flowId: string | null): Promise<
   })
 }
 
-async function fetchSteps(supabase: any, flowId: string | null): Promise<FlowStep[]> {
+async function fetchSteps(supabase: any, flowId: string | null, version = ''): Promise<FlowStep[]> {
   if (!flowId) return []
-  // Cache de 60s por fluxo: as etapas mudam apenas quando o admin salva o fluxo.
-  return await cached<FlowStep[]>(`flow-steps:${flowId}`, 60_000, async () => {
+  // Cache de 60s por fluxo+versão: invalidado assim que o admin salva o fluxo.
+  return await cached<FlowStep[]>(`flow-steps:${flowId}:${version}`, 60_000, async () => {
     const { data, error } = await supabase
       .from('ai_agent_flow_steps')
       .select('*')
@@ -87,6 +109,7 @@ async function fetchSteps(supabase: any, flowId: string | null): Promise<FlowSte
   })
 
 }
+
 
 /**
  * Monta o grafo executável do agente de produção (pré-handoff + handoff
