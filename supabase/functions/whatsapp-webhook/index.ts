@@ -1552,10 +1552,11 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         // roda enquanto o fluxo não terminar.
         // ============================================================
         try {
-          const flowPlan = await loadVisualFlowPlan(supabase)
-          const flowStateSaved = (funnelState as any)?.visual_flow_state && typeof (funnelState as any).visual_flow_state === 'object'
+          const flowPlan = visualFlowPlan?.enabled ? visualFlowPlan : await loadVisualFlowPlan(supabase)
+          const savedFromFunnel = (funnelState as any)?.visual_flow_state && typeof (funnelState as any).visual_flow_state === 'object'
             ? { ...(funnelState as any).visual_flow_state }
-            : {}
+            : null
+          const flowStateSaved = savedFromFunnel ?? { ...visualFlowSavedState }
 
           if (flowPlan.enabled && !flowStateSaved.finished) {
             const turn = runVisualFlowTurn(flowPlan, flowStateSaved, currentCustomerMessage || '', detectedChatLanguage as any)
@@ -1635,18 +1636,59 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
               details: { engine: 'visual-flow', step: turn.state.current_step, parts: flowParts.length },
             })
 
-            // Só devolve o turno ao motor determinístico quando ele produziu
-            // mensagens. Fluxo concluído sem mensagem → segue para o modo livre.
-            if (flowParts.length > 0) {
+            // TRAVA: enquanto o fluxo não terminou, o turno SEMPRE encerra aqui —
+            // mesmo sem mensagem gerada. Só um fluxo concluído (`finished`)
+            // devolve o comando ao funil legado / modo livre.
+            if (!turn.finished || flowParts.length > 0) {
+              if (!flowParts.length) {
+                console.log('[VISUAL_FLOW] turno sem mensagem — silêncio controlado (fluxo em andamento)')
+              }
               await releaseConcurrentLock()
               return new Response(
-                JSON.stringify({ success: true, engine: 'visual-flow', step: turn.state.current_step, parts: flowParts.length }),
+                JSON.stringify({
+                  success: true,
+                  engine: 'visual-flow',
+                  step: turn.state.current_step,
+                  parts: flowParts.length,
+                  finished: turn.finished,
+                }),
                 { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
               )
             }
+            console.log('[VISUAL_FLOW] fluxo concluído sem mensagem — liberando para o modo livre')
+            visualFlowActive = false
           }
         } catch (vfErr) {
-          console.warn('[VISUAL_FLOW] erro não bloqueante (segue funil legado):', vfErr instanceof Error ? vfErr.message : vfErr)
+          console.warn('[VISUAL_FLOW] erro no motor:', vfErr instanceof Error ? vfErr.message : vfErr)
+          // Com fluxo já iniciado e não concluído, NUNCA cai para o funil legado:
+          // o estado é preservado e o turno termina em silêncio.
+          if (visualFlowActive && visualFlowSavedState?.current_step) {
+            await logTurn({
+              supabase,
+              exit_reason: 'NO_REPLY',
+              lead_id: lead.id,
+              contact_id: contact.id,
+              phone: phoneNumber,
+              message_id: message.messageId,
+              inbound_text: message.body,
+              details: { engine: 'visual-flow', error: vfErr instanceof Error ? vfErr.message : String(vfErr) },
+            })
+            await releaseConcurrentLock()
+            return new Response(
+              JSON.stringify({ success: true, engine: 'visual-flow', error: 'turn_failed_state_preserved' }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            )
+          }
+        }
+
+        // Sem LLM configurado e sem fluxo comandando: nada a responder.
+        if (!botEnabled || !geminiApiKey) {
+          console.log('[VISUAL_FLOW] sem fluxo ativo e sem LLM configurado — encerrando turno')
+          await releaseConcurrentLock()
+          return new Response(
+            JSON.stringify({ success: true, message: 'No active flow and AI disabled' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          )
         }
 
 
