@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { splitPromptIntoBlocks } from '@/lib/agent-prompt-blocks';
+
 import type {
   AIAgent,
   AgentFlow,
