@@ -205,6 +205,13 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
 
 
           <TabsContent value="respostas" className="mt-0 space-y-4">
+            {kind !== 'PERGUNTA' && (
+              <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                Esta etapa é do tipo "{STEP_KINDS.find((k) => k.value === kind)?.label}" e não espera resposta
+                do cliente. Use apenas a próxima etapa padrão abaixo.
+              </p>
+            )}
+            {kind === 'PERGUNTA' && (
             <div className="space-y-2">
               <Label>Tipo de resposta esperada</Label>
               <Select value={step.answer_type} onValueChange={(v) => onChange({ answer_type: v as any })}>
@@ -214,6 +221,8 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
                 </SelectContent>
               </Select>
             </div>
+            )}
+
 
             {['SELECAO', 'BOTOES', 'MULTIPLA_ESCOLHA'].includes(step.answer_type) && (
               <div className="space-y-2">
