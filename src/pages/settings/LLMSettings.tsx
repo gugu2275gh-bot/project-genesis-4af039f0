@@ -382,10 +382,11 @@ function AddItemRow({ onAdd }: { onAdd: (provider: Provider, model: string) => v
   return (
     <div className="flex items-center gap-2 pt-3 border-t">
       <Select value={provider} onValueChange={(v) => { setProvider(v as Provider); setModel(''); }}>
-        <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="gemini">Gemini</SelectItem>
+          <SelectItem value="gemini">Gemini (chave própria)</SelectItem>
           <SelectItem value="openai">OpenAI</SelectItem>
+          <SelectItem value="lovable">Lovable AI</SelectItem>
         </SelectContent>
       </Select>
       <Select value={model} onValueChange={setModel} disabled={isLoading}>
