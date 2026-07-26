@@ -313,7 +313,7 @@ export default function KnowledgeBaseManager() {
                     onClick={async () => {
                       setReprocessing(true);
                       try {
-                        await supabase.auth.refreshSession();
+                        await ensureFreshSession();
                         const { data, error } = await supabase.functions.invoke('backfill-kb-embeddings', { body: {} });
                         if (error || data?.error) {
                           toast({ title: 'Erro ao gerar embeddings', description: error?.message || data?.error, variant: 'destructive' });
@@ -366,7 +366,7 @@ export default function KnowledgeBaseManager() {
                       title="Baixar PDF"
                       onClick={async () => {
                         try {
-                          await supabase.auth.refreshSession();
+                          await ensureFreshSession();
                           const { data, error } = await supabase.functions.invoke('kb-download', {
                             body: { filePath: entry.file_path },
                           });

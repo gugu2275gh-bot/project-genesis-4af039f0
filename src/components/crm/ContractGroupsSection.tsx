@@ -881,7 +881,7 @@ export function ContractGroupsSection({
     setIsDeletingService(true);
     try {
       // Refresh session to ensure valid token
-      await supabase.auth.refreshSession();
+      await ensureFreshSession();
 
       const { data, error } = await supabase.functions.invoke('delete-service', {
         body: { lead_id: lead.id },
