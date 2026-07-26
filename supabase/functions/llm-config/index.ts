@@ -55,6 +55,10 @@ function describeError(status: number, raw: string): string {
 }
 
 async function testGemini(model: string): Promise<{ ok: boolean; latency_ms: number; error?: string }> {
+  if (model === 'gemini-3.6-flash') {
+    return await testLovable('google/gemini-3.6-flash')
+  }
+
   const key = Deno.env.get('CBAsesoria_Key')
   if (!key) return { ok: false, latency_ms: 0, error: 'CBAsesoria_Key não configurada' }
   const start = Date.now()
