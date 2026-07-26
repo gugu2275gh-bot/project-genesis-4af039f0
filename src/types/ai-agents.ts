@@ -197,6 +197,12 @@ export interface AgentFlowStep {
   name: string;
   description: string | null;
   message: string;
+  /** Mensagem da etapa por idioma. */
+  messages: MultiLangText;
+  /** Reperguntas (quando a resposta não é válida) por idioma. */
+  reask_messages: MultiLangText;
+  phase: FlowPhase;
+
   answer_type: AnswerType;
   validation: Record<string, unknown>;
   next_step_code: string | null;
