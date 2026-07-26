@@ -157,6 +157,7 @@ ${text}
     }
     return json({ error: `Não foi possível traduzir: ${lastError}` }, 502)
   } catch (e) {
+    console.error('[AI_TRANSLATE] erro inesperado', e)
     return json({ error: e instanceof Error ? e.message : 'erro inesperado' }, 500)
   }
 })
