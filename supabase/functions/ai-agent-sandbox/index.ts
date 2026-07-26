@@ -6,6 +6,8 @@ import { buildSystemPrompt } from './lib/prompt-builder.ts'
 import { advanceFlow, findStartStep, mergeFlows, startFlow, startFlowWithPrefill, stepKindOf } from '../_shared/flow-engine.ts'
 import { dropOpeningMessages, normalizeIntakeConfig, prependIntakeGreeting, renderAckMessage, renderIntakeGreeting, runIntake } from '../_shared/flow-intake.ts'
 import { createIntakeLLM } from '../_shared/intake-llm.ts'
+import { advanceFlowTurn } from '../_shared/flow-turn.ts'
+import { searchKnowledgeBase } from '../_shared/kb-search.ts'
 import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
 
 
@@ -261,7 +263,16 @@ Deno.serve(async (req) => {
         turn = startFlow(steps, lang as any)
       } else {
         const ack = intakeConfig.enabled ? renderAckMessage(intakeConfig, lang as any) : ''
-        turn = advanceFlow(steps, flowState, message, lang as any, { ack })
+        const turnLLM = createIntakeLLM({
+          geminiKey: Deno.env.get('CBAsesoria_Key'),
+          lovableKey: Deno.env.get('LOVABLE_API_KEY'),
+        })
+        turn = await advanceFlowTurn(steps, flowState, message, lang as any, {
+          ack,
+          callLLM: turnLLM,
+          kbSearch: (q: string) => searchKnowledgeBase(service, q),
+          logTag: '[SANDBOX]',
+        })
       }
 
       await service.from('ai_agent_test_messages').insert({

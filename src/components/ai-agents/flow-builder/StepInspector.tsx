@@ -12,6 +12,7 @@ import { MultiLangField } from '@/components/ai-agents/MultiLangField';
 import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
 import { StepUnexpectedAnswerEditor } from '@/components/ai-agents/flow-builder/StepUnexpectedAnswerEditor';
+import { StepKnowledgeCheckEditor } from '@/components/ai-agents/flow-builder/StepKnowledgeCheckEditor';
 import { ANSWER_TYPES, FLOW_PHASES, STEP_FIELD_MAPPINGS, type AgentFlowStep } from '@/types/ai-agents';
 
 import {
@@ -74,10 +75,11 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
       </div>
 
       <Tabs defaultValue="pergunta" className="flex-1 overflow-hidden flex flex-col">
-        <TabsList className="mx-4 mt-3 grid grid-cols-5">
+        <TabsList className="mx-4 mt-3 grid grid-cols-6">
           <TabsTrigger value="pergunta">Mensagens</TabsTrigger>
           <TabsTrigger value="respostas">Respostas</TabsTrigger>
           <TabsTrigger value="validacao">Validação</TabsTrigger>
+          <TabsTrigger value="base">Base</TabsTrigger>
           <TabsTrigger value="naosei">Resposta inesperada</TabsTrigger>
           <TabsTrigger value="comportamento">Comportamento</TabsTrigger>
         </TabsList>
@@ -257,6 +259,16 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
             />
 
           </TabsContent>
+
+          <TabsContent value="base" className="mt-0 space-y-4">
+            <StepKnowledgeCheckEditor
+              value={validation.kb_check}
+              isQuestion={kind === 'PERGUNTA'}
+              onChange={(next) => setValidation({ kb_check: next })}
+            />
+          </TabsContent>
+
+
 
           <TabsContent value="naosei" className="mt-0 space-y-4">
             <StepUnexpectedAnswerEditor

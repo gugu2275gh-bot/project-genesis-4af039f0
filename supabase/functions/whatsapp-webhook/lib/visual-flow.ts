@@ -24,6 +24,7 @@ import {
   type FlowStep,
   type FlowTurnResult,
 } from '../../_shared/flow-engine.ts'
+import { advanceFlowTurn } from '../../_shared/flow-turn.ts'
 import {
   dropOpeningMessages,
   normalizeIntakeConfig,
@@ -210,19 +211,25 @@ export async function runVisualFlowFirstTurn(
 }
 
 
-export function runVisualFlowTurn(
+export async function runVisualFlowTurn(
   plan: VisualFlowPlan,
   state: FlowRunState,
   message: string,
   lang: FlowLang,
-): FlowTurnResult {
+  deps: { callLLM?: ((prompt: string) => Promise<string>) | null; kbSearch?: ((q: string) => Promise<string>) | null } = {},
+): Promise<FlowTurnResult> {
   const started = !!state?.current_step
   if (!started) return startFlow(plan.steps, lang)
   // Reconhecimento humano entre perguntas (ligado por etapa no editor).
   const ack = plan.intake?.enabled
     ? renderAckMessage(plan.intake, lang, nameFromState(plan.steps, state))
     : ''
-  return advanceFlow(plan.steps, state, message, lang, { ack })
+  return await advanceFlowTurn(plan.steps, state, message, lang, {
+    ack,
+    callLLM: deps.callLLM || null,
+    kbSearch: deps.kbSearch || null,
+    logTag: '[VISUAL_FLOW]',
+  })
 }
 
 /** Nome já capturado no fluxo, para personalizar o reconhecimento. */

@@ -1616,7 +1616,10 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
 
             const turn = isFirstFlowTurn
               ? await runVisualFlowFirstTurn(flowPlan, currentCustomerMessage || '', flowLang as any, intakeLLM)
-              : runVisualFlowTurn(flowPlan, flowStateSaved, currentCustomerMessage || '', flowLang as any)
+              : await runVisualFlowTurn(flowPlan, flowStateSaved, currentCustomerMessage || '', flowLang as any, {
+                  callLLM: intakeLLM,
+                  kbSearch: (q: string) => getKnowledgeBaseContext(supabase, q),
+                })
 
             const nextFlowState = { ...turn.state, lang: flowLang }
 

@@ -61,6 +61,20 @@ export function StepValidationEditor({ validation, stepCodes, answerType, onChan
         />
       </div>
 
+      <div className="flex items-center justify-between rounded-md border p-3">
+        <div>
+          <Label className="font-normal">Resposta humanizada gerada pela IA</Label>
+          <p className="text-xs text-muted-foreground">
+            Em vez da frase fixa, a IA escreve um comentário curto e contextual sobre a resposta que o
+            cliente acabou de dar (no idioma travado), antes da próxima pergunta.
+          </p>
+        </div>
+        <Switch
+          checked={validation.ack_ai === true}
+          onCheckedChange={(v) => onChange({ ack_ai: v, ...(v ? { ack_enabled: true } : {}) })}
+        />
+      </div>
+
 
 
 
