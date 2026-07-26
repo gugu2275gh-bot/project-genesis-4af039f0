@@ -216,26 +216,38 @@ Deno.serve(async (req) => {
       const firstTurn = firstTurnGlobal
       let turn
       if (firstTurn && intakeConfig.enabled) {
-        let intakeRes = { prefilled: {} as Record<string, string>, greeting: '', fieldValues: {} as Record<string, string> }
+        let intakeRes: any = { prefilled: {}, greeting: '', fieldValues: {}, reason: 'exception' }
+        const intakeLLM = createIntakeLLM({
+          geminiKey: Deno.env.get('CBAsesoria_Key'),
+          lovableKey: Deno.env.get('LOVABLE_API_KEY'),
+        })
         try {
-          intakeRes = await runIntake({
-            message,
-            steps,
-            lang: lang as any,
-            config: intakeConfig,
-            callLLM: async (prompt: string) => {
-              const out = await callOpenAICompatible('lovable', 'google/gemini-2.5-flash-lite', 'Você extrai dados. Responda apenas JSON.', [{ role: 'user', content: prompt }], 0, 400)
-              return out.text
-            },
-          })
+          if (!intakeLLM) {
+            intakeRes = { prefilled: {}, greeting: '', fieldValues: {}, reason: 'no_llm' }
+          } else {
+            intakeRes = await runIntake({
+              message,
+              steps,
+              lang: lang as any,
+              config: intakeConfig,
+              callLLM: intakeLLM,
+            })
+          }
         } catch (e) {
-          console.warn('[SANDBOX][INTAKE] falhou:', e instanceof Error ? e.message : e)
+          intakeRes.detail = e instanceof Error ? e.message : String(e)
         }
-        if (Object.keys(intakeRes.prefilled || {}).length) {
-          turn = prependIntakeGreeting(
-            startFlowWithPrefill(steps, lang as any, intakeRes.prefilled),
-            intakeRes.greeting,
-          )
+        console.log('[SANDBOX][INTAKE]', JSON.stringify({
+          reason: intakeRes.reason,
+          detail: intakeRes.detail,
+          fields: intakeRes.fieldValues,
+          steps: Object.keys(intakeRes.prefilled || {}),
+        }))
+        const hasPrefill = Object.keys(intakeRes.prefilled || {}).length > 0
+        if (hasPrefill || intakeRes.greeting) {
+          const base = hasPrefill
+            ? startFlowWithPrefill(steps, lang as any, intakeRes.prefilled)
+            : startFlow(steps, lang as any)
+          turn = prependIntakeGreeting(dropOpeningMessages(base, steps), intakeRes.greeting)
         } else {
           // Sem aproveitamento: usa a "Saudação padrão" quando configurada.
           turn = prependIntakeGreeting(
@@ -244,6 +256,7 @@ Deno.serve(async (req) => {
           )
         }
       } else if (firstTurn) {
+
         turn = startFlow(steps, lang as any)
       } else {
         const ack = intakeConfig.enabled ? renderAckMessage(intakeConfig, lang as any) : ''
