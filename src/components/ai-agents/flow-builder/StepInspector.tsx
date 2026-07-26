@@ -257,7 +257,16 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
 
           </TabsContent>
 
+          <TabsContent value="naosei" className="mt-0 space-y-4">
+            <StepUnknownAnswerEditor
+              value={validation.unknown_answer}
+              fallbackStepCode={validation.fallback_step_code}
+              onChange={(next) => setValidation({ unknown_answer: next })}
+            />
+          </TabsContent>
+
           <TabsContent value="comportamento" className="mt-0 space-y-4">
+
 
 
             <Separator />
