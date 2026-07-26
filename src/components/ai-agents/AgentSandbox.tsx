@@ -40,7 +40,9 @@ export function AgentSandbox({ initialAgentId }: Props) {
   useEffect(() => {
     setSessionId(null);
     setVersionId('current');
+    setDetectedLang(null);
   }, [agentId]);
+
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
