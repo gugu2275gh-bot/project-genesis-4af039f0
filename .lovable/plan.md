@@ -1,31 +1,61 @@
-## Regra a garantir
+# Otimização do tempo de resposta do agente no WhatsApp
 
-Com um fluxo configurado, **tudo que o cliente recebe vem exclusivamente da configuração da etapa** — texto, idioma e formato de envio. Nenhuma heurística legada pode alterar a mensagem. Botões só aparecem se a etapa estiver marcada para isso.
+## O que medi
 
-## Causa confirmada do print
+- O banco **não** é o gargalo: as consultas mais pesadas têm média de 2–8 ms (`slow_queries`).
+- O tempo por turno vem do webhook `whatsapp-webhook` (3.714 linhas no `index.ts`), que hoje executa quase tudo em série:
+  1. **Buffer fixo** de 300 ms (msg "completa") ou **1500 ms** (msg curta) antes de qualquer processamento;
+  2. **~75 chamadas `await supabase`** sequenciais (config, agente, textos, fluxo, histórico, rate limit, notificações, logs);
+  3. Uma **chamada HTTP extra à edge function `smart-reactivation`** (cold start + chamada OpenAI própria) quando não há fluxo visual ativo;
+  4. **LLM** com system prompt gigante + até 24 mensagens de histórico + `maxOutputTokens: 2048`;
+  5. Envio das mensagens ao Twilio em série com **pausa de 350 ms** entre cada balão.
 
-Os botões [Sí]/[No] não vieram do fluxo:
+Somando, um turno simples pode custar de 4 a 12 s mesmo quando o fluxo visual é determinístico e nem precisaria de LLM.
 
-- `lib/twilio.ts:157` chama `sendYesNoQuickReply(...)` sempre que `isBinaryYesNoQuestion(body)` for verdadeiro.
-- `lib/quick-reply.ts` decide isso por **regex sobre o texto de saída** (`YESNO_QUESTION_PATTERNS`), com padrões do roteiro antigo — inclusive `ya estas en espana`.
-- Como a etapa de localização do fluxo tem exatamente esse texto em `es`, a camada de envio converteu a mensagem em template `twilio/quick-reply` sozinha, ignorando a configuração da etapa.
+## O que será feito (sem mudar comportamento do fluxo)
 
-Os logs confirmam que o motor do fluxo comandou o turno (`[VISUAL_FLOW] step: msg_7_perguntar_localizacao`); o desvio foi só no envio.
+### 1. Instrumentação primeiro
+Adicionar marcas de tempo por fase (buffer, config, fluxo, LLM, envio) no `logTurn`, para medir antes/depois e provar o ganho.
 
-## Plano
+### 2. Buffer adaptativo mais inteligente
+- Reduzir o buffer padrão de 1500 ms → 700 ms.
+- **Zerar o buffer** quando a etapa ativa do fluxo visual espera resposta curta (SIM/NÃO, escolha de opção, data) — nesses casos não há "balões em sequência" a consolidar.
+- Manter integralmente as proteções `BUFFERED_NEWER` e anti-duplicidade.
 
-1. **Envio governado pelo fluxo.** Adicionar a opção `quickReply: 'auto' | 'on' | 'off'` no envio (`sendMessage` / `sendOutgoingIdempotent`). Quando a mensagem for originada pelo motor visual, o valor vem da etapa — nunca de regex. Sem valor explícito da etapa: `off`.
-2. **Botões viram configuração da etapa.** Novo campo `quick_reply` (boolean, padrão `false`) dentro do JSONB `validation`, editável apenas quando `answer_type = SIM_NAO`, exposto no inspetor do editor visual e na edição em tabela ("Enviar como botões Sim/Não").
-3. **Bloquear a heurística legada sob fluxo ativo.** `isBinaryYesNoQuestion` passa a valer somente no modo `auto` (atendimentos sem fluxo, LLM/funil legado). Com fluxo ativo, ela nunca é consultada.
-4. **Auditar outros desvios na camada de envio** (sanitização, quebra de mensagens, sufixos, fallback de template) para garantir que nenhum deles reescreva o texto definido na etapa; o que não for imposto pelo WhatsApp fica desativado sob fluxo ativo.
-5. **Retorno do botão.** Quando `quick_reply` estiver ligado, o `ButtonPayload` YES/NO continua normalizado para "sim"/"não" e validado pela etapa `SIM_NAO` do fluxo.
-6. **Testes Deno**: (a) fluxo ativo + `quick_reply` desligado → texto puro, sem botões, mesmo com texto que casa com a regex legada; (b) `quick_reply` ligado → quick reply; (c) sem fluxo → comportamento legado inalterado; (d) texto enviado é idêntico ao configurado na etapa.
+### 3. Paralelizar leituras independentes
+Agrupar em `Promise.all` os blocos que hoje são sequenciais e não dependem entre si: config do agente, textos multilíngues, etapas do fluxo, base de conhecimento, histórico da conversa, contagem de rate limit. Estimativa: −0,5 a −1,5 s por turno.
+
+### 4. Cache em memória do isolate (TTL curto)
+`ai_agents`, `ai_agent_texts`, `ai_agent_flow_steps`, `llm_settings` e `system_config` mudam raramente. Cache de 60 s no escopo do módulo, invalidado por TTL — isolates quentes deixam de reler tudo a cada mensagem.
+
+### 5. Tirar do caminho crítico o que não bloqueia a resposta
+Mover para depois do envio (via `EdgeRuntime.waitUntil`): notificações de setor, inserts em `interactions`, `turn-log`, marcação de setor na mensagem e updates de `webhook_logs`. O cliente recebe a resposta antes desses writes.
+
+### 6. `smart-reactivation` só quando fizer sentido
+Hoje é chamada em quase todo turno sem fluxo visual. Passará a ser chamada apenas quando a última interação for antiga (janela de reativação) — nos demais casos o resultado é sempre "CURRENT_FLOW" e a chamada é puro custo (HTTP + LLM).
+
+### 7. Envio das mensagens
+- Enviar o primeiro balão imediatamente e os seguintes em background.
+- Reduzir a pausa entre balões de 350 ms → 150 ms (mantendo a ordem).
+
+### 8. Ajustes no LLM (apenas quando o fluxo visual não responde)
+- Histórico de 24 → 12 mensagens.
+- `maxOutputTokens` 2048 → 700 (as respostas do agente são curtas).
+- Enxugar o system prompt duplicado (regras repetidas) e cortar contexto da base de conhecimento quando a etapa é de captação de dado.
+- Manter a cascata dinâmica de `llm_settings` intacta; apenas reduzir o timeout de 45 s → 20 s no primeiro provedor para cair mais rápido no fallback.
+
+## O que NÃO muda
+
+- Regras do fluxo visual, ramificações, validações e travas (Strict Flow Lock).
+- Detecção de idioma na 1ª mensagem e travamento por idioma.
+- Botões Sim/Não apenas quando habilitados na etapa.
+- Proteções anti-duplicidade e rate limit.
+
+## Verificação
+
+- Suíte Deno existente (`flow-engine`, `quick-reply-flow`, testes multilíngues) deve continuar 100% verde.
+- Comparar os logs de tempo por fase antes/depois em um teste no Sandbox e em um turno real.
 
 ## Detalhes técnicos
 
-- `supabase/functions/whatsapp-webhook/lib/twilio.ts`: parâmetro `quickReply`, default `'auto'`, com curto-circuito para `'off'`.
-- `supabase/functions/whatsapp-webhook/index.ts` (bloco `[VISUAL_FLOW]`) e `lib/visual-flow.ts`: propagar a decisão por mensagem vinda da etapa.
-- `supabase/functions/_shared/flow-engine.ts`: incluir no resultado do turno o metadado de cada mensagem (etapa de origem + `quick_reply`).
-- Front: `src/components/ai-agents/flow-builder/StepInspector.tsx` e `src/components/ai-agents/FlowsManagement.tsx` — switch "Enviar como botões (Sim/Não)".
-- Sandbox (`ai-agent-sandbox`) recebe o mesmo metadado para exibir a etapa como botões no simulador, mantendo paridade.
-- Sem migração de schema: o campo entra no JSONB `validation` já existente.
+Arquivos afetados: `supabase/functions/whatsapp-webhook/index.ts`, `lib/ai.ts`, `lib/agent-runtime.ts`, `lib/visual-flow.ts`, `lib/kb.ts`, `lib/twilio.ts`, `lib/turn-log.ts`. Nenhuma migration de banco é necessária.
