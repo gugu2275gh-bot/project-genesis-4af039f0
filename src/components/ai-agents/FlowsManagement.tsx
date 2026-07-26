@@ -369,13 +369,24 @@ export function FlowsManagement() {
         ))
       )}
 
-      {current && (
-        <Card>
-          <CardContent className="pt-6">
-            <FlowSteps flow={current} />
-          </CardContent>
-        </Card>
-      )}
+      <Dialog open={!!current} onOpenChange={(o) => !o && setSelected(null)}>
+        <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Workflow className="h-4 w-4" />
+              {current?.name}
+              {current && (
+                <Badge variant="outline">
+                  {FLOW_PHASES.find((p) => p.value === ((current as any).phase || 'GERAL'))?.label ||
+                    (current as any).phase}
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {current && <FlowSteps flow={current} />}
+        </DialogContent>
+      </Dialog>
+
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
