@@ -104,9 +104,23 @@ async function sha256Hex(input: string): Promise<string> {
  */
 export async function sendOutgoingIdempotent(
   supabase: any,
-  args: { phone: string; leadId: string | null; body: string; windowSeconds?: number; language?: ChatLanguage },
+  args: {
+    phone: string
+    leadId: string | null
+    body: string
+    windowSeconds?: number
+    language?: ChatLanguage
+    /**
+     * 'auto' (padrão legado): heurística por texto pode virar botões.
+     * 'on'  : botões Sim/Não porque a ETAPA DO FLUXO pediu.
+     * 'off' : nunca botões (fluxo visual ativo sem quick_reply na etapa).
+     */
+    quickReply?: 'auto' | 'on' | 'off'
+  },
 ): Promise<{ sent: boolean; reason?: string }> {
   const { phone, leadId, body, language } = args
+  const quickReplyMode = args.quickReply ?? 'auto'
+
   const windowSec = args.windowSeconds ?? 60
   const norm = normalizeForDedup(body)
   if (!norm) return { sent: false, reason: 'empty_body' }
