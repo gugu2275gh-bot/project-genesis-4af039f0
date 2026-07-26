@@ -55,7 +55,7 @@ export default function LLMSettings() {
         body: { action: 'status' },
       });
       if (error) throw error;
-      return data as { gemini_key_present: boolean; openai_key_present: boolean };
+      return data as { gemini_key_present: boolean; openai_key_present: boolean; lovable_key_present: boolean };
     },
   });
 
