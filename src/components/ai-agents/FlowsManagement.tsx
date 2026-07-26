@@ -9,9 +9,14 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Trash2, ListOrdered, Workflow } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Plus, Pencil, Trash2, ListOrdered, Workflow, AlertTriangle } from 'lucide-react';
 import { FlowCanvas } from '@/components/ai-agents/flow-builder/FlowCanvas';
 import { FlowErrorBoundary } from '@/components/ai-agents/flow-builder/FlowErrorBoundary';
+import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
+import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
+import { normalizeBranches, normalizeValidation } from '@/types/ai-agent-flow-builder';
+
 
 import {
   useAgentFlows,
