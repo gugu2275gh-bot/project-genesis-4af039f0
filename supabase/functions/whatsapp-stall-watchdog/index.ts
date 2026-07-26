@@ -16,9 +16,10 @@ const MAX_STALL_ATTEMPTS = 2
 const LOOKBACK_MINUTES = 30 // ignore very old conversations
 
 // O cron do Postgres roda no máximo a cada minuto; para recuperar em ~20s a
-// função varre em ciclos curtos dentro da mesma execução.
-const SWEEP_CYCLES = 3
-const SWEEP_INTERVAL_MS = 18_000
+// função varre em ciclos curtos dentro da mesma execução (sem passar de 1min).
+const SWEEP_CYCLES = 2
+const SWEEP_INTERVAL_MS = 20_000
+
 
 
 async function sweep(supabase: any, supabaseUrl: string, serviceKey: string) {
