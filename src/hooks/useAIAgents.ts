@@ -146,6 +146,71 @@ export function useDuplicateAgent() {
   });
 }
 
+/**
+ * Promove um agente para produção: remove a marca dos demais (o índice
+ * `ai_agents_single_production_idx` só permite um) e ativa o escolhido.
+ */
+export function usePromoteAgentToProduction() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (agent: AIAgent) => {
+      const { error: clearErr } = await db
+        .from('ai_agents')
+        .update({ is_production: false })
+        .eq('is_production', true)
+        .neq('id', agent.id);
+      if (clearErr) throw clearErr;
+
+      const { error } = await db
+        .from('ai_agents')
+        .update({
+          is_production: true,
+          status: 'ATIVO',
+          production_synced_at: new Date().toISOString(),
+        })
+        .eq('id', agent.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ai_agents'] });
+      toast({ title: 'Agente colocado em produção' });
+    },
+    onError: (e: any) =>
+      toast({ title: 'Erro ao promover agente', description: e.message, variant: 'destructive' }),
+  });
+}
+
+/** Exclui um agente que não está em produção (remove versões e textos antes). */
+export function useDeleteAgent() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (agent: AIAgent) => {
+      if (agent.is_production) throw new Error('Não é possível excluir o agente em produção.');
+      await db.from('ai_agent_versions').delete().eq('agent_id', agent.id);
+      await db.from('ai_agent_texts').delete().eq('agent_id', agent.id);
+      const { data: sessions } = await db
+        .from('ai_agent_test_sessions')
+        .select('id')
+        .eq('agent_id', agent.id);
+      const sessionIds = (sessions || []).map((s: any) => s.id);
+      if (sessionIds.length) {
+        await db.from('ai_agent_test_messages').delete().in('session_id', sessionIds);
+        await db.from('ai_agent_test_sessions').delete().in('id', sessionIds);
+      }
+      const { error } = await db.from('ai_agents').delete().eq('id', agent.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ai_agents'] });
+      toast({ title: 'Agente excluído' });
+    },
+    onError: (e: any) =>
+      toast({ title: 'Erro ao excluir agente', description: e.message, variant: 'destructive' }),
+  });
+}
+
 export function useAgentVersions(agentId?: string) {
   return useQuery({
     queryKey: ['ai_agent_versions', agentId],
