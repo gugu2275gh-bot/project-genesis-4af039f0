@@ -419,7 +419,7 @@ export function advanceFlow(
   const index = indexSteps(steps)
   if (!state?.current_step) return startFlow(steps, lang)
   if (state.finished) {
-    return { messages: [], state, reasked: false, finished: true, handoff: !!state.handoff, path: [], captured: [] }
+    return { messages: [], outbound: [], state, reasked: false, finished: true, handoff: !!state.handoff, path: [], captured: [] }
   }
 
   const step = index.get(state.current_step)
