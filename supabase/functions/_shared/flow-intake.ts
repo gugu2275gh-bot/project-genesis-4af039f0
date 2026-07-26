@@ -272,10 +272,23 @@ export function renderAckMessage(cfg: IntakeConfig, lang: FlowLang, name?: strin
 // ---------------------------------------------------------------------------
 // Orquestração (com LLM injetado)
 
+/** Motivo do resultado do intake — sempre registrado em log. */
+export type IntakeReason =
+  | 'ok'
+  | 'disabled'
+  | 'short_message'
+  | 'llm_error'
+  | 'parse_error'
+  | 'no_data'
+  | 'no_match'
+
 export interface IntakeResult {
   fieldValues: Record<string, string>
   prefilled: Record<string, string>
   greeting: string
+  reason: IntakeReason
+  /** Detalhe do erro do LLM (status/mensagem), quando houver. */
+  detail?: string
 }
 
 export async function runIntake(params: {
@@ -286,20 +299,26 @@ export async function runIntake(params: {
   callLLM: (prompt: string) => Promise<string>
   now?: Date
 }): Promise<IntakeResult> {
-  const empty: IntakeResult = { fieldValues: {}, prefilled: {}, greeting: '' }
+  const empty = (reason: IntakeReason, detail?: string): IntakeResult => ({
+    fieldValues: {},
+    prefilled: {},
+    greeting: '',
+    reason,
+    ...(detail ? { detail } : {}),
+  })
   const { message, steps, lang, config, callLLM } = params
-  if (!config?.enabled) return empty
-  if (!message || String(message).trim().length < 5) return empty
+  if (!config?.enabled) return empty('disabled')
+  if (!message || String(message).trim().length < 5) return empty('short_message')
 
   let raw = ''
   try {
     raw = await callLLM(buildIntakePrompt(message))
-  } catch {
-    return empty
+  } catch (e) {
+    return empty('llm_error', e instanceof Error ? e.message : String(e))
   }
 
   const extraction = parseIntakeJson(raw)
-  if (!extraction) return empty
+  if (!extraction) return empty('parse_error', String(raw || '').slice(0, 200))
 
   const fieldValues = extractionToFieldValues(extraction, config.min_confidence, params.now)
   const allowed = config.fields || []
@@ -310,7 +329,15 @@ export async function runIntake(params: {
   }
 
   const prefilled = prefillFromFieldValues(steps, filtered, allowed)
-  const greeting = Object.keys(prefilled).length ? renderIntakeGreeting(config, lang, filtered) : ''
 
-  return { fieldValues: filtered, prefilled, greeting }
+  // A saudação personalizada usa TUDO que foi entendido — inclusive um primeiro
+  // nome que não serve para responder a etapa de "nome completo".
+  const greeting = renderIntakeGreeting(config, lang, filtered)
+
+  let reason: IntakeReason = 'ok'
+  if (!Object.keys(filtered).length) reason = 'no_data'
+  else if (!Object.keys(prefilled).length) reason = 'no_match'
+
+  return { fieldValues: filtered, prefilled, greeting, reason }
 }
+
