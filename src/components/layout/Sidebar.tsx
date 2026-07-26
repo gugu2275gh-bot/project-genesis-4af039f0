@@ -15,6 +15,7 @@ import {
   LogOut,
   ChevronLeft,
   Menu,
+  Bot,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
@@ -59,6 +60,7 @@ const navItems: NavItem[] = [
   { label: 'Jurídico', href: '/legal', icon: Scale, roles: ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA', 'JURIDICO'] },
   { label: 'Tarefas', href: '/tasks', icon: CheckSquare },
   { label: 'Relatórios', href: '/reports', icon: BarChart3, roles: ['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA'] },
+  { label: 'Agentes de IA', href: '/ai-agents', icon: Bot, roles: ['ADMIN'] },
   { label: 'Configurações', href: '/settings', icon: Settings, roles: ['ADMIN', 'MANAGER', 'SUPERVISOR'] },
 ];
 

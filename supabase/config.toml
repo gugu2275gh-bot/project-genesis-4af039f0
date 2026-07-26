@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.openai-credit-check]
 verify_jwt = false
+
+[functions.ai-agent-sandbox]
+verify_jwt = true
