@@ -315,6 +315,11 @@ import {
   getLanguageName,
   getPromptTemplates,
 } from './lib/language.ts'
+import {
+  isFlowLanguage,
+  detectExplicitLanguageRequest,
+  detectLockableLanguageOrNull,
+} from '../_shared/language-detect.ts'
 
 export { detectChatLanguage }
 export type { ChatLanguage }
@@ -1588,8 +1593,13 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           const flowStateSaved = savedFromFunnel ?? { ...visualFlowSavedState }
 
           if (flowPlan.enabled && !flowStateSaved.finished) {
-            const turn = runVisualFlowTurn(flowPlan, flowStateSaved, currentCustomerMessage || '', detectedChatLanguage as any)
-            const nextFlowState = { ...turn.state, lang: detectedChatLanguage }
+            // O idioma do fluxo é travado na 1ª vez e NUNCA sobrescrito depois
+            // (só um pedido explícito do cliente troca — já tratado acima).
+            const flowLang = isFlowLanguage(flowStateSaved?.lang) && !explicitRequest
+              ? (flowStateSaved.lang as any)
+              : detectedChatLanguage
+            const turn = runVisualFlowTurn(flowPlan, flowStateSaved, currentCustomerMessage || '', flowLang as any)
+            const nextFlowState = { ...turn.state, lang: flowLang }
 
             console.log('[VISUAL_FLOW]', JSON.stringify({
               step: turn.state.current_step,
@@ -1597,7 +1607,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
               finished: turn.finished,
               handoff: turn.handoff,
               path: turn.path,
-              lang: detectedChatLanguage,
+              lang: flowLang,
             }))
 
             // Grava as respostas com "Salvar resposta em" nos campos do CRM.
