@@ -1239,17 +1239,18 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
 
     // ========== ADAPTIVE BUFFER: wait briefly to consolidate multiple client messages ==========
     if (!skipAIAgent) {
-      // Buffer adaptativo: mensagens "completas" (longas ou terminando em pontuação)
-      // dispensam espera longa. Caso contrário, aguarda apenas 1.5s para consolidar
-      // múltiplos balões enviados em sequência pelo cliente.
-      // Buffer adaptativo: mensagens "completas" (longas ou terminando em pontuação)
-      // dispensam espera longa. Caso contrário, aguarda apenas 1.5s para consolidar
-      // múltiplos balões enviados em sequência pelo cliente.
+      // Buffer adaptativo (otimização de latência):
+      //  - mensagem "completa" (longa ou terminando em pontuação): 300ms
+      //  - etapa de fluxo que espera resposta curta (Sim/Não, opção, data): 0ms
+      //  - demais casos: 700ms para consolidar balões em sequência
       const incomingText = (displayBody || message.body || '').trim()
       const looksComplete = incomingText.length > 120 || /[.!?…]$/.test(incomingText)
-      const bufferMs = looksComplete ? 300 : 1500
-      console.log(`Buffer: waiting ${bufferMs}ms for additional messages (complete=${looksComplete})...`)
-      await new Promise(resolve => setTimeout(resolve, bufferMs))
+      const shortAnswerStep = visualFlowActive && expectsShortAnswer(visualFlowPlan, visualFlowSavedState?.current_step)
+      const bufferMs = shortAnswerStep ? 0 : (looksComplete ? 300 : 700)
+      console.log(`Buffer: waiting ${bufferMs}ms for additional messages (complete=${looksComplete}, shortAnswerStep=${shortAnswerStep})...`)
+      if (bufferMs > 0) await new Promise(resolve => setTimeout(resolve, bufferMs))
+      __perf.mark('buffer_ms')
+
 
       // Check if newer messages arrived from the same lead after our message was inserted
       const { data: newerMessages } = await supabase
