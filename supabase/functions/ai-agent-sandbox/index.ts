@@ -257,7 +257,7 @@ Deno.serve(async (req) => {
     }
 
 
-    const history = [...(prior || []), { role: 'user', content: message }]
+    const history = userMessageStored ? [...(prior || [])] : [...(prior || []), { role: "user", content: message }]
 
     const provider = String(config.provider || 'gemini')
     const model = String(config.model || 'gemini-2.5-flash')
