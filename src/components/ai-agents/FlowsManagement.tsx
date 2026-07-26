@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Pencil, Trash2, ListOrdered, Workflow } from 'lucide-react';
 import { FlowCanvas } from '@/components/ai-agents/flow-builder/FlowCanvas';
+import { FlowErrorBoundary } from '@/components/ai-agents/flow-builder/FlowErrorBoundary';
+
 import {
   useAgentFlows,
   useDeleteFlow,
