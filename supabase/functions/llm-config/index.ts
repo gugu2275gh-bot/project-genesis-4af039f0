@@ -165,6 +165,20 @@ const OPENAI_FALLBACK: ModelInfo[] = [
   { id: 'gpt-4o', displayName: 'gpt-4o' },
 ]
 
+// Catálogo do Lovable AI Gateway (ids fixos suportados pelo gateway)
+const LOVABLE_MODELS: ModelInfo[] = [
+  { id: 'google/gemini-3.6-flash', displayName: 'Gemini 3.6 Flash (Lovable AI)' },
+  { id: 'google/gemini-3.5-flash', displayName: 'Gemini 3.5 Flash (Lovable AI)' },
+  { id: 'google/gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite (Lovable AI)' },
+  { id: 'google/gemini-3.1-pro-preview', displayName: 'Gemini 3.1 Pro Preview (Lovable AI)' },
+  { id: 'google/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash (Lovable AI)' },
+  { id: 'openai/gpt-5.5', displayName: 'GPT-5.5 (Lovable AI)' },
+  { id: 'openai/gpt-5.4-mini', displayName: 'GPT-5.4 Mini (Lovable AI)' },
+  { id: 'openai/gpt-5.4-nano', displayName: 'GPT-5.4 Nano (Lovable AI)' },
+]
+
+
+
 async function listGeminiModels(force = false): Promise<{ models: ModelInfo[]; cached: boolean; error?: string }> {
   const cacheKey = 'gemini'
   const now = Date.now()
