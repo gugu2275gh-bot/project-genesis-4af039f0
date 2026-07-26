@@ -88,7 +88,7 @@ export default function LLMSettings() {
         .update({
           gemini_enabled: payload.gemini_enabled,
           openai_enabled: payload.openai_enabled,
-          cascade: payload.cascade as any,
+          cascade: payload.cascade.map(normalizeCascadeItem) as any,
         })
         .eq('id', payload.id);
       if (error) throw error;
@@ -274,7 +274,8 @@ export default function LLMSettings() {
           <CardDescription>O agente tenta cada modelo nesta ordem. Modelos desabilitados são pulados.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {draft.cascade.map((item, idx) => {
+          {draft.cascade.map((rawItem, idx) => {
+            const item = normalizeCascadeItem(rawItem);
             const key = `${item.provider}/${item.model}`;
             const result = testResults[key];
             return (
