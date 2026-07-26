@@ -359,7 +359,7 @@ export function StepRoutingEditor({
           'Nenhuma (apenas repergunta)',
         )}
         <p className="text-[11px] text-muted-foreground">
-          Usada quando o cliente erra a resposta mais de {validation.max_reasks ?? 2} vezes.
+          Usada quando o cliente erra a resposta mais de {validation.max_reasks ?? 1} vez(es).
         </p>
       </div>
     </div>
