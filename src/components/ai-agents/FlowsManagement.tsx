@@ -333,7 +333,10 @@ export function FlowsManagement() {
               <TableCell className="max-w-[280px] truncate">{f.description || '—'}</TableCell>
               <TableCell><Badge variant="outline">{f.status}</Badge></TableCell>
               <TableCell className="text-right space-x-1">
-                <Button size="sm" variant="outline" onClick={() => setSelected(f.id)}>Etapas</Button>
+                <Button size="sm" variant="outline" onClick={() => setSelected(f.id)}>
+                  <Workflow className="h-4 w-4 mr-1" /> Abrir editor
+                </Button>
+
                 <Button size="icon" variant="ghost" onClick={() => { setDraft(f); setDialogOpen(true); }}>
                   <Pencil className="h-4 w-4" />
                 </Button>
