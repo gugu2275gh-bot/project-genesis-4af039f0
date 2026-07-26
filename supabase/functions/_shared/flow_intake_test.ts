@@ -16,13 +16,13 @@ import {
 } from './flow-intake.ts'
 
 const STEPS = [
-  { step_code: 'inicio', name: 'Início', step_kind: 'INICIO', message: { 'pt-BR': 'Olá!', en: 'Hello!' }, next_step_code: 'nome' },
-  { step_code: 'nome', name: 'Nome completo', step_kind: 'PERGUNTA', answer_type: 'NOME', message: { 'pt-BR': 'Qual seu nome completo?', en: 'What is your full name?' }, next_step_code: 'local' },
-  { step_code: 'local', name: 'Está na Espanha', step_kind: 'PERGUNTA', answer_type: 'SIM_NAO', message: { 'pt-BR': 'Você já está na Espanha?', en: 'Are you already in Spain?' }, branches: [{ value: 'sim', next_step_code: 'entrada' }, { value: 'nao', next_step_code: 'interesse' }] },
-  { step_code: 'entrada', name: 'Data de entrada na Espanha', step_kind: 'PERGUNTA', answer_type: 'DATA', message: { 'pt-BR': 'Qual a data de entrada?', en: 'Entry date?' }, next_step_code: 'interesse' },
-  { step_code: 'interesse', name: 'O que busca hoje', step_kind: 'PERGUNTA', answer_type: 'TEXTO_LIVRE', message: { 'pt-BR': 'O que você busca hoje?', en: 'What are you looking for?' }, next_step_code: 'email' },
-  { step_code: 'email', name: 'E-mail', step_kind: 'PERGUNTA', answer_type: 'EMAIL', message: { 'pt-BR': 'Qual seu e-mail?', en: 'Your email?' }, next_step_code: 'fim' },
-  { step_code: 'fim', name: 'Encaminhamento', step_kind: 'FIM', handoff: true, message: { 'pt-BR': 'Vou te encaminhar.', en: 'Transferring you.' } },
+  { step_code: 'inicio', name: 'Início', step_kind: 'INICIO', messages: { 'pt-BR': ['Olá!'], en: ['Hello!'] }, next_step_code: 'nome' },
+  { step_code: 'nome', name: 'Nome completo', step_kind: 'PERGUNTA', answer_type: 'NOME', messages: { 'pt-BR': ['Qual seu nome completo?'], en: ['What is your full name?'] }, next_step_code: 'local' },
+  { step_code: 'local', name: 'Está na Espanha', step_kind: 'PERGUNTA', answer_type: 'SIM_NAO', messages: { 'pt-BR': ['Você já está na Espanha?'], en: ['Are you already in Spain?'] }, branches: [{ value: 'sim', next_step_code: 'entrada' }, { value: 'nao', next_step_code: 'interesse' }] },
+  { step_code: 'entrada', name: 'Data de entrada na Espanha', step_kind: 'PERGUNTA', answer_type: 'DATA', messages: { 'pt-BR': ['Qual a data de entrada?'], en: ['Entry date?'] }, next_step_code: 'interesse' },
+  { step_code: 'interesse', name: 'O que busca hoje', step_kind: 'PERGUNTA', answer_type: 'TEXTO_LIVRE', messages: { 'pt-BR': ['O que você busca hoje?'], en: ['What are you looking for?'] }, next_step_code: 'email' },
+  { step_code: 'email', name: 'E-mail', step_kind: 'PERGUNTA', answer_type: 'EMAIL', messages: { 'pt-BR': ['Qual seu e-mail?'], en: ['Your email?'] }, next_step_code: 'fim' },
+  { step_code: 'fim', name: 'Encaminhamento', step_kind: 'FIM', handoff: true, messages: { 'pt-BR': ['Vou te encaminhar.'], en: ['Transferring you.'] } },
 ]
 
 const CFG = normalizeIntakeConfig({ enabled: true, min_confidence: 0.7 })
