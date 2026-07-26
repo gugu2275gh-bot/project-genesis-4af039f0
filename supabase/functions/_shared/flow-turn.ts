@@ -71,19 +71,19 @@ export async function advanceFlowTurn(
   let effectiveMessage = message
   let workingState: FlowRunState = state
 
-  // Recursos opcionais rodam EM PARALELO (base + reconhecimento + resposta à
-  // dúvida), com timeout curto: nenhum deles pode atrasar a retomada do fluxo.
+  // Recursos opcionais rodam EM PARALELO (base + reconhecimento), com timeout
+  // curto: nenhum deles pode atrasar a retomada do fluxo.
   const kbCfg = kbCheckOf(step)
   const wantsKbCheck = kbCfg.enabled && !!deps.callLLM && !!deps.kbSearch && !!text
   const wantsAck = ackAiEnabledFor(step) && !!deps.callLLM
-  const wantsAside = !!deps.callLLM && !!deps.kbSearch && looksLikeQuestion(text)
-
-  const kbContextP = (wantsKbCheck || wantsAside) && deps.kbSearch
-    ? withTimeout(Promise.resolve(deps.kbSearch(text)), ASSIST_TIMEOUT_MS, 'kb_search')
-    : Promise.resolve(null)
+  // A "resposta e retomada" só é possível quando há LLM + base e a mensagem
+  // parece uma dúvida — mas só é EXECUTADA se o fluxo realmente reperguntar.
+  const canAside = !!deps.callLLM && !!deps.kbSearch && looksLikeQuestion(text)
 
   const [kbContext, ackGenerated] = await Promise.all([
-    kbContextP,
+    wantsKbCheck && deps.kbSearch
+      ? withTimeout(Promise.resolve(deps.kbSearch(text)), ASSIST_TIMEOUT_MS, 'kb_search')
+      : Promise.resolve(null),
     wantsAck
       ? withTimeout(
         generateAckPhrase({ question, answer: message, lang, callLLM: deps.callLLM }),
@@ -93,22 +93,14 @@ export async function advanceFlowTurn(
       : Promise.resolve(null),
   ])
 
-  const [verdict, aside] = await Promise.all([
-    wantsKbCheck && kbContext
-      ? withTimeout(
-        runKbCheck({ question, answer: message, cfg: kbCfg, lang, kbContext, callLLM: deps.callLLM }),
-        ASSIST_TIMEOUT_MS,
-        'kb_check',
-      )
-      : Promise.resolve(null),
-    wantsAside && kbContext
-      ? withTimeout(
-        answerAside({ question: text, lang, kbContext, callLLM: deps.callLLM }),
-        ASSIST_TIMEOUT_MS,
-        'answer_aside',
-      )
-      : Promise.resolve(null),
-  ])
+  const verdict = wantsKbCheck && kbContext
+    ? await withTimeout(
+      runKbCheck({ question, answer: message, cfg: kbCfg, lang, kbContext, callLLM: deps.callLLM }),
+      ASSIST_TIMEOUT_MS,
+      'kb_check',
+    )
+    : null
+
 
   // 1) Checagem na base de conhecimento (só quando ligada na etapa).
   if (wantsKbCheck) {
