@@ -479,12 +479,39 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
-      const { data: isAdmin } = await admin.rpc('has_role', { _user_id: userData.user.id, _role: 'ADMIN' })
+      const userId = userData.user.id
+      let isAdmin = false
+      const { data: rpcAdmin, error: rpcErr } = await admin.rpc('has_role', { _user_id: userId, _role: 'ADMIN' })
+      if (rpcErr) console.warn('[AGENT_DEFAULTS] has_role rpc falhou:', rpcErr.message)
+      isAdmin = rpcAdmin === true
+
       if (!isAdmin) {
+        // Fallback direto na tabela (service role ignora RLS)
+        const { data: roleRows, error: roleErr } = await admin
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId)
+        if (roleErr) console.warn('[AGENT_DEFAULTS] leitura user_roles falhou:', roleErr.message)
+        isAdmin = (roleRows || []).some((r: any) => r.role === 'ADMIN')
+      }
+
+      if (!isAdmin) {
+        // Superusuários também podem sincronizar
+        const { data: su } = await admin
+          .from('superusers')
+          .select('id')
+          .eq('user_id', userId)
+          .maybeSingle()
+        isAdmin = !!su
+      }
+
+      if (!isAdmin) {
+        console.warn('[AGENT_DEFAULTS] acesso negado para', userId, userData.user.email)
         return new Response(JSON.stringify({ error: 'forbidden' }), {
           status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
       }
+
       return new Response(JSON.stringify(collectAgentDefaults()), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
