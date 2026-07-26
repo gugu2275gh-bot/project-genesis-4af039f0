@@ -116,8 +116,11 @@ export interface FlowBranch {
   label: string;
   match_type: BranchMatchType;
   value: string;
+  /** Equivalentes aceitos (traduções e variações) além do valor principal. */
+  synonyms?: string[];
   next_step_code: string | null;
 }
+
 
 /** Formatos aceitos na validação da resposta. */
 export type AnswerFormat =
