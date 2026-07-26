@@ -125,6 +125,20 @@ export async function enforceResponseLanguage(
   return responseText
 }
 
+
+/**
+ * Remove a última frase incompleta (sem pontuação final) de uma resposta que
+ * foi cortada pelo limite de tokens do modelo.
+ */
+export function trimIncompleteSentence(text: string): string {
+  const t = (text || '').trim()
+  if (!t) return ''
+  if (/[.!?…:)\]"'\u201d]$/.test(t)) return t
+  const cut = Math.max(t.lastIndexOf('.'), t.lastIndexOf('!'), t.lastIndexOf('?'), t.lastIndexOf('…'))
+  if (cut > 30) return t.slice(0, cut + 1).trim()
+  return t
+}
+
 export async function generateAIResponse(
   conversationHistory: Array<{ role: string; content: string }>,
   currentMessage: string,
@@ -330,6 +344,11 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
         break
       }
     }
+  }
+
+  if (truncatedFallback) {
+    console.warn('[AI cascade] Todos os modelos falharam; usando resposta truncada saneada')
+    return await enforceResponseLanguage(truncatedFallback, forcedLanguage, apiKey)
   }
 
   throw new Error(`All models in cascade failed: ${lastError instanceof Error ? lastError.message : 'unknown error'}`)
