@@ -58,7 +58,8 @@ export function resolveFlowLanguage(
   if (isFlowLanguage(lockedLang)) {
     return { lang: lockedLang, locked: true, detected: null }
   }
-  const detected = detectFlowLanguageOrNull(message)
+  // Amostras curtas/ambíguas (sim, no, sí, ok) não travam idioma.
+  const detected = detectLockableLanguageOrNull(message)
   if (detected) return { lang: detected, locked: true, detected }
   const fallback = isFlowLanguage(defaultLang) ? defaultLang : 'pt-BR'
   return { lang: fallback, locked: false, detected: null }
