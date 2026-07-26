@@ -74,13 +74,18 @@ Deno.test('modo PULAR grava valor de reserva e segue para a próxima etapa norma
   assertEquals(s2.state.unknown_attempts, 0)
 })
 
-Deno.test('modo INSISTIR nunca avança', () => {
+Deno.test('modo INSISTIR insiste e, esgotado, escala em vez de repetir para sempre', () => {
   const steps = buildSteps({ mode: 'INSISTIR', attempts: 1 })
   const s1 = advanceFlow(steps, baseState, 'no sé', 'es')
+  assertEquals(s1.state.current_step, 'DATA_ENTRADA')
+  assertEquals(s1.reasked, true)
   const s2 = advanceFlow(steps, s1.state, 'no sé', 'es')
-  assertEquals(s2.state.current_step, 'DATA_ENTRADA')
-  assertEquals(s2.reasked, true)
+  // Sem etapa de fallback e sem data aproximada: encerra o bot e passa para humano.
+  assertEquals(s2.handoff, true)
+  assertEquals(s2.finished, true)
+  assertEquals(s2.reasked, false)
 })
+
 
 Deno.test('modo ENCAMINHAR usa a etapa de fallback configurada', () => {
   const steps = buildSteps({ mode: 'ENCAMINHAR', attempts: 0 })
