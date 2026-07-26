@@ -292,21 +292,47 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
             <TableHead>Nome</TableHead>
             <TableHead>Fase</TableHead>
             <TableHead>Tipo</TableHead>
+            <TableHead>Caminhos</TableHead>
             <TableHead>Próxima</TableHead>
             <TableHead className="text-right">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {(steps || []).length === 0 && (
-            <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Nenhuma etapa cadastrada</TableCell></TableRow>
+            <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">Nenhuma etapa cadastrada</TableCell></TableRow>
           )}
-          {(steps || []).map((s) => (
+          {(steps || []).map((s) => {
+            const codes = new Set((steps || []).map((x) => x.step_code));
+            const paths = normalizeBranches((s as any).branches);
+            const broken = paths.filter(
+              (b) => !b.next_step_code || !codes.has(b.next_step_code),
+            ).length;
+            return (
             <TableRow key={s.id}>
               <TableCell>{s.order_index}</TableCell>
               <TableCell className="font-mono text-xs">{s.step_code}</TableCell>
               <TableCell>{s.name}</TableCell>
               <TableCell><Badge variant="outline">{phaseLabel(s.phase)}</Badge></TableCell>
               <TableCell>{ANSWER_TYPES.find((t) => t.value === s.answer_type)?.label || s.answer_type}</TableCell>
+              <TableCell className="font-mono text-[11px]">
+                {paths.length === 0 ? (
+                  <span className="text-muted-foreground">—</span>
+                ) : (
+                  <div className="space-y-0.5">
+                    {paths.slice(0, 3).map((b) => (
+                      <div key={b.id} className="truncate max-w-[220px]">
+                        {(b.value || b.label || '—')} → {b.next_step_code || '(padrão)'}
+                      </div>
+                    ))}
+                    {paths.length > 3 && <div className="text-muted-foreground">+{paths.length - 3}</div>}
+                    {broken > 0 && (
+                      <div className="flex items-center gap-1 text-amber-600">
+                        <AlertTriangle className="h-3 w-3" /> {broken} sem destino válido
+                      </div>
+                    )}
+                  </div>
+                )}
+              </TableCell>
               <TableCell className="font-mono text-xs">{s.next_step_code || '—'}</TableCell>
               <TableCell className="text-right space-x-1">
                 <Button size="icon" variant="ghost" onClick={() => { setEditing(s); setOpen(true); }}>
@@ -317,7 +343,8 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
                 </Button>
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
       {open && (
@@ -329,8 +356,10 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
           flowPhase={(flow.phase || 'GERAL') as FlowPhase}
           step={editing}
           nextIndex={(steps?.length || 0) + 1}
+          allSteps={steps || []}
         />
       )}
+
 
     </div>
   );
