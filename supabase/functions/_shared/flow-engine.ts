@@ -916,3 +916,37 @@ export function inferFieldMapping(step: FlowStep): string | null {
 
   return null
 }
+
+// ---------------------------------------------------------------------------
+// Utilitários usados pela orquestração (checagem na base de conhecimento)
+
+/** Retoma o grafo a partir de uma etapa específica (ex.: fallback de KB). */
+export function jumpToStep(
+  steps: FlowStep[],
+  code: string,
+  state: FlowRunState,
+  lang: FlowLang = 'pt-BR',
+): FlowTurnResult | null {
+  const index = indexSteps(steps)
+  if (!code || !index.get(code)) return null
+  return run(index, code, { ...state, attempts: 0, unknown_attempts: 0 }, lang)
+}
+
+/** Permanece na etapa atual enviando um texto (repergunta/explicação). */
+export function buildStayTurn(
+  step: FlowStep,
+  text: string,
+  state: FlowRunState,
+  patch: Partial<FlowRunState> = {},
+): FlowTurnResult {
+  return {
+    messages: text ? [text] : [],
+    outbound: text ? [{ text, step_code: step.step_code, quick_reply: quickReplyOf(step) }] : [],
+    state: { ...state, ...patch },
+    reasked: true,
+    finished: false,
+    handoff: false,
+    path: [step.step_code],
+    captured: [],
+  }
+}
