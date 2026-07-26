@@ -14,7 +14,7 @@ import {
   CheckCircle2, XCircle, Loader2, Activity, RefreshCw, Download, Upload,
 } from 'lucide-react';
 
-type Provider = 'gemini' | 'openai';
+type Provider = 'gemini' | 'openai' | 'lovable';
 interface CascadeItem { provider: Provider; model: string; enabled: boolean; }
 interface LLMSettingsRow {
   id: string;
