@@ -307,7 +307,7 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 }
 
 // Cache em memória da cascata (TTL curto p/ refletir mudanças do admin sem polling pesado)
-type CascadeItem = { provider: 'gemini' | 'openai'; model: string }
+type CascadeItem = { provider: 'gemini' | 'openai' | 'lovable'; model: string }
 let _cascadeCache: { value: CascadeItem[]; expires: number } | null = null
 const DEFAULT_CASCADE: CascadeItem[] = [
   { provider: 'gemini', model: 'gemini-3-flash-preview' },
