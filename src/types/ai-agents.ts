@@ -190,6 +190,25 @@ export const ANSWER_TYPES: { value: AnswerType; label: string }[] = [
   { value: 'MULTIPLA_ESCOLHA', label: 'Múltipla escolha' },
 ];
 
+/**
+ * Campos do CRM que podem receber automaticamente a resposta de uma etapa
+ * ("Salvar resposta em"). Vazio = a resposta fica apenas no histórico do fluxo.
+ */
+export const STEP_FIELD_MAPPINGS: { value: string; label: string }[] = [
+  { value: 'contact.full_name', label: 'Contato — Nome completo' },
+  { value: 'contact.email', label: 'Contato — E-mail' },
+  { value: 'funnel.interest_confirmed', label: 'Funil — Interesse/serviço' },
+  { value: 'funnel.location_known', label: 'Funil — Está na Espanha? (Sim/Não)' },
+  { value: 'funnel.entry_date_confirmed', label: 'Funil — Data de entrada na Espanha' },
+  { value: 'funnel.empadronado_confirmed', label: 'Funil — Está empadronado? (Sim/Não)' },
+  { value: 'funnel.empadronado_city', label: 'Funil — Cidade de empadronamento' },
+  { value: 'outside.age', label: 'Fora da Espanha — Idade' },
+  { value: 'outside.europe_6m', label: 'Fora da Espanha — Esteve na Europa (6 meses)' },
+  { value: 'outside.eu_family', label: 'Fora da Espanha — Familiar europeu/residente' },
+  { value: 'outside.remote_work', label: 'Fora da Espanha — Trabalha remoto' },
+];
+
+
 export interface AgentFlowStep {
   id: string;
   flow_id: string;
@@ -204,6 +223,8 @@ export interface AgentFlowStep {
   phase: FlowPhase;
 
   answer_type: AnswerType;
+  /** Campo do CRM onde a resposta desta etapa é gravada (null = nenhum). */
+  field_mapping: string | null;
   validation: Record<string, unknown>;
   next_step_code: string | null;
   exit_condition: string | null;

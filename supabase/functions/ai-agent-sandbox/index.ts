@@ -3,7 +3,7 @@
 // NÃO envia mensagens reais pelo WhatsApp e NÃO utiliza Twilio.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
 import { buildSystemPrompt } from './lib/prompt-builder.ts'
-import { advanceFlow, findStartStep, startFlow, stepKindOf } from '../_shared/flow-engine.ts'
+import { advanceFlow, findStartStep, mergeFlows, startFlow, stepKindOf } from '../_shared/flow-engine.ts'
 import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
 
 
@@ -150,25 +150,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    let steps: any[] = []
-    if (config.flow_id) {
+    const fetchSteps = async (flowId: string | null | undefined) => {
+      if (!flowId) return [] as any[]
       const { data } = await service
         .from('ai_agent_flow_steps')
         .select('*')
-        .eq('flow_id', config.flow_id)
+        .eq('flow_id', flowId)
         .order('order_index', { ascending: true })
-      steps = data || []
+      return data || []
     }
 
-    // Também carrega o fluxo de pré-handoff quando o agente tiver um.
-    if (config.pre_handoff_flow_id && config.pre_handoff_flow_id !== config.flow_id) {
-      const { data } = await service
-        .from('ai_agent_flow_steps')
-        .select('*')
-        .eq('flow_id', config.pre_handoff_flow_id)
-        .order('order_index', { ascending: true })
-      if ((data || []).length) steps = [...(data || []), ...steps]
-    }
+    // Pré-handoff (ou o fluxo legado do agente) + handoff encadeados,
+    // exatamente como a produção executa.
+    const preFlowId = config.pre_handoff_flow_id || config.flow_id || null
+    const handFlowId = config.handoff_flow_id || null
+    const [preSteps, handSteps] = await Promise.all([fetchSteps(preFlowId), fetchSteps(handFlowId)])
+    let steps: any[] = mergeFlows(preSteps, handSteps)
+
 
     // ------------------------------------------------------------------
     // EXECUÇÃO DETERMINÍSTICA DO FLUXO DESENHADO

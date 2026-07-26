@@ -24,6 +24,7 @@ export type Database = {
           created_by: string | null
           description: string | null
           exit_condition: string | null
+          field_mapping: string | null
           flow_id: string
           handoff: boolean
           id: string
@@ -48,6 +49,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           exit_condition?: string | null
+          field_mapping?: string | null
           flow_id: string
           handoff?: boolean
           id?: string
@@ -72,6 +74,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           exit_condition?: string | null
+          field_mapping?: string | null
           flow_id?: string
           handoff?: boolean
           id?: string
@@ -1947,6 +1950,7 @@ export type Database = {
           status: string | null
           step: string
           updated_at: string
+          visual_flow_state: Json
         }
         Insert: {
           answers?: Json
@@ -1970,6 +1974,7 @@ export type Database = {
           status?: string | null
           step?: string
           updated_at?: string
+          visual_flow_state?: Json
         }
         Update: {
           answers?: Json
@@ -1993,6 +1998,7 @@ export type Database = {
           status?: string | null
           step?: string
           updated_at?: string
+          visual_flow_state?: Json
         }
         Relationships: [
           {

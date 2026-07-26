@@ -505,7 +505,13 @@ export function AgentFormDialog({ open, onOpenChange, agent, readOnly }: Props) 
           </TabsContent>
 
           <TabsContent value="fluxo" className="space-y-4">
+            <p className="rounded-md border border-amber-300/60 bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              Quando um fluxo visual está selecionado abaixo, ele tem prioridade: o atendimento segue
+              exatamente as etapas, validações e ramificações do fluxo, ignorando o roteiro automático
+              anterior. A IA só volta a conduzir a conversa depois que o fluxo termina.
+            </p>
             <div className="space-y-2">
+
               <LabelWithTip
                 label="Fluxo de pré-handoff"
                 tip="Etapas que o agente executa sozinho, coletando informações antes de encaminhar para um atendente."

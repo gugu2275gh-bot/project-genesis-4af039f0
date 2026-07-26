@@ -30,6 +30,7 @@ import { MultiLangField } from '@/components/ai-agents/MultiLangField';
 import {
   ANSWER_TYPES,
   FLOW_PHASES,
+  STEP_FIELD_MAPPINGS,
   type AgentFlow,
   type AgentFlowStep,
   type FlowPhase,
@@ -69,6 +70,7 @@ function StepDialog({
       reask_messages: {},
       phase: flowPhase,
       answer_type: 'TEXTO_LIVRE',
+      field_mapping: null,
       next_step_code: '',
       exit_condition: '',
       branches: [],
@@ -204,6 +206,21 @@ function StepDialog({
                 onChange={(e) => set({ order_index: e.target.value.replace(/\D/g, '') })}
                 onBlur={(e) => set({ order_index: Number(e.target.value) || 0 })}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Salvar resposta em</Label>
+              <Select
+                value={(draft as any).field_mapping || '__none__'}
+                onValueChange={(v) => set({ field_mapping: v === '__none__' ? null : v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Nenhum campo" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Nenhum (só no histórico do fluxo)</SelectItem>
+                  {STEP_FIELD_MAPPINGS.map((f) => (
+                    <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label>Condição de saída</Label>

@@ -11,7 +11,7 @@ import { Plus, Trash2, X } from 'lucide-react';
 import { MultiLangField } from '@/components/ai-agents/MultiLangField';
 import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
-import { ANSWER_TYPES, FLOW_PHASES, type AgentFlowStep } from '@/types/ai-agents';
+import { ANSWER_TYPES, FLOW_PHASES, STEP_FIELD_MAPPINGS, type AgentFlowStep } from '@/types/ai-agents';
 
 import {
   STEP_KINDS,
@@ -215,6 +215,26 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
             </div>
             )}
 
+            {kind === 'PERGUNTA' && (
+              <div className="space-y-2">
+                <Label>Salvar resposta em</Label>
+                <Select
+                  value={(step as any).field_mapping || '__none__'}
+                  onValueChange={(v) => onChange({ field_mapping: v === '__none__' ? null : v } as any)}
+                >
+                  <SelectTrigger><SelectValue placeholder="Nenhum campo" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Nenhum (só no histórico do fluxo)</SelectItem>
+                    {STEP_FIELD_MAPPINGS.map((f) => (
+                      <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  A resposta validada é gravada automaticamente neste campo do cliente.
+                </p>
+              </div>
+            )}
 
             <StepRoutingEditor
               answerType={step.answer_type}

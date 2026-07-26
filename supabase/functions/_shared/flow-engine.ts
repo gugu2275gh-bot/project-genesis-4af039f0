@@ -40,6 +40,10 @@ export interface FlowStep {
   branches?: FlowBranch[]
   handoff?: boolean
   order_index?: number
+  /** Campo do CRM onde a resposta desta etapa deve ser gravada (opcional). */
+  field_mapping?: string | null
+  /** Fase do fluxo de origem ("PRE_HANDOFF" | "HANDOFF"). */
+  phase?: string | null
 }
 
 export interface FlowRunState {
@@ -55,6 +59,15 @@ export interface FlowRunState {
   finished?: boolean
   /** Handoff disparado pela etapa final. */
   handoff?: boolean
+  /** Idioma travado do atendimento. */
+  lang?: FlowLang
+}
+
+/** Resposta validada que deve ser gravada num campo do CRM. */
+export interface FlowCapturedField {
+  step_code: string
+  field: string
+  value: string
 }
 
 export interface FlowTurnResult {
@@ -67,7 +80,10 @@ export interface FlowTurnResult {
   handoff: boolean
   /** Etapas percorridas neste turno (para logs). */
   path: string[]
+  /** Respostas com `field_mapping` capturadas neste turno. */
+  captured: FlowCapturedField[]
 }
+
 
 const MAX_STEPS_PER_TURN = 25
 
@@ -229,7 +245,55 @@ export function resolveNextCode(step: FlowStep, answer: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Encadeamento pré-handoff → handoff
+
+/**
+ * Junta o fluxo de pré-handoff com o de handoff num único grafo.
+ *
+ * Toda etapa FIM do pré-handoff que não tenha saída explícita passa a apontar
+ * para a etapa inicial do fluxo de handoff (e deixa de encerrar o atendimento),
+ * garantindo que o handoff rode automaticamente na sequência.
+ */
+export function mergeFlows(preSteps: FlowStep[], handoffSteps: FlowStep[]): FlowStep[] {
+  const pre = [...(preSteps || [])]
+  const hand = [...(handoffSteps || [])]
+  if (!pre.length) return hand
+  if (!hand.length) return pre
+
+  const handStart = findStartStep(hand)
+  if (!handStart) return pre
+
+  const preCodes = new Set(pre.map((s) => s.step_code))
+  const chained = pre.map((s) => {
+    if (stepKindOf(s) !== 'FIM') return s
+    const next = String(s.next_step_code || '').trim()
+    if (next && preCodes.has(next)) return s
+    return {
+      ...s,
+      next_step_code: handStart.step_code,
+      validation: { ...(s.validation || {}), step_kind: 'INFORMATIVA' },
+    }
+  })
+
+  // A etapa inicial do handoff vira INFORMATIVA/PERGUNTA comum: só o
+  // pré-handoff tem "INICIO" no grafo unificado.
+  const normalizedHand = hand.map((s) => {
+    if (s.step_code !== handStart.step_code) return s
+    if (stepKindOf(s) !== 'INICIO') return s
+    return { ...s, validation: { ...(s.validation || {}), step_kind: 'INFORMATIVA' } }
+  })
+
+  return [...chained, ...normalizedHand]
+}
+
+// ---------------------------------------------------------------------------
 // Execução
+
+function captureOf(step: FlowStep, value: string): FlowCapturedField[] {
+  const field = String(step?.field_mapping || '').trim()
+  if (!field) return []
+  return [{ step_code: step.step_code, field, value }]
+}
 
 /**
  * Avança pelo grafo a partir de `fromCode`, acumulando mensagens de etapas
@@ -240,17 +304,20 @@ function run(
   fromCode: string | null,
   state: FlowRunState,
   lang: FlowLang,
+  captured: FlowCapturedField[] = [],
 ): FlowTurnResult {
   const messages: string[] = []
   const path: string[] = []
   const visited = new Set(state.visited || [])
   let code: string | null = fromCode
   let guard = 0
+  let sawHandoff = false
 
   while (code && guard++ < MAX_STEPS_PER_TURN) {
     const step = index.get(code)
     if (!step) break
     path.push(code)
+    if (step.handoff) sawHandoff = true
 
     // Nunca reenviar mensagens de uma etapa já executada (evita loops).
     if (!visited.has(code)) {
@@ -265,18 +332,20 @@ function run(
         state: { ...state, current_step: code, visited: [...visited], attempts: 0, finished: false },
         reasked: false,
         finished: false,
-        handoff: false,
+        handoff: sawHandoff,
         path,
+        captured,
       }
     }
     if (kind === 'FIM') {
       return {
         messages,
-        state: { ...state, current_step: code, visited: [...visited], finished: true, handoff: !!step.handoff },
+        state: { ...state, current_step: code, visited: [...visited], finished: true, handoff: sawHandoff || !!step.handoff },
         reasked: false,
         finished: true,
-        handoff: !!step.handoff,
+        handoff: sawHandoff || !!step.handoff,
         path,
+        captured,
       }
     }
     const next = resolveNextCode(step, '')
@@ -286,11 +355,12 @@ function run(
 
   return {
     messages,
-    state: { ...state, current_step: code, visited: [...visited], finished: true },
+    state: { ...state, current_step: code, visited: [...visited], finished: true, handoff: sawHandoff || !!state.handoff },
     reasked: false,
     finished: true,
-    handoff: false,
+    handoff: sawHandoff,
     path,
+    captured,
   }
 }
 
@@ -299,9 +369,9 @@ export function startFlow(steps: FlowStep[], lang: FlowLang = 'pt-BR'): FlowTurn
   const index = indexSteps(steps)
   const start = findStartStep(steps)
   if (!start) {
-    return { messages: [], state: { finished: true }, reasked: false, finished: true, handoff: false, path: [] }
+    return { messages: [], state: { finished: true }, reasked: false, finished: true, handoff: false, path: [], captured: [] }
   }
-  return run(index, start.step_code, { answers: {}, visited: [], attempts: 0 }, lang)
+  return run(index, start.step_code, { answers: {}, visited: [], attempts: 0, lang }, lang)
 }
 
 /** Processa a resposta do cliente na etapa corrente e avança o grafo. */
@@ -314,7 +384,7 @@ export function advanceFlow(
   const index = indexSteps(steps)
   if (!state?.current_step) return startFlow(steps, lang)
   if (state.finished) {
-    return { messages: [], state, reasked: false, finished: true, handoff: !!state.handoff, path: [] }
+    return { messages: [], state, reasked: false, finished: true, handoff: !!state.handoff, path: [], captured: [] }
   }
 
   const step = index.get(state.current_step)
@@ -344,12 +414,15 @@ export function advanceFlow(
       finished: false,
       handoff: false,
       path: [step.step_code],
+      captured: [],
     }
   }
 
 
-  const answers = { ...(state.answers || {}), [step.step_code]: result.value ?? '' }
-  const nextCode = resolveNextCode(step, result.value ?? '')
+  const value = result.value ?? ''
+  const answers = { ...(state.answers || {}), [step.step_code]: value }
+  const captured = captureOf(step, value)
+  const nextCode = resolveNextCode(step, value)
   const nextState: FlowRunState = { ...state, answers, attempts: 0 }
   if (!nextCode) {
     return {
@@ -359,7 +432,9 @@ export function advanceFlow(
       finished: true,
       handoff: false,
       path: [step.step_code],
+      captured,
     }
   }
-  return run(index, nextCode, nextState, lang)
+  return run(index, nextCode, nextState, lang, captured)
 }
+

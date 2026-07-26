@@ -414,6 +414,8 @@ import { logTurn } from './lib/turn-log.ts'
 import { buildConversationContext } from './lib/conversation-context.ts'
 import { decideTurn, applyTurnDecision, type TurnDecision } from './lib/turn-orchestrator.ts'
 import { resolveCurrentStep, getStepDef } from './lib/flow-machine.ts'
+import { loadVisualFlowPlan, runVisualFlowTurn, applyCapturedFields } from './lib/visual-flow.ts'
+
 
 // AGENTE 1.0 — configuração editável em Configurações > Agentes de IA
 import { loadProductionAgentRuntime, getAgentRuntime } from './lib/agent-runtime.ts'
@@ -1496,6 +1498,114 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
 
         // Wave 4: carregar estado persistente do funil
         let funnelState = await loadFunnelState(supabase, lead.id, contact)
+
+        // ============================================================
+        // PRECEDÊNCIA DO FLUXO VISUAL (Gestão de Agentes de IA)
+        // ------------------------------------------------------------
+        // Se o agente de produção aponta para um fluxo (pré-handoff e/ou
+        // handoff), o motor determinístico COMANDA o atendimento: nada do
+        // funil legado (orquestrador, flow-machine, heurísticas de prompt)
+        // roda enquanto o fluxo não terminar.
+        // ============================================================
+        try {
+          const flowPlan = await loadVisualFlowPlan(supabase)
+          const flowStateSaved = (funnelState as any)?.visual_flow_state && typeof (funnelState as any).visual_flow_state === 'object'
+            ? { ...(funnelState as any).visual_flow_state }
+            : {}
+
+          if (flowPlan.enabled && !flowStateSaved.finished) {
+            const turn = runVisualFlowTurn(flowPlan, flowStateSaved, currentCustomerMessage || '', detectedChatLanguage as any)
+            const nextFlowState = { ...turn.state, lang: detectedChatLanguage }
+
+            console.log('[VISUAL_FLOW]', JSON.stringify({
+              step: turn.state.current_step,
+              reasked: turn.reasked,
+              finished: turn.finished,
+              handoff: turn.handoff,
+              path: turn.path,
+              lang: detectedChatLanguage,
+            }))
+
+            // Grava as respostas com "Salvar resposta em" nos campos do CRM.
+            await applyCapturedFields(supabase, {
+              leadId: lead.id,
+              contactId: contact.id,
+              captured: turn.captured,
+              outsideProgress: (funnelState as any)?.outside_spain_progress || {},
+            })
+
+            const funnelPatch: Record<string, unknown> = {
+              visual_flow_state: nextFlowState,
+              answers: { ...((funnelState as any)?.answers || {}), ...(turn.state.answers || {}) },
+              updated_at: new Date().toISOString(),
+            }
+            if (turn.handoff) {
+              funnelPatch.pre_handoff_sent = true
+            }
+            if (turn.finished) {
+              funnelPatch.step = 'livre'
+              if (turn.handoff) {
+                funnelPatch.handoff_sent = true
+                funnelPatch.last_human_handoff_at = new Date().toISOString()
+              }
+            }
+            await supabase.from('lead_funnel_state').update(funnelPatch).eq('lead_id', lead.id)
+            funnelState = { ...(funnelState as any), ...funnelPatch }
+
+            const flowParts = (turn.messages || []).map((m: string) => String(m || '').trim()).filter(Boolean)
+            for (let i = 0; i < flowParts.length; i++) {
+              const part = flowParts[i]
+              const sendRes = await sendOutgoingIdempotent(supabase, {
+                phone: phoneNumber, leadId: lead.id, body: part, language: detectedChatLanguage,
+              })
+              if (sendRes.sent) {
+                await supabase.from('mensagens_cliente').insert({
+                  id_lead: lead.id,
+                  phone_id: parseInt(phoneNumber),
+                  mensagem_IA: part,
+                  origem: 'IA',
+                })
+                await supabase.from('interactions').insert({
+                  lead_id: lead.id,
+                  contact_id: contact.id,
+                  channel: 'WHATSAPP',
+                  direction: 'OUTBOUND',
+                  content: part,
+                  origin_bot: true,
+                })
+              } else {
+                console.log(`[VISUAL_FLOW] send skipped (${sendRes.reason})`)
+              }
+              if (i < flowParts.length - 1) await new Promise((r) => setTimeout(r, 350))
+            }
+
+            await logTurn({
+              supabase,
+              exit_reason: flowParts.length ? 'REPLIED' : 'NO_REPLY',
+              lead_id: lead.id,
+              contact_id: contact.id,
+              phone: phoneNumber,
+              message_id: message.messageId,
+              inbound_text: message.body,
+              response_chars: flowParts.reduce((a: number, p: string) => a + p.length, 0),
+              details: { engine: 'visual-flow', step: turn.state.current_step, parts: flowParts.length },
+            })
+
+            // Só devolve o turno ao motor determinístico quando ele produziu
+            // mensagens. Fluxo concluído sem mensagem → segue para o modo livre.
+            if (flowParts.length > 0) {
+              await releaseConcurrentLock()
+              return new Response(
+                JSON.stringify({ success: true, engine: 'visual-flow', step: turn.state.current_step, parts: flowParts.length }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              )
+            }
+          }
+        } catch (vfErr) {
+          console.warn('[VISUAL_FLOW] erro não bloqueante (segue funil legado):', vfErr instanceof Error ? vfErr.message : vfErr)
+        }
+
+
 
         // ============================================================
         // Wave 10 — GATE DETERMINÍSTICO (Turn Orchestrator)
