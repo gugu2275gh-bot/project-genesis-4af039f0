@@ -337,8 +337,8 @@ function AddItemRow({ onAdd }: { onAdd: (provider: Provider, model: string) => v
   const { toast } = useToast();
   const [provider, setProvider] = useState<Provider>('gemini');
   const [model, setModel] = useState<string>('');
-  const [models, setModels] = useState<Record<Provider, ModelInfo[]>>({ gemini: [], openai: [] });
-  const [loading, setLoading] = useState<Record<Provider, boolean>>({ gemini: false, openai: false });
+  const [models, setModels] = useState<Record<Provider, ModelInfo[]>>({ gemini: [], openai: [], lovable: [] });
+  const [loading, setLoading] = useState<Record<Provider, boolean>>({ gemini: false, openai: false, lovable: false });
 
   const loadModels = async (p: Provider, force = false) => {
     if (!force && models[p].length > 0) return;
