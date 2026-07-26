@@ -21,15 +21,10 @@ const SWEEP_CYCLES = 3
 const SWEEP_INTERVAL_MS = 18_000
 
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const supabase = createClient(supabaseUrl, serviceKey)
-
+async function sweep(supabase: any, supabaseUrl: string, serviceKey: string) {
   const cutoffOld = new Date(Date.now() - STALL_THRESHOLD_SECONDS * 1000).toISOString()
   const cutoffLookback = new Date(Date.now() - LOOKBACK_MINUTES * 60 * 1000).toISOString()
+
 
   // Check bot enabled globally
   const { data: cfg } = await supabase
