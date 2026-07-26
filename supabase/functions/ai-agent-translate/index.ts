@@ -138,8 +138,15 @@ TEXTO:
 ${text}
 """`
 
+    // Fallback final garantido pelo Lovable AI Gateway (LOVABLE_API_KEY sempre presente),
+    // pois provedores diretos podem ficar sem chave ou com modelo indisponível.
+    const attempts = [
+      ...cascade,
+      { provider: 'lovable', model: 'google/gemini-2.5-flash' },
+    ]
+
     let lastError = ''
-    for (const item of cascade) {
+    for (const item of attempts) {
       try {
         const raw =
           item.provider === 'gemini'
