@@ -45,6 +45,15 @@ async function requireAdmin(req: Request) {
   return { userId }
 }
 
+function describeError(status: number, raw: string): string {
+  try {
+    const parsed = JSON.parse(raw)
+    const msg = parsed?.error?.message || parsed?.message || parsed?.error?.status
+    if (msg) return `HTTP ${status}: ${String(msg)}`
+  } catch (_) { /* corpo não-JSON */ }
+  return `HTTP ${status}: ${raw.slice(0, 300)}`
+}
+
 async function testGemini(model: string): Promise<{ ok: boolean; latency_ms: number; error?: string }> {
   const key = Deno.env.get('CBAsesoria_Key')
   if (!key) return { ok: false, latency_ms: 0, error: 'CBAsesoria_Key não configurada' }
