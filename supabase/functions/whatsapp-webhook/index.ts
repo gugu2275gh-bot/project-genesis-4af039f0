@@ -1610,6 +1610,15 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
               lang: flowLang,
             }))
 
+            // Rede de segurança: extração passiva de dados pessoais (sugestões).
+            // Roda em background — não altera o fluxo nem atrasa a resposta.
+            if (geminiApiKey && currentCustomerMessage) {
+              fireAndForget(
+                extractAndSuggestContactData(supabase, contact.id, currentCustomerMessage, geminiApiKey),
+                'flow_extract_suggestions',
+              )
+            }
+
             // Grava as respostas com "Salvar resposta em" nos campos do CRM.
             await applyCapturedFields(supabase, {
               leadId: lead.id,
