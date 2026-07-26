@@ -9,9 +9,14 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, Trash2, ListOrdered, Workflow } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { Plus, Pencil, Trash2, ListOrdered, Workflow, AlertTriangle } from 'lucide-react';
 import { FlowCanvas } from '@/components/ai-agents/flow-builder/FlowCanvas';
 import { FlowErrorBoundary } from '@/components/ai-agents/flow-builder/FlowErrorBoundary';
+import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
+import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
+import { normalizeBranches, normalizeValidation } from '@/types/ai-agent-flow-builder';
+
 
 import {
   useAgentFlows,
@@ -43,6 +48,7 @@ function StepDialog({
   flowPhase,
   step,
   nextIndex,
+  allSteps,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -50,6 +56,7 @@ function StepDialog({
   flowPhase: FlowPhase;
   step?: AgentFlowStep | null;
   nextIndex: number;
+  allSteps: AgentFlowStep[];
 }) {
   const save = useSaveFlowStep();
   const [draft, setDraft] = useState<any>(
@@ -64,6 +71,7 @@ function StepDialog({
       answer_type: 'TEXTO_LIVRE',
       next_step_code: '',
       exit_condition: '',
+      branches: [],
       allow_parallel_question: true,
       allow_free_answer: true,
       handoff: false,
@@ -71,6 +79,12 @@ function StepDialog({
     },
   );
   const set = (patch: Record<string, unknown>) => setDraft((d: any) => ({ ...d, ...patch }));
+
+  const validation = normalizeValidation(draft.validation);
+  const otherCodes = allSteps
+    .filter((s) => s.id !== draft.id)
+    .map((s) => s.step_code)
+    .filter(Boolean);
 
   const messages: MultiLangText =
     draft.messages && typeof draft.messages === 'object' && Object.keys(draft.messages).length > 0
@@ -80,6 +94,7 @@ function StepDialog({
         : {};
   const reask: MultiLangText =
     draft.reask_messages && typeof draft.reask_messages === 'object' ? draft.reask_messages : {};
+
 
   const handleSave = async () => {
     const { created_at, updated_at, ...rest } = draft;
@@ -162,29 +177,31 @@ function StepDialog({
                 onBlur={(e) => set({ order_index: Number(e.target.value) || 0 })}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Próxima etapa (código)</Label>
-              <Input value={draft.next_step_code || ''} onChange={(e) => set({ next_step_code: e.target.value })} />
-            </div>
-            <div className="space-y-2">
+            <div className="space-y-2 sm:col-span-2">
               <Label>Condição de saída</Label>
               <Input value={draft.exit_condition || ''} onChange={(e) => set({ exit_condition: e.target.value })} />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label>Validação (JSON)</Label>
-            <Textarea
-              rows={2}
-              value={JSON.stringify(draft.validation || {}, null, 0)}
-              onChange={(e) => {
-                try {
-                  set({ validation: JSON.parse(e.target.value || '{}') });
-                } catch {
-                  /* ignora JSON inválido enquanto digita */
-                }
-              }}
-            />
-          </div>
+
+          <Separator />
+          <p className="text-sm font-medium">Respostas e caminhos</p>
+          <StepRoutingEditor
+            answerType={draft.answer_type}
+            validation={validation}
+            branches={draft.branches}
+            nextStepCode={draft.next_step_code}
+            stepCodes={otherCodes}
+            onChange={(patch) => set(patch as Record<string, unknown>)}
+          />
+
+          <Separator />
+          <p className="text-sm font-medium">Validação da resposta</p>
+          <StepValidationEditor
+            validation={validation}
+            stepCodes={otherCodes}
+            onChange={(patch) => set({ validation: { ...validation, ...patch } })}
+          />
+
           <div className="space-y-2">
             {[
               { key: 'allow_parallel_question', label: 'Permitir pergunta paralela' },
@@ -275,21 +292,47 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
             <TableHead>Nome</TableHead>
             <TableHead>Fase</TableHead>
             <TableHead>Tipo</TableHead>
+            <TableHead>Caminhos</TableHead>
             <TableHead>Próxima</TableHead>
             <TableHead className="text-right">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {(steps || []).length === 0 && (
-            <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Nenhuma etapa cadastrada</TableCell></TableRow>
+            <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">Nenhuma etapa cadastrada</TableCell></TableRow>
           )}
-          {(steps || []).map((s) => (
+          {(steps || []).map((s) => {
+            const codes = new Set((steps || []).map((x) => x.step_code));
+            const paths = normalizeBranches((s as any).branches);
+            const broken = paths.filter(
+              (b) => !b.next_step_code || !codes.has(b.next_step_code),
+            ).length;
+            return (
             <TableRow key={s.id}>
               <TableCell>{s.order_index}</TableCell>
               <TableCell className="font-mono text-xs">{s.step_code}</TableCell>
               <TableCell>{s.name}</TableCell>
               <TableCell><Badge variant="outline">{phaseLabel(s.phase)}</Badge></TableCell>
               <TableCell>{ANSWER_TYPES.find((t) => t.value === s.answer_type)?.label || s.answer_type}</TableCell>
+              <TableCell className="font-mono text-[11px]">
+                {paths.length === 0 ? (
+                  <span className="text-muted-foreground">—</span>
+                ) : (
+                  <div className="space-y-0.5">
+                    {paths.slice(0, 3).map((b) => (
+                      <div key={b.id} className="truncate max-w-[220px]">
+                        {(b.value || b.label || '—')} → {b.next_step_code || '(padrão)'}
+                      </div>
+                    ))}
+                    {paths.length > 3 && <div className="text-muted-foreground">+{paths.length - 3}</div>}
+                    {broken > 0 && (
+                      <div className="flex items-center gap-1 text-amber-600">
+                        <AlertTriangle className="h-3 w-3" /> {broken} sem destino válido
+                      </div>
+                    )}
+                  </div>
+                )}
+              </TableCell>
               <TableCell className="font-mono text-xs">{s.next_step_code || '—'}</TableCell>
               <TableCell className="text-right space-x-1">
                 <Button size="icon" variant="ghost" onClick={() => { setEditing(s); setOpen(true); }}>
@@ -300,7 +343,8 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
                 </Button>
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
       {open && (
@@ -312,8 +356,10 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
           flowPhase={(flow.phase || 'GERAL') as FlowPhase}
           step={editing}
           nextIndex={(steps?.length || 0) + 1}
+          allSteps={steps || []}
         />
       )}
+
 
     </div>
   );

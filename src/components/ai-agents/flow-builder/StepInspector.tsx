@@ -1,32 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Trash2, X } from 'lucide-react';
 import { MultiLangField } from '@/components/ai-agents/MultiLangField';
-import { useAgentTranslate } from '@/hooks/useAgentTranslate';
-import { AGENT_LANGUAGES, ANSWER_TYPES, FLOW_PHASES, type AgentFlowStep, type MultiLangText } from '@/types/ai-agents';
+import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
+import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
+import { ANSWER_TYPES, FLOW_PHASES, type AgentFlowStep } from '@/types/ai-agents';
 
 import {
-  ANSWER_FORMATS,
-  BRANCH_MATCH_TYPES,
-  SKIP_MODES,
   STEP_KINDS,
   messageAt,
   messageCount,
-  normalizeBranches,
   normalizeMessages,
   normalizeValidation,
   removeMessageAt,
   setMessageAt,
   stepKindOf,
-  type FlowBranch,
   type StepValidation,
 } from '@/types/ai-agent-flow-builder';
 
@@ -39,22 +34,8 @@ interface Props {
   onClose: () => void;
 }
 
-const AUTO_BRANCH_TYPES = ['SIM_NAO', 'SELECAO', 'BOTOES', 'MULTIPLA_ESCOLHA'];
-
 export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: Props) {
-  const branches = useMemo(() => normalizeBranches((step as any).branches), [step]);
   const validation = useMemo(() => normalizeValidation(step.validation), [step]);
-  const [optionInput, setOptionInput] = useState('');
-  const translate = useAgentTranslate();
-  const [translatingId, setTranslatingId] = useState<string | null>(null);
-  const branchesRef = useRef<FlowBranch[]>(branches);
-  const mounted = useRef(true);
-
-  useEffect(() => {
-    branchesRef.current = branches;
-  }, [branches]);
-
-  useEffect(() => () => { mounted.current = false; }, []);
 
   const otherCodes = allSteps.filter((s) => s.id !== step.id).map((s) => s.step_code).filter(Boolean);
   const duplicateCode = otherCodes.includes(step.step_code);
@@ -62,62 +43,6 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
 
   const setValidation = (patch: Partial<StepValidation>) =>
     onChange({ validation: { ...validation, ...patch } as any });
-
-  const setBranches = (next: FlowBranch[]) => onChange({ branches: next } as any);
-
-  /**
-   * Traduz o valor da ramificação para os demais idiomas e guarda como
-   * sinônimos, para que a resposta do cliente seja reconhecida em qualquer um.
-   */
-  const translateBranch = async (b: FlowBranch) => {
-    const source = (b.value || b.label || '').trim();
-    if (!source) return;
-    setTranslatingId(b.id);
-    try {
-      const result = await translate.mutateAsync({
-        text: source,
-        source: 'pt-BR',
-        targets: AGENT_LANGUAGES.map((l) => l.code).filter((c) => c !== 'pt-BR'),
-      });
-      const extra = Object.values(result)
-        .map((v) => String(v ?? '').trim())
-        .filter((v) => v && v.toLowerCase() !== source.toLowerCase());
-      if (!mounted.current || extra.length === 0) return;
-      const latestBranches = branchesRef.current;
-      const latestBranch = latestBranches.find((x) => x.id === b.id);
-      if (!latestBranch) return;
-      const merged = Array.from(new Set([...(latestBranch.synonyms || []), ...extra]));
-      setBranches(latestBranches.map((x) => (x.id === b.id ? { ...x, synonyms: merged } : x)));
-    } catch {
-      /* toast já exibido pelo hook */
-    } finally {
-      if (mounted.current) setTranslatingId(null);
-    }
-  };
-
-
-  /** Opções sugeridas para o tipo de resposta atual. */
-  const suggestedOptions = AUTO_BRANCH_TYPES.includes(step.answer_type)
-    ? step.answer_type === 'SIM_NAO'
-      ? ['Sim', 'Não']
-      : validation.options || []
-    : [];
-  const missingOptions = suggestedOptions.filter((o) => !branches.some((b) => b.value === o));
-
-  /** Cria ramificações a partir das opções — apenas quando o usuário pede. */
-  const generateBranches = () => {
-    if (missingOptions.length === 0) return;
-    setBranches([
-      ...branches,
-      ...missingOptions.map((o, i) => ({
-        id: `b_${Date.now()}_${i}`,
-        label: o,
-        match_type: 'IGUAL' as const,
-        value: o,
-        next_step_code: null,
-      })),
-    ]);
-  };
 
   const messages = useMemo(
     () => normalizeMessages(step.messages, step.message),
@@ -133,6 +58,7 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
       message: (Array.isArray(first) ? first[0] : first) || '',
     });
   };
+
 
 
 
@@ -283,281 +209,26 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
             )}
 
 
-            {['SELECAO', 'BOTOES', 'MULTIPLA_ESCOLHA'].includes(step.answer_type) && (
-              <div className="space-y-2">
-                <Label>Opções oferecidas</Label>
-                <div className="flex flex-wrap gap-1">
-                  {(validation.options || []).map((o) => (
-                    <Badge key={o} variant="secondary" className="gap-1">
-                      {o}
-                      <button
-                        type="button"
-                        onClick={() => setValidation({ options: (validation.options || []).filter((x) => x !== o) })}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    value={optionInput}
-                    placeholder="Nova opção"
-                    onChange={(e) => setOptionInput(e.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      const v = optionInput.trim();
-                      if (!v) return;
-                      setValidation({ options: Array.from(new Set([...(validation.options || []), v])) });
-                      setOptionInput('');
-                    }}
-                  >
-                    Adicionar
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <Label>Ramificações (respostas possíveis)</Label>
-              <div className="flex items-center gap-1">
-                {missingOptions.length > 0 && (
-                  <Button size="sm" variant="secondary" onClick={generateBranches}>
-                    Gerar opções ({missingOptions.length})
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
-                    setBranches([
-                      ...branches,
-                      { id: `b_${Date.now()}`, label: '', match_type: 'IGUAL', value: '', next_step_code: null },
-                    ])
-                  }
-                >
-                  <Plus className="h-4 w-4 mr-1" /> Resposta
-                </Button>
-              </div>
-            </div>
-
-
-            {branches.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                Sem ramificações: o fluxo segue sempre para a próxima etapa padrão.
-              </p>
-            )}
-
-            {branches.map((b, i) => (
-              <div key={b.id} className="space-y-2 rounded-md border p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Resposta {i + 1}</span>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => setBranches(branches.filter((x) => x.id !== b.id))}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-                <Input
-                  placeholder="Rótulo"
-                  value={b.label}
-                  onChange={(e) =>
-                    setBranches(branches.map((x) => (x.id === b.id ? { ...x, label: e.target.value } : x)))
-                  }
-                />
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Select
-                    value={b.match_type}
-                    onValueChange={(v) =>
-                      setBranches(branches.map((x) => (x.id === b.id ? { ...x, match_type: v as any } : x)))
-                    }
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {BRANCH_MATCH_TYPES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    placeholder="Valor"
-                    disabled={b.match_type === 'QUALQUER'}
-                    value={b.value}
-                    onChange={(e) =>
-                      setBranches(branches.map((x) => (x.id === b.id ? { ...x, value: e.target.value } : x)))
-                    }
-                  />
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label className="text-xs font-normal text-muted-foreground">
-                      Equivalentes aceitos (outros idiomas), separados por vírgula
-                    </Label>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={b.match_type === 'QUALQUER' || translatingId === b.id}
-                      onClick={() => translateBranch(b)}
-                    >
-                      {translatingId === b.id ? 'Traduzindo…' : 'Traduzir'}
-                    </Button>
-                  </div>
-                  <Input
-                    placeholder="ej: sí, yes, oui"
-                    disabled={b.match_type === 'QUALQUER'}
-                    value={(b.synonyms || []).join(', ')}
-                    onChange={(e) =>
-                      setBranches(
-                        branches.map((x) =>
-                          x.id === b.id
-                            ? {
-                                ...x,
-                                synonyms: e.target.value
-                                  .split(',')
-                                  .map((s) => s.trim())
-                                  .filter(Boolean),
-                              }
-                            : x,
-                        ),
-                      )
-                    }
-                  />
-                </div>
-
-                <Select
-                  value={b.next_step_code || '__none__'}
-                  onValueChange={(v) =>
-                    setBranches(
-                      branches.map((x) =>
-                        x.id === b.id ? { ...x, next_step_code: v === '__none__' ? null : v } : x,
-                      ),
-                    )
-                  }
-                >
-                  <SelectTrigger><SelectValue placeholder="Vai para…" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Sem destino</SelectItem>
-                    {otherCodes.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            ))}
-
-            <Separator />
-            <div className="space-y-2">
-              <Label>Próxima etapa padrão (senão)</Label>
-              <Select
-                value={step.next_step_code || '__none__'}
-                onValueChange={(v) => onChange({ next_step_code: v === '__none__' ? null : v })}
-              >
-                <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Nenhuma</SelectItem>
-                  {otherCodes.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            <StepRoutingEditor
+              answerType={step.answer_type}
+              validation={validation}
+              branches={(step as any).branches}
+              nextStepCode={step.next_step_code}
+              stepCodes={otherCodes}
+              onChange={(patch) => onChange(patch as any)}
+            />
           </TabsContent>
 
           <TabsContent value="validacao" className="mt-0 space-y-4">
-            <div className="flex items-center justify-between rounded-md border p-3">
-              <Label className="font-normal">Resposta obrigatória</Label>
-              <Switch checked={validation.required !== false} onCheckedChange={(v) => setValidation({ required: v })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Formato esperado</Label>
-              <Select value={validation.format || 'NENHUM'} onValueChange={(v) => setValidation({ format: v as any })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ANSWER_FORMATS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {validation.format === 'REGEX' && (
-              <div className="space-y-2">
-                <Label>Expressão regular</Label>
-                <Input value={validation.regex || ''} onChange={(e) => setValidation({ regex: e.target.value })} />
-              </div>
-            )}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Mínimo</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  value={validation.min ?? ''}
-                  onChange={(e) => setValidation({ min: e.target.value === '' ? null : Number(e.target.value.replace(/\D/g, '')) })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Máximo</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  value={validation.max ?? ''}
-                  onChange={(e) => setValidation({ max: e.target.value === '' ? null : Number(e.target.value.replace(/\D/g, '')) })}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Reperguntas antes do fallback</Label>
-              <Input
-                type="text"
-                inputMode="numeric"
-                value={validation.max_reasks ?? 2}
-                onChange={(e) => setValidation({ max_reasks: Number(e.target.value.replace(/\D/g, '')) || 0 })}
-              />
-            </div>
+            <StepValidationEditor
+              validation={validation}
+              stepCodes={otherCodes}
+              onChange={(patch) => setValidation(patch)}
+            />
           </TabsContent>
 
           <TabsContent value="comportamento" className="mt-0 space-y-4">
-            <div className="space-y-2">
-              <Label>Salvar resposta no campo</Label>
-              <Input
-                placeholder="ex.: nome_completo"
-                value={validation.save_to_field || ''}
-                onChange={(e) => setValidation({ save_to_field: e.target.value })}
-              />
-            </div>
 
-            <div className="space-y-2">
-              <Label>Não repetir esta etapa</Label>
-              <Select value={validation.skip_mode || 'NUNCA'} onValueChange={(v) => setValidation({ skip_mode: v as any })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {SKIP_MODES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {validation.skip_mode === 'CAMPO_PREENCHIDO' && (
-              <div className="space-y-2">
-                <Label>Campo verificado</Label>
-                <Input
-                  value={validation.skip_field || ''}
-                  onChange={(e) => setValidation({ skip_field: e.target.value })}
-                />
-              </div>
-            )}
-            {validation.skip_mode === 'ETAPA_CONCLUIDA' && (
-              <div className="space-y-2">
-                <Label>Etapa já concluída</Label>
-                <Select
-                  value={validation.skip_step_code || '__none__'}
-                  onValueChange={(v) => setValidation({ skip_step_code: v === '__none__' ? '' : v })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Selecione</SelectItem>
-                    {otherCodes.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
 
             <Separator />
 

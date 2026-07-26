@@ -284,6 +284,15 @@ export function advanceFlow(
   const result = validateAnswer(step, message)
   if (!result.valid) {
     const attempts = (state.attempts || 0) + 1
+    const v = (step.validation || {}) as Record<string, unknown>
+    const maxReasks = Number.isFinite(Number(v.max_reasks)) ? Number(v.max_reasks) : 2
+    const fallbackCode = String(v.fallback_step_code || '').trim()
+
+    // Esgotou as reperguntas e existe etapa de fallback: desvia o fluxo.
+    if (fallbackCode && attempts > maxReasks && index.get(fallbackCode)) {
+      return run(index, fallbackCode, { ...state, attempts: 0 }, lang)
+    }
+
     const reask = reaskOf(step, lang) || messagesOf(step, lang).slice(-1)[0] || ''
     return {
       messages: reask ? [reask] : [],
@@ -294,6 +303,7 @@ export function advanceFlow(
       path: [step.step_code],
     }
   }
+
 
   const answers = { ...(state.answers || {}), [step.step_code]: result.value ?? '' }
   const nextCode = resolveNextCode(step, result.value ?? '')
