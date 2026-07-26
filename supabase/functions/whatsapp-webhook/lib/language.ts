@@ -1,5 +1,6 @@
 // Language detection + locale-aware directives.
 // Extracted from index.ts (Wave 3b, step 1) — pure functions, no side effects.
+import { t as agentText } from './agent-runtime.ts'
 
 export type ChatLanguage = 'pt-BR' | 'es' | 'en' | 'fr'
 
@@ -43,10 +44,11 @@ export function getLanguageDirective(language: ChatLanguage): string {
 }
 
 export function getTransientErrorReply(language: ChatLanguage): string {
-  if (language === 'es') return 'Perdón, tuve una inestabilidad para responder ahora. ¿Puedes enviarme tu pregunta nuevamente en texto?'
-  if (language === 'en') return 'Sorry, I had a temporary issue responding just now. Could you send your question again in text?'
-  if (language === 'fr') return 'Désolé, j’ai eu une instabilité temporaire pour répondre. Pouvez-vous renvoyer votre question en texte ?'
-  return 'Desculpe, tive uma instabilidade agora para responder. Pode me enviar novamente sua pergunta em texto?'
+  let def = 'Desculpe, tive uma instabilidade agora para responder. Pode me enviar novamente sua pergunta em texto?'
+  if (language === 'es') def = 'Perdón, tuve una inestabilidad para responder ahora. ¿Puedes enviarme tu pregunta nuevamente en texto?'
+  if (language === 'en') def = 'Sorry, I had a temporary issue responding just now. Could you send your question again in text?'
+  if (language === 'fr') def = 'Désolé, j’ai eu une instabilité temporaire pour répondre. Pouvez-vous renvoyer votre question en texte ?'
+  return agentText('system.transientError', language, def)
 }
 
 export function normalizeForLanguageChecks(text: string): string {
@@ -157,8 +159,26 @@ const TEMPLATES: Record<ChatLanguage, PromptTemplates> = {
 }
 
 export function getPromptTemplates(language: ChatLanguage): PromptTemplates {
+  const base = TEMPLATES[language] || TEMPLATES['pt-BR']
+  return {
+    askName: agentText('opening.askName', language, base.askName),
+    thanksThenAskEmail: agentText('opening.thanksThenAskEmail', language, base.thanksThenAskEmail),
+    interestQuestion: agentText('opening.interestQuestion', language, base.interestQuestion),
+    servicesCatalog: agentText('opening.servicesCatalog', language, base.servicesCatalog),
+    oneMomentPlease: agentText('opening.oneMomentPlease', language, base.oneMomentPlease),
+    askLocationSpain: agentText('opening.askLocationSpain', language, base.askLocationSpain),
+    openingLine1: agentText('opening.line1', language, base.openingLine1),
+    openingLine2: agentText('opening.line2', language, base.openingLine2),
+    outsideIntro: agentText('opening.outsideIntro', language, base.outsideIntro),
+    insideIntro: agentText('opening.insideIntro', language, base.insideIntro),
+  }
+}
+
+/** Textos padrão (somente código), sem os overrides do agente de produção. */
+export function getDefaultPromptTemplates(language: ChatLanguage): PromptTemplates {
   return TEMPLATES[language] || TEMPLATES['pt-BR']
 }
+
 
 export function getLanguageName(language: ChatLanguage): string {
   if (language === 'es') return 'espanhol'
