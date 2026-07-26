@@ -18,6 +18,7 @@ import { FlowErrorBoundary } from '@/components/ai-agents/flow-builder/FlowError
 import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRoutingEditor';
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
 import { StepUnexpectedAnswerEditor } from '@/components/ai-agents/flow-builder/StepUnexpectedAnswerEditor';
+import { StepKnowledgeCheckEditor } from '@/components/ai-agents/flow-builder/StepKnowledgeCheckEditor';
 import { STEP_KINDS, normalizeBranches, normalizeValidation, stepKindOf } from '@/types/ai-agent-flow-builder';
 
 
