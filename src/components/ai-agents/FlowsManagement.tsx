@@ -209,6 +209,23 @@ function FlowSteps({ flow }: { flow: AgentFlow }) {
   const del = useDeleteFlowStep();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AgentFlowStep | null>(null);
+  const [view, setView] = useState<'canvas' | 'table'>('canvas');
+
+  if (view === 'canvas') {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium flex items-center gap-2">
+            <Workflow className="h-4 w-4" /> Desenho de "{flow.name}"
+          </p>
+          <Button size="sm" variant="outline" onClick={() => setView('table')}>
+            <ListOrdered className="h-4 w-4 mr-1" /> Ver em tabela
+          </Button>
+        </div>
+        <FlowCanvas key={flow.id} flow={flow} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -216,9 +233,15 @@ function FlowSteps({ flow }: { flow: AgentFlow }) {
         <p className="text-sm font-medium flex items-center gap-2">
           <ListOrdered className="h-4 w-4" /> Etapas de "{flow.name}"
         </p>
-        <Button size="sm" onClick={() => { setEditing(null); setOpen(true); }}>
-          <Plus className="h-4 w-4 mr-1" /> Nova etapa
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setView('canvas')}>
+            <Workflow className="h-4 w-4 mr-1" /> Editor visual
+          </Button>
+          <Button size="sm" onClick={() => { setEditing(null); setOpen(true); }}>
+            <Plus className="h-4 w-4 mr-1" /> Nova etapa
+          </Button>
+        </div>
+
       </div>
       <Table>
         <TableHeader>
