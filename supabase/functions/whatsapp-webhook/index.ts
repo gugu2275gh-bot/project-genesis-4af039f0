@@ -1607,28 +1607,15 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
               ? (flowStateSaved.lang as any)
               : detectedChatLanguage
             const isFirstFlowTurn = !flowStateSaved?.current_step
-            const intakeLLM = geminiApiKey
-              ? async (prompt: string) => {
-                  const resp = await fetch(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiApiKey}`,
-                    {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                        generationConfig: { maxOutputTokens: 400, temperature: 0 },
-                      }),
-                    },
-                  )
-                  if (!resp.ok) throw new Error(`intake LLM ${resp.status}`)
-                  const data = await resp.json()
-                  return String(data?.candidates?.[0]?.content?.parts?.[0]?.text || '')
-                }
-              : null
+            const intakeLLM = createIntakeLLM({
+              geminiKey: geminiApiKey,
+              lovableKey: Deno.env.get('LOVABLE_API_KEY'),
+            })
 
             const turn = isFirstFlowTurn
               ? await runVisualFlowFirstTurn(flowPlan, currentCustomerMessage || '', flowLang as any, intakeLLM)
               : runVisualFlowTurn(flowPlan, flowStateSaved, currentCustomerMessage || '', flowLang as any)
+
             const nextFlowState = { ...turn.state, lang: flowLang }
 
             console.log('[VISUAL_FLOW]', JSON.stringify({
