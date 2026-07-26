@@ -24,6 +24,8 @@ import {
   type FlowTurnResult,
 } from '../../_shared/flow-engine.ts'
 import { getAgentRuntime } from './agent-runtime.ts'
+import { cached } from './perf.ts'
+
 
 export interface VisualFlowPlan {
   enabled: boolean
@@ -36,16 +38,20 @@ const EMPTY_PLAN: VisualFlowPlan = { enabled: false, steps: [], preHandoffFlowId
 
 async function fetchSteps(supabase: any, flowId: string | null): Promise<FlowStep[]> {
   if (!flowId) return []
-  const { data, error } = await supabase
-    .from('ai_agent_flow_steps')
-    .select('*')
-    .eq('flow_id', flowId)
-    .order('order_index', { ascending: true })
-  if (error) {
-    console.warn('[VISUAL_FLOW] falha ao carregar etapas:', error.message)
-    return []
-  }
-  return (data || []) as FlowStep[]
+  // Cache de 60s por fluxo: as etapas mudam apenas quando o admin salva o fluxo.
+  return await cached<FlowStep[]>(`flow-steps:${flowId}`, 60_000, async () => {
+    const { data, error } = await supabase
+      .from('ai_agent_flow_steps')
+      .select('*')
+      .eq('flow_id', flowId)
+      .order('order_index', { ascending: true })
+    if (error) {
+      console.warn('[VISUAL_FLOW] falha ao carregar etapas:', error.message)
+      return []
+    }
+    return (data || []) as FlowStep[]
+  })
+
 }
 
 /**
@@ -187,5 +193,21 @@ export async function applyCapturedFields(
     }
   } catch (e) {
     console.warn('[VISUAL_FLOW] falha ao atualizar funil:', e instanceof Error ? e.message : e)
+  }
+}
+
+/**
+ * A etapa atual espera uma resposta curta (Sim/Não, opção, data, número)?
+ * Nesses casos não faz sentido esperar o buffer de consolidação de balões.
+ */
+export function expectsShortAnswer(plan: VisualFlowPlan, stepCode: unknown): boolean {
+  try {
+    if (!plan?.enabled || !stepCode) return false
+    const step = plan.steps.find((s: any) => s?.step_code === stepCode)
+    if (!step) return false
+    const type = String((step as any).answer_type || '').toUpperCase()
+    return ['SIM_NAO', 'OPCOES', 'OPCAO', 'DATA', 'NUMERO', 'IDADE'].includes(type)
+  } catch {
+    return false
   }
 }

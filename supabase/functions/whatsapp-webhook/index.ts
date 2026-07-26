@@ -414,7 +414,9 @@ import { logTurn } from './lib/turn-log.ts'
 import { buildConversationContext } from './lib/conversation-context.ts'
 import { decideTurn, applyTurnDecision, type TurnDecision } from './lib/turn-orchestrator.ts'
 import { resolveCurrentStep, getStepDef } from './lib/flow-machine.ts'
-import { loadVisualFlowPlan, runVisualFlowTurn, applyCapturedFields } from './lib/visual-flow.ts'
+import { loadVisualFlowPlan, runVisualFlowTurn, applyCapturedFields, expectsShortAnswer } from './lib/visual-flow.ts'
+import { Timings, fireAndForget } from './lib/perf.ts'
+
 
 
 // AGENTE 1.0 — configuração editável em Configurações > Agentes de IA
@@ -551,9 +553,14 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
     )
     __supabaseOuter = supabase
 
+    // Instrumentação de latência por fase (diagnóstico de tempo de resposta).
+    const __perf = new Timings()
+
     // Carrega a configuração do agente marcado como "em produção" (AGENTE 1.0).
     // Sem agente configurado, o comportamento atual em código continua valendo.
     await loadProductionAgentRuntime(supabase)
+    __perf.mark('agent_runtime_ms')
+
 
 
     // Parse request body - handle both JSON and form-encoded (Twilio)
@@ -1159,6 +1166,37 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
 
     try {
       if (visualFlowActive) throw new Error('__skip_reactivation_visual_flow__')
+
+      // Otimização de latência: a reativação inteligente só é relevante quando a
+      // sessão expirou (ou há uma confirmação pendente). Nos demais turnos ela
+      // sempre devolve CURRENT_FLOW — e custava um invoke de edge function
+      // (cold start + chamada LLM) em cada mensagem recebida.
+      const sessionTimeoutMin = 120
+      const [{ data: prevMsg }, { data: pendingResolution }] = await Promise.all([
+        supabase
+          .from('mensagens_cliente')
+          .select('created_at')
+          .eq('id_lead', lead.id)
+          .lt('id', insertedMsg?.id || Number.MAX_SAFE_INTEGER)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('reactivation_resolutions')
+          .select('id')
+          .eq('contact_id', contact.id)
+          .eq('user_confirmation_status', 'pending')
+          .limit(1)
+          .maybeSingle(),
+      ])
+      const lastMsgAgeMin = prevMsg?.created_at
+        ? (Date.now() - new Date(prevMsg.created_at).getTime()) / 60000
+        : Number.POSITIVE_INFINITY
+      if (!pendingResolution && lastMsgAgeMin < sessionTimeoutMin) {
+        console.log(`[REACTIVATION] sessão ativa (${Math.round(lastMsgAgeMin)}min) — chamada ignorada (otimização)`)
+        throw new Error('__skip_reactivation_active_session__')
+      }
+
       const reactivationResponse = await fetch(
         `${Deno.env.get('SUPABASE_URL')}/functions/v1/smart-reactivation`,
         {
@@ -1231,23 +1269,28 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       const __msg = reactivationError instanceof Error ? reactivationError.message : String(reactivationError)
       if (__msg === '__skip_reactivation_visual_flow__') {
         console.log('[VISUAL_FLOW] reativação inteligente ignorada (fluxo em andamento)')
+      } else if (__msg === '__skip_reactivation_active_session__') {
+        // já logado acima
       } else
       console.error('Smart reactivation error (non-blocking):', reactivationError instanceof Error ? reactivationError.message : reactivationError)
     }
+    __perf.mark('reactivation_ms')
+
 
     // ========== ADAPTIVE BUFFER: wait briefly to consolidate multiple client messages ==========
     if (!skipAIAgent) {
-      // Buffer adaptativo: mensagens "completas" (longas ou terminando em pontuação)
-      // dispensam espera longa. Caso contrário, aguarda apenas 1.5s para consolidar
-      // múltiplos balões enviados em sequência pelo cliente.
-      // Buffer adaptativo: mensagens "completas" (longas ou terminando em pontuação)
-      // dispensam espera longa. Caso contrário, aguarda apenas 1.5s para consolidar
-      // múltiplos balões enviados em sequência pelo cliente.
+      // Buffer adaptativo (otimização de latência):
+      //  - mensagem "completa" (longa ou terminando em pontuação): 300ms
+      //  - etapa de fluxo que espera resposta curta (Sim/Não, opção, data): 0ms
+      //  - demais casos: 700ms para consolidar balões em sequência
       const incomingText = (displayBody || message.body || '').trim()
       const looksComplete = incomingText.length > 120 || /[.!?…]$/.test(incomingText)
-      const bufferMs = looksComplete ? 300 : 1500
-      console.log(`Buffer: waiting ${bufferMs}ms for additional messages (complete=${looksComplete})...`)
-      await new Promise(resolve => setTimeout(resolve, bufferMs))
+      const shortAnswerStep = visualFlowActive && expectsShortAnswer(visualFlowPlan, visualFlowSavedState?.current_step)
+      const bufferMs = shortAnswerStep ? 0 : (looksComplete ? 300 : 700)
+      console.log(`Buffer: waiting ${bufferMs}ms for additional messages (complete=${looksComplete}, shortAnswerStep=${shortAnswerStep})...`)
+      if (bufferMs > 0) await new Promise(resolve => setTimeout(resolve, bufferMs))
+      __perf.mark('buffer_ms')
+
 
       // Check if newer messages arrived from the same lead after our message was inserted
       const { data: newerMessages } = await supabase
@@ -1617,27 +1660,28 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
               })
 
               if (sendRes.sent) {
-                await supabase.from('mensagens_cliente').insert({
+                // Persistência fora do caminho crítico: não atrasa o próximo balão.
+                fireAndForget(supabase.from('mensagens_cliente').insert({
                   id_lead: lead.id,
                   phone_id: parseInt(phoneNumber),
                   mensagem_IA: part,
                   origem: 'IA',
-                })
-                await supabase.from('interactions').insert({
+                }), 'persist_msg')
+                fireAndForget(supabase.from('interactions').insert({
                   lead_id: lead.id,
                   contact_id: contact.id,
                   channel: 'WHATSAPP',
                   direction: 'OUTBOUND',
                   content: part,
                   origin_bot: true,
-                })
+                }), 'persist_interaction')
               } else {
                 console.log(`[VISUAL_FLOW] send skipped (${sendRes.reason})`)
               }
-              if (i < flowParts.length - 1) await new Promise((r) => setTimeout(r, 350))
+              if (i < flowParts.length - 1) await new Promise((r) => setTimeout(r, 150))
             }
 
-            await logTurn({
+            fireAndForget(logTurn({
               supabase,
               exit_reason: flowParts.length ? 'REPLIED' : 'NO_REPLY',
               lead_id: lead.id,
@@ -1646,8 +1690,8 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
               message_id: message.messageId,
               inbound_text: message.body,
               response_chars: flowParts.reduce((a: number, p: string) => a + p.length, 0),
-              details: { engine: 'visual-flow', step: turn.state.current_step, parts: flowParts.length },
-            })
+              details: { engine: 'visual-flow', step: turn.state.current_step, parts: flowParts.length, perf: __perf.snapshot() },
+            }), 'log_turn')
 
             // TRAVA: enquanto o fluxo não terminou, o turno SEMPRE encerra aqui —
             // mesmo sem mensagem gerada. Só um fluxo concluído (`finished`)
@@ -3454,24 +3498,24 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
                   origem: 'IA',
                 })
 
-                await supabase.from('interactions').insert({
+                fireAndForget(supabase.from('interactions').insert({
                   lead_id: lead.id,
                   contact_id: contact.id,
                   channel: 'WHATSAPP',
                   direction: 'OUTBOUND',
                   content: part,
                   origin_bot: true,
-                })
+                }), 'persist_interaction')
               }
 
               if (i < parts.length - 1) {
-                await new Promise(r => setTimeout(r, 350))
+                await new Promise(r => setTimeout(r, 150))
               }
             }
 
             console.log('AI response sent and stored successfully (parts:', parts.length, ')')
 
-            await logTurn({
+            fireAndForget(logTurn({
               supabase,
               exit_reason: 'REPLIED',
               lead_id: lead.id,
@@ -3482,8 +3526,8 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
               response_chars: parts.reduce((a: number, p: string) => a + (p?.length || 0), 0),
               funnel_step_before: funnelStateLive?.step ?? null,
               funnel_step_after: funnelStateLive?.step ?? null,
-              details: { parts: parts.length },
-            })
+              details: { parts: parts.length, perf: __perf.snapshot() },
+            }), 'log_turn')
 
             // BPMN-3: persiste flags pre_handoff_sent / handoff_sent ao detectar H1-H2 / H3.
             // Combina o que foi enviado NESTE turno com o transcript histórico do assistente
