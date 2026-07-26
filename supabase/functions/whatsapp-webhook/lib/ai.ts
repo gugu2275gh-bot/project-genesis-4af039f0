@@ -308,12 +308,11 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
 
 // Cache em memória da cascata (TTL curto p/ refletir mudanças do admin sem polling pesado)
 type CascadeItem = { provider: 'gemini' | 'openai' | 'lovable'; model: string }
+// Sem conversões automáticas de provedor: usa o que está salvo em llm_settings.
 function normalizeCascadeItem(item: CascadeItem): CascadeItem {
-  if (item.provider === 'gemini' && item.model === 'gemini-3.6-flash') {
-    return { provider: 'lovable', model: 'google/gemini-3.6-flash' }
-  }
   return item
 }
+
 let _cascadeCache: { value: CascadeItem[]; expires: number } | null = null
 const DEFAULT_CASCADE: CascadeItem[] = [
   { provider: 'gemini', model: 'gemini-3-flash-preview' },
