@@ -16,7 +16,7 @@ import '@xyflow/react/dist/style.css';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle, CheckCircle2, LayoutGrid, Plus, Save } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, LayoutGrid, Plus, Save, Trash2, Upload } from 'lucide-react';
 import { StepNode } from './StepNode';
 import { StepInspector } from './StepInspector';
 import { autoLayout } from '@/lib/flow-layout';
