@@ -4,7 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
 import { buildSystemPrompt } from './lib/prompt-builder.ts'
 import { advanceFlow, findStartStep, mergeFlows, startFlow, startFlowWithPrefill, stepKindOf } from '../_shared/flow-engine.ts'
-import { normalizeIntakeConfig, runIntake } from '../_shared/flow-intake.ts'
+import { normalizeIntakeConfig, prependIntakeGreeting, renderAckMessage, renderIntakeGreeting, runIntake } from '../_shared/flow-intake.ts'
 import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
 
 
@@ -232,16 +232,22 @@ Deno.serve(async (req) => {
           console.warn('[SANDBOX][INTAKE] falhou:', e instanceof Error ? e.message : e)
         }
         if (Object.keys(intakeRes.prefilled || {}).length) {
-          turn = startFlowWithPrefill(steps, lang as any, intakeRes.prefilled)
-          if (intakeRes.greeting) {
-            turn.messages = [intakeRes.greeting, ...(turn.messages || [])]
-            turn.outbound = [{ text: intakeRes.greeting, step_code: 'intake', quick_reply: false }, ...(turn.outbound || [])]
-          }
+          turn = prependIntakeGreeting(
+            startFlowWithPrefill(steps, lang as any, intakeRes.prefilled),
+            intakeRes.greeting,
+          )
         } else {
-          turn = startFlow(steps, lang as any)
+          // Sem aproveitamento: usa a "Saudação padrão" quando configurada.
+          turn = prependIntakeGreeting(
+            startFlow(steps, lang as any),
+            renderIntakeGreeting(intakeConfig, lang as any, {}),
+          )
         }
+      } else if (firstTurn) {
+        turn = startFlow(steps, lang as any)
       } else {
-        turn = firstTurn ? startFlow(steps, lang as any) : advanceFlow(steps, flowState, message, lang as any)
+        const ack = intakeConfig.enabled ? renderAckMessage(intakeConfig, lang as any) : ''
+        turn = advanceFlow(steps, flowState, message, lang as any, { ack })
       }
 
       await service.from('ai_agent_test_messages').insert({
