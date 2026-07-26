@@ -603,6 +603,44 @@ export function startFlow(steps: FlowStep[], lang: FlowLang = 'pt-BR'): FlowTurn
   return run(index, start.step_code, { answers: {}, visited: [], attempts: 0, lang }, lang)
 }
 
+/**
+ * Primeiro turno com dados já aproveitados da 1ª mensagem do cliente.
+ *
+ * `prefilled` é um mapa `step_code -> resposta`. As etapas correspondentes são
+ * marcadas como respondidas e o motor percorre o grafo desde o INÍCIO,
+ * parando na PRIMEIRA pergunta ainda sem resposta (não na etapa seguinte à
+ * última aproveitada).
+ */
+export function startFlowWithPrefill(
+  steps: FlowStep[],
+  lang: FlowLang = 'pt-BR',
+  prefilled: Record<string, string> = {},
+): FlowTurnResult {
+  const index = indexSteps(steps)
+  const start = findStartStep(steps)
+  if (!start) {
+    return { messages: [], outbound: [], state: { finished: true }, reasked: false, finished: true, handoff: false, path: [], captured: [] }
+  }
+
+  // Só aceita respostas que passem na validação da própria etapa.
+  const answers: Record<string, string> = {}
+  const captured: FlowCapturedField[] = []
+  for (const [code, raw] of Object.entries(prefilled || {})) {
+    const step = index.get(code)
+    if (!step) continue
+    const value = String(raw ?? '').trim()
+    if (!value) continue
+    const check = validateAnswer(step, value)
+    if (!check.valid) continue
+    answers[code] = check.value ?? value
+    captured.push(...captureOf(step, answers[code]))
+  }
+
+  return run(index, start.step_code, { answers, visited: [], attempts: 0, lang }, lang, captured)
+}
+
+
+
 /** Processa a resposta do cliente na etapa corrente e avança o grafo. */
 export function advanceFlow(
   steps: FlowStep[],
