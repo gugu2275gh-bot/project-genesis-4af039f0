@@ -23,7 +23,10 @@ export interface AgentRuntime {
   modelCascade: Array<{ provider: string; model: string; order?: number }>
   runtimeConfig: Record<string, unknown>
   texts: Record<string, Partial<Record<ChatLanguage, string>>>
+  /** Fluxos visuais configurados no agente (quando houver). */
+  flowIds: { pre_handoff: string | null; handoff: string | null; legacy: string | null }
 }
+
 
 let RUNTIME: AgentRuntime | null = null
 
