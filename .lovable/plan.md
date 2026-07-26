@@ -1,45 +1,25 @@
-## Objetivo
+## O que está acontecendo
 
-Adicionar, em cada etapa do fluxo do tipo **Pergunta**, duas configurações novas:
+Existem hoje **dois editores de etapa** no módulo de Fluxos:
 
-1. **Validar a resposta na base de conhecimento (KB)** — checa se o que o cliente respondeu corresponde a um serviço/tema realmente atendido; se sim grava o valor normalizado e segue o fluxo, se não explica e repergunta.
-2. **Resposta humanizada** — checkbox que faz o agente reagir com uma frase curta e contextual à resposta do cliente antes de seguir para a próxima pergunta.
+1. **Editor visual (canvas)** → painel lateral `StepInspector`, que **já tem** a aba **Base** com "Validar a resposta na base de conhecimento" e o switch "Resposta humanizada gerada pela IA" (na aba Validação).
+2. **Ver em tabela → botão de lápis** → abre o diálogo antigo `StepDialog`, que **não tem** esses campos.
 
-Caso de referência: etapa 4 / `msg_5_entender_interesse` → `msg_6_informar_`.
+Se você está editando pelo lápis da tabela, a opção realmente não aparece. Além disso, no painel do canvas a barra tem 6 abas espremidas em coluna estreita, o que faz "Base" e "Resposta inesperada" ficarem cortadas e difíceis de notar.
 
-## Configuração na etapa (aba nova "Base de conhecimento")
+## O que será feito
 
-Visível apenas quando a etapa é do tipo Pergunta:
+1. **Adicionar a checagem na base de conhecimento ao editor em tabela**
+   - No diálogo de edição de etapa (visão tabela), incluir o mesmo bloco `StepKnowledgeCheckEditor`: ativar/desativar a validação na base, nº de tentativas, ação quando inválida (explicar e repergunta / seguir mesmo assim / encaminhar) e a mensagem multilíngue de resposta inválida.
+   - Incluir também o switch **"Resposta humanizada gerada pela IA"** (`ack_ai`) nesse diálogo, salvando no mesmo campo `validation` já usado pelo canvas — assim os dois editores ficam equivalentes e o backend não muda.
+   - Ambos os blocos só aparecem quando o tipo da etapa é **Pergunta** (com aviso explicativo caso contrário).
 
-- **Validar resposta na base de conhecimento** (liga/desliga)
-- **O que validar** — instrução curta em texto livre (ex.: "verificar se o serviço citado é oferecido pela CB Asesoria")
-- **Quando não for válido**: repergunta a mesma etapa (padrão) / segue mesmo assim / vai para a etapa de fallback
-- **Mensagem de recusa** (multi-idioma, com tradução automática) — opcional; se vazia, o agente redige na hora a partir da base, listando o que é oferecido
-- **Tentativas antes de desistir** (padrão 2)
-- **Gravar o resultado** — usa o campo já configurado em "Salvar resposta em", gravando o nome normalizado do serviço em vez do texto cru
-
-Na aba **Comportamento**, ao lado do reconhecimento atual:
-
-- **Resposta humanizada gerada pela IA** (checkbox por etapa). Ligado = frase curta e contextual sobre a resposta dada; desligado = comportamento atual (frase fixa de reconhecimento ou nada).
-
-## Comportamento em execução
-
-Antes de o motor avançar a etapa:
-
-1. Se a etapa tem validação de KB ligada, busca na base (busca híbrida já existente) usando a resposta do cliente + a instrução da etapa e pede ao LLM um veredito curto: `{ valid, normalized_value, reason, options[] }`.
-2. **Válido** → a resposta gravada passa a ser `normalized_value` e o fluxo avança normalmente.
-3. **Inválido** → envia a explicação (mensagem configurada ou redigida a partir da base) e repergunta a mesma etapa, contando tentativas; esgotadas as tentativas aplica o modo escolhido (seguir / fallback).
-4. **Falha técnica** (LLM/KB fora do ar) → não bloqueia: registra log e deixa o fluxo seguir como hoje.
-
-Depois de a resposta ser aceita, se "resposta humanizada" estiver ligada, o agente gera uma frase curta no idioma travado da conversa e ela é enviada antes da próxima pergunta (substitui o reconhecimento fixo).
-
-Vale igualmente no WhatsApp em produção e no Sandbox de teste.
+2. **Melhorar a visibilidade das abas no editor visual**
+   - Trocar o `grid-cols-6` da barra de abas do `StepInspector` por uma lista com rolagem horizontal e rótulos legíveis, para "Base" não ficar truncada.
+   - Renomear o rótulo para **"Base de conhecimento"** (abreviado quando o espaço for curto), deixando claro o propósito.
 
 ## Detalhes técnicos
 
-- **Tipos**: novos campos em `StepValidation` (`src/types/ai-agent-flow-builder.ts`): `kb_check: { enabled, instruction, on_invalid, messages, attempts }` e `ack_ai: boolean`. Sem migração de banco — tudo dentro do jsonb `validation`.
-- **UI**: nova aba em `src/components/ai-agents/flow-builder/StepInspector.tsx` com um componente `StepKnowledgeCheckEditor.tsx`; checkbox `ack_ai` em `StepValidationEditor.tsx`. Tradução automática reaproveita `useAgentTranslate`.
-- **Runtime**: novo módulo `supabase/functions/_shared/flow-kb-check.ts` (veredito + normalização) e `flow-ack.ts` (frase humanizada), ambos recebendo um `callLLM` injetado para usar a cascata resiliente já existente (`intake-llm.ts`) e a busca de KB de `whatsapp-webhook/lib/kb.ts` (extraída para `_shared` para o sandbox também usar).
-- **Orquestração**: `whatsapp-webhook/lib/visual-flow.ts` e `ai-agent-sandbox/index.ts` chamam a checagem antes de `advanceFlow`, passando o valor normalizado; e o ack de IA via a opção `ack` já suportada pelo motor. `flow-engine.ts` ganha apenas o suporte a contagem de tentativas de KB no `flow_state` e o helper `kbCheckOf(step)`.
-- **Logs**: `[VISUAL_FLOW][KB_CHECK]` / `[SANDBOX][KB_CHECK]` com etapa, veredito e motivo.
-- **Testes**: casos Deno em `_shared` cobrindo válido / inválido / esgotou tentativas / falha do LLM, e etapa sem KB ligada (comportamento inalterado).
+- Arquivos afetados: `src/components/ai-agents/FlowsManagement.tsx` (componente `StepDialog`) e `src/components/ai-agents/flow-builder/StepInspector.tsx`.
+- Reutiliza `StepKnowledgeCheckEditor` e a normalização `normalizeKbCheck` de `src/types/ai-agent-flow-builder.ts`.
+- Sem alteração de schema, edge functions ou do `flow-engine` — a persistência continua no JSON `validation` da etapa (`validation.kb_check` e `validation.ack_ai`), já lido pelo runtime.
