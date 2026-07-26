@@ -349,7 +349,17 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
           )}
         </div>
       </div>
+
+      <ImportBizagiDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        flowId={flow.id}
+        phase={(flow.phase || 'GERAL') as FlowPhase}
+        currentCount={steps.length}
+        onImport={applyImport}
+      />
     </div>
+
   );
 }
 
