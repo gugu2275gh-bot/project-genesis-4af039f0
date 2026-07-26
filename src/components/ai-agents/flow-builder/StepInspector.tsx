@@ -117,11 +117,22 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
               <div className="space-y-2">
                 <Label>Código *</Label>
                 <Input value={step.step_code} onChange={(e) => onChange({ step_code: e.target.value })} />
+                {(duplicateCode || emptyCode) && (
+                  <p className="text-xs text-destructive">
+                    {emptyCode ? 'Informe um código para a etapa.' : 'Já existe outra etapa com este código.'}
+                  </p>
+                )}
+                {!duplicateCode && !emptyCode && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Ao renomear, as ligações das outras etapas são atualizadas automaticamente.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Nome *</Label>
                 <Input value={step.name} onChange={(e) => onChange({ name: e.target.value })} />
               </div>
+
             </div>
 
             <div className="space-y-2">
