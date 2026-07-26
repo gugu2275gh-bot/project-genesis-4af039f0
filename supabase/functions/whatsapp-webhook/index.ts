@@ -7,6 +7,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 }
 
+/** Prefixo usado no reenvio quando a deduplicação descartaria a repergunta. */
+const FLOW_RETRY_PREFIX: Record<string, string> = {
+  'pt-BR': 'Só para confirmar:',
+  es: 'Solo para confirmar:',
+  en: 'Just to confirm:',
+  fr: 'Juste pour confirmer :',
+}
+
+
+
 interface WhatsAppMessage {
   from: string;
   body: string;
@@ -1676,9 +1686,11 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
               .map((o) => ({ ...o, text: String(o.text || '').trim() }))
               .filter((o) => !!o.text)
             const flowParts = flowOutbound.map((o) => o.text)
+            let flowSentCount = 0
+            const flowSkipReasons: string[] = []
             for (let i = 0; i < flowOutbound.length; i++) {
               const part = flowOutbound[i].text
-              const sendRes = await sendOutgoingIdempotent(supabase, {
+              let sendRes = await sendOutgoingIdempotent(supabase, {
                 phone: phoneNumber,
                 leadId: lead.id,
                 body: part,
@@ -1686,7 +1698,22 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
                 quickReply: flowOutbound[i].quick_reply ? 'on' : 'off',
               })
 
+              // Descarte por deduplicação: o cliente ficaria sem NENHUMA resposta.
+              // Reenvia uma variação curta para o atendimento não parecer travado.
+              if (!sendRes.sent && (sendRes.reason === 'dedup_hash' || sendRes.reason === 'near_duplicate')) {
+                const prefix = FLOW_RETRY_PREFIX[String(flowLang)] || FLOW_RETRY_PREFIX['pt-BR']
+                sendRes = await sendOutgoingIdempotent(supabase, {
+                  phone: phoneNumber,
+                  leadId: lead.id,
+                  body: `${prefix} ${part}`,
+                  language: flowLang as ChatLanguage,
+                  quickReply: flowOutbound[i].quick_reply ? 'on' : 'off',
+                })
+                if (sendRes.sent) console.log('[VISUAL_FLOW] reenvio com variação após dedup')
+              }
+
               if (sendRes.sent) {
+                flowSentCount++
                 // Persistência fora do caminho crítico: não atrasa o próximo balão.
                 fireAndForget(supabase.from('mensagens_cliente').insert({
                   id_lead: lead.id,
@@ -1703,6 +1730,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
                   origin_bot: true,
                 }), 'persist_interaction')
               } else {
+                flowSkipReasons.push(String(sendRes.reason || 'unknown'))
                 console.log(`[VISUAL_FLOW] send skipped (${sendRes.reason})`)
               }
               if (i < flowParts.length - 1) await new Promise((r) => setTimeout(r, 150))
@@ -1710,15 +1738,24 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
 
             fireAndForget(logTurn({
               supabase,
-              exit_reason: flowParts.length ? 'REPLIED' : 'NO_REPLY',
+              exit_reason: flowSentCount ? 'REPLIED' : 'NO_REPLY',
               lead_id: lead.id,
               contact_id: contact.id,
               phone: phoneNumber,
               message_id: message.messageId,
               inbound_text: message.body,
               response_chars: flowParts.reduce((a: number, p: string) => a + p.length, 0),
-              details: { engine: 'visual-flow', step: turn.state.current_step, parts: flowParts.length, perf: __perf.snapshot() },
+              ai_error: !flowSentCount && flowParts.length ? `all_parts_skipped:${flowSkipReasons.join(',')}` : null,
+              details: {
+                engine: 'visual-flow',
+                step: turn.state.current_step,
+                parts: flowParts.length,
+                sent: flowSentCount,
+                skipped: flowSkipReasons,
+                perf: __perf.snapshot(),
+              },
             }), 'log_turn')
+
 
             // TRAVA: enquanto o fluxo não terminou, o turno SEMPRE encerra aqui —
             // mesmo sem mensagem gerada. Só um fluxo concluído (`finished`)
