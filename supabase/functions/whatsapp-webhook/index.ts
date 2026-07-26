@@ -315,6 +315,11 @@ import {
   getLanguageName,
   getPromptTemplates,
 } from './lib/language.ts'
+import {
+  isFlowLanguage,
+  detectExplicitLanguageRequest,
+  detectLockableLanguageOrNull,
+} from '../_shared/language-detect.ts'
 
 export { detectChatLanguage }
 export type { ChatLanguage }
@@ -1519,72 +1524,58 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
         }
 
 
+        // Wave 4: carregar estado persistente do funil (antes do lock de idioma:
+        // o `visual_flow_state.lang` é a fonte primária do idioma travado).
+        let funnelState = await loadFunnelState(supabase, lead.id, contact)
+
         const currentCustomerMessage = String(effectiveBody || '')
-        // LANGUAGE LOCK: detectar uma única vez (1ª interação) e travar para sempre.
-        // contact.preferred_language é a única fonte da verdade após a primeira detecção.
+        // ============================================================
+        // LANGUAGE LOCK — detecta UMA ÚNICA VEZ e trava para sempre.
+        // Depois de travado, responder "Sim"/"no"/"sí" NÃO muda o idioma.
+        // A única exceção é um pedido EXPLÍCITO de troca pelo cliente.
+        // ============================================================
         const preferredLangMap: Record<string, ChatLanguage> = { 'pt': 'pt-BR', 'pt-BR': 'pt-BR', 'es': 'es', 'en': 'en', 'fr': 'fr' }
         const langCodeMap: Record<ChatLanguage, string> = { 'pt-BR': 'pt', 'es': 'es', 'en': 'en', 'fr': 'fr' }
 
-        let detectedChatLanguage: ChatLanguage
-        // Junta as últimas mensagens do cliente (via mensagens_cliente) para dar mais material
-        // à detecção (mensagens curtas/typos como "good mroning" isoladas não disparam sinal).
-        let recentUserMsgs: string[] = []
-        try {
-          const { data: recentRows } = await supabase
-            .from('mensagens_cliente')
-            .select('mensagem_cliente, created_at')
-            .eq('id_lead', lead.id)
-            .not('mensagem_cliente', 'is', null)
-            .order('created_at', { ascending: false })
-            .limit(6)
-          recentUserMsgs = (recentRows || []).map((r: any) => String(r.mensagem_cliente || '')).filter(Boolean).reverse()
-        } catch (_) { /* ignore */ }
-        const combinedSample = [...recentUserMsgs, currentCustomerMessage].join(' \n ').trim()
-
-        // Sinal positivo: prioriza a mensagem ATUAL (1ª mensagem inclusive);
-        // se ela for neutra, usa o histórico recente como material extra.
-        const positiveSignal =
-          detectChatLanguageOrNull(currentCustomerMessage) ?? detectChatLanguageOrNull(combinedSample)
-
-        if (isFirstInteraction) {
-          if (positiveSignal) {
-            detectedChatLanguage = positiveSignal
-            const currentLangCode = langCodeMap[detectedChatLanguage]
-            await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
-            contact.preferred_language = currentLangCode
-            console.log('Language locked (first message, positive):', detectedChatLanguage, 'sample:', currentCustomerMessage.slice(0, 120))
-          } else {
-            detectedChatLanguage = 'pt-BR'
-            console.log('Language provisional pt-BR (no positive signal yet); will re-detect on next inbound')
-          }
-        } else if (contact.preferred_language && preferredLangMap[contact.preferred_language]) {
-          // Re-detecção precoce: enquanto o cliente ainda está na fase de captação,
-          // um sinal positivo claro em outro idioma corrige o lock.
-          const locked = preferredLangMap[contact.preferred_language]
-          if (positiveSignal && positiveSignal !== locked && recentUserMsgs.length <= 8) {
-            detectedChatLanguage = positiveSignal
-            const currentLangCode = langCodeMap[detectedChatLanguage]
-            await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
-            contact.preferred_language = currentLangCode
-            console.log('Language re-locked (early positive signal):', locked, '→', detectedChatLanguage)
-          } else {
-            detectedChatLanguage = locked
-            console.log('Language locked (from contact):', detectedChatLanguage)
-          }
-        } else if (positiveSignal) {
-          detectedChatLanguage = positiveSignal
-          const currentLangCode = langCodeMap[detectedChatLanguage]
-          await supabase.from('contacts').update({ preferred_language: currentLangCode }).eq('id', contact.id)
-          contact.preferred_language = currentLangCode
-          console.log('Language locked (positive detection):', detectedChatLanguage)
-        } else {
-          // Sem sinal positivo: NÃO persiste lock — apenas usa pt-BR neste turno.
-          detectedChatLanguage = 'pt-BR'
-          console.log('Language provisional pt-BR (no lock persisted)')
+        const persistLangLock = async (lang: ChatLanguage) => {
+          const code = langCodeMap[lang]
+          await supabase.from('contacts').update({ preferred_language: code }).eq('id', contact.id)
+          contact.preferred_language = code
         }
 
-        // Wave 4: carregar estado persistente do funil
-        let funnelState = await loadFunnelState(supabase, lead.id, contact)
+        // Lock persistido: estado do fluxo visual tem precedência, depois o contato.
+        const flowLockRaw = (funnelState as any)?.visual_flow_state?.lang
+        const lockedLanguage: ChatLanguage | null =
+          (isFlowLanguage(flowLockRaw) ? (flowLockRaw as ChatLanguage) : null) ??
+          (contact.preferred_language && preferredLangMap[contact.preferred_language]
+            ? preferredLangMap[contact.preferred_language]
+            : null)
+
+        const explicitRequest = detectExplicitLanguageRequest(currentCustomerMessage) as ChatLanguage | null
+
+        let detectedChatLanguage: ChatLanguage
+        if (explicitRequest) {
+          detectedChatLanguage = explicitRequest
+          await persistLangLock(detectedChatLanguage)
+          console.log('[LANG] troca explícita solicitada pelo cliente →', detectedChatLanguage)
+        } else if (lockedLanguage) {
+          detectedChatLanguage = lockedLanguage
+          console.log('[LANG] idioma travado (mantido):', detectedChatLanguage)
+        } else {
+          // Ainda sem lock: detecta na mensagem atual, ignorando respostas
+          // curtas/ambíguas (sim, no, sí, ok) que não são sinal confiável.
+          const positiveSignal = detectLockableLanguageOrNull(currentCustomerMessage) as ChatLanguage | null
+          if (positiveSignal) {
+            detectedChatLanguage = positiveSignal
+            await persistLangLock(detectedChatLanguage)
+            console.log('[LANG] idioma travado (1ª detecção):', detectedChatLanguage, 'amostra:', currentCustomerMessage.slice(0, 120))
+          } else {
+            const agentDefault = preferredLangMap[String((getAgentRuntime()?.runtimeConfig as any)?.default_language || '')] || 'pt-BR'
+            detectedChatLanguage = agentDefault
+            console.log('[LANG] provisório (sem sinal claro, sem lock persistido):', detectedChatLanguage)
+          }
+        }
+
 
         // ============================================================
         // PRECEDÊNCIA DO FLUXO VISUAL (Gestão de Agentes de IA)
@@ -1602,8 +1593,13 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           const flowStateSaved = savedFromFunnel ?? { ...visualFlowSavedState }
 
           if (flowPlan.enabled && !flowStateSaved.finished) {
-            const turn = runVisualFlowTurn(flowPlan, flowStateSaved, currentCustomerMessage || '', detectedChatLanguage as any)
-            const nextFlowState = { ...turn.state, lang: detectedChatLanguage }
+            // O idioma do fluxo é travado na 1ª vez e NUNCA sobrescrito depois
+            // (só um pedido explícito do cliente troca — já tratado acima).
+            const flowLang = isFlowLanguage(flowStateSaved?.lang) && !explicitRequest
+              ? (flowStateSaved.lang as any)
+              : detectedChatLanguage
+            const turn = runVisualFlowTurn(flowPlan, flowStateSaved, currentCustomerMessage || '', flowLang as any)
+            const nextFlowState = { ...turn.state, lang: flowLang }
 
             console.log('[VISUAL_FLOW]', JSON.stringify({
               step: turn.state.current_step,
@@ -1611,7 +1607,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
               finished: turn.finished,
               handoff: turn.handoff,
               path: turn.path,
-              lang: detectedChatLanguage,
+              lang: flowLang,
             }))
 
             // Grava as respostas com "Salvar resposta em" nos campos do CRM.
