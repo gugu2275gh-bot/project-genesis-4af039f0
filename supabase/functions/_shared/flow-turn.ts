@@ -3,6 +3,8 @@
  * Orquestração de um turno do fluxo visual com recursos assíncronos:
  *  - checagem da resposta na base de conhecimento (por etapa)
  *  - reconhecimento humanizado gerado pela IA (por etapa)
+ *  - "responde e volta na hora": dúvida fora do tema é respondida pela base e
+ *    a pergunta da etapa é retomada na MESMA mensagem
  *
  * O motor (`advanceFlow`) continua puro e determinístico: aqui só decidimos
  * se a resposta entra como está, normalizada, ou se a etapa é reperguntada.
@@ -22,6 +24,23 @@ import {
 } from './flow-engine.ts'
 import { ackAiEnabledFor, generateAckPhrase } from './flow-ack.ts'
 import { kbCheckOf, kbInvalidMessage, runKbCheck } from './flow-kb-check.ts'
+import { answerAside, composeAnswerAndReask, defaultAsideAck, looksLikeQuestion } from './flow-answer-reask.ts'
+
+/** Nenhum recurso opcional pode segurar o turno além disto. */
+const ASSIST_TIMEOUT_MS = 6000
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T | null> {
+  return Promise.race([
+    p.catch((e) => {
+      console.warn(`[FLOW_TURN] ${label} falhou:`, e instanceof Error ? e.message : e)
+      return null
+    }),
+    new Promise<null>((resolve) => setTimeout(() => {
+      console.warn(`[FLOW_TURN] ${label} excedeu ${ms}ms — seguindo sem esperar`)
+      resolve(null)
+    }, ms)),
+  ])
+}
 
 export interface FlowTurnDeps {
   /** Frase fixa de reconhecimento (aba "Primeira mensagem"). */
@@ -48,27 +67,51 @@ export async function advanceFlowTurn(
   if (!step) return startFlow(steps, lang)
 
   const question = (messagesOf(step, lang) || []).slice(-1)[0] || ''
+  const text = String(message || '').trim()
   let effectiveMessage = message
   let workingState: FlowRunState = state
 
-  // 1) Checagem na base de conhecimento (só quando ligada na etapa).
+  // Recursos opcionais rodam EM PARALELO (base + reconhecimento + resposta à
+  // dúvida), com timeout curto: nenhum deles pode atrasar a retomada do fluxo.
   const kbCfg = kbCheckOf(step)
-  if (kbCfg.enabled && deps.callLLM && deps.kbSearch && String(message || '').trim()) {
-    let verdict = null
-    try {
-      const kbContext = await deps.kbSearch(message)
-      verdict = await runKbCheck({
-        question,
-        answer: message,
-        cfg: kbCfg,
-        lang,
-        kbContext,
-        callLLM: deps.callLLM,
-      })
-    } catch (e) {
-      console.warn(`${tag}[KB_CHECK] erro:`, e instanceof Error ? e.message : e)
-    }
+  const wantsKbCheck = kbCfg.enabled && !!deps.callLLM && !!deps.kbSearch && !!text
+  const wantsAck = ackAiEnabledFor(step) && !!deps.callLLM
+  const wantsAside = !!deps.callLLM && !!deps.kbSearch && looksLikeQuestion(text)
 
+  const kbContextP = (wantsKbCheck || wantsAside) && deps.kbSearch
+    ? withTimeout(Promise.resolve(deps.kbSearch(text)), ASSIST_TIMEOUT_MS, 'kb_search')
+    : Promise.resolve(null)
+
+  const [kbContext, ackGenerated] = await Promise.all([
+    kbContextP,
+    wantsAck
+      ? withTimeout(
+        generateAckPhrase({ question, answer: message, lang, callLLM: deps.callLLM }),
+        ASSIST_TIMEOUT_MS,
+        'ack_ai',
+      )
+      : Promise.resolve(null),
+  ])
+
+  const [verdict, aside] = await Promise.all([
+    wantsKbCheck && kbContext
+      ? withTimeout(
+        runKbCheck({ question, answer: message, cfg: kbCfg, lang, kbContext, callLLM: deps.callLLM }),
+        ASSIST_TIMEOUT_MS,
+        'kb_check',
+      )
+      : Promise.resolve(null),
+    wantsAside && kbContext
+      ? withTimeout(
+        answerAside({ question: text, lang, kbContext, callLLM: deps.callLLM }),
+        ASSIST_TIMEOUT_MS,
+        'answer_aside',
+      )
+      : Promise.resolve(null),
+  ])
+
+  // 1) Checagem na base de conhecimento (só quando ligada na etapa).
+  if (wantsKbCheck) {
     console.log(`${tag}[KB_CHECK]`, JSON.stringify({
       step: step.step_code,
       answered: !!verdict,
@@ -79,8 +122,8 @@ export async function advanceFlowTurn(
     if (verdict && !verdict.valid) {
       const tries = Number(state.kb_attempts || 0) + 1
       if (tries <= kbCfg.attempts || kbCfg.on_invalid === 'REPERGUNTAR') {
-        const text = kbInvalidMessage(kbCfg, lang) || verdict.reply || question
-        return buildStayTurn(step, text, workingState, { kb_attempts: tries })
+        const msg = kbInvalidMessage(kbCfg, lang) || verdict.reply || question
+        return buildStayTurn(step, msg, workingState, { kb_attempts: tries })
       }
       if (kbCfg.on_invalid === 'ENCAMINHAR') {
         const v = (step.validation || {}) as Record<string, unknown>
@@ -99,16 +142,24 @@ export async function advanceFlowTurn(
   }
 
   // 2) Reconhecimento humanizado: gerado pela IA quando a etapa pedir.
-  let ack = deps.ack || ''
-  if (ackAiEnabledFor(step) && deps.callLLM) {
-    const generated = await generateAckPhrase({
-      question,
-      answer: message,
-      lang,
-      callLLM: deps.callLLM,
-    })
-    if (generated) ack = generated
+  const ack = ackGenerated || deps.ack || ''
+
+  const turn = advanceFlow(steps, workingState, effectiveMessage, lang, { ack })
+
+  // 3) "Responde e volta na hora": o fluxo ficou na mesma etapa por causa de
+  // uma dúvida do cliente → resposta curta + pergunta na MESMA mensagem.
+  if (turn.reasked && wantsAside) {
+    const answer = aside || defaultAsideAck(lang)
+    const outbound = (turn.outbound || []).slice()
+    if (outbound.length) {
+      outbound[0] = { ...outbound[0], text: composeAnswerAndReask(answer, outbound[0].text, lang) }
+      console.log(`${tag}[ANSWER_REASK]`, JSON.stringify({
+        step: step.step_code,
+        from_kb: !!aside,
+      }))
+      return { ...turn, outbound, messages: outbound.map((o) => o.text) }
+    }
   }
 
-  return advanceFlow(steps, workingState, effectiveMessage, lang, { ack })
+  return turn
 }
