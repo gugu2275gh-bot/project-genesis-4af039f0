@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
 
     const { data: session, error: sessErr } = await service
       .from('ai_agent_test_sessions')
-      .select('id, agent_id, agent_version_id')
+      .select('id, agent_id, agent_version_id, flow_state')
       .eq('id', session_id)
       .single()
     if (sessErr || !session) return json({ error: 'sessão não encontrada' }, 404)
