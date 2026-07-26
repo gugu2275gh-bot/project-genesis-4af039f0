@@ -1,40 +1,43 @@
-## Resposta curta
+## Diagnóstico (verificado no código)
 
-**Parcialmente.** O editor já modela a *estrutura* do seu diagrama, mas hoje ele é apenas de desenho: o agente em produção **não lê** esses fluxos.
+O editor visual (`FlowCanvas.tsx`, `StepNode.tsx`, `StepInspector.tsx`, `useSaveFlowCanvas`) tem falhas estruturais que explicam as quebras — inclusive "mover uma etapa quebra":
 
-### O que já é possível hoje
-- Etapas em sequência (Msg 3, Msg 4, Msg 7…), com pergunta multi-idioma (PT/ES/EN/FR) e mensagem de reperguntar.
-- Gateway "Está na Espanha?" → ramificações por resposta (igual/contém/regex/intenção/qualquer), cada uma apontando para uma etapa.
-- Trilhas paralelas A1–A6 (fora) e B1–B5 (na Espanha) e o reencontro em "Dados coletados".
-- Validações (e-mail, data DD/MM/AAAA, número, sim/não, seleção), campo do lead onde salvar a resposta, limite de reperguntas.
-- "Não repetir etapa já cumprida" (pular se campo preenchido / etapa concluída / uma vez por contato).
-- Etapa de handoff e importação do export **BPMN 2.0** do Bizagi (tarefas → etapas, gateways → ramificações, posições do diagrama).
+1. **Posições guardadas pelo `step_code`, não pelo id** (`FlowCanvas.tsx:66,97,147`). Ao arrastar, o handler reconstrói o mapa inteiro de posições a cada evento; qualquer etapa com código vazio ou duplicado colide ou é perdida e o nó salta para `{0,0}`. Renomear o código no inspetor também apaga a posição.
+2. **Nós recriados a cada movimento** — o `useMemo` de `nodes` depende de `positions`, que muda a cada pixel do arrasto; o React Flow perde estado interno (dimensões/seleção), gerando o "tremor"/salto observado.
+3. **Estado local é sobrescrito por refetch** (`useEffect` em `FlowCanvas.tsx:75`): qualquer invalidação do React Query (salvar, voltar à aba, refoco da janela) recarrega `savedSteps` e **descarta as alterações não salvas** sem aviso.
+4. **Renomear o código quebra as ligações**: as outras etapas continuam apontando para o código antigo, virando "etapa aponta para X que não existe".
+5. **Códigos duplicados**: `etapa_${n}` é gerado por contagem; após excluir e criar de novo, gera código repetido → arestas erradas (o mapa de arestas é por código).
+6. **Ramificações automáticas em loop** (`StepInspector.tsx:54-72`): para `SIM_NAO`/seleção, o efeito recria as ramificações apagadas ou renomeadas, tornando impossível excluir/editar uma opção.
+7. **Salvar sem trava de erro** e sem aviso de alterações pendentes ao fechar a tela cheia; um erro no meio do laço de `update/insert` deixa o fluxo meio salvo.
 
-### O que falta para o fluxo da imagem ficar 100%
-1. **Textos das mensagens não vêm na importação.** No seu arquivo, os textos "Msg 1", "Msg 2"… estão em caixas de anotação (text annotation) ligadas às tarefas; o importador hoje só lê o campo "documentação" da tarefa, então as etapas chegam sem texto.
-2. **Blocos com mais de uma mensagem** ("Msg 1-2 – Abertura", "Msg 5 + Msg 6", "Msg H1-H2") — hoje cada etapa envia uma única mensagem.
-3. **Etapas só informativas, sem resposta** (Msg 6 – serviços atendidos, Msg H1–H3) — não existe tipo "apenas informar e seguir".
-4. **Início e Fim** viram etapas comuns na importação, em vez de marcadores de início do fluxo e de encerramento/handoff.
-5. **O agente não executa o fluxo desenhado.** O roteiro real está fixo em código (`flow-machine.ts`: ABERTURA → NAME → LOCATION → INSIDE/OUTSIDE → PRE_HANDOFF → HANDOFF). Mudar o desenho hoje não muda o atendimento.
+## O que será feito
 
-## Plano proposto
+**A. Reescrever o núcleo de estado do canvas**
+- Posições passam a ser indexadas pelo **id da etapa** (com migração automática das posições antigas por código na leitura, e regravação no formato novo).
+- Usar o padrão oficial do React Flow (estado de nós mantido e atualizado por `applyNodeChanges`), aplicando só as mudanças recebidas em vez de recriar tudo; nós ficam estáveis durante o arrasto.
+- `data` do nó com callbacks estáveis (ref) para o `memo` do `StepNode` voltar a funcionar.
 
-### Fase 1 — Editor cobre o diagrama por completo
-- Importador Bizagi: ler `textAnnotation` + `association` e usar o texto da caixa como mensagem da etapa (com fallback para a documentação); reconhecer "Msg N" no rótulo para ordenar.
-- Etapa passa a ter **lista de mensagens** (1..n) por idioma, enviadas em sequência — cobre "Msg 1-2", "Msg 5+6", "Msg H1-H2".
-- Novo tipo de etapa **Informativa** (sem resposta esperada, segue direto para a próxima).
-- Marcadores **Início** e **Fim** dedicados no canvas; Fim pode marcar "encaminhar para especialista" (handoff).
-- Validação do fluxo reforçada: um único início, toda etapa alcançável, ramificação sem destino, loop infinito.
+**B. Não perder trabalho**
+- Só sincronizar com os dados do servidor quando não houver alterações pendentes (ou ao trocar de fluxo); caso contrário manter o rascunho e mostrar aviso "há alterações não salvas".
+- Confirmação ao fechar o editor em tela cheia com alterações pendentes.
 
-### Fase 2 — Fluxo do desenho vira o fluxo executado
-- O runtime do WhatsApp passa a carregar as etapas do agente em produção do banco e executá-las (perguntas, validações, ramificações, campos salvos, anti-repetição), mantendo o roteiro atual em código como fallback caso o agente não tenha fluxo publicado.
-- Publicação por versão: alterações só afetam o atendimento após "Publicar", com possibilidade de voltar a versão anterior.
-- Sandbox usa exatamente o mesmo motor, para testar antes de publicar.
+**C. Integridade dos códigos e ligações**
+- Renomear o código de uma etapa remapeia automaticamente `next_step_code` e `branches.next_step_code` de todas as outras etapas.
+- Geração de código único (sufixo incremental) e bloqueio/normalização de código vazio ou duplicado (aviso no inspetor).
+- Arestas passam a ser construídas de forma resiliente a códigos repetidos.
 
-### Detalhes técnicos
-- `ai_agent_flow_steps`: usar `messages` como lista ordenada por idioma; novos valores de tipo de etapa (`INFORMATIVA`, `INICIO`, `FIM`) e flag de encerramento.
-- `src/lib/bizagi-bpmn-import.ts`: mapear `bpmn:textAnnotation` via `bpmn:association` (sourceRef/targetRef nos dois sentidos).
-- `supabase/functions/whatsapp-webhook/lib/flow-machine.ts`: extrair um executor genérico dirigido por dados, alimentado pelas etapas do agente; `agent-runtime.ts` carrega e cacheia o fluxo publicado.
-- Testes: converter o roteiro atual em fluxo de dados e rodar a suíte existente (canonical, handoff, pré-handoff, multi-idioma) contra o motor novo para garantir zero regressão.
+**D. Inspetor sem loops**
+- Ramificações automáticas geradas **uma vez** por tipo de resposta (com marcação de "geradas automaticamente"), com botão "Gerar opções" manual; o usuário pode excluir/editar sem recriação.
+- Correções de edição de mensagens múltiplas (remover a última mensagem, listas vazias) e de campos numéricos.
 
-Posso executar só a Fase 1 (editor completo, sem tocar no atendimento) ou as duas.
+**E. Robustez geral**
+- `ErrorBoundary` em volta do canvas: se algo falhar, mostra mensagem e botão "recarregar editor" em vez de tela branca.
+- Salvamento em bloco mais seguro: normaliza etapas (código, order_index, mensagens), avisa quando há erros de validação antes de salvar e reporta a etapa exata em caso de falha.
+
+**F. Verificação**
+- Testes unitários para: layout automático, validação, remapeamento de código, aplicação de movimento de nó e normalização de mensagens/ramificações.
+- Teste de interação no preview (arrastar etapa, criar, renomear código, excluir, importar Bizagi, salvar e reabrir) com capturas de tela.
+
+## Observações técnicas
+
+Arquivos afetados: `src/components/ai-agents/flow-builder/FlowCanvas.tsx` (reescrita do estado), `StepNode.tsx`, `StepInspector.tsx`, `src/types/ai-agent-flow-builder.ts` (helpers de remapeamento/códigos), `src/lib/flow-validation.ts`, `src/hooks/useAIAgents.ts` (`useSaveFlowCanvas`), `src/components/ai-agents/FlowsManagement.tsx` (guarda de fechamento). Sem mudanças de banco de dados: o formato novo de `canvas.positions` é retrocompatível com o antigo.

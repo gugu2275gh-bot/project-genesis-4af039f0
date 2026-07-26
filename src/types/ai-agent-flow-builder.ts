@@ -222,3 +222,91 @@ export function firstText(t: MultiLangText | undefined, fallback = ''): string {
   if (!t) return fallback;
   return t['pt-BR'] || t.es || t.en || t.fr || fallback;
 }
+
+/* ------------------------- integridade dos códigos ------------------------ */
+
+/** Normaliza um código de etapa (minúsculas, sem espaços/acentos). */
+export function slugStepCode(raw: string): string {
+  return (raw || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+/** Devolve um código único, acrescentando sufixo numérico quando necessário. */
+export function uniqueStepCode(existing: Iterable<string>, base: string): string {
+  const taken = new Set(Array.from(existing).filter(Boolean));
+  const root = slugStepCode(base) || 'etapa';
+  if (!taken.has(root)) return root;
+  let i = 2;
+  while (taken.has(`${root}_${i}`)) i++;
+  return `${root}_${i}`;
+}
+
+type CodeRefStep = {
+  step_code: string;
+  next_step_code?: string | null;
+  branches?: unknown;
+};
+
+/**
+ * Renomeia o código de uma etapa e reaponta todas as referências das demais
+ * (`next_step_code` e destinos das ramificações).
+ */
+export function renameStepCode<T extends CodeRefStep>(
+  steps: T[],
+  stepId: string,
+  newCode: string,
+  idOf: (s: T) => string,
+): T[] {
+  const target = steps.find((s) => idOf(s) === stepId);
+  if (!target) return steps;
+  const oldCode = target.step_code;
+  if (oldCode === newCode) return steps;
+  if (!newCode) return steps.map((s) => (idOf(s) === stepId ? { ...s, step_code: '' } : s));
+
+  return steps.map((s) => {
+    if (idOf(s) === stepId) return { ...s, step_code: newCode };
+    if (!oldCode) return s;
+    const branches = normalizeBranches((s as any).branches);
+    const patched = branches.map((b) =>
+      b.next_step_code === oldCode ? { ...b, next_step_code: newCode } : b,
+    );
+    const nextChanged = s.next_step_code === oldCode;
+    if (!nextChanged && patched.every((b, i) => b.next_step_code === branches[i].next_step_code)) {
+      return s;
+    }
+    return {
+      ...s,
+      next_step_code: nextChanged ? newCode : s.next_step_code,
+      ...(branches.length ? { branches: patched } : {}),
+    } as T;
+  });
+}
+
+/**
+ * Aceita posições salvas por id (formato novo) ou por `step_code` (formato
+ * antigo) e devolve sempre um mapa indexado pelo id da etapa.
+ */
+export function migratePositions(
+  saved: Record<string, { x: number; y: number }> | undefined,
+  steps: { id: string; step_code: string }[],
+): Record<string, { x: number; y: number }> {
+  const out: Record<string, { x: number; y: number }> = {};
+  if (!saved) return out;
+  const byCode = new Map(steps.map((s) => [s.step_code, s.id]));
+  const ids = new Set(steps.map((s) => s.id));
+  Object.entries(saved).forEach(([key, pos]) => {
+    if (!pos || typeof pos.x !== 'number' || typeof pos.y !== 'number') return;
+    if (ids.has(key)) out[key] = pos;
+    else {
+      const id = byCode.get(key);
+      if (id && !out[id]) out[id] = pos;
+    }
+  });
+  return out;
+}
+

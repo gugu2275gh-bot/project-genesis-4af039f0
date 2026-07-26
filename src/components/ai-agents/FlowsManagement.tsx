@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plus, Pencil, Trash2, ListOrdered, Workflow } from 'lucide-react';
 import { FlowCanvas } from '@/components/ai-agents/flow-builder/FlowCanvas';
+import { FlowErrorBoundary } from '@/components/ai-agents/flow-builder/FlowErrorBoundary';
+
 import {
   useAgentFlows,
   useDeleteFlow,
@@ -205,12 +207,18 @@ function StepDialog({
   );
 }
 
-function FlowSteps({ flow }: { flow: AgentFlow }) {
+function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (d: boolean) => void }) {
   const { data: steps } = useFlowSteps(flow.id);
   const del = useDeleteFlowStep();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AgentFlowStep | null>(null);
   const [view, setView] = useState<'canvas' | 'table'>('canvas');
+  const [canvasDirty, setCanvasDirty] = useState(false);
+
+  const setDirty = (d: boolean) => {
+    setCanvasDirty(d);
+    onDirtyChange?.(d);
+  };
 
   if (view === 'canvas') {
     return (
@@ -219,14 +227,29 @@ function FlowSteps({ flow }: { flow: AgentFlow }) {
           <p className="text-sm font-medium flex items-center gap-2">
             <Workflow className="h-4 w-4" /> Desenho de "{flow.name}"
           </p>
-          <Button size="sm" variant="outline" onClick={() => setView('table')}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              if (
+                canvasDirty &&
+                !window.confirm('Há alterações não salvas no desenho. Sair mesmo assim?')
+              )
+                return;
+              setDirty(false);
+              setView('table');
+            }}
+          >
             <ListOrdered className="h-4 w-4 mr-1" /> Ver em tabela
           </Button>
         </div>
-        <FlowCanvas key={flow.id} flow={flow} />
+        <FlowErrorBoundary resetKey={flow.id}>
+          <FlowCanvas key={flow.id} flow={flow} onDirtyChange={setDirty} />
+        </FlowErrorBoundary>
       </div>
     );
   }
+
 
   return (
     <div className="space-y-3">
@@ -302,6 +325,8 @@ export function FlowsManagement() {
   const delFlow = useDeleteFlow();
   const [selected, setSelected] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editorDirty, setEditorDirty] = useState(false);
+
   const [draft, setDraft] = useState<any>({ name: '', description: '', status: 'RASCUNHO', phase: 'PRE_HANDOFF' });
 
   const current = (flows || []).find((f) => f.id === selected) || null;
@@ -372,7 +397,15 @@ export function FlowsManagement() {
         ))
       )}
 
-      <Dialog open={!!current} onOpenChange={(o) => !o && setSelected(null)}>
+      <Dialog
+        open={!!current}
+        onOpenChange={(o) => {
+          if (o) return;
+          if (editorDirty && !window.confirm('Há alterações não salvas no desenho. Fechar mesmo assim?')) return;
+          setEditorDirty(false);
+          setSelected(null);
+        }}
+      >
         <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -384,11 +417,13 @@ export function FlowsManagement() {
                     (current as any).phase}
                 </Badge>
               )}
+              {editorDirty && <Badge variant="secondary">Alterações não salvas</Badge>}
             </DialogTitle>
           </DialogHeader>
-          {current && <FlowSteps flow={current} />}
+          {current && <FlowSteps flow={current} onDirtyChange={setEditorDirty} />}
         </DialogContent>
       </Dialog>
+
 
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

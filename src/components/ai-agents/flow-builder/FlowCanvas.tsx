@@ -5,7 +5,6 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
-  applyNodeChanges,
   type Connection,
   type Edge,
   type Node,
@@ -16,7 +15,7 @@ import '@xyflow/react/dist/style.css';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle, CheckCircle2, LayoutGrid, Plus, Save, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, LayoutGrid, Plus, RotateCcw, Save, Trash2, Upload } from 'lucide-react';
 import { StepNode } from './StepNode';
 import { StepInspector } from './StepInspector';
 import { autoLayout } from '@/lib/flow-layout';
@@ -28,17 +27,36 @@ import type { AgentFlow, AgentFlowStep, FlowPhase } from '@/types/ai-agents';
 
 import {
   DEFAULT_STEP_VALIDATION,
+  migratePositions,
   normalizeBranches,
+  renameStepCode,
+  slugStepCode,
+  uniqueStepCode,
   type FlowCanvasData,
 } from '@/types/ai-agent-flow-builder';
 
 const nodeTypes = { step: StepNode };
 
-function newStep(flowId: string, phase: FlowPhase, index: number): AgentFlowStep {
+type PosMap = Record<string, { x: number; y: number }>;
+
+const idOf = (s: AgentFlowStep) => s.id;
+
+/** Converte posições calculadas por código para o formato indexado por id. */
+function layoutById(steps: AgentFlowStep[]): PosMap {
+  const byCode = autoLayout(steps);
+  const out: PosMap = {};
+  steps.forEach((s, i) => {
+    out[s.id] = byCode[s.step_code] || { x: (i % 4) * 320, y: Math.floor(i / 4) * 200 };
+  });
+  return out;
+}
+
+function newStep(flowId: string, phase: FlowPhase, existingCodes: string[], index: number): AgentFlowStep {
+  const code = uniqueStepCode(existingCodes, `etapa_${index + 1}`);
   return {
-    id: `tmp_${Date.now()}_${index}`,
+    id: `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     flow_id: flowId,
-    step_code: `etapa_${index + 1}`,
+    step_code: code,
     name: `Etapa ${index + 1}`,
     description: '',
     message: '',
@@ -58,30 +76,53 @@ function newStep(flowId: string, phase: FlowPhase, index: number): AgentFlowStep
   } as AgentFlowStep;
 }
 
-function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
+function FlowCanvasInner({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (d: boolean) => void }) {
   const { data: savedSteps } = useFlowSteps(flow.id);
   const saveCanvas = useSaveFlowCanvas();
 
   const [steps, setSteps] = useState<AgentFlowStep[]>([]);
-  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
+  const [positions, setPositions] = useState<PosMap>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [importOpen, setImportOpen] = useState(false);
   const deleteStepRef = useRef<(id: string) => void>(() => {});
+  const dirtyRef = useRef(false);
+  const loadedFlowRef = useRef<string | null>(null);
 
-
+  dirtyRef.current = dirty;
 
   useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  const loadFromServer = useCallback(
+    (list: AgentFlowStep[]) => {
+      const canvas = ((flow as any).canvas || {}) as FlowCanvasData;
+      const saved = migratePositions(canvas.positions, list);
+      const fallback = layoutById(list);
+      const merged: PosMap = {};
+      list.forEach((s) => {
+        merged[s.id] = saved[s.id] || fallback[s.id];
+      });
+      setSteps(list);
+      setPositions(merged);
+      setSelectedId(null);
+      setRemovedIds([]);
+      setDirty(false);
+    },
+    [flow],
+  );
+
+  // Só sincroniza com o servidor quando não há rascunho pendente, para nunca
+  // descartar alterações do usuário em um refetch do React Query.
+  useEffect(() => {
     if (!savedSteps) return;
-    setSteps(savedSteps);
-    const canvas = ((flow as any).canvas || {}) as FlowCanvasData;
-    const saved = canvas.positions || {};
-    const missing = savedSteps.filter((s) => !saved[s.step_code]);
-    setPositions(missing.length ? { ...autoLayout(savedSteps), ...saved } : saved);
-    setDirty(false);
-    setRemovedIds([]);
-  }, [savedSteps, flow.id]);
+    const flowChanged = loadedFlowRef.current !== flow.id;
+    if (!flowChanged && dirtyRef.current) return;
+    loadedFlowRef.current = flow.id;
+    loadFromServer(savedSteps);
+  }, [savedSteps, flow.id, loadFromServer]);
 
   const issues = useMemo(() => validateFlow(steps), [steps]);
   const errorCodes = useMemo(
@@ -89,21 +130,26 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
     [issues],
   );
 
+  const handleDelete = useCallback((id: string) => deleteStepRef.current(id), []);
+
   const nodes: Node[] = useMemo(
     () =>
-      steps.map((s) => ({
+      steps.map((s, i) => ({
         id: s.id,
         type: 'step',
-        position: positions[s.step_code] || { x: 0, y: 0 },
-        data: { step: s, hasIssue: errorCodes.has(s.step_code), onDelete: (id: string) => deleteStepRef.current(id) },
+        position: positions[s.id] || { x: (i % 4) * 320, y: Math.floor(i / 4) * 200 },
+        data: { step: s, hasIssue: errorCodes.has(s.step_code), onDelete: handleDelete },
         selected: selectedId === s.id,
       })),
-    [steps, positions, selectedId, errorCodes],
+    [steps, positions, selectedId, errorCodes, handleDelete],
   );
 
-
   const edges: Edge[] = useMemo(() => {
-    const byCode = new Map(steps.map((s) => [s.step_code, s]));
+    // Primeiro código vence quando há duplicados, evitando arestas cruzadas.
+    const byCode = new Map<string, AgentFlowStep>();
+    steps.forEach((s) => {
+      if (s.step_code && !byCode.has(s.step_code)) byCode.set(s.step_code, s);
+    });
     const list: Edge[] = [];
     steps.forEach((s) => {
       normalizeBranches((s as any).branches).forEach((b) => {
@@ -134,29 +180,41 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
   }, [steps]);
 
   const patchStep = useCallback((id: string, patch: Partial<AgentFlowStep>) => {
-    setSteps((prev) => prev.map((s) => (s.id === id ? ({ ...s, ...patch } as AgentFlowStep) : s)));
+    setSteps((prev) => {
+      const { step_code, ...rest } = patch as any;
+      let next = prev.map((s) => (s.id === id ? ({ ...s, ...rest } as AgentFlowStep) : s));
+      if (step_code !== undefined) {
+        const code = slugStepCode(String(step_code));
+        // Renomear reaponta as referências das demais etapas automaticamente.
+        next = renameStepCode(next, id, code, idOf);
+      }
+      return next;
+    });
     setDirty(true);
   }, []);
 
-  const onNodesChange = useCallback(
-    (changes: NodeChange[]) => {
-      const next = applyNodeChanges(changes, nodes);
-      const map: Record<string, { x: number; y: number }> = {};
-      next.forEach((n) => {
-        const step = steps.find((s) => s.id === n.id);
-        if (step) map[step.step_code] = n.position;
+  const onNodesChange = useCallback((changes: NodeChange[]) => {
+    const moves = changes.filter((c) => c.type === 'position' && (c as any).position) as any[];
+    if (moves.length) {
+      setPositions((prev) => {
+        const next = { ...prev };
+        moves.forEach((c) => {
+          next[c.id] = c.position;
+        });
+        return next;
       });
-      setPositions(map);
-      if (changes.some((c) => c.type === 'position' && (c as any).dragging === false)) setDirty(true);
-    },
-    [nodes, steps],
-  );
+      if (moves.some((c) => c.dragging === false)) setDirty(true);
+    }
+    const sel = changes.find((c) => c.type === 'select') as any;
+    if (sel?.selected) setSelectedId(sel.id);
+  }, []);
+
 
   const onConnect = useCallback(
     (conn: Connection) => {
       const source = steps.find((s) => s.id === conn.source);
       const target = steps.find((s) => s.id === conn.target);
-      if (!source || !target) return;
+      if (!source || !target || !target.step_code) return;
       if (conn.sourceHandle && conn.sourceHandle.startsWith('branch-')) {
         const branchId = conn.sourceHandle.replace('branch-', '');
         const branches = normalizeBranches((source as any).branches).map((b) =>
@@ -171,11 +229,16 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
   );
 
   const addStep = () => {
-    const step = newStep(flow.id, (flow.phase || 'GERAL') as FlowPhase, steps.length);
+    const step = newStep(
+      flow.id,
+      (flow.phase || 'GERAL') as FlowPhase,
+      steps.map((s) => s.step_code),
+      steps.length,
+    );
     setSteps((prev) => [...prev, step]);
     setPositions((prev) => ({
       ...prev,
-      [step.step_code]: { x: (steps.length % 4) * 320, y: Math.floor(steps.length / 4) * 200 + 60 },
+      [step.id]: { x: (steps.length % 4) * 320, y: Math.floor(steps.length / 4) * 200 + 60 },
     }));
     setSelectedId(step.id);
     setDirty(true);
@@ -195,19 +258,28 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
         ? `Excluir a etapa "${step.name || step.step_code}"? ${refs.length} ligação(ões) de outras etapas serão removidas.`
         : `Excluir a etapa "${step.name || step.step_code}"?`;
       if (!window.confirm(msg)) return;
-      if (!step.id.startsWith('tmp_')) setRemovedIds((prev) => [...prev, step.id]);
+      if (!String(step.id).startsWith('tmp_')) setRemovedIds((prev) => [...prev, step.id]);
       setSteps((prev) =>
         prev
           .filter((s) => s.id !== id)
           .map((s) => ({
             ...s,
             next_step_code: s.next_step_code === step.step_code ? null : s.next_step_code,
-            branches: normalizeBranches((s as any).branches).map((b) =>
-              b.next_step_code === step.step_code ? { ...b, next_step_code: null } : b,
-            ),
+            ...(normalizeBranches((s as any).branches).length
+              ? {
+                  branches: normalizeBranches((s as any).branches).map((b) =>
+                    b.next_step_code === step.step_code ? { ...b, next_step_code: null } : b,
+                  ),
+                }
+              : {}),
           })) as AgentFlowStep[],
       );
-      setSelectedId(null);
+      setPositions((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setSelectedId((prev) => (prev === id ? null : prev));
       setDirty(true);
     },
     [steps],
@@ -216,44 +288,68 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
   deleteStepRef.current = deleteStep;
 
   useEffect(() => {
-
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Delete' || !selectedId) return;
       const el = document.activeElement as HTMLElement | null;
       if (el && ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return;
       if (el?.isContentEditable) return;
-      deleteStep(selectedId);
+      deleteStepRef.current(selectedId);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedId, deleteStep]);
+  }, [selectedId]);
 
   const applyImport = (result: ImportedFlow, mode: 'REPLACE' | 'APPEND') => {
     if (mode === 'REPLACE') {
-      setRemovedIds((prev) => [...prev, ...steps.filter((s) => !s.id.startsWith('tmp_')).map((s) => s.id)]);
+      setRemovedIds((prev) => [...prev, ...steps.filter((s) => !String(s.id).startsWith('tmp_')).map((s) => s.id)]);
       setSteps(result.steps);
-      setPositions(
-        Object.keys(result.positions).length ? result.positions : autoLayout(result.steps),
-      );
+      setPositions(layoutById(result.steps));
     } else {
       const existing = new Set(steps.map((s) => s.step_code));
       const imported = result.steps.filter((s) => !existing.has(s.step_code));
       const merged = [...steps, ...imported];
       setSteps(merged);
-      setPositions(autoLayout(merged));
+      setPositions(layoutById(merged));
     }
     setSelectedId(null);
     setDirty(true);
   };
 
   const organize = () => {
-    setPositions(autoLayout(steps));
+    setPositions(layoutById(steps));
     setDirty(true);
   };
 
+  const discard = () => {
+    if (!savedSteps) return;
+    if (!window.confirm('Descartar todas as alterações não salvas deste fluxo?')) return;
+    loadFromServer(savedSteps);
+  };
 
   const handleSave = async () => {
-    await saveCanvas.mutateAsync({ flowId: flow.id, steps, positions, removedIds });
+    const errs = issues.filter((i) => i.level === 'error');
+    if (errs.length) {
+      const ok = window.confirm(
+        `O fluxo tem ${errs.length} erro(s):\n\n- ${errs
+          .slice(0, 5)
+          .map((e) => e.message)
+          .join('\n- ')}\n\nSalvar mesmo assim?`,
+      );
+      if (!ok) return;
+    }
+    const result = await saveCanvas.mutateAsync({ flowId: flow.id, steps, positions, removedIds });
+    const idMap = (result as any)?.idMap as Record<string, string> | undefined;
+    if (idMap && Object.keys(idMap).length) {
+      setSteps((prev) => prev.map((s) => (idMap[s.id] ? ({ ...s, id: idMap[s.id] } as AgentFlowStep) : s)));
+      setPositions((prev) => {
+        const next: PosMap = {};
+        Object.entries(prev).forEach(([id, pos]) => {
+          next[idMap[id] || id] = pos;
+        });
+        return next;
+      });
+      setSelectedId((prev) => (prev && idMap[prev] ? idMap[prev] : prev));
+    }
     setDirty(false);
     setRemovedIds([]);
   };
@@ -273,6 +369,11 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
           <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
             <Upload className="h-4 w-4 mr-1" /> Importar do Bizagi
           </Button>
+          {dirty && (
+            <Button size="sm" variant="ghost" onClick={discard}>
+              <RotateCcw className="h-4 w-4 mr-1" /> Descartar alterações
+            </Button>
+          )}
           {selected && (
             <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteStep(selected.id)}>
               <Trash2 className="h-4 w-4 mr-1" /> Excluir etapa
@@ -281,6 +382,7 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
         </div>
 
         <div className="flex items-center gap-2">
+          {dirty && <Badge variant="secondary">Alterações não salvas</Badge>}
           {errors.length === 0 && warnings.length === 0 ? (
             <Badge variant="outline" className="gap-1">
               <CheckCircle2 className="h-3 w-3" /> Fluxo sem problemas
@@ -291,7 +393,7 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
             </Badge>
           )}
           <Button size="sm" onClick={handleSave} disabled={!dirty || saveCanvas.isPending}>
-            <Save className="h-4 w-4 mr-1" /> Salvar fluxo
+            <Save className="h-4 w-4 mr-1" /> {saveCanvas.isPending ? 'Salvando…' : 'Salvar fluxo'}
           </Button>
         </div>
       </div>
@@ -316,6 +418,7 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
             onConnect={onConnect}
             onNodeClick={(_, n) => setSelectedId(n.id)}
             onPaneClick={() => setSelectedId(null)}
+            deleteKeyCode={null}
             fitView
             proOptions={{ hideAttribution: true }}
           >
@@ -324,7 +427,6 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
             <MiniMap pannable zoomable />
           </ReactFlow>
         </div>
-
 
         <div className="rounded-lg border">
           {selected ? (
@@ -365,14 +467,13 @@ function FlowCanvasInner({ flow }: { flow: AgentFlow }) {
         onImport={applyImport}
       />
     </div>
-
   );
 }
 
-export function FlowCanvas({ flow }: { flow: AgentFlow }) {
+export function FlowCanvas({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (d: boolean) => void }) {
   return (
     <ReactFlowProvider>
-      <FlowCanvasInner flow={flow} />
+      <FlowCanvasInner flow={flow} onDirtyChange={onDirtyChange} />
     </ReactFlowProvider>
   );
 }

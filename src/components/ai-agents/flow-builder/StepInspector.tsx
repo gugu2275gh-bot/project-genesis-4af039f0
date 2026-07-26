@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,23 +45,28 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
   const [optionInput, setOptionInput] = useState('');
 
   const otherCodes = allSteps.filter((s) => s.id !== step.id).map((s) => s.step_code).filter(Boolean);
+  const duplicateCode = otherCodes.includes(step.step_code);
+  const emptyCode = !step.step_code?.trim();
 
   const setValidation = (patch: Partial<StepValidation>) =>
     onChange({ validation: { ...validation, ...patch } as any });
 
   const setBranches = (next: FlowBranch[]) => onChange({ branches: next } as any);
 
-  // Gera ramificações automaticamente a partir das opções, para tipos de escolha.
-  useEffect(() => {
-    if (!AUTO_BRANCH_TYPES.includes(step.answer_type)) return;
-    const options =
-      step.answer_type === 'SIM_NAO' ? ['Sim', 'Não'] : (validation.options || []);
-    if (options.length === 0) return;
-    const missing = options.filter((o) => !branches.some((b) => b.value === o));
-    if (missing.length === 0) return;
+  /** Opções sugeridas para o tipo de resposta atual. */
+  const suggestedOptions = AUTO_BRANCH_TYPES.includes(step.answer_type)
+    ? step.answer_type === 'SIM_NAO'
+      ? ['Sim', 'Não']
+      : validation.options || []
+    : [];
+  const missingOptions = suggestedOptions.filter((o) => !branches.some((b) => b.value === o));
+
+  /** Cria ramificações a partir das opções — apenas quando o usuário pede. */
+  const generateBranches = () => {
+    if (missingOptions.length === 0) return;
     setBranches([
       ...branches,
-      ...missing.map((o, i) => ({
+      ...missingOptions.map((o, i) => ({
         id: `b_${Date.now()}_${i}`,
         label: o,
         match_type: 'IGUAL' as const,
@@ -69,8 +74,7 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
         next_step_code: null,
       })),
     ]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step.answer_type, validation.options, branches, step.id]);
+  };
 
   const messages = useMemo(
     () => normalizeMessages(step.messages, step.message),
@@ -86,6 +90,7 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
       message: (Array.isArray(first) ? first[0] : first) || '',
     });
   };
+
 
 
   return (
@@ -112,11 +117,22 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
               <div className="space-y-2">
                 <Label>Código *</Label>
                 <Input value={step.step_code} onChange={(e) => onChange({ step_code: e.target.value })} />
+                {(duplicateCode || emptyCode) && (
+                  <p className="text-xs text-destructive">
+                    {emptyCode ? 'Informe um código para a etapa.' : 'Já existe outra etapa com este código.'}
+                  </p>
+                )}
+                {!duplicateCode && !emptyCode && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Ao renomear, as ligações das outras etapas são atualizadas automaticamente.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Nome *</Label>
                 <Input value={step.name} onChange={(e) => onChange({ name: e.target.value })} />
               </div>
+
             </div>
 
             <div className="space-y-2">
@@ -266,19 +282,27 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
 
             <div className="flex items-center justify-between">
               <Label>Ramificações (respostas possíveis)</Label>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  setBranches([
-                    ...branches,
-                    { id: `b_${Date.now()}`, label: '', match_type: 'IGUAL', value: '', next_step_code: null },
-                  ])
-                }
-              >
-                <Plus className="h-4 w-4 mr-1" /> Resposta
-              </Button>
+              <div className="flex items-center gap-1">
+                {missingOptions.length > 0 && (
+                  <Button size="sm" variant="secondary" onClick={generateBranches}>
+                    Gerar opções ({missingOptions.length})
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setBranches([
+                      ...branches,
+                      { id: `b_${Date.now()}`, label: '', match_type: 'IGUAL', value: '', next_step_code: null },
+                    ])
+                  }
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Resposta
+                </Button>
+              </div>
             </div>
+
 
             {branches.length === 0 && (
               <p className="text-xs text-muted-foreground">
