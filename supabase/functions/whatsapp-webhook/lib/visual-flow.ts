@@ -24,7 +24,15 @@ import {
   type FlowStep,
   type FlowTurnResult,
 } from '../../_shared/flow-engine.ts'
-import { normalizeIntakeConfig, runIntake, type IntakeConfig } from '../../_shared/flow-intake.ts'
+import {
+  normalizeIntakeConfig,
+  prependIntakeGreeting,
+  renderAckMessage,
+  renderIntakeGreeting,
+  runIntake,
+  type IntakeConfig,
+} from '../../_shared/flow-intake.ts'
+
 import { getAgentRuntime } from './agent-runtime.ts'
 import { cached } from './perf.ts'
 
