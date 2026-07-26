@@ -458,6 +458,38 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
   // WhatsApp webhook verification (GET request)
   if (req.method === 'GET') {
     const url = new URL(req.url)
+
+    // Configuração ATUAL do agente de produção (somente ADMIN autenticado).
+    // Usado pela tela Configurações > Agentes de IA para importar/sincronizar o AGENTE 1.0.
+    if (url.searchParams.get('action') === 'agent_defaults') {
+      const authHeader = req.headers.get('Authorization') || ''
+      const jwt = authHeader.replace(/^Bearer\s+/i, '').trim()
+      if (!jwt) {
+        return new Response(JSON.stringify({ error: 'unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const admin = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      )
+      const { data: userData, error: userErr } = await admin.auth.getUser(jwt)
+      if (userErr || !userData?.user) {
+        return new Response(JSON.stringify({ error: 'unauthorized' }), {
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      const { data: isAdmin } = await admin.rpc('has_role', { _user_id: userData.user.id, _role: 'ADMIN' })
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ error: 'forbidden' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify(collectAgentDefaults()), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const mode = url.searchParams.get('hub.mode')
     const token = url.searchParams.get('hub.verify_token')
     const challenge = url.searchParams.get('hub.challenge')
