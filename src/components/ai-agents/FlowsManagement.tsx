@@ -431,7 +431,16 @@ export function FlowsManagement() {
           </div>
 
           <DialogFooter>
+            {draft.id && (
+              <Button
+                variant="secondary"
+                onClick={() => { setDialogOpen(false); setSelected(draft.id); }}
+              >
+                <Workflow className="h-4 w-4 mr-1" /> Editar etapas
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+
             <Button
               disabled={!draft.name?.trim()}
               onClick={async () => {
