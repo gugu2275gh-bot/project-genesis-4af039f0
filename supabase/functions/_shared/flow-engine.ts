@@ -467,7 +467,7 @@ function run(
       return {
         messages,
         outbound,
-        state: { ...state, current_step: code, visited: [...visited], attempts: 0, finished: false },
+        state: { ...state, current_step: code, visited: [...visited], attempts: 0, unknown_attempts: 0, finished: false },
         reasked: false,
         finished: false,
         handoff: sawHandoff,
