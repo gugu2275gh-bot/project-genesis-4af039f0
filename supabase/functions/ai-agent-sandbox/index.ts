@@ -181,6 +181,8 @@ Deno.serve(async (req) => {
 
     const flowState = (session.flow_state && typeof session.flow_state === 'object') ? session.flow_state : {}
 
+    let userMessageStored = false
+
     if (visualFlowEnabled && !flowState.finished) {
       const lang = String(config.default_language || 'pt-BR')
       const firstTurn = !flowState.current_step
@@ -195,6 +197,8 @@ Deno.serve(async (req) => {
         content: message,
         created_by: auth.userId,
       })
+      userMessageStored = true
+
 
       await service
         .from('ai_agent_test_sessions')
