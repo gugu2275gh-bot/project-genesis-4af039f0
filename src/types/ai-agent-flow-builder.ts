@@ -290,8 +290,10 @@ export interface StepValidation {
   step_kind?: StepKind;
   /** Enviar a pergunta como botões Sim/Não no WhatsApp (só para SIM_NAO). */
   quick_reply?: boolean;
-  /** Comportamento quando o cliente não sabe responder esta etapa. */
+  /** @deprecated formato antigo e plano ("se não souber"). */
   unknown_answer?: UnknownAnswerConfig;
+  /** Tratativas por situação quando a resposta é diferente do esperado. */
+  unexpected_answer?: UnexpectedAnswerConfig;
 
   [key: string]: unknown;
 }
