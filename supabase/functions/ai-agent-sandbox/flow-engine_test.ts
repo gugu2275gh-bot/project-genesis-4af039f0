@@ -98,3 +98,17 @@ Deno.test('nao repete mensagens de etapas ja visitadas', () => {
   const again = advanceFlow(steps, first.state, 'Maria Souza', 'pt-BR')
   assertEquals(again.messages.includes('Olá! 😊 Tudo bem?'), false)
 })
+
+Deno.test('desvia para a etapa de fallback ao esgotar as reperguntas', () => {
+  const withFallback = steps.map((s: any) =>
+    s.step_code === 'NOME'
+      ? { ...s, validation: { ...(s.validation || {}), max_reasks: 1, fallback_step_code: 'FORA' } }
+      : s,
+  )
+  const start = startFlow(withFallback, 'pt-BR')
+  const t1 = advanceFlow(withFallback, start.state, 'Pedro', 'pt-BR')
+  assertEquals(t1.reasked, true)
+  const t2 = advanceFlow(withFallback, t1.state, 'Ana', 'pt-BR')
+  assertEquals(t2.reasked, false)
+  assertEquals(t2.path.includes('FORA'), true)
+})
