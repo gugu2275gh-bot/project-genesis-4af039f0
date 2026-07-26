@@ -70,3 +70,54 @@ export function getFlowLanguageDirective(lang: FlowLanguage): string {
   if (lang === 'fr') return 'LANGUE VERROUILLÉE: RÉPONDEZ EXCLUSIVEMENT EN FRANÇAIS. Même si le client écrit dans une autre langue, continuez à répondre en français. NE mélangez pas les langues.'
   return 'IDIOMA TRAVADO: RESPONDA EXCLUSIVAMENTE EM PORTUGUÊS DO BRASIL. Mesmo se o cliente escrever em outro idioma, continue respondendo em português. NÃO misture idiomas.'
 }
+
+/**
+ * Respostas curtas e ambíguas (sim/não/ok em qualquer idioma) NÃO são sinal
+ * confiável de idioma: "Sim", "no", "sí", "oui" aparecem o tempo todo como
+ * resposta a perguntas do fluxo e não devem travar/alterar o idioma.
+ */
+const AMBIGUOUS_SHORT_ANSWERS = new Set([
+  'sim', 's', 'ss', 'sss', 'nao', 'n', 'nn', 'no', 'nop', 'nope',
+  'yes', 'y', 'yeah', 'yep', 'si', 'oui', 'non', 'ok', 'okay', 'oka',
+  'claro', 'certo', 'correto', 'exato', 'perfeito',
+])
+
+function normalizeAmbiguous(text: string): string {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** A mensagem é curta/ambígua demais para servir de sinal de idioma? */
+export function isAmbiguousLanguageSample(text: string): boolean {
+  const sample = normalizeAmbiguous(text)
+  if (!sample) return true
+  const words = sample.split(' ').filter(Boolean)
+  if (words.length > 2) return false
+  return words.every((w) => AMBIGUOUS_SHORT_ANSWERS.has(w))
+}
+
+/** Detecção usada para TRAVAR o idioma: ignora amostras ambíguas. */
+export function detectLockableLanguageOrNull(text: string): FlowLanguage | null {
+  if (isAmbiguousLanguageSample(text)) return null
+  return detectFlowLanguageOrNull(text)
+}
+
+/**
+ * Pedido EXPLÍCITO de troca de idioma ("em português", "en español",
+ * "in english", "en français", "fale comigo em inglês"...).
+ * Única situação em que o idioma travado pode mudar no meio da conversa.
+ */
+export function detectExplicitLanguageRequest(text: string): FlowLanguage | null {
+  const sample = normalizeAmbiguous(text)
+  if (!sample) return null
+  if (/\b(em|en|in|no|para|fala[r]?|fale|speak|habla[r]?|parle[rz]?)\s+(portugues|brasileiro)\b/.test(sample)) return 'pt-BR'
+  if (/\b(em|en|in|no|para|fala[r]?|fale|speak|habla[r]?|parle[rz]?)\s+(espanhol|espanol|spanish)\b/.test(sample)) return 'es'
+  if (/\b(em|en|in|no|para|fala[r]?|fale|speak|habla[r]?|parle[rz]?)\s+(ingles|english|anglais)\b/.test(sample)) return 'en'
+  if (/\b(em|en|in|no|para|fala[r]?|fale|speak|habla[r]?|parle[rz]?)\s+(frances|french|francais)\b/.test(sample)) return 'fr'
+  return null
+}
