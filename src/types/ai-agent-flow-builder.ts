@@ -163,6 +163,8 @@ export interface StepValidation {
   skip_mode?: SkipMode;
   skip_field?: string;
   skip_step_code?: string;
+  /** Etapa de destino quando o cliente esgota as reperguntas. */
+  fallback_step_code?: string;
   /** Natureza da etapa (início, pergunta, informativa, fim). */
   step_kind?: StepKind;
   [key: string]: unknown;
@@ -180,8 +182,10 @@ export const DEFAULT_STEP_VALIDATION: StepValidation = {
   skip_mode: 'NUNCA',
   skip_field: '',
   skip_step_code: '',
+  fallback_step_code: '',
   step_kind: 'PERGUNTA',
 };
+
 
 /** Natureza da etapa, com retrocompatibilidade para etapas antigas. */
 export function stepKindOf(step: { validation?: unknown; handoff?: boolean }): StepKind {
