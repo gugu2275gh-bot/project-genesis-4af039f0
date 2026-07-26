@@ -433,7 +433,14 @@ export function useSendTestMessage() {
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
-      return data as { reply: string; provider: string; model: string; latency_ms: number };
+      return data as {
+        reply: string;
+        provider: string;
+        model: string;
+        latency_ms: number;
+        flow?: { lang?: string; lang_locked?: boolean; current_step?: string; finished?: boolean };
+      };
+
     },
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['ai_agent_test_messages', vars.sessionId] });
