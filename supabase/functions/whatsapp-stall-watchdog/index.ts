@@ -11,9 +11,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const STALL_THRESHOLD_SECONDS = 90
+const STALL_THRESHOLD_SECONDS = 20
 const MAX_STALL_ATTEMPTS = 2
 const LOOKBACK_MINUTES = 30 // ignore very old conversations
+
+// O cron do Postgres roda no máximo a cada minuto; para recuperar em ~20s a
+// função varre em ciclos curtos dentro da mesma execução.
+const SWEEP_CYCLES = 3
+const SWEEP_INTERVAL_MS = 18_000
+
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
