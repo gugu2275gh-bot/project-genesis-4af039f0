@@ -103,6 +103,29 @@ export const AGENT_TEXT_KEYS: Array<{ key: string; label: string; group: string 
 const EMPTY_CASCADE: AgentRuntime['modelCascade'] = []
 
 /**
+ * Monta o prompt do fluxo. Quando o agente tem blocos editaveis
+ * (`prompt_blocks`), eles sao remontados na ordem salva; caso contrario usa o
+ * texto unico de `prompt_flow`.
+ */
+function composePromptFlow(agent: any): string {
+  const blocks = agent?.prompt_blocks
+  if (Array.isArray(blocks) && blocks.length > 0) {
+    const composed = blocks
+      .filter((b: any) => b && (String(b.content || '').trim() || String(b.title || '').trim()))
+      .map((b: any, i: number) => {
+        const content = String(b.content || '').trim()
+        const title = String(b.title || '').trim()
+        if (i === 0 && title === 'IDENTIDADE DO AGENTE') return content
+        return `## ${title}\n${content}`
+      })
+      .join('\n\n')
+      .trim()
+    if (composed) return composed
+  }
+  return typeof agent?.prompt_flow === 'string' ? agent.prompt_flow : ''
+}
+
+/**
  * Carrega o agente de producao do banco. Nunca lanca: qualquer falha mantem o
  * comportamento atual (fallback em codigo).
  */
@@ -110,7 +133,7 @@ export async function loadProductionAgentRuntime(supabase: any): Promise<AgentRu
   try {
     const { data: agent, error } = await supabase
       .from('ai_agents')
-      .select('id, name, prompt_base, prompt_flow, model_cascade, runtime_config, status, is_production')
+      .select('id, name, prompt_base, prompt_flow, prompt_blocks, model_cascade, runtime_config, status, is_production')
       .eq('is_production', true)
       .maybeSingle()
 
@@ -138,7 +161,7 @@ export async function loadProductionAgentRuntime(supabase: any): Promise<AgentRu
     const runtime: AgentRuntime = {
       id: agent.id,
       name: agent.name,
-      promptFlow: typeof agent.prompt_flow === 'string' ? agent.prompt_flow : '',
+      promptFlow: composePromptFlow(agent),
       promptBase: typeof agent.prompt_base === 'string' ? agent.prompt_base : '',
       modelCascade: Array.isArray(agent.model_cascade) ? agent.model_cascade : EMPTY_CASCADE,
       runtimeConfig: (agent.runtime_config && typeof agent.runtime_config === 'object') ? agent.runtime_config : {},
