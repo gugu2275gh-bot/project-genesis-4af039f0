@@ -310,33 +310,65 @@ export function useSaveFlowCanvas() {
         if (error) throw error;
       }
 
-      for (let i = 0; i < steps.length; i++) {
-        const s = steps[i];
+      // Garante códigos únicos e não vazios antes de gravar.
+      const used = new Set<string>();
+      const normalized = steps.map((s, i) => {
+        let code = String(s.step_code || '').trim() || `etapa_${i + 1}`;
+        if (used.has(code)) {
+          let n = 2;
+          while (used.has(`${code}_${n}`)) n++;
+          code = `${code}_${n}`;
+        }
+        used.add(code);
+        return { ...s, step_code: code };
+      });
+
+      const idMap: Record<string, string> = {};
+
+      for (let i = 0; i < normalized.length; i++) {
+        const s = normalized[i];
         const { id, created_at, updated_at, created_by, ...rest } = s;
+        const firstMsg = (rest as any).messages?.['pt-BR'];
         const payload = {
           ...rest,
           flow_id: flowId,
           order_index: i + 1,
-          message: s.messages?.['pt-BR'] || s.message || '',
+          message: (Array.isArray(firstMsg) ? firstMsg[0] : firstMsg) || s.message || '',
           updated_by: userId,
         };
-        if (String(id).startsWith('tmp_')) {
-          const { error } = await db
-            .from('ai_agent_flow_steps')
-            .insert({ ...payload, created_by: userId });
-          if (error) throw error;
-        } else {
-          const { error } = await db.from('ai_agent_flow_steps').update(payload).eq('id', id);
-          if (error) throw error;
+        try {
+          if (String(id).startsWith('tmp_')) {
+            const { data, error } = await db
+              .from('ai_agent_flow_steps')
+              .insert({ ...payload, created_by: userId })
+              .select('id')
+              .single();
+            if (error) throw error;
+            if (data?.id) idMap[String(id)] = data.id as string;
+          } else {
+            const { error } = await db.from('ai_agent_flow_steps').update(payload).eq('id', id);
+            if (error) throw error;
+          }
+        } catch (e: any) {
+          throw new Error(`Etapa "${s.step_code}": ${e?.message || e}`);
         }
       }
 
+      // Posições são gravadas pelo id definitivo da etapa.
+      const finalPositions: Record<string, { x: number; y: number }> = {};
+      Object.entries(positions || {}).forEach(([key, pos]) => {
+        finalPositions[idMap[key] || key] = pos;
+      });
+
       const { error: flowError } = await db
         .from('ai_agent_flows')
-        .update({ canvas: { positions }, updated_by: userId })
+        .update({ canvas: { positions: finalPositions }, updated_by: userId })
         .eq('id', flowId);
       if (flowError) throw flowError;
+
+      return { idMap };
     },
+
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ['ai_agent_flow_steps', vars.flowId] });
       qc.invalidateQueries({ queryKey: ['ai_agent_flows'] });
