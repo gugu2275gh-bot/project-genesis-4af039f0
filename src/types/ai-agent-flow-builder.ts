@@ -1,5 +1,104 @@
 import type { MultiLangText } from '@/types/ai-agents';
 
+/** Natureza da etapa dentro do desenho do fluxo. */
+export type StepKind = 'INICIO' | 'PERGUNTA' | 'INFORMATIVA' | 'FIM';
+
+export const STEP_KINDS: { value: StepKind; label: string; hint: string }[] = [
+  { value: 'INICIO', label: 'Início', hint: 'Ponto de entrada do fluxo. Só pode existir um.' },
+  { value: 'PERGUNTA', label: 'Pergunta', hint: 'Envia a mensagem e espera a resposta do cliente.' },
+  {
+    value: 'INFORMATIVA',
+    label: 'Informativa',
+    hint: 'Só envia mensagens e segue direto para a próxima etapa, sem esperar resposta.',
+  },
+  { value: 'FIM', label: 'Fim', hint: 'Encerra o fluxo (pode encaminhar para um especialista).' },
+];
+
+/** Mensagens da etapa: por idioma, uma ou várias mensagens em sequência. */
+export type MultiLangMessages = Record<string, string | string[]>;
+
+const asList = (v: string | string[] | undefined): string[] =>
+  Array.isArray(v) ? v : typeof v === 'string' && v ? [v] : [];
+
+/** Quantidade de mensagens em sequência configuradas na etapa. */
+export function messageCount(messages: MultiLangMessages | undefined): number {
+  if (!messages) return 1;
+  const counts = Object.values(messages).map((v) => asList(v).length);
+  return Math.max(1, ...counts, 0) || 1;
+}
+
+/** Mensagens de um idioma, na ordem de envio. */
+export function messageList(
+  messages: MultiLangMessages | undefined,
+  lang: string,
+  fallbacks: string[] = ['pt-BR', 'es', 'en', 'fr'],
+): string[] {
+  if (!messages) return [];
+  const direct = asList(messages[lang]).filter((t) => t.trim());
+  if (direct.length) return direct;
+  for (const f of fallbacks) {
+    const alt = asList(messages[f]).filter((t) => t.trim());
+    if (alt.length) return alt;
+  }
+  return [];
+}
+
+/** Extrai a mensagem de índice `i` em todos os idiomas (formato do MultiLangField). */
+export function messageAt(messages: MultiLangMessages | undefined, i: number): MultiLangText {
+  const out: MultiLangText = {};
+  Object.entries(messages || {}).forEach(([lang, v]) => {
+    const item = asList(v)[i];
+    if (typeof item === 'string') out[lang] = item;
+  });
+  return out;
+}
+
+/** Grava a mensagem de índice `i` em todos os idiomas informados. */
+export function setMessageAt(
+  messages: MultiLangMessages | undefined,
+  i: number,
+  value: MultiLangText,
+): MultiLangMessages {
+  const langs = new Set([...Object.keys(messages || {}), ...Object.keys(value)]);
+  const out: MultiLangMessages = {};
+  langs.forEach((lang) => {
+    const list = asList(messages?.[lang]).slice();
+    while (list.length <= i) list.push('');
+    list[i] = value[lang] ?? list[i] ?? '';
+    out[lang] = list;
+  });
+  return out;
+}
+
+/** Remove a mensagem de índice `i` de todos os idiomas. */
+export function removeMessageAt(messages: MultiLangMessages | undefined, i: number): MultiLangMessages {
+  const out: MultiLangMessages = {};
+  Object.entries(messages || {}).forEach(([lang, v]) => {
+    const list = asList(v).slice();
+    list.splice(i, 1);
+    out[lang] = list;
+  });
+  return out;
+}
+
+/** Converte qualquer formato antigo (`message`, `messages` string) para lista. */
+export function normalizeMessages(
+  messages: unknown,
+  legacyMessage?: string,
+): MultiLangMessages {
+  const raw = (messages && typeof messages === 'object' ? messages : {}) as MultiLangMessages;
+  const entries = Object.entries(raw).filter(([, v]) => asList(v).length > 0);
+  if (entries.length === 0) {
+    return legacyMessage ? { 'pt-BR': [legacyMessage] } : { 'pt-BR': [''] };
+  }
+  const out: MultiLangMessages = {};
+  entries.forEach(([lang, v]) => {
+    out[lang] = asList(v);
+  });
+  return out;
+}
+
+
 /** Tipo de comparação usado para decidir a ramificação. */
 export type BranchMatchType = 'IGUAL' | 'CONTEM' | 'REGEX' | 'INTENCAO' | 'QUALQUER';
 
