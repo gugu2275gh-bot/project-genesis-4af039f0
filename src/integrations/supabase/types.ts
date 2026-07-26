@@ -205,6 +205,7 @@ export type Database = {
           agent_version_id: string | null
           created_at: string
           created_by: string | null
+          flow_state: Json
           id: string
           status: string
           title: string | null
@@ -216,6 +217,7 @@ export type Database = {
           agent_version_id?: string | null
           created_at?: string
           created_by?: string | null
+          flow_state?: Json
           id?: string
           status?: string
           title?: string | null
@@ -227,6 +229,7 @@ export type Database = {
           agent_version_id?: string | null
           created_at?: string
           created_by?: string | null
+          flow_state?: Json
           id?: string
           status?: string
           title?: string | null
