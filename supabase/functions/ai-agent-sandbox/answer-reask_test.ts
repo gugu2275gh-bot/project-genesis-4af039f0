@@ -70,6 +70,7 @@ Deno.test('dúvida fora do tema: uma única mensagem com resposta + repergunta',
     kbSearch: async () => '[precos.pdf | 1]\nServiços a partir de 500 euros.',
   })
   assertEquals(turn.state.current_step, 'NOME')
+  assertEquals(turn.state.answers['NOME'], undefined)
   assertEquals(turn.outbound.length, 1)
   assert(turn.outbound[0].text.includes('500 euros'))
   assert(turn.outbound[0].text.includes('Qual é o seu nome completo?'))
