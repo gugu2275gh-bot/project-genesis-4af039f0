@@ -162,29 +162,31 @@ function StepDialog({
                 onBlur={(e) => set({ order_index: Number(e.target.value) || 0 })}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Próxima etapa (código)</Label>
-              <Input value={draft.next_step_code || ''} onChange={(e) => set({ next_step_code: e.target.value })} />
-            </div>
-            <div className="space-y-2">
+            <div className="space-y-2 sm:col-span-2">
               <Label>Condição de saída</Label>
               <Input value={draft.exit_condition || ''} onChange={(e) => set({ exit_condition: e.target.value })} />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label>Validação (JSON)</Label>
-            <Textarea
-              rows={2}
-              value={JSON.stringify(draft.validation || {}, null, 0)}
-              onChange={(e) => {
-                try {
-                  set({ validation: JSON.parse(e.target.value || '{}') });
-                } catch {
-                  /* ignora JSON inválido enquanto digita */
-                }
-              }}
-            />
-          </div>
+
+          <Separator />
+          <p className="text-sm font-medium">Respostas e caminhos</p>
+          <StepRoutingEditor
+            answerType={draft.answer_type}
+            validation={validation}
+            branches={draft.branches}
+            nextStepCode={draft.next_step_code}
+            stepCodes={otherCodes}
+            onChange={(patch) => set(patch as Record<string, unknown>)}
+          />
+
+          <Separator />
+          <p className="text-sm font-medium">Validação da resposta</p>
+          <StepValidationEditor
+            validation={validation}
+            stepCodes={otherCodes}
+            onChange={(patch) => set({ validation: { ...validation, ...patch } })}
+          />
+
           <div className="space-y-2">
             {[
               { key: 'allow_parallel_question', label: 'Permitir pergunta paralela' },
