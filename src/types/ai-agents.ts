@@ -45,7 +45,46 @@ export interface AIAgent {
   updated_at: string;
   created_by: string | null;
   updated_by: string | null;
+  /** Marca o agente que controla o atendimento real de WhatsApp (AGENTE 1.0). */
+  is_production?: boolean;
+  /** Toggles de execução aplicados ao webhook (bot ligado, modo estrito da base, etc.). */
+  runtime_config?: AgentRuntimeConfig | null;
+  /** Cascata de modelos usada em produção (sobrepõe llm_settings). */
+  model_cascade?: ModelCascadeItem[] | null;
+  /** Prompt estruturado do fluxo, com placeholders. */
+  prompt_flow?: string | null;
 }
+
+export interface ModelCascadeItem {
+  provider: AgentProvider | string;
+  model: string;
+}
+
+export interface AgentRuntimeConfig {
+  whatsapp_bot_enabled?: boolean;
+  kb_strict_mode?: boolean;
+  kb_strict_fallback_message?: string;
+  [key: string]: unknown;
+}
+
+export interface AgentText {
+  id: string;
+  agent_id: string;
+  text_key: string;
+  label: string | null;
+  description: string | null;
+  translations: Record<string, string>;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export const AGENT_TEXT_LANGUAGES: { code: string; label: string }[] = [
+  { code: 'pt-BR', label: 'Português' },
+  { code: 'es', label: 'Espanhol' },
+  { code: 'en', label: 'Inglês' },
+  { code: 'fr', label: 'Francês' },
+];
 
 export interface AgentVersion {
   id: string;
