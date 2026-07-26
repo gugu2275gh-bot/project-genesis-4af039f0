@@ -45,23 +45,28 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
   const [optionInput, setOptionInput] = useState('');
 
   const otherCodes = allSteps.filter((s) => s.id !== step.id).map((s) => s.step_code).filter(Boolean);
+  const duplicateCode = otherCodes.includes(step.step_code);
+  const emptyCode = !step.step_code?.trim();
 
   const setValidation = (patch: Partial<StepValidation>) =>
     onChange({ validation: { ...validation, ...patch } as any });
 
   const setBranches = (next: FlowBranch[]) => onChange({ branches: next } as any);
 
-  // Gera ramificações automaticamente a partir das opções, para tipos de escolha.
-  useEffect(() => {
-    if (!AUTO_BRANCH_TYPES.includes(step.answer_type)) return;
-    const options =
-      step.answer_type === 'SIM_NAO' ? ['Sim', 'Não'] : (validation.options || []);
-    if (options.length === 0) return;
-    const missing = options.filter((o) => !branches.some((b) => b.value === o));
-    if (missing.length === 0) return;
+  /** Opções sugeridas para o tipo de resposta atual. */
+  const suggestedOptions = AUTO_BRANCH_TYPES.includes(step.answer_type)
+    ? step.answer_type === 'SIM_NAO'
+      ? ['Sim', 'Não']
+      : validation.options || []
+    : [];
+  const missingOptions = suggestedOptions.filter((o) => !branches.some((b) => b.value === o));
+
+  /** Cria ramificações a partir das opções — apenas quando o usuário pede. */
+  const generateBranches = () => {
+    if (missingOptions.length === 0) return;
     setBranches([
       ...branches,
-      ...missing.map((o, i) => ({
+      ...missingOptions.map((o, i) => ({
         id: `b_${Date.now()}_${i}`,
         label: o,
         match_type: 'IGUAL' as const,
@@ -69,8 +74,7 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
         next_step_code: null,
       })),
     ]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step.answer_type, validation.options, branches, step.id]);
+  };
 
   const messages = useMemo(
     () => normalizeMessages(step.messages, step.message),
@@ -86,6 +90,7 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
       message: (Array.isArray(first) ? first[0] : first) || '',
     });
   };
+
 
 
   return (
