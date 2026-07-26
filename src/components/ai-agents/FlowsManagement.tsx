@@ -223,10 +223,6 @@ function StepDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2 sm:col-span-2">
-              <Label>Condição de saída</Label>
-              <Input value={draft.exit_condition || ''} onChange={(e) => set({ exit_condition: e.target.value })} />
-            </div>
           </div>
 
           <Separator />

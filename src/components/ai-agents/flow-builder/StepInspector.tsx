@@ -287,10 +287,6 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
               </div>
             ))}
 
-            <div className="space-y-2">
-              <Label>Condição de saída</Label>
-              <Input value={step.exit_condition || ''} onChange={(e) => onChange({ exit_condition: e.target.value })} />
-            </div>
 
             <Button variant="destructive" className="w-full" onClick={onDelete}>
               <Trash2 className="h-4 w-4 mr-2" /> Excluir etapa
