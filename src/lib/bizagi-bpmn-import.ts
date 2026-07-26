@@ -108,6 +108,28 @@ export function parseBizagiBpmn(
     }))
     .filter((f) => f.source && f.target);
 
+  // Caixas de texto (textAnnotation) ligadas às tarefas por association.
+  const annotationText = new Map<string, string>();
+  all(doc, ['textAnnotation']).forEach((el) => {
+    const id = el.getAttribute('id');
+    if (!id) return;
+    const textEl = Array.from(el.children).find((c) => localName(c) === 'text');
+    const raw = (textEl?.textContent ?? el.textContent ?? '').replace(/\r/g, '').trim();
+    if (raw) annotationText.set(id, raw);
+  });
+
+  const annotationsByNode = new Map<string, string[]>();
+  all(doc, ['association']).forEach((el) => {
+    const a = el.getAttribute('sourceRef') || '';
+    const b = el.getAttribute('targetRef') || '';
+    const [annId, nodeId] = annotationText.has(a) ? [a, b] : annotationText.has(b) ? [b, a] : ['', ''];
+    if (!annId || !nodeId) return;
+    const list = annotationsByNode.get(nodeId) || [];
+    list.push(annotationText.get(annId) as string);
+    annotationsByNode.set(nodeId, list);
+  });
+
+
   // Posições do diagrama (BPMNShape -> bpmnElement)
   const shapePos = new Map<string, { x: number; y: number }>();
   all(doc, ['BPMNShape']).forEach((shape) => {
