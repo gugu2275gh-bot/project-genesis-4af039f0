@@ -109,15 +109,19 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   try {
     const auth = await requireAdmin(req)
-    if ('error' in auth) return json({ error: auth.error }, auth.status)
+    if ('error' in auth) {
+      console.error('[AI_TRANSLATE] auth falhou:', auth.status, auth.error)
+      return json({ error: auth.error }, auth.status)
+    }
 
     const { text, source, targets } = await req.json()
     if (!text?.trim()) return json({ error: 'text é obrigatório' }, 400)
     const langs: string[] = Array.isArray(targets) && targets.length > 0 ? targets : ['es', 'en', 'fr']
 
-    const { data: settings } = await auth.service.from('llm_settings').select('cascade').limit(1).single()
+    const { data: settings } = await auth.service.from('llm_settings').select('cascade').limit(1).maybeSingle()
     const cascade = ((settings?.cascade || []) as any[]).filter((c) => c?.enabled && c?.model)
     if (cascade.length === 0) cascade.push({ provider: 'gemini', model: 'gemini-2.5-flash' })
+    console.log('[AI_TRANSLATE] iniciando', { langs, cascade: cascade.map((c) => `${c.provider}/${c.model}`) })
 
     const prompt = `Traduza o texto abaixo, escrito em ${LANG_NAMES[source] || 'português do Brasil'}, para os idiomas solicitados.
 
@@ -134,8 +138,15 @@ TEXTO:
 ${text}
 """`
 
+    // Fallback final garantido pelo Lovable AI Gateway (LOVABLE_API_KEY sempre presente),
+    // pois provedores diretos podem ficar sem chave ou com modelo indisponível.
+    const attempts = [
+      ...cascade,
+      { provider: 'lovable', model: 'google/gemini-2.5-flash' },
+    ]
+
     let lastError = ''
-    for (const item of cascade) {
+    for (const item of attempts) {
       try {
         const raw =
           item.provider === 'gemini'
@@ -153,6 +164,7 @@ ${text}
     }
     return json({ error: `Não foi possível traduzir: ${lastError}` }, 502)
   } catch (e) {
+    console.error('[AI_TRANSLATE] erro inesperado', e)
     return json({ error: e instanceof Error ? e.message : 'erro inesperado' }, 500)
   }
 })
