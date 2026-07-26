@@ -38,16 +38,20 @@ const EMPTY_PLAN: VisualFlowPlan = { enabled: false, steps: [], preHandoffFlowId
 
 async function fetchSteps(supabase: any, flowId: string | null): Promise<FlowStep[]> {
   if (!flowId) return []
-  const { data, error } = await supabase
-    .from('ai_agent_flow_steps')
-    .select('*')
-    .eq('flow_id', flowId)
-    .order('order_index', { ascending: true })
-  if (error) {
-    console.warn('[VISUAL_FLOW] falha ao carregar etapas:', error.message)
-    return []
-  }
-  return (data || []) as FlowStep[]
+  // Cache de 60s por fluxo: as etapas mudam apenas quando o admin salva o fluxo.
+  return await cached<FlowStep[]>(`flow-steps:${flowId}`, 60_000, async () => {
+    const { data, error } = await supabase
+      .from('ai_agent_flow_steps')
+      .select('*')
+      .eq('flow_id', flowId)
+      .order('order_index', { ascending: true })
+    if (error) {
+      console.warn('[VISUAL_FLOW] falha ao carregar etapas:', error.message)
+      return []
+    }
+    return (data || []) as FlowStep[]
+  })
+
 }
 
 /**
