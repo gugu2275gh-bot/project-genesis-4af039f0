@@ -856,8 +856,14 @@ export function advanceFlow(
     }
 
   }
-  return run(index, nextCode, nextState, lang, captured)
+  const turn = run(index, nextCode, nextState, lang, captured)
+  // Reconhecimento humano antes da próxima pergunta (respostas abertas).
+  if (opts?.ack && ackEnabledFor(step) && (turn.messages || []).length) {
+    return prependMessage(turn, opts.ack, step.step_code)
+  }
+  return turn
 }
+
 
 
 // ---------------------------------------------------------------------------
