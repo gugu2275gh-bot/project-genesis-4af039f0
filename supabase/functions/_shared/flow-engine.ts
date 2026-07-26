@@ -40,6 +40,10 @@ export interface FlowStep {
   branches?: FlowBranch[]
   handoff?: boolean
   order_index?: number
+  /** Campo do CRM onde a resposta desta etapa deve ser gravada (opcional). */
+  field_mapping?: string | null
+  /** Fase do fluxo de origem ("PRE_HANDOFF" | "HANDOFF"). */
+  phase?: string | null
 }
 
 export interface FlowRunState {
@@ -55,6 +59,15 @@ export interface FlowRunState {
   finished?: boolean
   /** Handoff disparado pela etapa final. */
   handoff?: boolean
+  /** Idioma travado do atendimento. */
+  lang?: FlowLang
+}
+
+/** Resposta validada que deve ser gravada num campo do CRM. */
+export interface FlowCapturedField {
+  step_code: string
+  field: string
+  value: string
 }
 
 export interface FlowTurnResult {
@@ -67,7 +80,10 @@ export interface FlowTurnResult {
   handoff: boolean
   /** Etapas percorridas neste turno (para logs). */
   path: string[]
+  /** Respostas com `field_mapping` capturadas neste turno. */
+  captured: FlowCapturedField[]
 }
+
 
 const MAX_STEPS_PER_TURN = 25
 
