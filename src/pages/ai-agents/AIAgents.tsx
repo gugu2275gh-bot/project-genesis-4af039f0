@@ -13,9 +13,26 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Bot, Plus, MoreHorizontal, Eye, Pencil, Copy, Power, PowerOff, FlaskConical, Workflow, RefreshCw } from 'lucide-react';
+import { Bot, Plus, MoreHorizontal, Eye, Pencil, Copy, Power, PowerOff, FlaskConical, Workflow, RefreshCw, Rocket, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAIAgents, useDuplicateAgent, useSyncAgentDefaults, useToggleAgentStatus } from '@/hooks/useAIAgents';
+import {
+  useAIAgents,
+  useDeleteAgent,
+  useDuplicateAgent,
+  usePromoteAgentToProduction,
+  useSyncAgentDefaults,
+  useToggleAgentStatus,
+} from '@/hooks/useAIAgents';
 import { AgentFormDialog } from '@/components/ai-agents/AgentFormDialog';
 import { FlowsManagement } from '@/components/ai-agents/FlowsManagement';
 import { AgentSandbox } from '@/components/ai-agents/AgentSandbox';
