@@ -606,7 +606,8 @@ export function advanceFlow(
   const step = index.get(state.current_step)
   if (!step) return startFlow(steps, lang)
 
-  const unknownCfg = unknownAnswerOf(step)
+  const cfg = unexpectedAnswerOf(step)
+  const unknownCfg = cfg.unknown
 
   /** Avança usando a saída padrão da etapa (não altera a sequência do fluxo). */
   const advanceWith = (value: string): FlowTurnResult => {
@@ -634,42 +635,78 @@ export function advanceFlow(
     captured: [],
   })
 
-  // 1) Cliente disse que não sabe/não lembra → comportamento configurado na etapa.
-  if (isUnknownAnswer(message, unknownCfg)) {
-    const tries = (state.unknown_attempts || 0) + 1
-    if (tries <= unknownCfg.attempts) {
-      return stay(unknownMessageOf(unknownCfg, lang), { unknown_attempts: tries })
+  /**
+   * Aplica a tratativa configurada para a situação. Devolve `null` quando o
+   * modo é INSISTIR (o chamador decide qual repergunta enviar).
+   */
+  const applyRule = (kind: DeviationKind, tries: number): FlowTurnResult | null => {
+    const rule = ruleFor(cfg, kind)
+    if (tries <= rule.attempts) {
+      return stay(unexpectedMessageOf(rule, kind, lang), { unknown_attempts: tries })
     }
     const v = (step.validation || {}) as Record<string, unknown>
-    switch (unknownCfg.mode) {
+    switch (rule.mode) {
+      case 'ACEITAR_APROXIMADO': {
+        if (String(step.answer_type || '') === 'DATA') {
+          const approx = parseApproxDate(message)
+          if (approx) return advanceWith(approx)
+        }
+        return advanceWith(rule.fallback_value)
+      }
       case 'PULAR':
-      case 'ACEITAR_APROXIMADO':
-        return advanceWith(unknownCfg.fallback_value)
+        return advanceWith(rule.fallback_value)
       case 'ENCAMINHAR': {
         const fallbackCode = String(v.fallback_step_code || '').trim()
         if (fallbackCode && index.get(fallbackCode)) {
           return run(index, fallbackCode, { ...state, attempts: 0, unknown_attempts: 0 }, lang)
         }
-        break
+        return null
       }
       default:
-        break
+        return null
     }
+  }
+
+  const defaultReask = (reason?: string): string =>
+    reaskOf(step, lang)
+      || (reason === 'invalid_date' ? defaultDateReask(lang) : '')
+      || messagesOf(step, lang).slice(-1)[0]
+      || ''
+
+  // 1) Cliente disse que não sabe/não lembra → tratativa da situação "unknown".
+  if (isUnknownAnswer(message, unknownCfg)) {
+    const tries = (state.unknown_attempts || 0) + 1
+    const applied = applyRule('unknown', tries)
+    if (applied) return applied
     // INSISTIR (ou ENCAMINHAR sem etapa de destino): repergunta padrão.
-    const insist = reaskOf(step, lang) || messagesOf(step, lang).slice(-1)[0] || ''
-    return stay(insist, { unknown_attempts: tries })
+    return stay(defaultReask(), { unknown_attempts: tries })
   }
 
   const result = validateAnswer(step, message)
   if (!result.valid) {
+    // Classifica o desvio para escolher a tratativa configurada na etapa.
+    const kind: DeviationKind =
+      result.reason === 'empty' ? 'off_topic'
+        : result.reason === 'no_yesno' ? 'no_match'
+          : 'invalid_format'
+    const rule = ruleFor(cfg, kind)
+
     // Modo aproximado: aceita data incompleta ("03/2024", "em 2023") e segue.
     if (
-      unknownCfg.mode === 'ACEITAR_APROXIMADO' &&
+      rule.mode === 'ACEITAR_APROXIMADO' &&
       String(step.answer_type || '') === 'DATA' &&
       result.reason === 'invalid_date'
     ) {
       const approx = parseApproxDate(message)
       if (approx) return advanceWith(approx)
+    }
+
+    // Tratativa específica ligada para esta situação (ou frase personalizada).
+    if (cfg[kind].enabled || matchesRulePhrases(message, cfg[kind])) {
+      const tries = (state.unknown_attempts || 0) + 1
+      const applied = applyRule(kind, tries)
+      if (applied) return applied
+      return stay(defaultReask(result.reason), { unknown_attempts: tries })
     }
 
     const attempts = (state.attempts || 0) + 1
@@ -686,15 +723,12 @@ export function advanceFlow(
     if (
       attempts > maxReasks &&
       !fallbackCode &&
-      (unknownCfg.mode === 'PULAR' || unknownCfg.mode === 'ACEITAR_APROXIMADO')
+      (rule.mode === 'PULAR' || rule.mode === 'ACEITAR_APROXIMADO')
     ) {
-      return advanceWith(unknownCfg.fallback_value)
+      return advanceWith(rule.fallback_value)
     }
 
-    const reask = reaskOf(step, lang)
-      || (result.reason === 'invalid_date' ? defaultDateReask(lang) : '')
-      || messagesOf(step, lang).slice(-1)[0]
-      || ''
+    const reask = defaultReask(result.reason)
 
     return {
       messages: reask ? [reask] : [],
@@ -708,6 +742,7 @@ export function advanceFlow(
     }
 
   }
+
 
 
   const value = result.value ?? ''
