@@ -136,6 +136,107 @@ export function reaskOf(step: FlowStep, lang: FlowLang): string {
   return String(pick || '').trim()
 }
 
+// ---------------------------------------------------------------------------
+// "Não sei responder" — configuração POR ETAPA (validation.unknown_answer)
+
+export type UnknownAnswerMode = 'INSISTIR' | 'ACEITAR_APROXIMADO' | 'PULAR' | 'ENCAMINHAR'
+
+export interface UnknownAnswerConfig {
+  mode: UnknownAnswerMode
+  /** Mensagem de acolhimento (multi-idioma) enviada antes de aplicar o modo. */
+  messages: Record<string, string>
+  /** Quantas vezes acolher/insistir antes de aplicar o modo. */
+  attempts: number
+  /** Valor gravado quando o modo aceita/pula. */
+  fallback_value: string
+  /** Frases extras que indicam "não sei". */
+  phrases: string[]
+}
+
+export const DEFAULT_UNKNOWN_PHRASES: string[] = [
+  'nao sei', 'não sei', 'nao lembro', 'não lembro', 'nao me lembro', 'não me lembro',
+  'nao faco ideia', 'não faço ideia', 'sei nao', 'sei lá', 'sei la', 'nao tenho certeza',
+  'não tenho certeza', 'nao tenho essa informacao', 'não tenho essa informação',
+  'no se', 'no sé', 'no recuerdo', 'no me acuerdo', 'ni idea', 'no estoy seguro',
+  'no lo se', 'no lo sé',
+  "i don't know", 'i dont know', "i don't remember", 'i dont remember', 'no idea',
+  'not sure', "i'm not sure", 'im not sure', 'dunno',
+  'je ne sais pas', 'aucune idee', 'aucune idée', 'je ne me souviens pas', 'pas sûr', 'pas sur',
+]
+
+const DEFAULT_UNKNOWN_MESSAGE: Record<string, string> = {
+  'pt-BR': 'Sem problema! Uma informação aproximada já me ajuda. Pode me dar uma estimativa?',
+  es: '¡Sin problema! Una información aproximada ya me ayuda. ¿Me puedes dar una estimación?',
+  en: 'No problem! An approximate answer already helps. Could you give me an estimate?',
+  fr: 'Pas de souci ! Une information approximative m’aide déjà. Pouvez-vous me donner une estimation ?',
+}
+
+export function unknownAnswerOf(step: FlowStep): UnknownAnswerConfig {
+  const raw = ((step?.validation as any)?.unknown_answer || {}) as Partial<UnknownAnswerConfig>
+  const mode = ['INSISTIR', 'ACEITAR_APROXIMADO', 'PULAR', 'ENCAMINHAR'].includes(String(raw.mode))
+    ? (raw.mode as UnknownAnswerMode)
+    : 'INSISTIR'
+  const attempts = Number.isFinite(Number(raw.attempts)) ? Math.max(0, Number(raw.attempts)) : 1
+  return {
+    mode,
+    messages: (raw.messages && typeof raw.messages === 'object' ? raw.messages : {}) as Record<string, string>,
+    attempts,
+    fallback_value: String(raw.fallback_value || ''),
+    phrases: Array.isArray(raw.phrases) ? raw.phrases.map((p) => String(p || '')).filter(Boolean) : [],
+  }
+}
+
+function normalizeText(v: string): string {
+  return String(v || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9' ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** Detecta se o cliente disse que não sabe/não lembra a resposta. */
+export function isUnknownAnswer(message: string, cfg?: UnknownAnswerConfig): boolean {
+  const text = normalizeText(message)
+  if (!text) return false
+  const list = [...DEFAULT_UNKNOWN_PHRASES, ...(cfg?.phrases || [])].map(normalizeText).filter(Boolean)
+  return list.some((p) => text === p || text.includes(p))
+}
+
+export function unknownMessageOf(cfg: UnknownAnswerConfig, lang: FlowLang): string {
+  const raw = cfg.messages || {}
+  const pick = (raw as any)[lang] ?? (raw as any)['pt-BR'] ?? Object.values(raw).find(Boolean)
+  const text = String(pick || '').trim()
+  return text || DEFAULT_UNKNOWN_MESSAGE[String(lang)] || DEFAULT_UNKNOWN_MESSAGE['pt-BR']
+}
+
+/**
+ * Aceita datas aproximadas ("03/2024", "março de 2024", "2024") e normaliza
+ * para DD/MM/YYYY usando o dia 01. Só usada no modo ACEITAR_APROXIMADO.
+ */
+export function parseApproxDate(raw: string): string | null {
+  const text = String(raw || '')
+  const mm = /\b(\d{1,2})\s*[\/\-.]\s*((?:19|20)\d{2})\b/.exec(text)
+  if (mm) {
+    const month = Number(mm[1])
+    if (month >= 1 && month <= 12) return `01/${String(month).padStart(2, '0')}/${mm[2]}`
+  }
+  const MONTHS = [
+    ['jan'], ['fev', 'feb'], ['mar'], ['abr', 'apr', 'avr'], ['mai', 'may'], ['jun'],
+    ['jul'], ['ago', 'aug', 'aou', 'aoû'], ['set', 'sep'], ['out', 'oct'], ['nov'], ['dez', 'dec'],
+  ]
+  const norm = normalizeText(text)
+  const yr = /\b((?:19|20)\d{2})\b/.exec(norm)
+  if (yr) {
+    const idx = MONTHS.findIndex((names) => names.some((n) => norm.includes(n)))
+    const month = idx >= 0 ? idx + 1 : 1
+    return `01/${String(month).padStart(2, '0')}/${yr[1]}`
+  }
+  return null
+}
+
+
 export function indexSteps(steps: FlowStep[]): Map<string, FlowStep> {
   const map = new Map<string, FlowStep>()
   for (const s of steps || []) {
