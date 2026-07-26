@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -33,17 +33,34 @@ export function MultiLangField({
   const [lang, setLang] = useState<AgentLanguage>(baseLanguage);
   const translate = useAgentTranslate();
   const mounted = useRef(true);
+  const latestValue = useRef<MultiLangText>(value || {});
+
+  useEffect(() => {
+    latestValue.current = value || {};
+  }, [value]);
+
   useEffect(() => () => { mounted.current = false; }, []);
 
+  const availableTargets = useMemo(
+    () => AGENT_LANGUAGES.map((l) => l.code).filter((c) => c !== baseLanguage),
+    [baseLanguage],
+  );
+
   const handleTranslate = async () => {
-    const source = value[baseLanguage] || '';
+    const current = latestValue.current || {};
+    const source = String(current[baseLanguage] || '').trim();
     if (!source.trim()) return;
-    const targets = AGENT_LANGUAGES.map((l) => l.code).filter((c) => c !== baseLanguage);
     try {
-      const result = await translate.mutateAsync({ text: source, source: baseLanguage, targets });
+      const result = await translate.mutateAsync({ text: source, source: baseLanguage, targets: availableTargets });
       // Falhas nunca podem derrubar a edição em andamento: mantemos o texto base.
       if (!mounted.current) return;
-      onChange({ ...value, ...result });
+      const cleanResult = Object.fromEntries(
+        Object.entries(result).filter(([, text]) => String(text || '').trim()),
+      ) as MultiLangText;
+      const firstTranslatedLang = availableTargets.find((target) => String(cleanResult[target] || '').trim());
+      if (!firstTranslatedLang) return;
+      onChange({ ...latestValue.current, [baseLanguage]: latestValue.current[baseLanguage] ?? source, ...cleanResult });
+      setLang(firstTranslatedLang);
     } catch {
       /* erro já exibido em toast pelo hook */
     }
@@ -58,7 +75,7 @@ export function MultiLangField({
           type="button"
           variant="ghost"
           size="sm"
-          disabled={disabled || translate.isPending || !String(value[baseLanguage] ?? '').trim()}
+          disabled={disabled || translate.isPending || !String(value?.[baseLanguage] ?? '').trim()}
           onClick={handleTranslate}
         >
           {translate.isPending ? (
@@ -75,7 +92,7 @@ export function MultiLangField({
           {AGENT_LANGUAGES.map((l) => (
             <TabsTrigger key={l.code} value={l.code} className="text-xs">
               {l.label}
-              {!String(value[l.code] ?? '').trim() && <span className="ml-1 text-muted-foreground">•</span>}
+              {!String(value?.[l.code] ?? '').trim() && <span className="ml-1 text-muted-foreground">•</span>}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -84,8 +101,8 @@ export function MultiLangField({
             <Textarea
               rows={rows}
               disabled={disabled}
-              value={String(value[l.code] ?? '')}
-              onChange={(e) => onChange({ ...value, [l.code]: e.target.value })}
+              value={String(value?.[l.code] ?? '')}
+              onChange={(e) => onChange({ ...(latestValue.current || {}), [l.code]: e.target.value })}
               placeholder={l.code === baseLanguage ? 'Escreva o texto base aqui' : 'Traduza ou escreva manualmente'}
             />
           </TabsContent>

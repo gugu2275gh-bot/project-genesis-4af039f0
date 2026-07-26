@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -47,6 +47,14 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
   const [optionInput, setOptionInput] = useState('');
   const translate = useAgentTranslate();
   const [translatingId, setTranslatingId] = useState<string | null>(null);
+  const branchesRef = useRef<FlowBranch[]>(branches);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    branchesRef.current = branches;
+  }, [branches]);
+
+  useEffect(() => () => { mounted.current = false; }, []);
 
   const otherCodes = allSteps.filter((s) => s.id !== step.id).map((s) => s.step_code).filter(Boolean);
   const duplicateCode = otherCodes.includes(step.step_code);
@@ -74,12 +82,16 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
       const extra = Object.values(result)
         .map((v) => String(v ?? '').trim())
         .filter((v) => v && v.toLowerCase() !== source.toLowerCase());
-      const merged = Array.from(new Set([...(b.synonyms || []), ...extra]));
-      setBranches(branches.map((x) => (x.id === b.id ? { ...x, synonyms: merged } : x)));
+      if (!mounted.current || extra.length === 0) return;
+      const latestBranches = branchesRef.current;
+      const latestBranch = latestBranches.find((x) => x.id === b.id);
+      if (!latestBranch) return;
+      const merged = Array.from(new Set([...(latestBranch.synonyms || []), ...extra]));
+      setBranches(latestBranches.map((x) => (x.id === b.id ? { ...x, synonyms: merged } : x)));
     } catch {
       /* toast já exibido pelo hook */
     } finally {
-      setTranslatingId(null);
+      if (mounted.current) setTranslatingId(null);
     }
   };
 
