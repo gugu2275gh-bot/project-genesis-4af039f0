@@ -291,102 +291,18 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
               stepCodes={otherCodes}
               onChange={(patch) => onChange(patch as any)}
             />
-
+          </TabsContent>
 
           <TabsContent value="validacao" className="mt-0 space-y-4">
-            <div className="flex items-center justify-between rounded-md border p-3">
-              <Label className="font-normal">Resposta obrigatória</Label>
-              <Switch checked={validation.required !== false} onCheckedChange={(v) => setValidation({ required: v })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Formato esperado</Label>
-              <Select value={validation.format || 'NENHUM'} onValueChange={(v) => setValidation({ format: v as any })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ANSWER_FORMATS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {validation.format === 'REGEX' && (
-              <div className="space-y-2">
-                <Label>Expressão regular</Label>
-                <Input value={validation.regex || ''} onChange={(e) => setValidation({ regex: e.target.value })} />
-              </div>
-            )}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Mínimo</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  value={validation.min ?? ''}
-                  onChange={(e) => setValidation({ min: e.target.value === '' ? null : Number(e.target.value.replace(/\D/g, '')) })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Máximo</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  value={validation.max ?? ''}
-                  onChange={(e) => setValidation({ max: e.target.value === '' ? null : Number(e.target.value.replace(/\D/g, '')) })}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Reperguntas antes do fallback</Label>
-              <Input
-                type="text"
-                inputMode="numeric"
-                value={validation.max_reasks ?? 2}
-                onChange={(e) => setValidation({ max_reasks: Number(e.target.value.replace(/\D/g, '')) || 0 })}
-              />
-            </div>
+            <StepValidationEditor
+              validation={validation}
+              stepCodes={otherCodes}
+              onChange={(patch) => setValidation(patch)}
+            />
           </TabsContent>
 
           <TabsContent value="comportamento" className="mt-0 space-y-4">
-            <div className="space-y-2">
-              <Label>Salvar resposta no campo</Label>
-              <Input
-                placeholder="ex.: nome_completo"
-                value={validation.save_to_field || ''}
-                onChange={(e) => setValidation({ save_to_field: e.target.value })}
-              />
-            </div>
 
-            <div className="space-y-2">
-              <Label>Não repetir esta etapa</Label>
-              <Select value={validation.skip_mode || 'NUNCA'} onValueChange={(v) => setValidation({ skip_mode: v as any })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {SKIP_MODES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {validation.skip_mode === 'CAMPO_PREENCHIDO' && (
-              <div className="space-y-2">
-                <Label>Campo verificado</Label>
-                <Input
-                  value={validation.skip_field || ''}
-                  onChange={(e) => setValidation({ skip_field: e.target.value })}
-                />
-              </div>
-            )}
-            {validation.skip_mode === 'ETAPA_CONCLUIDA' && (
-              <div className="space-y-2">
-                <Label>Etapa já concluída</Label>
-                <Select
-                  value={validation.skip_step_code || '__none__'}
-                  onValueChange={(v) => setValidation({ skip_step_code: v === '__none__' ? '' : v })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Selecione</SelectItem>
-                    {otherCodes.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
 
             <Separator />
 
