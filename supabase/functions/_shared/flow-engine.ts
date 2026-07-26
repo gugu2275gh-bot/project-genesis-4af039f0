@@ -116,8 +116,44 @@ export function findStartStep(steps: FlowStep[]): FlowStep | null {
 const YES = /\b(sim|s[íi]|si|yes|yeah|claro|correto|exato|positivo|ok|vale|oui)\b/i
 const NO = /\b(n[ãa]o|nao|no|nope|nunca|jamais|negativo|non)\b/i
 const EMAIL = /[^\s@]+@[^\s@]+\.[a-z]{2,}/i
-const DATE = /(\d{1,2}\s*[\/\-.]\s*\d{1,2}\s*[\/\-.]\s*\d{2,4})|\b(20\d{2}|19\d{2})\b/
 const NUMBER = /\d{1,3}/
+
+/** Captura dd/mm/aaaa (aceita `/`, `-` ou `.` e espaços). Ano SEMPRE obrigatório. */
+const DATE_DMY = /\b(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{4})\b/
+
+/**
+ * Valida e normaliza uma data no formato único do sistema: DD/MM/YYYY.
+ * - Ano com 4 dígitos é obrigatório (2 dígitos é ambíguo → inválido).
+ * - Mês 1..12 e dia válido para o mês/ano (considera ano bissexto).
+ * - Formato americano (ex.: 01/24/2026) é rejeitado, pois mês 24 não existe.
+ * Retorna a data normalizada `DD/MM/YYYY` ou `null`.
+ */
+export function parseFlowDate(raw: string): string | null {
+  const m = DATE_DMY.exec(String(raw || ''))
+  if (!m) return null
+  const day = Number(m[1])
+  const month = Number(m[2])
+  const year = Number(m[3])
+  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) return null
+  if (month < 1 || month > 12) return null
+  if (year < 1900 || year > 2100) return null
+  const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0
+  const daysInMonth = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
+  if (day < 1 || day > daysInMonth) return null
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(day)}/${pad(month)}/${year}`
+}
+
+const DATE_REASK: Record<string, string> = {
+  'pt-BR': 'Preciso da data completa no formato DD/MM/AAAA (por exemplo, 24/01/2026). Pode me enviar assim?',
+  es: 'Necesito la fecha completa en formato DD/MM/AAAA (por ejemplo, 24/01/2026). ¿Me la puedes enviar así?',
+  en: 'I need the full date in DD/MM/YYYY format (for example, 24/01/2026). Could you send it that way?',
+  fr: 'J’ai besoin de la date complète au format JJ/MM/AAAA (par exemple, 24/01/2026). Pouvez-vous l’envoyer ainsi ?',
+}
+
+export function defaultDateReask(lang: FlowLang): string {
+  return DATE_REASK[String(lang)] || DATE_REASK['pt-BR']
+}
 
 export function validateAnswer(step: FlowStep, raw: string): { valid: boolean; value?: string; reason?: string } {
   const text = String(raw || '').trim()
@@ -135,14 +171,17 @@ export function validateAnswer(step: FlowStep, raw: string): { valid: boolean; v
       if (YES.test(text)) return { valid: true, value: 'sim' }
       if (NO.test(text)) return { valid: true, value: 'nao' }
       return { valid: false, reason: 'no_yesno' }
-    case 'DATA':
-      return DATE.test(text) ? { valid: true, value: text } : { valid: false, reason: 'invalid_date' }
+    case 'DATA': {
+      const parsed = parseFlowDate(text)
+      return parsed ? { valid: true, value: parsed } : { valid: false, reason: 'invalid_date' }
+    }
     case 'NUMERO':
       return NUMBER.test(text) ? { valid: true, value: text } : { valid: false, reason: 'invalid_number' }
     default:
       return { valid: true, value: text }
   }
 }
+
 
 // ---------------------------------------------------------------------------
 // Transição
@@ -293,7 +332,11 @@ export function advanceFlow(
       return run(index, fallbackCode, { ...state, attempts: 0 }, lang)
     }
 
-    const reask = reaskOf(step, lang) || messagesOf(step, lang).slice(-1)[0] || ''
+    const reask = reaskOf(step, lang)
+      || (result.reason === 'invalid_date' ? defaultDateReask(lang) : '')
+      || messagesOf(step, lang).slice(-1)[0]
+      || ''
+
     return {
       messages: reask ? [reask] : [],
       state: { ...state, attempts },
