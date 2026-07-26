@@ -19,6 +19,7 @@ export type Database = {
           allow_free_answer: boolean
           allow_parallel_question: boolean
           answer_type: string
+          branches: Json
           created_at: string
           created_by: string | null
           description: string | null
@@ -42,6 +43,7 @@ export type Database = {
           allow_free_answer?: boolean
           allow_parallel_question?: boolean
           answer_type?: string
+          branches?: Json
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -65,6 +67,7 @@ export type Database = {
           allow_free_answer?: boolean
           allow_parallel_question?: boolean
           answer_type?: string
+          branches?: Json
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -96,6 +99,7 @@ export type Database = {
       }
       ai_agent_flows: {
         Row: {
+          canvas: Json
           created_at: string
           created_by: string | null
           description: string | null
@@ -107,6 +111,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          canvas?: Json
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -118,6 +123,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          canvas?: Json
           created_at?: string
           created_by?: string | null
           description?: string | null
