@@ -195,10 +195,15 @@ NUNCA invente, suponha ou use conhecimento externo. Responda apenas o que está 
       try {
         let response: Response
         if (provider === 'gemini') {
-          // thinkingBudget só é aceito na família Gemini 2.x; Gemini 3+ retorna HTTP 400.
-          const generationConfig: Record<string, unknown> = { maxOutputTokens: 700 }
+          // Orçamento maior: o modo pós-handoff (KB) responde em 2-5 frases e
+          // estava sendo cortado em MAX_TOKENS quando o modelo "pensa".
+          const generationConfig: Record<string, unknown> = { maxOutputTokens: 1200 }
           if (/^gemini-2\./.test(model)) {
             generationConfig.thinkingConfig = { thinkingBudget: 0 }
+          } else if (/^gemini-3/.test(model)) {
+            // Gemini 3.x aceita thinkingLevel; desliga o raciocínio para não
+            // consumir o orçamento de saída (causava respostas truncadas).
+            generationConfig.thinkingConfig = { thinkingLevel: 'low' }
           }
           response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
