@@ -160,6 +160,8 @@ export interface StepValidation {
   skip_mode?: SkipMode;
   skip_field?: string;
   skip_step_code?: string;
+  /** Natureza da etapa (início, pergunta, informativa, fim). */
+  step_kind?: StepKind;
   [key: string]: unknown;
 }
 
@@ -175,7 +177,16 @@ export const DEFAULT_STEP_VALIDATION: StepValidation = {
   skip_mode: 'NUNCA',
   skip_field: '',
   skip_step_code: '',
+  step_kind: 'PERGUNTA',
 };
+
+/** Natureza da etapa, com retrocompatibilidade para etapas antigas. */
+export function stepKindOf(step: { validation?: unknown; handoff?: boolean }): StepKind {
+  const v = (step.validation && typeof step.validation === 'object' ? step.validation : {}) as StepValidation;
+  if (v.step_kind) return v.step_kind;
+  return step.handoff ? 'FIM' : 'PERGUNTA';
+}
+
 
 /** Posições dos nós no editor visual (coluna `canvas` de `ai_agent_flows`). */
 export interface FlowCanvasData {
