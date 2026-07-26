@@ -1041,7 +1041,12 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
                         console.log('Multichat: disambiguation skipped —', disambigRes.reason)
                       }
                     } catch (disambigErr) {
-                      console.error('Disambiguation send error:', disambigErr instanceof Error ? disambigErr.message : disambigErr)
+                      const __dmsg = disambigErr instanceof Error ? disambigErr.message : String(disambigErr)
+                      if (__dmsg === '__skip_disambiguation_visual_flow__') {
+                        console.log('[VISUAL_FLOW] desambiguação de setor ignorada (fluxo em andamento)')
+                      } else {
+                        console.error('Disambiguation send error:', __dmsg)
+                      }
                     }
                   }
                 } catch {
