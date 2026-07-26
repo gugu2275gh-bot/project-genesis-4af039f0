@@ -452,6 +452,7 @@ import {
   enforceResponseLanguage,
   generateAIResponse,
   generateAIResponseOpenAI,
+  trimIncompleteSentence,
 } from './lib/ai.ts'
 
 
