@@ -10,7 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Trash2, X } from 'lucide-react';
 import { MultiLangField } from '@/components/ai-agents/MultiLangField';
-import { ANSWER_TYPES, FLOW_PHASES, type AgentFlowStep, type MultiLangText } from '@/types/ai-agents';
+import { useAgentTranslate } from '@/hooks/useAgentTranslate';
+import { AGENT_LANGUAGES, ANSWER_TYPES, FLOW_PHASES, type AgentFlowStep, type MultiLangText } from '@/types/ai-agents';
+
 import {
   ANSWER_FORMATS,
   BRANCH_MATCH_TYPES,
