@@ -30,6 +30,7 @@ import { MultiLangField } from '@/components/ai-agents/MultiLangField';
 import {
   ANSWER_TYPES,
   FLOW_PHASES,
+  STEP_FIELD_MAPPINGS,
   type AgentFlow,
   type AgentFlowStep,
   type FlowPhase,
@@ -69,6 +70,7 @@ function StepDialog({
       reask_messages: {},
       phase: flowPhase,
       answer_type: 'TEXTO_LIVRE',
+      field_mapping: null,
       next_step_code: '',
       exit_condition: '',
       branches: [],
