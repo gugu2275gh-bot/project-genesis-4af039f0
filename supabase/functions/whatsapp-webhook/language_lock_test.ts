@@ -27,6 +27,18 @@ Deno.test('idioma travado é mantido mesmo com resposta em outra língua', () =>
   assertEquals(resolveFlowLanguage('es', 'no', 'pt-BR').lang, 'es')
 })
 
+Deno.test('primeira mensagem clara supera fallback pt do banco', () => {
+  const resolved = resolveFlowLanguage(null, 'Hello', 'pt-BR')
+  assertEquals(resolved.lang, 'en')
+  assertEquals(resolved.locked, true)
+  assertEquals(resolved.detected, 'en')
+})
+
+Deno.test('resposta curta mantém lock em vez de trocar idioma', () => {
+  assertEquals(resolveFlowLanguage('en', 'Sim', 'pt-BR').lang, 'en')
+  assertEquals(resolveFlowLanguage('pt-BR', 'no', 'pt-BR').lang, 'pt-BR')
+})
+
 Deno.test('pedido explícito de troca é reconhecido', () => {
   assertEquals(detectExplicitLanguageRequest('pode falar em português?'), 'pt-BR')
   assertEquals(detectExplicitLanguageRequest('en español por favor'), 'es')

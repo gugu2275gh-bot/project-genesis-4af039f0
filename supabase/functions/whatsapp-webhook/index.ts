@@ -1543,13 +1543,16 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           contact.preferred_language = code
         }
 
-        // Lock persistido: estado do fluxo visual tem precedência, depois o contato.
+        // Lock persistido: estado do fluxo visual é o ÚNICO lock forte.
+        // `contacts.preferred_language` tem default `pt` no banco; por isso ele
+        // não pode bloquear a 1ª detecção real (ex.: cliente novo dizendo "Hello").
         const flowLockRaw = (funnelState as any)?.visual_flow_state?.lang
-        const lockedLanguage: ChatLanguage | null =
-          (isFlowLanguage(flowLockRaw) ? (flowLockRaw as ChatLanguage) : null) ??
-          (contact.preferred_language && preferredLangMap[contact.preferred_language]
-            ? preferredLangMap[contact.preferred_language]
-            : null)
+        const flowLockedLanguage: ChatLanguage | null = isFlowLanguage(flowLockRaw)
+          ? (flowLockRaw as ChatLanguage)
+          : null
+        const contactPreferredLanguage: ChatLanguage | null = contact.preferred_language && preferredLangMap[contact.preferred_language]
+          ? preferredLangMap[contact.preferred_language]
+          : null
 
         const explicitRequest = detectExplicitLanguageRequest(currentCustomerMessage) as ChatLanguage | null
 
@@ -1558,17 +1561,21 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           detectedChatLanguage = explicitRequest
           await persistLangLock(detectedChatLanguage)
           console.log('[LANG] troca explícita solicitada pelo cliente →', detectedChatLanguage)
-        } else if (lockedLanguage) {
-          detectedChatLanguage = lockedLanguage
+        } else if (flowLockedLanguage) {
+          detectedChatLanguage = flowLockedLanguage
           console.log('[LANG] idioma travado (mantido):', detectedChatLanguage)
         } else {
-          // Ainda sem lock: detecta na mensagem atual, ignorando respostas
-          // curtas/ambíguas (sim, no, sí, ok) que não são sinal confiável.
+          // Ainda sem lock forte: primeiro tenta detectar na mensagem atual,
+          // ignorando respostas curtas/ambíguas (sim, no, sí, ok).
+          // Só depois usa contacts.preferred_language como fallback.
           const positiveSignal = detectLockableLanguageOrNull(currentCustomerMessage) as ChatLanguage | null
           if (positiveSignal) {
             detectedChatLanguage = positiveSignal
             await persistLangLock(detectedChatLanguage)
             console.log('[LANG] idioma travado (1ª detecção):', detectedChatLanguage, 'amostra:', currentCustomerMessage.slice(0, 120))
+          } else if (contactPreferredLanguage) {
+            detectedChatLanguage = contactPreferredLanguage
+            console.log('[LANG] fallback do contato (sem sinal claro):', detectedChatLanguage)
           } else {
             const agentDefault = preferredLangMap[String((getAgentRuntime()?.runtimeConfig as any)?.default_language || '')] || 'pt-BR'
             detectedChatLanguage = agentDefault
@@ -1660,7 +1667,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
                 phone: phoneNumber,
                 leadId: lead.id,
                 body: part,
-                language: detectedChatLanguage,
+                language: flowLang as ChatLanguage,
                 quickReply: flowOutbound[i].quick_reply ? 'on' : 'off',
               })
 
