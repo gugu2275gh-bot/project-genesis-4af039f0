@@ -110,6 +110,33 @@ export function quickReplyOf(step: FlowStep): boolean {
   return v.quick_reply === true && answerType === 'SIM_NAO'
 }
 
+/** Tipos de resposta considerados "abertos" (merecem reconhecimento humano). */
+const OPEN_ANSWER_TYPES = ['', 'TEXTO', 'TEXTO_LIVRE', 'NOME', 'EMAIL', 'NUMERO', 'DATA']
+
+/**
+ * Se a etapa deve enviar uma frase curta de reconhecimento humano antes da
+ * próxima pergunta. Padrão: ligado para respostas abertas, desligado para
+ * Sim/Não e listas de opções. `validation.ack_enabled` sobrepõe o padrão.
+ */
+export function ackEnabledFor(step: FlowStep): boolean {
+  const v = (step?.validation || {}) as Record<string, unknown>
+  if (typeof v.ack_enabled === 'boolean') return v.ack_enabled
+  return OPEN_ANSWER_TYPES.includes(String(step?.answer_type || '').toUpperCase())
+}
+
+/** Insere uma mensagem no início do turno (usada pela frase de reconhecimento). */
+export function prependMessage(turn: FlowTurnResult, text: string, stepCode = 'ack'): FlowTurnResult {
+  const clean = String(text || '').trim()
+  if (!clean) return turn
+  return {
+    ...turn,
+    messages: [clean, ...(turn.messages || [])],
+    outbound: [{ text: clean, step_code: stepCode, quick_reply: false }, ...(turn.outbound || [])],
+  }
+}
+
+
+
 
 
 const MAX_STEPS_PER_TURN = 25
@@ -647,8 +674,10 @@ export function advanceFlow(
   state: FlowRunState,
   message: string,
   lang: FlowLang = 'pt-BR',
+  opts: { ack?: string } = {},
 ): FlowTurnResult {
   const index = indexSteps(steps)
+
   if (!state?.current_step) return startFlow(steps, lang)
   if (state.finished) {
     return { messages: [], outbound: [], state, reasked: false, finished: true, handoff: !!state.handoff, path: [], captured: [] }
@@ -827,8 +856,14 @@ export function advanceFlow(
     }
 
   }
-  return run(index, nextCode, nextState, lang, captured)
+  const turn = run(index, nextCode, nextState, lang, captured)
+  // Reconhecimento humano antes da próxima pergunta (respostas abertas).
+  if (opts?.ack && ackEnabledFor(step) && (turn.messages || []).length) {
+    return prependMessage(turn, opts.ack, step.step_code)
+  }
+  return turn
 }
+
 
 
 // ---------------------------------------------------------------------------

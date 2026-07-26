@@ -47,6 +47,22 @@ export function StepValidationEditor({ validation, stepCodes, answerType, onChan
         </div>
       )}
 
+      <div className="flex items-center justify-between rounded-md border p-3">
+        <div>
+          <Label className="font-normal">Enviar reconhecimento antes da próxima pergunta</Label>
+          <p className="text-xs text-muted-foreground">
+            Frase humana curta (ex.: “Perfeito, obrigada!”) configurada na aba “Primeira mensagem”.
+            Padrão: ligado em respostas abertas, desligado em Sim/Não e listas de opções.
+          </p>
+        </div>
+        <Switch
+          checked={validation.ack_enabled ?? !isYesNo}
+          onCheckedChange={(v) => onChange({ ack_enabled: v })}
+        />
+      </div>
+
+
+
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">

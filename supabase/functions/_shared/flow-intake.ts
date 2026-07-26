@@ -10,7 +10,14 @@
  * Módulo PURO: a chamada ao LLM é injetada pelo chamador (`callLLM`).
  */
 
-import { inferFieldMapping, validateAnswer, type FlowLang, type FlowStep } from './flow-engine.ts'
+import {
+  inferFieldMapping,
+  prependMessage,
+  validateAnswer,
+  type FlowLang,
+  type FlowStep,
+  type FlowTurnResult,
+} from './flow-engine.ts'
 
 export interface IntakeExtraction {
   full_name?: string | null
@@ -249,6 +256,11 @@ export function renderIntakeGreeting(
     .replace(/\{localizacao\}/g, fieldValues['funnel.location_known'] || '')
     .replace(/\s{2,}/g, ' ')
     .trim()
+}
+
+/** Prefixa a saudação do intake (personalizada ou padrão) no turno. */
+export function prependIntakeGreeting(turn: FlowTurnResult, greeting: string): FlowTurnResult {
+  return prependMessage(turn, greeting, 'intake')
 }
 
 export function renderAckMessage(cfg: IntakeConfig, lang: FlowLang, name?: string): string {

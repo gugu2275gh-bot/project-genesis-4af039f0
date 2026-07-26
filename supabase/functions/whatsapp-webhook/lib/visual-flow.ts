@@ -24,7 +24,15 @@ import {
   type FlowStep,
   type FlowTurnResult,
 } from '../../_shared/flow-engine.ts'
-import { normalizeIntakeConfig, runIntake, type IntakeConfig } from '../../_shared/flow-intake.ts'
+import {
+  normalizeIntakeConfig,
+  prependIntakeGreeting,
+  renderAckMessage,
+  renderIntakeGreeting,
+  runIntake,
+  type IntakeConfig,
+} from '../../_shared/flow-intake.ts'
+
 import { getAgentRuntime } from './agent-runtime.ts'
 import { cached } from './perf.ts'
 
@@ -133,28 +141,27 @@ export async function runVisualFlowFirstTurn(
 ): Promise<FlowTurnResult> {
   if (!plan.intake?.enabled || !callLLM) return startFlow(plan.steps, lang)
 
+  /** Abertura sem aproveitamento: usa a "Saudação padrão" quando configurada. */
+  const plainStart = (): FlowTurnResult =>
+    prependIntakeGreeting(startFlow(plan.steps, lang), renderIntakeGreeting(plan.intake, lang, {}))
+
   let intake
   try {
     intake = await runIntake({ message, steps: plan.steps, lang, config: plan.intake, callLLM })
   } catch (e) {
     console.warn('[VISUAL_FLOW] intake falhou (segue fluxo normal):', e instanceof Error ? e.message : e)
-    return startFlow(plan.steps, lang)
+    return plainStart()
   }
 
   const prefilledCodes = Object.keys(intake.prefilled || {})
-  if (!prefilledCodes.length) return startFlow(plan.steps, lang)
+  if (!prefilledCodes.length) return plainStart()
 
   console.log('[VISUAL_FLOW][INTAKE]', JSON.stringify({ fields: intake.fieldValues, steps: prefilledCodes }))
 
-  const turn = startFlowWithPrefill(plan.steps, lang, intake.prefilled)
-  if (intake.greeting) {
-    turn.messages = [intake.greeting, ...(turn.messages || [])]
-    turn.outbound = [
-      { text: intake.greeting, step_code: 'intake', quick_reply: false },
-      ...(turn.outbound || []),
-    ]
-  }
-  return turn
+  return prependIntakeGreeting(
+    startFlowWithPrefill(plan.steps, lang, intake.prefilled),
+    intake.greeting,
+  )
 }
 
 export function runVisualFlowTurn(
@@ -164,8 +171,25 @@ export function runVisualFlowTurn(
   lang: FlowLang,
 ): FlowTurnResult {
   const started = !!state?.current_step
-  return started ? advanceFlow(plan.steps, state, message, lang) : startFlow(plan.steps, lang)
+  if (!started) return startFlow(plan.steps, lang)
+  // Reconhecimento humano entre perguntas (ligado por etapa no editor).
+  const ack = plan.intake?.enabled
+    ? renderAckMessage(plan.intake, lang, nameFromState(plan.steps, state))
+    : ''
+  return advanceFlow(plan.steps, state, message, lang, { ack })
 }
+
+/** Nome já capturado no fluxo, para personalizar o reconhecimento. */
+function nameFromState(steps: FlowStep[], state: FlowRunState): string {
+  const answers = state?.answers || {}
+  for (const step of steps || []) {
+    const value = String(answers[step.step_code] ?? '').trim()
+    if (!value) continue
+    if (String(step.answer_type || '').toUpperCase() === 'NOME') return value
+  }
+  return ''
+}
+
 
 // ---------------------------------------------------------------------------
 // Persistência das respostas nos campos do CRM
