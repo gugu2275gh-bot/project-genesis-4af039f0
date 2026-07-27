@@ -7,6 +7,7 @@ import { advanceFlow, findStartStep, mergeFlows, startFlow, startFlowWithPrefill
 import { dropOpeningMessages, normalizeIntakeConfig, prependIntakeGreeting, renderAckMessage, renderIntakeGreeting, runIntake } from '../_shared/flow-intake.ts'
 import { createIntakeLLM } from '../_shared/intake-llm.ts'
 import { advanceFlowTurn } from '../_shared/flow-turn.ts'
+import { localizeTurn } from '../_shared/flow-i18n.ts'
 import { searchKnowledgeBase } from '../_shared/kb-search.ts'
 import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
 
@@ -274,6 +275,17 @@ Deno.serve(async (req) => {
           logTag: '[SANDBOX]',
         })
       }
+
+      // Camada única de saída: nada é enviado fora do idioma da conversa.
+      turn = await localizeTurn(turn, lang as any, {
+        steps,
+        callLLM: createIntakeLLM({
+          geminiKey: Deno.env.get('CBAsesoria_Key'),
+          lovableKey: Deno.env.get('LOVABLE_API_KEY'),
+        }),
+        supabase: service,
+        logTag: '[SANDBOX]',
+      })
 
       await service.from('ai_agent_test_messages').insert({
         session_id,
