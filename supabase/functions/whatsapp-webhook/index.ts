@@ -461,6 +461,7 @@ export {
 
 // Wave 3b step 7: Twilio + AI providers + extraction moved to lib/
 import { getMediaPlaceholder, sendWhatsAppMessage, sendOutgoingIdempotent } from './lib/twilio.ts'
+import { YES_NO_LABELS } from './lib/quick-reply.ts'
 import {
   rewriteResponseToLanguage,
   enforceResponseLanguage,
