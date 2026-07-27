@@ -182,6 +182,8 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       const p = String(buttonPayload).trim().toUpperCase()
       if (p === 'YES') bodyText = 'sim'
       else if (p === 'NO') bodyText = 'no'
+      // OPT_n: o rótulo clicado vem no Body e é canonizado pelo motor do fluxo.
+      else if (p.startsWith('OPT_') && bodyText) { /* mantém o rótulo do botão */ }
       else if (!bodyText) bodyText = String(buttonPayload)
     }
     return {
