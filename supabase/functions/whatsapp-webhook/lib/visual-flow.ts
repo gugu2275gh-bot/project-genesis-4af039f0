@@ -27,6 +27,7 @@ import {
   type FlowTurnResult,
 } from '../../_shared/flow-engine.ts'
 import { advanceFlowTurn } from '../../_shared/flow-turn.ts'
+import { localizeTurn } from '../../_shared/flow-i18n.ts'
 import {
   dropOpeningMessages,
   normalizeIntakeConfig,
