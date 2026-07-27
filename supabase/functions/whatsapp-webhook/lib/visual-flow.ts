@@ -168,13 +168,18 @@ export async function runVisualFlowFirstTurn(
   message: string,
   lang: FlowLang,
   callLLM: ((prompt: string) => Promise<string>) | null,
+  supabase?: any,
 ): Promise<FlowTurnResult> {
   const logIntake = (payload: Record<string, unknown>) =>
     console.log('[VISUAL_FLOW][INTAKE]', JSON.stringify(payload))
 
+  /** Camada única de saída: nada sai fora do idioma da conversa. */
+  const localize = (turn: FlowTurnResult) =>
+    localizeTurn(turn, lang, { steps: plan.steps, callLLM, supabase, logTag: '[VISUAL_FLOW]' })
+
   if (!plan.intake?.enabled) {
     logIntake({ reason: 'disabled' })
-    return startFlow(plan.steps, lang)
+    return await localize(startFlow(plan.steps, lang))
   }
   if (!callLLM) {
     logIntake({ reason: 'no_llm' })
@@ -190,7 +195,7 @@ export async function runVisualFlowFirstTurn(
     intake = await runIntake({ message, steps: plan.steps, lang, config: plan.intake, callLLM })
   } catch (e) {
     logIntake({ reason: 'exception', detail: e instanceof Error ? e.message : String(e) })
-    return plainStart()
+    return await localize(plainStart())
   }
 
   const prefilledCodes = Object.keys(intake.prefilled || {})
@@ -203,14 +208,14 @@ export async function runVisualFlowFirstTurn(
   })
 
   // Nada entendido: abertura normal (com a saudação padrão, se configurada).
-  if (!prefilledCodes.length && !intake.greeting) return plainStart()
+  if (!prefilledCodes.length && !intake.greeting) return await localize(plainStart())
 
   const base = prefilledCodes.length
     ? startFlowWithPrefill(plan.steps, lang, intake.prefilled)
     : startFlow(plan.steps, lang)
 
   // A saudação personalizada substitui a abertura informativa do fluxo.
-  return prependIntakeGreeting(dropOpeningMessages(base, plan.steps), intake.greeting)
+  return await localize(prependIntakeGreeting(dropOpeningMessages(base, plan.steps), intake.greeting))
 }
 
 
@@ -219,21 +224,35 @@ export async function runVisualFlowTurn(
   state: FlowRunState,
   message: string,
   lang: FlowLang,
-  deps: { callLLM?: ((prompt: string) => Promise<string>) | null; kbSearch?: ((q: string) => Promise<string>) | null } = {},
+  deps: {
+    callLLM?: ((prompt: string) => Promise<string>) | null
+    kbSearch?: ((q: string) => Promise<string>) | null
+    supabase?: any
+  } = {},
 ): Promise<FlowTurnResult> {
+  const localize = (turn: FlowTurnResult) =>
+    localizeTurn(turn, lang, {
+      steps: plan.steps,
+      callLLM: deps.callLLM || null,
+      supabase: deps.supabase,
+      logTag: '[VISUAL_FLOW]',
+    })
+
   const started = !!state?.current_step
-  if (!started) return startFlow(plan.steps, lang)
+  if (!started) return await localize(startFlow(plan.steps, lang))
   // Reconhecimento humano entre perguntas (ligado por etapa no editor).
   const ack = plan.intake?.enabled
     ? renderAckMessage(plan.intake, lang, nameFromState(plan.steps, state))
     : ''
-  return await advanceFlowTurn(plan.steps, state, message, lang, {
+  const turn = await advanceFlowTurn(plan.steps, state, message, lang, {
     ack,
     callLLM: deps.callLLM || null,
     kbSearch: deps.kbSearch || null,
     logTag: '[VISUAL_FLOW]',
   })
+  return await localize(turn)
 }
+
 
 /** Nome já capturado no fluxo, para personalizar o reconhecimento. */
 function nameFromState(steps: FlowStep[], state: FlowRunState): string {
