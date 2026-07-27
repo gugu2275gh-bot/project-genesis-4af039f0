@@ -182,6 +182,8 @@ function parseMessage(payload: WebhookPayload): WhatsAppMessage | null {
       const p = String(buttonPayload).trim().toUpperCase()
       if (p === 'YES') bodyText = 'sim'
       else if (p === 'NO') bodyText = 'no'
+      // OPT_n: o rótulo clicado vem no Body e é canonizado pelo motor do fluxo.
+      else if (p.startsWith('OPT_') && bodyText) { /* mantém o rótulo do botão */ }
       else if (!bodyText) bodyText = String(buttonPayload)
     }
     return {
@@ -429,7 +431,7 @@ import { logTurn } from './lib/turn-log.ts'
 import { buildConversationContext } from './lib/conversation-context.ts'
 import { decideTurn, applyTurnDecision, type TurnDecision } from './lib/turn-orchestrator.ts'
 import { resolveCurrentStep, getStepDef } from './lib/flow-machine.ts'
-import { loadVisualFlowPlan, runVisualFlowTurn, runVisualFlowFirstTurn, applyCapturedFields, expectsShortAnswer } from './lib/visual-flow.ts'
+import { loadVisualFlowPlan, runVisualFlowTurn, runVisualFlowFirstTurn, applyCapturedFields, expectsShortAnswer, buttonsForStep } from './lib/visual-flow.ts'
 import { createIntakeLLM } from '../_shared/intake-llm.ts'
 
 import { Timings, fireAndForget } from './lib/perf.ts'
@@ -1696,6 +1698,9 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
                 body: part,
                 language: flowLang as ChatLanguage,
                 quickReply: flowOutbound[i].quick_reply ? 'on' : 'off',
+                buttons: flowOutbound[i].quick_reply
+                  ? buttonsForStep(flowPlan, flowOutbound[i].step_code, flowLang as any)
+                  : undefined,
               })
 
               // Descarte por deduplicação: o cliente ficaria sem NENHUMA resposta.
@@ -1708,6 +1713,9 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
                   body: `${prefix} ${part}`,
                   language: flowLang as ChatLanguage,
                   quickReply: flowOutbound[i].quick_reply ? 'on' : 'off',
+                  buttons: flowOutbound[i].quick_reply
+                    ? buttonsForStep(flowPlan, flowOutbound[i].step_code, flowLang as any)
+                    : undefined,
                 })
                 if (sendRes.sent) console.log('[VISUAL_FLOW] reenvio com variação após dedup')
               }

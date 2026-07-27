@@ -102,15 +102,98 @@ export interface FlowTurnResult {
   captured: FlowCapturedField[]
 }
 
+/** Limite de botões de resposta rápida do WhatsApp. */
+export const WHATSAPP_BUTTON_LIMIT = 3
+
+/** Rótulos Sim/Não por idioma (mesmos usados na camada Twilio). */
+const YES_NO_LABELS: Record<string, [string, string]> = {
+  'pt-BR': ['Sim', 'Não'],
+  es: ['Sí', 'No'],
+  en: ['Yes', 'No'],
+  fr: ['Oui', 'Non'],
+}
+
+/** Opções base (idioma de cadastro) da etapa. */
+export function optionsOf(step: FlowStep): string[] {
+  const v = (step?.validation || {}) as Record<string, unknown>
+  const raw = Array.isArray(v.options) ? v.options : []
+  return raw.map((o) => String(o ?? '').trim()).filter(Boolean)
+}
+
+/** Código curto do idioma usado nas traduções salvas no editor. */
+function langKey(lang: FlowLang): string {
+  const l = String(lang || 'pt-BR')
+  if (l.startsWith('pt')) return 'pt'
+  if (l.startsWith('es')) return 'es'
+  if (l.startsWith('en')) return 'en'
+  if (l.startsWith('fr')) return 'fr'
+  return 'pt'
+}
+
 /**
- * Botões Sim/Não só quando a etapa está marcada com `validation.quick_reply`
- * E a resposta esperada é binária. Padrão: desligado.
+ * Rótulos das opções no idioma da conversa. Usa `validation.options_i18n`
+ * (traduzido no editor) e cai para o rótulo original quando não houver
+ * tradução para aquela posição.
+ */
+export function localizedOptions(step: FlowStep, lang: FlowLang): string[] {
+  const base = optionsOf(step)
+  const v = (step?.validation || {}) as Record<string, any>
+  const dict = v.options_i18n && typeof v.options_i18n === 'object' ? v.options_i18n : {}
+  const translated = Array.isArray(dict[langKey(lang)]) ? dict[langKey(lang)] : []
+  return base.map((o, i) => String(translated[i] ?? '').trim() || o)
+}
+
+/**
+ * Converte um rótulo traduzido digitado/clicado pelo cliente de volta para a
+ * opção base — é sobre a opção base que os caminhos (branches) comparam.
+ */
+export function canonicalOption(step: FlowStep, answer: string): string | null {
+  const text = String(answer || '').trim().toLowerCase()
+  if (!text) return null
+  const base = optionsOf(step)
+  if (!base.length) return null
+  const v = (step?.validation || {}) as Record<string, any>
+  const dict = v.options_i18n && typeof v.options_i18n === 'object' ? v.options_i18n : {}
+  for (let i = 0; i < base.length; i++) {
+    const candidates = [base[i], ...Object.values(dict).map((arr: any) => (Array.isArray(arr) ? arr[i] : ''))]
+      .map((c) => String(c ?? '').trim().toLowerCase())
+      .filter(Boolean)
+    if (candidates.includes(text)) return base[i]
+  }
+  return null
+}
+
+/**
+ * Botões que a etapa deve oferecer no WhatsApp, já no idioma da conversa.
+ * Vazio quando a etapa não usa botões.
+ */
+export function buttonsOf(step: FlowStep, lang: FlowLang): string[] {
+  const answerType = String(step?.answer_type || '').toUpperCase()
+  if (!quickReplyOf(step)) return []
+  if (answerType === 'SIM_NAO') {
+    const [yes, no] = YES_NO_LABELS[String(lang)] || YES_NO_LABELS['pt-BR']
+    return [yes, no]
+  }
+  return localizedOptions(step, lang).slice(0, WHATSAPP_BUTTON_LIMIT)
+}
+
+/**
+ * A etapa deve ser enviada com botões?
+ *  - `SIM_NAO`: só quando `validation.quick_reply` está marcado.
+ *  - `BOTOES`: sempre (é a intenção do tipo), desde que caiba em 3 opções.
+ *  - `SELECAO`: quando `validation.quick_reply` está marcado e cabe em 3.
  */
 export function quickReplyOf(step: FlowStep): boolean {
   const v = (step?.validation || {}) as Record<string, unknown>
   const answerType = String(step?.answer_type || '').toUpperCase()
-  return v.quick_reply === true && answerType === 'SIM_NAO'
+  if (answerType === 'SIM_NAO') return v.quick_reply === true
+  const count = optionsOf(step).length
+  if (!count || count > WHATSAPP_BUTTON_LIMIT) return false
+  if (answerType === 'BOTOES') return v.quick_reply !== false
+  if (answerType === 'SELECAO') return v.quick_reply === true
+  return false
 }
+
 
 /** Tipos de resposta considerados "abertos" (merecem reconhecimento humano). */
 const OPEN_ANSWER_TYPES = ['', 'TEXTO', 'TEXTO_LIVRE', 'NOME', 'EMAIL', 'NUMERO', 'DATA']
@@ -438,8 +521,19 @@ export function validateAnswer(step: FlowStep, raw: string): { valid: boolean; v
     }
     case 'NUMERO':
       return NUMBER.test(text) ? { valid: true, value: text } : { valid: false, reason: 'invalid_number' }
+    case 'BOTOES':
+    case 'SELECAO':
+    case 'MULTIPLA_ESCOLHA': {
+      // Rótulo clicado/digitado em qualquer idioma volta para a opção base,
+      // que é o valor comparado pelos caminhos do fluxo.
+      const canonical = canonicalOption(step, text)
+      if (canonical) return { valid: true, value: canonical }
+      const hasOptions = optionsOf(step).length > 0
+      return hasOptions ? { valid: false, reason: 'no_option_match' } : { valid: true, value: text }
+    }
     default:
       return { valid: true, value: text }
+
   }
 }
 
@@ -811,8 +905,9 @@ export function advanceFlow(
     // Classifica o desvio para escolher a tratativa configurada na etapa.
     const kind: DeviationKind =
       result.reason === 'empty' ? 'off_topic'
-        : result.reason === 'no_yesno' ? 'no_match'
+        : (result.reason === 'no_yesno' || result.reason === 'no_option_match') ? 'no_match'
           : 'invalid_format'
+
     const rule = ruleFor(cfg, kind)
 
     // Data aproximada ("Maio de 2026", "03/2024", "em 2023"): aceita já na

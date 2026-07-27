@@ -1,7 +1,7 @@
 // @ts-nocheck
 // Wave 3b step 7: Twilio gateway + media placeholder
 import type { ChatLanguage } from './language.ts'
-import { isBinaryYesNoQuestion, sendYesNoQuickReply } from './quick-reply.ts'
+import { isBinaryYesNoQuestion, sendYesNoQuickReply, sendOptionsQuickReply } from './quick-reply.ts'
 
 export function getMediaPlaceholder(mediaType: string, language: ChatLanguage): string {
   const mediaNames: Record<ChatLanguage, Record<string, string>> = {
@@ -112,11 +112,14 @@ export async function sendOutgoingIdempotent(
     language?: ChatLanguage
     /**
      * 'auto' (padrão legado): heurística por texto pode virar botões.
-     * 'on'  : botões Sim/Não porque a ETAPA DO FLUXO pediu.
+     * 'on'  : botões porque a ETAPA DO FLUXO pediu.
      * 'off' : nunca botões (fluxo visual ativo sem quick_reply na etapa).
      */
     quickReply?: 'auto' | 'on' | 'off'
+    /** Rótulos dos botões (já no idioma da conversa) quando quickReply='on'. */
+    buttons?: string[]
   },
+
 ): Promise<{ sent: boolean; reason?: string }> {
   const { phone, leadId, body, language } = args
   const quickReplyMode = args.quickReply ?? 'auto'
@@ -169,14 +172,18 @@ export async function sendOutgoingIdempotent(
   // Com fluxo visual ativo o modo é 'on'/'off' — a heurística nunca é consultada.
   const wantsQuickReply = quickReplyMode === 'on'
     || (quickReplyMode === 'auto' && isBinaryYesNoQuestion(body))
+  const buttons = Array.isArray(args.buttons) ? args.buttons.filter((b) => String(b || '').trim()) : []
   if (language && wantsQuickReply) {
     try {
-      await sendYesNoQuickReply(phone, sanitizeOutgoingText(body), language)
+      const text = sanitizeOutgoingText(body)
+      if (buttons.length) await sendOptionsQuickReply(phone, text, buttons, language)
+      else await sendYesNoQuickReply(phone, text, language)
       return { sent: true }
     } catch (qrErr) {
       console.warn('[QUICK_REPLY] falhou, caindo em texto:', qrErr instanceof Error ? qrErr.message : qrErr)
     }
   }
+
 
 
   await sendWhatsAppMessage(phone, body)

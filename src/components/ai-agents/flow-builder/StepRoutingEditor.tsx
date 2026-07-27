@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, ArrowDown, ArrowUp, Plus, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, Languages, Plus, Trash2, X } from 'lucide-react';
 import { useAgentTranslate } from '@/hooks/useAgentTranslate';
 import { AGENT_LANGUAGES } from '@/types/ai-agents';
 import {
@@ -63,6 +63,10 @@ export function StepRoutingEditor({
   const [translatingId, setTranslatingId] = useState<string | null>(null);
   const branchesRef = useRef<FlowBranch[]>(branches);
   const mounted = useRef(true);
+  const [translatingOptions, setTranslatingOptions] = useState(false);
+
+  /** Traduções dos rótulos das opções, por idioma (mesma ordem de `options`). */
+  const optionsI18n = (validation.options_i18n || {}) as Partial<Record<'pt' | 'es' | 'en' | 'fr', string[]>>;
 
   useEffect(() => {
     branchesRef.current = branches;
@@ -158,6 +162,29 @@ export function StepRoutingEditor({
     }
   };
 
+  /** Traduz TODOS os rótulos das opções para os demais idiomas do agente. */
+  const translateOptions = async () => {
+    if (options.length === 0) return;
+    setTranslatingOptions(true);
+    try {
+      const targets = AGENT_LANGUAGES.map((l) => l.code).filter((c) => c !== 'pt-BR');
+      const results = await Promise.all(
+        options.map((o) => translate.mutateAsync({ text: o, source: 'pt-BR', targets })),
+      );
+      if (!mounted.current) return;
+      const next: Partial<Record<'pt' | 'es' | 'en' | 'fr', string[]>> = { pt: options.slice() };
+      for (const code of targets) {
+        const key = code === 'es' ? 'es' : code === 'en' ? 'en' : 'fr';
+        next[key] = results.map((r, i) => String((r as Record<string, string>)[code] ?? '').trim() || options[i]);
+      }
+      setValidation({ options_i18n: next });
+    } catch {
+      /* toast já exibido pelo hook */
+    } finally {
+      if (mounted.current) setTranslatingOptions(false);
+    }
+  };
+
   const destinationSelect = (
     value: string | null | undefined,
     onValue: (v: string | null) => void,
@@ -176,7 +203,18 @@ export function StepRoutingEditor({
     <div className="space-y-4">
       {usesOptions && (
         <div className="space-y-2">
-          <Label>Opções oferecidas ao cliente</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label>Opções oferecidas ao cliente</Label>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={translatingOptions || options.length === 0}
+              onClick={translateOptions}
+            >
+              <Languages className="h-4 w-4 mr-1" />
+              {translatingOptions ? 'Traduzindo…' : 'Traduzir opções'}
+            </Button>
+          </div>
           <div className="space-y-1">
             {options.length === 0 && (
               <p className="text-xs text-muted-foreground">Nenhuma opção cadastrada.</p>
@@ -201,12 +239,28 @@ export function StepRoutingEditor({
                   size="icon"
                   variant="ghost"
                   title="Excluir opção"
-                  onClick={() => setValidation({ options: options.filter((_, x) => x !== i) })}
+                  onClick={() =>
+                    setValidation({
+                      options: options.filter((_, x) => x !== i),
+                      options_i18n: Object.fromEntries(
+                        Object.entries(optionsI18n).map(([k, arr]) => [
+                          k,
+                          (Array.isArray(arr) ? arr : []).filter((_, x) => x !== i),
+                        ]),
+                      ),
+                    })
+                  }
                 >
                   <X className="h-4 w-4" />
                 </Button>
               </div>
             ))}
+            {options.length > 0 && (optionsI18n.es || optionsI18n.en || optionsI18n.fr) && (
+              <p className="text-[11px] text-muted-foreground">
+                ES: {(optionsI18n.es || []).join(' / ') || '—'} · EN:{' '}
+                {(optionsI18n.en || []).join(' / ') || '—'} · FR: {(optionsI18n.fr || []).join(' / ') || '—'}
+              </p>
+            )}
           </div>
           <div className="flex gap-2">
             <Input
