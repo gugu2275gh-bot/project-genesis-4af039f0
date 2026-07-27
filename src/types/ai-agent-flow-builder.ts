@@ -339,6 +339,9 @@ export interface StepValidation {
   max?: number | null;
   max_reasks?: number;
   options?: string[];
+  /** Rótulos das opções traduzidos por idioma (mesma ordem de `options`). */
+  options_i18n?: Partial<Record<'pt' | 'es' | 'en' | 'fr', string[]>>;
+
   save_to_field?: string;
   skip_mode?: SkipMode;
   skip_field?: string;
