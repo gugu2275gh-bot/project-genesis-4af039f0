@@ -213,3 +213,114 @@ export async function sendYesNoQuickReply(
   }
   console.log('[QUICK_REPLY] Sent yes/no quick reply', { phone, language })
 }
+
+// -------- Quick Reply genérico por opções da etapa --------
+
+/** Limite do WhatsApp: 3 botões, título com no máximo 20 caracteres. */
+const MAX_BUTTONS = 3
+const MAX_TITLE = 20
+
+export const OPTION_PAYLOAD_PREFIX = 'OPT_'
+
+/** Normaliza os rótulos vindos da etapa para o formato aceito pelo WhatsApp. */
+export function sanitizeButtonTitles(options: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of options || []) {
+    const title = String(raw || '').trim().slice(0, MAX_TITLE)
+    if (!title) continue
+    const key = title.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(title)
+    if (out.length >= MAX_BUTTONS) break
+  }
+  return out
+}
+
+const optionsSidCache = new Map<string, string>()
+
+async function ensureOptionsContentSid(
+  language: ChatLanguage,
+  titles: string[],
+  auth: { accountSid: string; authToken: string },
+): Promise<string> {
+  const key = `${language}::${titles.join('|').toLowerCase()}`
+  const cached = optionsSidCache.get(key)
+  if (cached) return cached
+
+  const basicAuth = btoa(`${auth.accountSid}:${auth.authToken}`)
+  const payload = {
+    friendly_name: `flow_options_${language}_${Date.now()}`,
+    language: language === 'pt-BR' ? 'pt_BR' : language,
+    variables: { '1': titles[0] },
+    types: {
+      'twilio/quick-reply': {
+        body: '{{1}}',
+        actions: titles.map((title, i) => ({ title, id: `${OPTION_PAYLOAD_PREFIX}${i + 1}` })),
+      },
+    },
+  }
+
+  const resp = await fetch(CONTENT_API_URL, {
+    method: 'POST',
+    headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const data = await resp.json().catch(() => ({}))
+  if (!resp.ok || !(data as any).sid) {
+    throw new Error(`Twilio Content API create failed [${resp.status}]: ${JSON.stringify(data).slice(0, 400)}`)
+  }
+  const sid = String((data as any).sid)
+  optionsSidCache.set(key, sid)
+  console.log('[QUICK_REPLY] Created options Content resource', { language, sid, titles })
+  return sid
+}
+
+/**
+ * Envia a pergunta da etapa com os botões das opções configuradas.
+ * Lança em caso de erro para o chamador cair no envio de texto.
+ */
+export async function sendOptionsQuickReply(
+  phone: string,
+  question: string,
+  options: string[],
+  language: ChatLanguage,
+): Promise<void> {
+  const titles = sanitizeButtonTitles(options)
+  if (titles.length < 1) throw new Error('no button options')
+
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
+  const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY')
+  const TWILIO_ACCOUNT_SID = Deno.env.get('TWILIO_ACCOUNT_SID')
+  const TWILIO_AUTH_TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN')
+  if (!LOVABLE_API_KEY || !TWILIO_API_KEY) throw new Error('Twilio gateway credentials not configured')
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN) {
+    throw new Error('TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN required for Content API')
+  }
+
+  const contentSid = await ensureOptionsContentSid(language, titles, {
+    accountSid: TWILIO_ACCOUNT_SID,
+    authToken: TWILIO_AUTH_TOKEN,
+  })
+
+  const resp = await fetch(`${GATEWAY_URL}/Messages.json`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+      'X-Connection-Api-Key': TWILIO_API_KEY,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      To: `whatsapp:+${phone}`,
+      From: TWILIO_FROM_NUMBER,
+      ContentSid: contentSid,
+      ContentVariables: JSON.stringify({ '1': question }),
+    }),
+  })
+  if (!resp.ok) {
+    const body = await resp.text()
+    throw new Error(`Twilio Messages send (options quick-reply) failed [${resp.status}]: ${body.slice(0, 400)}`)
+  }
+  console.log('[QUICK_REPLY] Sent options quick reply', { phone, language, titles })
+}
