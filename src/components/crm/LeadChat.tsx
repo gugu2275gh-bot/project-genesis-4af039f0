@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff, ExternalLink, LayoutTemplate, Clock, AlertTriangle, Paperclip, X, Loader2 } from 'lucide-react';
+import { Send, MessageCircle, RefreshCw, CheckCircle2, Image, FileText, Mic, Video, Download, Bot, BotOff, ExternalLink, LayoutTemplate, Clock, AlertTriangle, Paperclip, X, Loader2, MousePointerClick } from 'lucide-react';
 import { ProxiedMedia } from './ProxiedMedia';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -408,11 +408,30 @@ export function LeadChat({ leadId, contactPhone, contactId, contactName }: LeadC
   };
 
   // Transform messages into chat format (each row can have client and/or AI message)
-  const chatMessages = messages.flatMap((msg) => {
+  const normalizeOpt = (v: string) =>
+    String(v || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  const chatMessages = messages.flatMap((msg, msgIndex) => {
     const items = [];
-    
+    const rawOptions = (msg as any).interactive_options;
+    const options: string[] = Array.isArray(rawOptions)
+      ? rawOptions.map((o: any) => String(o || '').trim()).filter(Boolean)
+      : [];
+
     // Client message
     if (msg.mensagem_cliente) {
+      // Última pergunta com botões enviada antes desta resposta
+      let prevOptions: string[] = [];
+      for (let i = msgIndex; i >= 0; i--) {
+        const prev = (messages[i] as any)?.interactive_options;
+        if (Array.isArray(prev) && prev.length) {
+          prevOptions = prev.map((o: any) => String(o || '').trim()).filter(Boolean);
+          break;
+        }
+      }
+      const answeredByButton = prevOptions.some(
+        (o) => normalizeOpt(o) === normalizeOpt(msg.mensagem_cliente || '')
+      );
       items.push({
         id: `${msg.id}-client`,
         type: 'client' as const,
@@ -424,6 +443,8 @@ export function LeadChat({ leadId, contactPhone, contactId, contactName }: LeadC
         media_url: msg.media_url,
         media_filename: msg.media_filename,
         media_mimetype: msg.media_mimetype,
+        interactiveOptions: [] as string[],
+        answeredByButton,
       });
     }
     
@@ -440,11 +461,14 @@ export function LeadChat({ leadId, contactPhone, contactId, contactName }: LeadC
         media_url: null,
         media_filename: null,
         media_mimetype: null,
+        interactiveOptions: options,
+        answeredByButton: false,
       });
     }
     
     return items;
   });
+
 
   return (
     <Card className="flex flex-col h-[500px]">
@@ -664,6 +688,32 @@ export function LeadChat({ leadId, contactPhone, contactId, contactName }: LeadC
                       }
                       return <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>;
                     })()}
+                    {/* Opções enviadas como botões no WhatsApp */}
+                    {msg.interactiveOptions && msg.interactiveOptions.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border/40 space-y-1">
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <MousePointerClick className="h-3 w-3" />
+                          <span>Enviado com botões</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {msg.interactiveOptions.map((opt, idx) => (
+                            <span
+                              key={idx}
+                              className="text-[11px] rounded-full border border-border bg-background/60 px-2 py-0.5 text-foreground"
+                            >
+                              {opt}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {msg.answeredByButton && (
+                      <div className="mt-1 flex items-center gap-1 text-[10px] text-green-700 dark:text-green-300">
+                        <MousePointerClick className="h-3 w-3" />
+                        <span>Resposta por botão</span>
+                      </div>
+                    )}
+
                     <p
                       className={cn(
                         'text-[10px] mt-1',

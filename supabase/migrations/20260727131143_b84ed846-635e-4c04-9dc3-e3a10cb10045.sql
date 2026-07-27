@@ -1,0 +1,1 @@
+ALTER TABLE public.mensagens_cliente ADD COLUMN IF NOT EXISTS interactive_options jsonb;
