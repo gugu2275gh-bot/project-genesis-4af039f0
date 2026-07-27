@@ -1,30 +1,34 @@
-## O que já está validado
+## Por que a pergunta saiu como texto aberto
 
-Rodei a suíte completa do motor de fluxo: **45 testes, 0 falhas** (`flow-engine`, `unexpected-answer`, `date-validation`, `flow-strict`, `language-detect`, `language-first-message`, `quick-reply-flow`), e o `deno check` passa nos três arquivos novos/alterados. As integrações estão ligadas de verdade:
+Confirmado no código:
 
-- `advanceFlowTurn` é chamado tanto em produção (`whatsapp-webhook/lib/visual-flow.ts`) quanto no simulador (`ai-agent-sandbox/index.ts`).
-- `FLOW_RETRY_PREFIX` está aplicado no webhook (evita silêncio por deduplicação do Twilio).
-- Watchdog compila e o cron `whatsapp-stall-watchdog-1m` continua apontando para a função.
+- `quickReplyOf()` em `supabase/functions/_shared/flow-engine.ts:109` só liga botões quando `validation.quick_reply === true` **E** `answer_type === 'SIM_NAO'`.
+- A etapa da imagem 1 está com **Tipo de resposta esperada = "Botões" (`BOTOES`)**, que não é `SIM_NAO` — logo `quick_reply` sai `false` e o webhook envia `quickReply: 'off'` (`whatsapp-webhook/index.ts:1698`).
+- Além disso, o único envio com botões existente é `sendYesNoQuickReply()` (`lib/quick-reply.ts`), que cria um Content Twilio fixo com dois botões **Sim/Não**. Não existe hoje envio de botões a partir das "Opções oferecidas ao cliente".
 
-## 2 pontos que ainda não estão garantidos (proponho corrigir)
+Ou seja: as opções digitadas no editor hoje servem só para validar/rotear a resposta digitada — nunca viram botões no WhatsApp.
 
-**1. Latência desnecessária em respostas válidas que "parecem pergunta"**
-Hoje a busca na base roda ANTES de saber se o fluxo vai avançar. Se o cliente responde algo válido mas com cara de pergunta (ex.: "posso ser o Pedro Oliveira?"), gastamos uma busca na base + espera antes de avançar. Ajuste: rodar a busca da "resposta e retomada" só depois de `advanceFlow` indicar `reasked = true`, mantendo o mesmo timeout curto.
+E sobre a imagem 2: o botão "Traduzir" existente atua nos **equivalentes aceitos do caminho** (entrada). Os **rótulos exibidos** (`validation.options`) não têm tradução — por isso apareceriam sempre em português.
 
-**2. Sobreposição de execuções do watchdog**
-O cron dispara a cada 1 minuto e cada execução agora varre 3 ciclos (~36s). Isso é seguro (o lead recuperado deixa de ser o "último inbound"), mas não há trava explícita. Ajuste: reduzir para 2 ciclos de 20s e registrar no log o número do ciclo, para o comportamento ficar previsível e auditável.
+## O que será implementado
 
-## Cobertura de teste que falta
+### 1. Envio real de botões por opções
+- Novo `sendOptionsQuickReply(phone, question, options, language)` em `lib/quick-reply.ts`: cria/reutiliza Content Twilio `twilio/quick-reply` com até 3 botões vindos das opções da etapa (títulos truncados em 20 caracteres, ids estáveis `OPT_1..OPT_3`), com cache por idioma+opções.
+- `sendOutgoingIdempotent` ganha `quickReply: 'options'` com a lista de rótulos; falha em qualquer ponto cai no texto atual (comportamento hoje).
+- `quickReplyOf()` passa a retornar botões também quando `answer_type === 'BOTOES'` (ou `SELECAO` com ≤3 opções e `quick_reply` marcado), expondo os rótulos junto do `outbound`.
+- Webhook: repassa os rótulos ao envio; se houver mais de 3 opções, mantém texto e lista numerada (aviso já existe no editor).
+- Recebimento: `parseMessage` mapeia `ButtonPayload = OPT_n` para o rótulo canônico da etapa, que segue para o roteamento normal por caminhos.
 
-Criar `supabase/functions/ai-agent-sandbox/answer-reask_test.ts` cobrindo:
-- `looksLikeQuestion` nos 4 idiomas (pt/es/en/fr), incluindo falsos positivos ("sim", "Pedro Oliveira").
-- `composeAnswerAndReask` juntando resposta + pergunta numa única bolha com a frase de ligação correta por idioma.
-- `advanceFlowTurn` com LLM/KB simulados: resposta fora do tema → uma única mensagem contendo resposta + repergunta, sem sair da etapa.
-- Timeout: LLM que nunca responde não pode segurar o turno (deve seguir com o fallback).
-- Data aproximada aceita na 1ª falha e `max_reasks` padrão 1 escalando corretamente.
+### 2. Tradução automática dos rótulos das opções
+- `StepValidation` ganha `options_i18n?: { pt?: string[]; es?: string[]; en?: string[]; fr?: string[] }`.
+- No `StepRoutingEditor`, ao adicionar/editar opções, um botão "Traduzir" (e tradução automática ao salvar a etapa, igual às mensagens) gera os rótulos nos 4 idiomas via `useAgentTranslate`, exibidos em campos por idioma.
+- No runtime (`flow-engine.ts`), os rótulos exibidos/enviados como botões usam o idioma travado da conversa, com fallback para o texto original.
+- Os equivalentes aceitos dos caminhos continuam funcionando e passam a incluir automaticamente os rótulos traduzidos, para que a resposta digitada em qualquer idioma case com o caminho certo.
 
-## Detalhes técnicos
+### 3. Validação
+- Testes em `supabase/functions/ai-agent-sandbox/`: etapa `BOTOES` gera outbound com rótulos, limite de 3, fallback para texto, matching de `OPT_n` e de rótulo traduzido digitado.
+- Redeploy de `whatsapp-webhook` e `ai-agent-sandbox`.
 
-- `_shared/flow-turn.ts`: mover o par `kbSearch`/`answerAside` para depois de `advanceFlow`, preservando o `Promise.all` do par `kb_check`/`ack_ai`.
-- `whatsapp-stall-watchdog/index.ts`: `SWEEP_CYCLES = 2`, `SWEEP_INTERVAL_MS = 20_000`, log por ciclo.
-- Após os ajustes: rodar a suíte de novo e redeployar `whatsapp-webhook`, `ai-agent-sandbox` e `whatsapp-stall-watchdog`.
+## Observações técnicas
+- Botões só funcionam dentro da janela de 24h; fora dela o fallback de template/texto atual permanece.
+- WhatsApp limita 3 botões de resposta rápida e 20 caracteres por título — acima disso a etapa é enviada como lista numerada em texto.
