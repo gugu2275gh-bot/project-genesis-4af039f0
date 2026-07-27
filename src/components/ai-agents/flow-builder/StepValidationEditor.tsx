@@ -21,6 +21,8 @@ export function StepValidationEditor({ validation, stepCodes, answerType, onChan
   const [showRaw, setShowRaw] = useState(false);
   const [rawDraft, setRawDraft] = useState<string | null>(null);
   const isYesNo = String(answerType || '').toUpperCase() === 'SIM_NAO';
+  const isName = String(answerType || '').toUpperCase() === 'NOME';
+
 
   return (
     <div className="space-y-4">
