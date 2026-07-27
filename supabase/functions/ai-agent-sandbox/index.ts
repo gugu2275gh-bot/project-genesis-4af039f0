@@ -7,6 +7,7 @@ import { advanceFlow, findStartStep, mergeFlows, startFlow, startFlowWithPrefill
 import { dropOpeningMessages, normalizeIntakeConfig, prependIntakeGreeting, renderAckMessage, renderIntakeGreeting, runIntake } from '../_shared/flow-intake.ts'
 import { createIntakeLLM } from '../_shared/intake-llm.ts'
 import { advanceFlowTurn } from '../_shared/flow-turn.ts'
+import { localizeTurn } from '../_shared/flow-i18n.ts'
 import { searchKnowledgeBase } from '../_shared/kb-search.ts'
 import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
 
