@@ -173,14 +173,14 @@ Deno.test('Saudação padrão é usada quando nada é aproveitado', () => {
   assert(renderIntakeGreeting(cfg, 'pt-BR', { 'contact.full_name': 'Fred' }).includes('Fred'))
 })
 
-Deno.test('Reconhecimento humano: só em respostas abertas', () => {
+Deno.test('Reconhecimento humano: desligado por padrão em todas as etapas', () => {
   const ack = renderAckMessage(DEFAULT_INTAKE_CONFIG, 'pt-BR')
   assert(ack.length > 0)
 
-  // Etapa aberta (interesse) → ack aparece antes da próxima pergunta.
+  // Etapa aberta (interesse) → sem ack, pois o padrão agora é desligado.
   const state = { current_step: 'interesse', answers: { nome: 'Fred Souza', local: 'nao' }, visited: ['inicio', 'nome', 'local'], lang: 'pt-BR' }
   const open = advanceFlow(STEPS, state, 'quero estudar', 'pt-BR', { ack })
-  assertEquals(open.messages[0], ack)
+  assert(open.messages[0] !== ack)
 
   // Etapa Sim/Não → sem ack.
   const yesNoState = { current_step: 'local', answers: { nome: 'Fred Souza' }, visited: ['inicio', 'nome'], lang: 'pt-BR' }
@@ -191,6 +191,7 @@ Deno.test('Reconhecimento humano: só em respostas abertas', () => {
   const noAck = advanceFlow(STEPS, state, 'quero estudar', 'pt-BR')
   assertEquals(noAck.messages[0], 'Qual seu e-mail?')
 })
+
 
 Deno.test('ack_enabled por etapa sobrepõe o padrão', () => {
   const steps = STEPS.map((s) =>

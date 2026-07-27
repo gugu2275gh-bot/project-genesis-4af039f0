@@ -195,19 +195,18 @@ export function quickReplyOf(step: FlowStep): boolean {
 }
 
 
-/** Tipos de resposta considerados "abertos" (merecem reconhecimento humano). */
-const OPEN_ANSWER_TYPES = ['', 'TEXTO', 'TEXTO_LIVRE', 'NOME', 'EMAIL', 'NUMERO', 'DATA']
 
 /**
  * Se a etapa deve enviar uma frase curta de reconhecimento humano antes da
- * próxima pergunta. Padrão: ligado para respostas abertas, desligado para
- * Sim/Não e listas de opções. `validation.ack_enabled` sobrepõe o padrão.
+ * próxima pergunta. Padrão: DESLIGADO em todas as etapas.
+ * `validation.ack_enabled` sobrepõe o padrão.
  */
 export function ackEnabledFor(step: FlowStep): boolean {
   const v = (step?.validation || {}) as Record<string, unknown>
   if (typeof v.ack_enabled === 'boolean') return v.ack_enabled
-  return OPEN_ANSWER_TYPES.includes(String(step?.answer_type || '').toUpperCase())
+  return false
 }
+
 
 /** Insere uma mensagem no início do turno (usada pela frase de reconhecimento). */
 export function prependMessage(turn: FlowTurnResult, text: string, stepCode = 'ack'): FlowTurnResult {
