@@ -905,8 +905,9 @@ export function advanceFlow(
     // Classifica o desvio para escolher a tratativa configurada na etapa.
     const kind: DeviationKind =
       result.reason === 'empty' ? 'off_topic'
-        : result.reason === 'no_yesno' ? 'no_match'
+        : (result.reason === 'no_yesno' || result.reason === 'no_option_match') ? 'no_match'
           : 'invalid_format'
+
     const rule = ruleFor(cfg, kind)
 
     // Data aproximada ("Maio de 2026", "03/2024", "em 2023"): aceita já na
