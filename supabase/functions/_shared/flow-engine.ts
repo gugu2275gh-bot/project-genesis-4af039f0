@@ -521,8 +521,19 @@ export function validateAnswer(step: FlowStep, raw: string): { valid: boolean; v
     }
     case 'NUMERO':
       return NUMBER.test(text) ? { valid: true, value: text } : { valid: false, reason: 'invalid_number' }
+    case 'BOTOES':
+    case 'SELECAO':
+    case 'MULTIPLA_ESCOLHA': {
+      // Rótulo clicado/digitado em qualquer idioma volta para a opção base,
+      // que é o valor comparado pelos caminhos do fluxo.
+      const canonical = canonicalOption(step, text)
+      if (canonical) return { valid: true, value: canonical }
+      const hasOptions = optionsOf(step).length > 0
+      return hasOptions ? { valid: false, reason: 'no_option_match' } : { valid: true, value: text }
+    }
     default:
       return { valid: true, value: text }
+
   }
 }
 
