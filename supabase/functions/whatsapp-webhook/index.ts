@@ -1692,15 +1692,16 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
             const flowSkipReasons: string[] = []
             for (let i = 0; i < flowOutbound.length; i++) {
               const part = flowOutbound[i].text
+              const stepButtons = flowOutbound[i].quick_reply
+                ? (buttonsForStep(flowPlan, flowOutbound[i].step_code, flowLang as any) || [])
+                : []
               let sendRes = await sendOutgoingIdempotent(supabase, {
                 phone: phoneNumber,
                 leadId: lead.id,
                 body: part,
                 language: flowLang as ChatLanguage,
                 quickReply: flowOutbound[i].quick_reply ? 'on' : 'off',
-                buttons: flowOutbound[i].quick_reply
-                  ? buttonsForStep(flowPlan, flowOutbound[i].step_code, flowLang as any)
-                  : undefined,
+                buttons: stepButtons.length ? stepButtons : undefined,
               })
 
               // Descarte por deduplicação: o cliente ficaria sem NENHUMA resposta.
@@ -1713,9 +1714,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
                   body: `${prefix} ${part}`,
                   language: flowLang as ChatLanguage,
                   quickReply: flowOutbound[i].quick_reply ? 'on' : 'off',
-                  buttons: flowOutbound[i].quick_reply
-                    ? buttonsForStep(flowPlan, flowOutbound[i].step_code, flowLang as any)
-                    : undefined,
+                  buttons: stepButtons.length ? stepButtons : undefined,
                 })
                 if (sendRes.sent) console.log('[VISUAL_FLOW] reenvio com variação após dedup')
               }
@@ -1728,7 +1727,13 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
                   phone_id: parseInt(phoneNumber),
                   mensagem_IA: part,
                   origem: 'IA',
+                  interactive_options: flowOutbound[i].quick_reply
+                    ? (stepButtons.length
+                        ? stepButtons
+                        : [YES_NO_LABELS[flowLang as ChatLanguage]?.yes, YES_NO_LABELS[flowLang as ChatLanguage]?.no].filter(Boolean))
+                    : null,
                 }), 'persist_msg')
+
                 fireAndForget(supabase.from('interactions').insert({
                   lead_id: lead.id,
                   contact_id: contact.id,
