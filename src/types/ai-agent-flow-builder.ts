@@ -341,6 +341,9 @@ export interface StepValidation {
   options?: string[];
   /** Rótulos das opções traduzidos por idioma (mesma ordem de `options`). */
   options_i18n?: Partial<Record<'pt' | 'es' | 'en' | 'fr', string[]>>;
+  /** Só para respostas do tipo Nome: exigir nome completo ou aceitar nome simples. */
+  name_mode?: 'COMPLETO' | 'SIMPLES';
+
 
   save_to_field?: string;
   skip_mode?: SkipMode;

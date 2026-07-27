@@ -509,8 +509,12 @@ export function validateAnswer(step: FlowStep, raw: string): { valid: boolean; v
       return EMAIL.test(text) ? { valid: true, value: text } : { valid: false, reason: 'invalid_email' }
     case 'NOME': {
       const words = text.split(/\s+/).filter((w) => /[a-zà-ÿ]{2,}/i.test(w))
-      return words.length >= 2 ? { valid: true, value: text } : { valid: false, reason: 'not_full_name' }
+      // `name_mode: 'SIMPLES'` aceita só o primeiro nome; padrão exige nome + sobrenome.
+      const simple = String((step?.validation as any)?.name_mode || 'COMPLETO').toUpperCase() === 'SIMPLES'
+      const min = simple ? 1 : 2
+      return words.length >= min ? { valid: true, value: text } : { valid: false, reason: 'not_full_name' }
     }
+
     case 'SIM_NAO':
       if (YES.test(text)) return { valid: true, value: 'sim' }
       if (NO.test(text)) return { valid: true, value: 'nao' }
