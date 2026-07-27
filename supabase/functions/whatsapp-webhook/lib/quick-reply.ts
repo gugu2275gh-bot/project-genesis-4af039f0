@@ -99,17 +99,6 @@ function cacheKey(language: ChatLanguage, question: string): string {
   return `${language}::${normalizeForLanguageChecks(question).slice(0, 200)}`
 }
 
-function envSidFor(language: ChatLanguage): string | undefined {
-  const map: Record<ChatLanguage, string> = {
-    'pt-BR': 'TWILIO_YESNO_CONTENT_SID_PT_BR',
-    'es':    'TWILIO_YESNO_CONTENT_SID_ES',
-    'en':    'TWILIO_YESNO_CONTENT_SID_EN',
-    'fr':    'TWILIO_YESNO_CONTENT_SID_FR',
-  }
-  const v = Deno.env.get(map[language])
-  return v && v.trim().length > 0 ? v.trim() : undefined
-}
-
 /**
  * Cria (ou reutiliza) um Content resource twilio/quick-reply com Body dinâmico
  * ({{1}} = pergunta) e 2 botões [Sim/YES], [Não/NO] no idioma alvo.
@@ -122,9 +111,6 @@ async function ensureYesNoContentSid(
   question: string,
   auth: { accountSid: string; authToken: string },
 ): Promise<string> {
-  const envSid = envSidFor(language)
-  if (envSid) return envSid
-
   const key = cacheKey(language, question)
   const cached = contentSidCache.get(key)
   if (cached) return cached
@@ -135,7 +121,7 @@ async function ensureYesNoContentSid(
   const payload = {
     friendly_name: `yesno_quickreply_${language}_${Date.now()}`,
     language: language === 'pt-BR' ? 'pt_BR' : language,
-    variables: { '1': labels.yes },
+    variables: { '1': question },
     types: {
       'twilio/quick-reply': {
         body: '{{1}}',

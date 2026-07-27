@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.177.0/testing/asserts.ts'
-import { startFlow, advanceFlow, quickReplyOf } from '../_shared/flow-engine.ts'
+import { startFlow, advanceFlow, quickReplyOf, buttonsOf } from '../_shared/flow-engine.ts'
 import { isBinaryYesNoQuestion } from '../whatsapp-webhook/lib/quick-reply.ts'
 
 const steps = [
@@ -33,6 +33,13 @@ Deno.test('etapa com quick_reply ligado → botões', () => {
   const withQr = [{ ...steps[0], validation: { step_kind: 'PERGUNTA', quick_reply: true } }, steps[1]]
   const turn = startFlow(withQr as any, 'es')
   assertEquals(turn.outbound[0].quick_reply, true)
+})
+
+Deno.test('etapa SIM_NAO com quick_reply ligado → rótulos no idioma travado', () => {
+  const withQr = { ...steps[0], validation: { step_kind: 'PERGUNTA', quick_reply: true } }
+  assertEquals(buttonsOf(withQr as any, 'es'), ['Sí', 'No'])
+  assertEquals(buttonsOf(withQr as any, 'en'), ['Yes', 'No'])
+  assertEquals(buttonsOf(withQr as any, 'fr'), ['Oui', 'Non'])
 })
 
 Deno.test('quick_reply ignorado quando a resposta não é binária', () => {

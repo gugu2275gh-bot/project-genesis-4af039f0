@@ -1,33 +1,20 @@
-## Objetivo
+## Plano
 
-Nas etapas cujo tipo de resposta é **Nome**, permitir escolher entre:
-- **Nome completo obrigatório** (comportamento atual: exige 2+ palavras)
-- **Aceitar nome simples** (só o primeiro nome já vale)
+1. **Corrigir a origem do vazamento de idioma nos botões**
+   - Remover a reutilização de `TWILIO_YESNO_CONTENT_SID_*` para botões Sim/Não, porque esses templates podem ter sido criados antes da localização e manter títulos em português.
+   - Fazer o envio do fluxo sempre criar/reutilizar Content API por idioma + pergunta + títulos efetivos.
 
-A escolha também vale para a análise da **primeira mensagem do cliente**: se o nome extraído já satisfaz a regra da etapa, a pergunta do nome não é repetida.
+2. **Forçar botões do fluxo a usarem os rótulos da etapa/idioma**
+   - Quando `quickReply='on'`, enviar os botões recebidos de `buttonsForStep(...)`.
+   - Se for uma etapa `SIM_NAO` sem lista explícita, cair nos rótulos do idioma travado: `Sí/No`, `Yes/No`, `Oui/Non`, `Sim/Não`.
 
-## Como fica no editor
+3. **Preservar fallback legado fora do fluxo visual**
+   - Manter a heurística `auto` apenas para casos antigos fora do fluxo.
+   - Dentro do fluxo visual, a configuração da etapa continua sendo a única autoridade para decidir se há botões.
 
-Na aba de validação da etapa (visível apenas quando "Tipo de resposta esperada" = Nome), um seletor:
-- "Exigir nome completo (nome e sobrenome)" — padrão, mantém os fluxos atuais
-- "Aceitar nome simples (só o primeiro nome)"
+4. **Validar com teste automatizado**
+   - Adicionar teste garantindo que etapa `SIM_NAO` em espanhol gera `Sí/No`.
+   - Rodar os testes das Edge Functions relacionados a quick replies/fluxo.
 
-## Mudanças técnicas
-
-1. `src/types/ai-agent-flow-builder.ts`
-   - Novo campo em `StepValidation`: `name_mode?: 'COMPLETO' | 'SIMPLES'` (ausente = `COMPLETO`).
-
-2. `src/components/ai-agents/flow-builder/StepValidationEditor.tsx`
-   - Novo `Select` renderizado só quando `answerType === 'NOME'`, gravando `name_mode`.
-
-3. `supabase/functions/_shared/flow-engine.ts`
-   - `validateAnswer`, caso `NOME`: com `name_mode === 'SIMPLES'`, aceitar 1 palavra alfabética (≥2 letras); caso contrário manter a exigência de 2+ palavras.
-   - Prefill da primeira mensagem (`startFlowWithPrefill`): só considerar a etapa de nome já respondida se o valor extraído passar na mesma regra da etapa — assim, com "nome simples", "Sou o Pedro" já pula a pergunta; com "nome completo", um primeiro nome isolado mantém a pergunta.
-
-4. Testes
-   - Casos novos em `supabase/functions/_shared/flow_intake_test.ts` / `flow_turn_test.ts`: nome simples aceito, nome simples rejeitado no modo completo, e pular/não pular a etapa via prefill.
-
-## Observações
-
-- Nada muda em fluxos existentes: sem o campo, o comportamento permanece "nome completo".
-- Redeploy das funções `whatsapp-webhook` e `ai-agent-sandbox` após a alteração do motor.
+5. **Publicar backend**
+   - Após aprovação, aplicar a correção e redeployar `whatsapp-webhook` para produção.
