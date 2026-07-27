@@ -1,34 +1,33 @@
-## Por que a pergunta saiu como texto aberto
+## Objetivo
 
-Confirmado no código:
+Nas etapas cujo tipo de resposta é **Nome**, permitir escolher entre:
+- **Nome completo obrigatório** (comportamento atual: exige 2+ palavras)
+- **Aceitar nome simples** (só o primeiro nome já vale)
 
-- `quickReplyOf()` em `supabase/functions/_shared/flow-engine.ts:109` só liga botões quando `validation.quick_reply === true` **E** `answer_type === 'SIM_NAO'`.
-- A etapa da imagem 1 está com **Tipo de resposta esperada = "Botões" (`BOTOES`)**, que não é `SIM_NAO` — logo `quick_reply` sai `false` e o webhook envia `quickReply: 'off'` (`whatsapp-webhook/index.ts:1698`).
-- Além disso, o único envio com botões existente é `sendYesNoQuickReply()` (`lib/quick-reply.ts`), que cria um Content Twilio fixo com dois botões **Sim/Não**. Não existe hoje envio de botões a partir das "Opções oferecidas ao cliente".
+A escolha também vale para a análise da **primeira mensagem do cliente**: se o nome extraído já satisfaz a regra da etapa, a pergunta do nome não é repetida.
 
-Ou seja: as opções digitadas no editor hoje servem só para validar/rotear a resposta digitada — nunca viram botões no WhatsApp.
+## Como fica no editor
 
-E sobre a imagem 2: o botão "Traduzir" existente atua nos **equivalentes aceitos do caminho** (entrada). Os **rótulos exibidos** (`validation.options`) não têm tradução — por isso apareceriam sempre em português.
+Na aba de validação da etapa (visível apenas quando "Tipo de resposta esperada" = Nome), um seletor:
+- "Exigir nome completo (nome e sobrenome)" — padrão, mantém os fluxos atuais
+- "Aceitar nome simples (só o primeiro nome)"
 
-## O que será implementado
+## Mudanças técnicas
 
-### 1. Envio real de botões por opções
-- Novo `sendOptionsQuickReply(phone, question, options, language)` em `lib/quick-reply.ts`: cria/reutiliza Content Twilio `twilio/quick-reply` com até 3 botões vindos das opções da etapa (títulos truncados em 20 caracteres, ids estáveis `OPT_1..OPT_3`), com cache por idioma+opções.
-- `sendOutgoingIdempotent` ganha `quickReply: 'options'` com a lista de rótulos; falha em qualquer ponto cai no texto atual (comportamento hoje).
-- `quickReplyOf()` passa a retornar botões também quando `answer_type === 'BOTOES'` (ou `SELECAO` com ≤3 opções e `quick_reply` marcado), expondo os rótulos junto do `outbound`.
-- Webhook: repassa os rótulos ao envio; se houver mais de 3 opções, mantém texto e lista numerada (aviso já existe no editor).
-- Recebimento: `parseMessage` mapeia `ButtonPayload = OPT_n` para o rótulo canônico da etapa, que segue para o roteamento normal por caminhos.
+1. `src/types/ai-agent-flow-builder.ts`
+   - Novo campo em `StepValidation`: `name_mode?: 'COMPLETO' | 'SIMPLES'` (ausente = `COMPLETO`).
 
-### 2. Tradução automática dos rótulos das opções
-- `StepValidation` ganha `options_i18n?: { pt?: string[]; es?: string[]; en?: string[]; fr?: string[] }`.
-- No `StepRoutingEditor`, ao adicionar/editar opções, um botão "Traduzir" (e tradução automática ao salvar a etapa, igual às mensagens) gera os rótulos nos 4 idiomas via `useAgentTranslate`, exibidos em campos por idioma.
-- No runtime (`flow-engine.ts`), os rótulos exibidos/enviados como botões usam o idioma travado da conversa, com fallback para o texto original.
-- Os equivalentes aceitos dos caminhos continuam funcionando e passam a incluir automaticamente os rótulos traduzidos, para que a resposta digitada em qualquer idioma case com o caminho certo.
+2. `src/components/ai-agents/flow-builder/StepValidationEditor.tsx`
+   - Novo `Select` renderizado só quando `answerType === 'NOME'`, gravando `name_mode`.
 
-### 3. Validação
-- Testes em `supabase/functions/ai-agent-sandbox/`: etapa `BOTOES` gera outbound com rótulos, limite de 3, fallback para texto, matching de `OPT_n` e de rótulo traduzido digitado.
-- Redeploy de `whatsapp-webhook` e `ai-agent-sandbox`.
+3. `supabase/functions/_shared/flow-engine.ts`
+   - `validateAnswer`, caso `NOME`: com `name_mode === 'SIMPLES'`, aceitar 1 palavra alfabética (≥2 letras); caso contrário manter a exigência de 2+ palavras.
+   - Prefill da primeira mensagem (`startFlowWithPrefill`): só considerar a etapa de nome já respondida se o valor extraído passar na mesma regra da etapa — assim, com "nome simples", "Sou o Pedro" já pula a pergunta; com "nome completo", um primeiro nome isolado mantém a pergunta.
 
-## Observações técnicas
-- Botões só funcionam dentro da janela de 24h; fora dela o fallback de template/texto atual permanece.
-- WhatsApp limita 3 botões de resposta rápida e 20 caracteres por título — acima disso a etapa é enviada como lista numerada em texto.
+4. Testes
+   - Casos novos em `supabase/functions/_shared/flow_intake_test.ts` / `flow_turn_test.ts`: nome simples aceito, nome simples rejeitado no modo completo, e pular/não pular a etapa via prefill.
+
+## Observações
+
+- Nada muda em fluxos existentes: sem o campo, o comportamento permanece "nome completo".
+- Redeploy das funções `whatsapp-webhook` e `ai-agent-sandbox` após a alteração do motor.
