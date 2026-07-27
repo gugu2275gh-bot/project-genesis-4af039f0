@@ -2228,6 +2228,7 @@ export type Database = {
           created_at: string
           id: number
           id_lead: string | null
+          interactive_options: Json | null
           media_filename: string | null
           media_mimetype: string | null
           media_type: string | null
@@ -2242,6 +2243,7 @@ export type Database = {
           created_at?: string
           id?: number
           id_lead?: string | null
+          interactive_options?: Json | null
           media_filename?: string | null
           media_mimetype?: string | null
           media_type?: string | null
@@ -2256,6 +2258,7 @@ export type Database = {
           created_at?: string
           id?: number
           id_lead?: string | null
+          interactive_options?: Json | null
           media_filename?: string | null
           media_mimetype?: string | null
           media_type?: string | null
