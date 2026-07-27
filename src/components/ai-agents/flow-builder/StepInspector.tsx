@@ -150,7 +150,16 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
               <Textarea rows={2} value={step.description || ''} onChange={(e) => onChange({ description: e.target.value })} />
             </div>
 
+            {missingLangs.length > 0 && (
+              <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-700">
+                Faltam traduções para: <strong>{missingLangs.join(', ')}</strong>. Use "Traduzir para
+                os outros idiomas" em cada texto. Enquanto isso, o agente traduz automaticamente na
+                hora do envio (pode atrasar um pouco a resposta).
+              </p>
+            )}
+
             {Array.from({ length: total }).map((_, i) => (
+
               <div key={i} className="space-y-2 rounded-md border p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-muted-foreground">
