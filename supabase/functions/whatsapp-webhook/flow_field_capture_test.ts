@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.177.0/testing/asserts.ts'
-import { inferFieldMapping, advanceFlow, startFlow, type FlowStep } from '../_shared/flow-engine.ts'
+import { inferFieldMapping, advanceFlow, startFlow, startFlowWithPrefill, type FlowStep } from '../_shared/flow-engine.ts'
 
 const step = (over: Partial<FlowStep>): FlowStep => ({
   step_code: 'x',
@@ -43,4 +43,34 @@ Deno.test('resposta válida é capturada com o destino inferido', () => {
   assertEquals(turn.captured.length, 1)
   assertEquals(turn.captured[0].field, 'contact.full_name')
   assertEquals(turn.captured[0].value, 'Maria Silva Santos')
+})
+
+Deno.test('nome simples é aceito quando name_mode = SIMPLES', () => {
+  const steps: FlowStep[] = [
+    step({ step_code: 'inicio', validation: { step_kind: 'INICIO' }, next_step_code: 'nome' }),
+    step({ step_code: 'nome', answer_type: 'NOME', validation: { name_mode: 'SIMPLES' }, next_step_code: null }),
+  ]
+  const first = startFlow(steps, 'pt-BR')
+  const turn = advanceFlow(steps, first.state, 'Pedro', 'pt-BR')
+  assertEquals(turn.captured[0]?.value, 'Pedro')
+})
+
+Deno.test('nome simples é rejeitado no modo completo (padrão)', () => {
+  const steps: FlowStep[] = [
+    step({ step_code: 'inicio', validation: { step_kind: 'INICIO' }, next_step_code: 'nome' }),
+    step({ step_code: 'nome', answer_type: 'NOME', next_step_code: null }),
+  ]
+  const first = startFlow(steps, 'pt-BR')
+  const turn = advanceFlow(steps, first.state, 'Pedro', 'pt-BR')
+  assertEquals(turn.captured.length, 0)
+})
+
+Deno.test('prefill pula a etapa de nome conforme o modo', () => {
+  const mk = (mode?: string): FlowStep[] => [
+    step({ step_code: 'inicio', validation: { step_kind: 'INICIO' }, next_step_code: 'nome' }),
+    step({ step_code: 'nome', answer_type: 'NOME', validation: mode ? { name_mode: mode } : {}, next_step_code: 'fim' }),
+    step({ step_code: 'fim', answer_type: 'TEXTO_LIVRE', next_step_code: null }),
+  ]
+  assertEquals(startFlowWithPrefill(mk('SIMPLES'), 'pt-BR', { nome: 'Pedro' }).state.current_step, 'fim')
+  assertEquals(startFlowWithPrefill(mk(), 'pt-BR', { nome: 'Pedro' }).state.current_step, 'nome')
 })
