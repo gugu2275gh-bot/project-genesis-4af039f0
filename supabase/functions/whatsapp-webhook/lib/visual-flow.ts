@@ -518,8 +518,24 @@ export function expectsShortAnswer(plan: VisualFlowPlan, stepCode: unknown): boo
     const step = plan.steps.find((s: any) => s?.step_code === stepCode)
     if (!step) return false
     const type = String((step as any).answer_type || '').toUpperCase()
-    return ['SIM_NAO', 'OPCOES', 'OPCAO', 'DATA', 'NUMERO', 'IDADE'].includes(type)
+    return ['SIM_NAO', 'OPCOES', 'OPCAO', 'BOTOES', 'SELECAO', 'DATA', 'NUMERO', 'IDADE'].includes(type)
   } catch {
     return false
   }
 }
+
+/**
+ * Rótulos dos botões que a etapa deve oferecer, já traduzidos para o idioma
+ * da conversa. Vazio quando a etapa não usa botões.
+ */
+export function buttonsForStep(plan: VisualFlowPlan, stepCode: unknown, lang: FlowLang): string[] {
+  try {
+    if (!plan?.enabled || !stepCode) return []
+    const step = plan.steps.find((s: any) => s?.step_code === stepCode)
+    if (!step) return []
+    return buttonsOf(step, lang)
+  } catch {
+    return []
+  }
+}
+
