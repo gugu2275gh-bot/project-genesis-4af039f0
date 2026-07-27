@@ -34,6 +34,26 @@ export function StepValidationEditor({ validation, stepCodes, answerType, onChan
         />
       </div>
 
+      {isName && (
+        <div className="space-y-2 rounded-md border p-3">
+          <Label>Como aceitar o nome</Label>
+          <Select
+            value={validation.name_mode || 'COMPLETO'}
+            onValueChange={(v) => onChange({ name_mode: v as 'COMPLETO' | 'SIMPLES' })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="COMPLETO">Exigir nome completo (nome e sobrenome)</SelectItem>
+              <SelectItem value="SIMPLES">Aceitar nome simples (só o primeiro nome)</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Vale também para a análise da primeira mensagem: se o nome capturado já atender a esta
+            regra, a pergunta não é repetida.
+          </p>
+        </div>
+      )}
+
       {isYesNo && (
         <div className="flex items-center justify-between rounded-md border p-3">
           <div>
