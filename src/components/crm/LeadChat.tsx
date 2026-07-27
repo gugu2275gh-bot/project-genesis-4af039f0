@@ -688,6 +688,32 @@ export function LeadChat({ leadId, contactPhone, contactId, contactName }: LeadC
                       }
                       return <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>;
                     })()}
+                    {/* Opções enviadas como botões no WhatsApp */}
+                    {msg.interactiveOptions && msg.interactiveOptions.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border/40 space-y-1">
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <MousePointerClick className="h-3 w-3" />
+                          <span>Enviado com botões</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {msg.interactiveOptions.map((opt, idx) => (
+                            <span
+                              key={idx}
+                              className="text-[11px] rounded-full border border-border bg-background/60 px-2 py-0.5 text-foreground"
+                            >
+                              {opt}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {msg.answeredByButton && (
+                      <div className="mt-1 flex items-center gap-1 text-[10px] text-green-700 dark:text-green-300">
+                        <MousePointerClick className="h-3 w-3" />
+                        <span>Resposta por botão</span>
+                      </div>
+                    )}
+
                     <p
                       className={cn(
                         'text-[10px] mt-1',
