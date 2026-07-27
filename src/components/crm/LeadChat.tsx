@@ -408,11 +408,30 @@ export function LeadChat({ leadId, contactPhone, contactId, contactName }: LeadC
   };
 
   // Transform messages into chat format (each row can have client and/or AI message)
-  const chatMessages = messages.flatMap((msg) => {
+  const normalizeOpt = (v: string) =>
+    String(v || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  const chatMessages = messages.flatMap((msg, msgIndex) => {
     const items = [];
-    
+    const rawOptions = (msg as any).interactive_options;
+    const options: string[] = Array.isArray(rawOptions)
+      ? rawOptions.map((o: any) => String(o || '').trim()).filter(Boolean)
+      : [];
+
     // Client message
     if (msg.mensagem_cliente) {
+      // Última pergunta com botões enviada antes desta resposta
+      let prevOptions: string[] = [];
+      for (let i = msgIndex; i >= 0; i--) {
+        const prev = (messages[i] as any)?.interactive_options;
+        if (Array.isArray(prev) && prev.length) {
+          prevOptions = prev.map((o: any) => String(o || '').trim()).filter(Boolean);
+          break;
+        }
+      }
+      const answeredByButton = prevOptions.some(
+        (o) => normalizeOpt(o) === normalizeOpt(msg.mensagem_cliente || '')
+      );
       items.push({
         id: `${msg.id}-client`,
         type: 'client' as const,
@@ -424,6 +443,8 @@ export function LeadChat({ leadId, contactPhone, contactId, contactName }: LeadC
         media_url: msg.media_url,
         media_filename: msg.media_filename,
         media_mimetype: msg.media_mimetype,
+        interactiveOptions: [] as string[],
+        answeredByButton,
       });
     }
     
@@ -440,11 +461,14 @@ export function LeadChat({ leadId, contactPhone, contactId, contactName }: LeadC
         media_url: null,
         media_filename: null,
         media_mimetype: null,
+        interactiveOptions: options,
+        answeredByButton: false,
       });
     }
     
     return items;
   });
+
 
   return (
     <Card className="flex flex-col h-[500px]">
