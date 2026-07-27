@@ -1,7 +1,7 @@
 // @ts-nocheck
 // Wave 3b step 7: Twilio gateway + media placeholder
 import type { ChatLanguage } from './language.ts'
-import { isBinaryYesNoQuestion, sendYesNoQuickReply, sendOptionsQuickReply } from './quick-reply.ts'
+import { isBinaryYesNoQuestion, sendYesNoQuickReply, sendOptionsQuickReply, YES_NO_LABELS } from './quick-reply.ts'
 
 export function getMediaPlaceholder(mediaType: string, language: ChatLanguage): string {
   const mediaNames: Record<ChatLanguage, Record<string, string>> = {
@@ -176,8 +176,14 @@ export async function sendOutgoingIdempotent(
   if (language && wantsQuickReply) {
     try {
       const text = sanitizeOutgoingText(body)
-      if (buttons.length) await sendOptionsQuickReply(phone, text, buttons, language)
-      else await sendYesNoQuickReply(phone, text, language)
+      if (quickReplyMode === 'on') {
+        const flowButtons = buttons.length
+          ? buttons
+          : [YES_NO_LABELS[language]?.yes, YES_NO_LABELS[language]?.no].filter(Boolean)
+        await sendOptionsQuickReply(phone, text, flowButtons, language)
+      } else {
+        await sendYesNoQuickReply(phone, text, language)
+      }
       return { sent: true }
     } catch (qrErr) {
       console.warn('[QUICK_REPLY] falhou, caindo em texto:', qrErr instanceof Error ? qrErr.message : qrErr)
