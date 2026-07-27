@@ -52,6 +52,24 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
   );
   const kind = stepKindOf(step);
   const total = messageCount(messages);
+  /** Idiomas sem tradução gravada (mensagens ou repergunta). */
+  const missingLangs = useMemo(() => {
+    const labels: Record<string, string> = { es: 'Espanhol', en: 'Inglês', fr: 'Francês' };
+    const hasAll = (bag: any, lang: string) => {
+      const v = bag?.[lang];
+      return Array.isArray(v) ? v.some((t) => String(t || '').trim()) : !!String(v || '').trim();
+    };
+    const reask = (step.reask_messages || {}) as any;
+    const needsReask = hasAll(reask, 'pt-BR');
+    return Object.keys(labels).filter((lang) => {
+      const msgOk = Array.from({ length: messageCount(messages) }).every((_, i) =>
+        String((messageAt(messages, i) as any)?.[lang] || '').trim(),
+      );
+      const reaskOk = !needsReask || hasAll(reask, lang);
+      return !(msgOk && reaskOk);
+    }).map((l) => labels[l]);
+  }, [messages, step.reask_messages]);
+
 
   const updateMessages = (next: ReturnType<typeof normalizeMessages>) => {
     const first = next['pt-BR'];
