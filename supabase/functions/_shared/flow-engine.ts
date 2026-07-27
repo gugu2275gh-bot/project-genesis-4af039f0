@@ -113,6 +113,11 @@ const YES_NO_LABELS: Record<string, [string, string]> = {
   fr: ['Oui', 'Non'],
 }
 
+const YES_NO_ALIASES = {
+  yes: ['sim', 'sí', 'si', 'yes', 'oui'],
+  no: ['não', 'nao', 'no', 'non'],
+}
+
 /** Opções base (idioma de cadastro) da etapa. */
 export function optionsOf(step: FlowStep): string[] {
   const v = (step?.validation || {}) as Record<string, unknown>
@@ -130,6 +135,32 @@ function langKey(lang: FlowLang): string {
   return 'pt'
 }
 
+function normalizeOptionLabel(value: unknown): string {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+}
+
+function yesNoSide(value: unknown): 'yes' | 'no' | null {
+  const normalized = normalizeOptionLabel(value)
+  if (YES_NO_ALIASES.yes.map(normalizeOptionLabel).includes(normalized)) return 'yes'
+  if (YES_NO_ALIASES.no.map(normalizeOptionLabel).includes(normalized)) return 'no'
+  return null
+}
+
+function isBinaryYesNoOptions(options: string[]): boolean {
+  if (options.length !== 2) return false
+  const sides = options.map(yesNoSide)
+  return sides.includes('yes') && sides.includes('no')
+}
+
+function localizedBinaryYesNoOptions(base: string[], lang: FlowLang): string[] {
+  const [yes, no] = YES_NO_LABELS[String(lang)] || YES_NO_LABELS['pt-BR']
+  return base.map((option) => (yesNoSide(option) === 'yes' ? yes : no))
+}
+
 /**
  * Rótulos das opções no idioma da conversa. Usa `validation.options_i18n`
  * (traduzido no editor) e cai para o rótulo original quando não houver
@@ -140,7 +171,11 @@ export function localizedOptions(step: FlowStep, lang: FlowLang): string[] {
   const v = (step?.validation || {}) as Record<string, any>
   const dict = v.options_i18n && typeof v.options_i18n === 'object' ? v.options_i18n : {}
   const translated = Array.isArray(dict[langKey(lang)]) ? dict[langKey(lang)] : []
-  return base.map((o, i) => String(translated[i] ?? '').trim() || o)
+  const mapped = base.map((o, i) => String(translated[i] ?? '').trim() || o)
+  if (isBinaryYesNoOptions(base) && !Array.isArray(dict[langKey(lang)])) {
+    return localizedBinaryYesNoOptions(base, lang)
+  }
+  return mapped
 }
 
 /**
@@ -149,16 +184,21 @@ export function localizedOptions(step: FlowStep, lang: FlowLang): string[] {
  */
 export function canonicalOption(step: FlowStep, answer: string): string | null {
   const text = String(answer || '').trim().toLowerCase()
+  const normalizedText = normalizeOptionLabel(answer)
   if (!text) return null
   const base = optionsOf(step)
   if (!base.length) return null
   const v = (step?.validation || {}) as Record<string, any>
   const dict = v.options_i18n && typeof v.options_i18n === 'object' ? v.options_i18n : {}
   for (let i = 0; i < base.length; i++) {
-    const candidates = [base[i], ...Object.values(dict).map((arr: any) => (Array.isArray(arr) ? arr[i] : ''))]
+    const autoYesNo = isBinaryYesNoOptions(base)
+      ? Object.keys(YES_NO_LABELS).map((lang) => localizedBinaryYesNoOptions(base, lang as FlowLang)[i])
+      : []
+    const candidates = [base[i], ...autoYesNo, ...Object.values(dict).map((arr: any) => (Array.isArray(arr) ? arr[i] : ''))]
       .map((c) => String(c ?? '').trim().toLowerCase())
       .filter(Boolean)
-    if (candidates.includes(text)) return base[i]
+    const normalizedCandidates = candidates.map(normalizeOptionLabel)
+    if (candidates.includes(text) || normalizedCandidates.includes(normalizedText)) return base[i]
   }
   return null
 }
