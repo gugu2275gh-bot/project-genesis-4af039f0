@@ -42,6 +42,35 @@ Deno.test('etapa SIM_NAO com quick_reply ligado → rótulos no idioma travado',
   assertEquals(buttonsOf(withQr as any, 'fr'), ['Oui', 'Non'])
 })
 
+Deno.test('etapa BOTOES com opções Sim/Não → rótulos no idioma travado', () => {
+  const withOptions = {
+    ...steps[0],
+    answer_type: 'BOTOES',
+    validation: { step_kind: 'PERGUNTA', options: ['Sim', 'Não'] },
+  }
+  assertEquals(buttonsOf(withOptions as any, 'es'), ['Sí', 'No'])
+  assertEquals(buttonsOf(withOptions as any, 'en'), ['Yes', 'No'])
+  assertEquals(buttonsOf(withOptions as any, 'fr'), ['Oui', 'Non'])
+})
+
+Deno.test('clique em botão traduzido volta para a opção base do fluxo', () => {
+  const withOptions = [
+    {
+      ...steps[0],
+      answer_type: 'BOTOES',
+      validation: { step_kind: 'PERGUNTA', options: ['Sim', 'Não'] },
+      branches: [
+        { id: 'b1', value: 'Sim', match_type: 'IGUAL', next_step_code: 'fim' },
+      ],
+    },
+    steps[1],
+  ]
+  const first = startFlow(withOptions as any, 'es')
+  const turn = advanceFlow(withOptions as any, first.state, 'Sí', 'es')
+  assertEquals(turn.state.answers?.[steps[0].step_code], 'Sim')
+  assertEquals(turn.finished, true)
+})
+
 Deno.test('quick_reply ignorado quando a resposta não é binária', () => {
   const notYesNo = { ...steps[0], answer_type: 'TEXTO', validation: { step_kind: 'PERGUNTA', quick_reply: true } }
   assertEquals(quickReplyOf(notYesNo as any), false)
