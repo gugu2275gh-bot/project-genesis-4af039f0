@@ -196,7 +196,6 @@ export function quickReplyOf(step: FlowStep): boolean {
 
 
 /** Tipos de resposta considerados "abertos" (merecem reconhecimento humano). */
-const OPEN_ANSWER_TYPES = ['', 'TEXTO', 'TEXTO_LIVRE', 'NOME', 'EMAIL', 'NUMERO', 'DATA']
 
 /**
  * Se a etapa deve enviar uma frase curta de reconhecimento humano antes da
