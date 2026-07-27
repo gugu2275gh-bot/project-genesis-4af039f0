@@ -172,14 +172,18 @@ export async function sendOutgoingIdempotent(
   // Com fluxo visual ativo o modo é 'on'/'off' — a heurística nunca é consultada.
   const wantsQuickReply = quickReplyMode === 'on'
     || (quickReplyMode === 'auto' && isBinaryYesNoQuestion(body))
+  const buttons = Array.isArray(args.buttons) ? args.buttons.filter((b) => String(b || '').trim()) : []
   if (language && wantsQuickReply) {
     try {
-      await sendYesNoQuickReply(phone, sanitizeOutgoingText(body), language)
+      const text = sanitizeOutgoingText(body)
+      if (buttons.length) await sendOptionsQuickReply(phone, text, buttons, language)
+      else await sendYesNoQuickReply(phone, text, language)
       return { sent: true }
     } catch (qrErr) {
       console.warn('[QUICK_REPLY] falhou, caindo em texto:', qrErr instanceof Error ? qrErr.message : qrErr)
     }
   }
+
 
 
   await sendWhatsAppMessage(phone, body)
