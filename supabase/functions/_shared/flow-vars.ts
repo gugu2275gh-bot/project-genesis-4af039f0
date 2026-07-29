@@ -25,6 +25,7 @@ export const FIELD_ALIAS_GROUPS: string[][] = [
   ['funnel.entry_date_confirmed', 'contact.spain_arrival_date'],
   ['funnel.location_known', 'contact.is_in_spain'],
   ['funnel.interest_confirmed', 'lead.service_interest'],
+  ['contact.residence_country', 'outside.residence_country', 'contact.country_of_origin'],
 ]
 
 const ALIAS_INDEX = new Map<string, string[]>()
@@ -64,6 +65,7 @@ export const MESSAGE_VARIABLES: { key: string; aliases: string[]; label: string;
   { key: 'cidade', aliases: ['cidade', 'ciudad', 'city', 'ville'], label: 'Cidade onde mora', field: 'funnel.empadronado_city' },
   { key: 'objetivo', aliases: ['objetivo', 'objective', 'goal', 'intencao', 'intención'], label: 'Objetivo / serviço de interesse', field: 'funnel.interest_confirmed' },
   { key: 'idade', aliases: ['idade', 'edad', 'age'], label: 'Idade', field: 'outside.age' },
+  { key: 'pais', aliases: ['pais', 'país', 'country', 'pays'], label: 'País onde mora', field: 'contact.residence_country' },
   { key: 'email', aliases: ['email', 'e-mail', 'correo'], label: 'E-mail', field: 'contact.email' },
 ]
 
