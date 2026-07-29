@@ -101,7 +101,7 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
           <TabsTrigger value="respostas" className="shrink-0">Respostas</TabsTrigger>
           <TabsTrigger value="validacao" className="shrink-0">Validação</TabsTrigger>
           {kind === 'PERGUNTA_GERAL' && (
-            <TabsTrigger value="interpretacao" className="shrink-0">Interpretação</TabsTrigger>
+            <TabsTrigger value="interpretacao" className="shrink-0">Interpretação / obrigatórios</TabsTrigger>
           )}
           <TabsTrigger value="base" className="shrink-0">Base de conhecimento</TabsTrigger>
           <TabsTrigger value="naosei" className="shrink-0">Resposta inesperada</TabsTrigger>
