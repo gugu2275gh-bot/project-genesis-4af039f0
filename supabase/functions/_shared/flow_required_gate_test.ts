@@ -59,7 +59,7 @@ Deno.test('depois da resposta sem nome, o nome é a primeira cobrança', () => {
   const already = { ...base, outbound: [], messages: [], reasked: true } as any
   const gated = applyRequiredGate(steps as any, already, 'pt-BR', { 'outside.age': '34' })
   assertEquals(gated.state.required_field, 'contact.full_name')
-  assertEquals(gated.messages.join(' ').toLowerCase().includes('nome'), true)
+  assertEquals(gated.messages.join(' ').includes('Como você se chama?'), true)
 })
 
 
