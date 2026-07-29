@@ -1628,7 +1628,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
             })
 
             const turn = isFirstFlowTurn
-              ? await runVisualFlowFirstTurn(flowPlan, currentCustomerMessage || '', flowLang as any, intakeLLM, supabase, { profileName: payload.ProfileName, phone: customerPhone })
+              ? await runVisualFlowFirstTurn(flowPlan, currentCustomerMessage || '', flowLang as any, intakeLLM, supabase, { profileName: message.name, phone: phoneNumber })
               : await runVisualFlowTurn(flowPlan, flowStateSaved, currentCustomerMessage || '', flowLang as any, {
                   callLLM: intakeLLM,
                   kbSearch: (q: string) => getKnowledgeBaseContext(supabase, q),
