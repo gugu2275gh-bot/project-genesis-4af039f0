@@ -387,6 +387,7 @@ export async function applyCapturedFields(
   const leadPatch: Record<string, unknown> = {}
   const outside: Record<string, unknown> = { ...(params.outsideProgress || {}) }
   let outsideTouched = false
+  let intentText = ''
 
   for (const item of captured) {
     const value = String(item?.value ?? '').trim()
