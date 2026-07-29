@@ -354,7 +354,6 @@ const SERVICE_INTEREST_HINTS: Array<[RegExp, string]> = [
   [/nacionalidade por casamento|nacionalidad por matrimonio|casamento|matrimonio|marriage/i, 'NACIONALIDADE_CASAMENTO'],
   [/nacionalidade|nacionalidad|citizenship|cidadania/i, 'NACIONALIDADE_RESIDENCIA'],
   [/comunitari|familiar europeu|eu family/i, 'RESIDENCIA_PARENTE_COMUNITARIO'],
-  [/morar|viver|residir|resid[êe]ncia|residencia|vivir|live in spain/i, 'RESIDENCIA'],
 ]
 
 function inferServiceInterest(value: string): string | null {
