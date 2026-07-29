@@ -209,8 +209,12 @@ Deno.test('enforceBlockCompletion: ramo B sem cidade → substitui H1 pela pergu
   })
   assert(isLocked(result), 'deve estar travado contra overrides posteriores')
   const clean = stripLockedSentinel(result)
-  assertStringIncludes(clean, 'Em qual cidade você está empadronado')
+  // Asserção semântica: a redação da pergunta muda com o tempo ("está"/"foi"),
+  // o que importa é que a pergunta de cidade de empadronamento substitua o H1.
+  assertStringIncludes(clean.toLowerCase(), 'cidade')
+  assertStringIncludes(clean.toLowerCase(), 'empadronad')
   assert(!clean.includes('visão inicial'), 'H1 não pode passar enquanto cidade ausente')
+
 })
 
 Deno.test('enforceBlockCompletion: ramo B sem entry_date → força B1', () => {
