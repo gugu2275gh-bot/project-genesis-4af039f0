@@ -135,6 +135,7 @@ export async function advanceFlowTurn(
         value,
         lang,
         knownNow,
+        Number(state.required_attempts || 0),
       )
       if (issue) {
         const tries = Number(state.required_attempts || 0) + 1
