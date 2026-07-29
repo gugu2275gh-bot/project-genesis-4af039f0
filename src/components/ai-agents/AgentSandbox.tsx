@@ -14,6 +14,8 @@ import {
   useSendTestMessage,
   useTestMessages,
 } from '@/hooks/useAIAgents';
+import { CapturedFieldsCard } from './CapturedFieldsCard';
+
 
 const LANG_LABELS: Record<string, string> = {
   'pt-BR': 'Português (BR)',
