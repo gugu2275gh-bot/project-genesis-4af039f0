@@ -113,26 +113,36 @@ export function normalizeIntakeConfig(raw: unknown): IntakeConfig {
 // ---------------------------------------------------------------------------
 // Prompt + parsing
 
-export function buildIntakePrompt(message: string): string {
-  return `Você extrai dados de uma PRIMEIRA mensagem de um cliente de uma assessoria de imigração na Espanha.
+export function buildIntakePrompt(message: string, sources: string[] = []): string {
+  const only = (sources || []).filter(Boolean)
+  const filter = only.length
+    ? `\nExtraia SOMENTE estas chaves (as demais devem ser null): ${only.join(', ')}.`
+    : ''
+  return `Você extrai dados de uma mensagem de um cliente de uma assessoria de imigração na Espanha.
 Retorne APENAS um JSON válido, sem markdown, com as chaves abaixo. Inclua SOMENTE o que foi dito
-EXPLICITAMENTE. Nunca invente. Campos desconhecidos devem ser null.
+EXPLICITAMENTE. Nunca invente. Campos desconhecidos devem ser null.${filter}
 
 {
   "full_name": "nome completo ou primeiro nome dito pela pessoa, ou null",
   "email": "e-mail ou null",
   "in_spain": "sim | nao | null (a pessoa está fisicamente na Espanha agora?)",
-  "intent": "resumo curto do objetivo (ex.: estudar, trabalhar, residência, nacionalidade) ou null",
+  "intent": "resumo curto do objetivo (ex.: estudar, trabalhar, residência, nômade digital, arraigo, nacionalidade, oferta de trabalho) ou null",
   "arrival_date": "DD/MM/AAAA se a data de chegada na Espanha foi dita, senão null",
   "arrival_days_ago": número inteiro se disse algo como "estou aqui há 5 dias", senão null,
   "empadronado": "sim | nao | null",
   "empadronado_city": "cidade do empadronamento ou null",
-  "confidence": { "full_name": 0..1, "in_spain": 0..1, "intent": 0..1, "arrival_date": 0..1, "empadronado": 0..1 }
+  "age": número inteiro da idade em anos, senão null,
+  "city": "cidade onde a pessoa mora hoje, ou null",
+  "education_superior": "sim | nao | null (possui formação superior/universitária?)",
+  "eu_family": "sim | nao | null (possui familiar europeu ou residente na UE?)",
+  "europe_6m": "sim | nao | null (esteve na Europa nos últimos 6 meses?)",
+  "confidence": { "full_name": 0..1, "in_spain": 0..1, "intent": 0..1, "arrival_date": 0..1, "empadronado": 0..1, "age": 0..1, "city": 0..1, "education_superior": 0..1, "eu_family": 0..1, "europe_6m": 0..1 }
 }
 
 Mensagem do cliente:
 """${String(message || '').slice(0, 1500)}"""`
 }
+
 
 export function parseIntakeJson(raw: string): IntakeExtraction | null {
   const text = String(raw || '')
