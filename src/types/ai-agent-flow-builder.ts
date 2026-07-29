@@ -390,6 +390,9 @@ export interface StepValidation {
   ack_ai?: boolean;
   /** Valida a resposta desta etapa na base de conhecimento. */
   kb_check?: StepKbCheck;
+  /** Interpretação multi-campo da etapa "Pergunta geral". */
+  general_capture?: StepGeneralCapture;
+
 
   /** @deprecated formato antigo e plano ("se não souber"). */
   unknown_answer?: UnknownAnswerConfig;
