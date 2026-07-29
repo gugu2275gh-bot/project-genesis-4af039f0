@@ -193,8 +193,6 @@ export function AgentSandbox({ initialAgentId }: Props) {
           <div ref={bottomRef} />
         </div>
 
-        <CapturedFieldsCard captured={captured} />
-
         <div className="flex gap-2">
           <Input
             placeholder="Digite uma mensagem de teste…"
@@ -212,6 +210,9 @@ export function AgentSandbox({ initialAgentId }: Props) {
             <Send className="h-4 w-4" />
           </Button>
         </div>
+
+        <CapturedFieldsCard captured={captured} />
+
       </CardContent>
     </Card>
   );
