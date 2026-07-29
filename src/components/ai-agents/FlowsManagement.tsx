@@ -19,7 +19,8 @@ import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRouti
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
 import { StepUnexpectedAnswerEditor } from '@/components/ai-agents/flow-builder/StepUnexpectedAnswerEditor';
 import { StepKnowledgeCheckEditor } from '@/components/ai-agents/flow-builder/StepKnowledgeCheckEditor';
-import { STEP_KINDS, normalizeBranches, normalizeValidation, stepKindOf } from '@/types/ai-agent-flow-builder';
+import { StepGeneralCaptureEditor } from '@/components/ai-agents/flow-builder/StepGeneralCaptureEditor';
+import { STEP_KINDS, CAPTURE_SOURCE_OPTIONS, normalizeBranches, normalizeValidation, stepKindOf } from '@/types/ai-agent-flow-builder';
 
 
 import {
@@ -248,7 +249,18 @@ function StepDialog({
             onChange={(patch) => set({ validation: { ...validation, ...patch } })}
           />
 
-          {stepKindOf({ validation, handoff: draft.handoff }) === 'PERGUNTA' && (
+          {stepKindOf({ validation, handoff: draft.handoff }) === 'PERGUNTA_GERAL' && (
+            <>
+              <Separator />
+              <p className="text-sm font-medium">Interpretação e campos obrigatórios</p>
+              <StepGeneralCaptureEditor
+                value={validation.general_capture}
+                onChange={(next) => set({ validation: { ...validation, general_capture: next } })}
+              />
+            </>
+          )}
+
+          {['PERGUNTA', 'PERGUNTA_GERAL'].includes(stepKindOf({ validation, handoff: draft.handoff })) && (
             <>
               <Separator />
               <p className="text-sm font-medium">Base de conhecimento</p>
@@ -394,13 +406,29 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
             const broken = paths.filter(
               (b) => !b.next_step_code || !codes.has(b.next_step_code),
             ).length;
+            const stepValidation = normalizeValidation((s as any).validation);
+            const isGeneral = stepKindOf(s as any) === 'PERGUNTA_GERAL';
+            const requiredLabels = (stepValidation.general_capture?.fields || [])
+              .filter((f) => f.required)
+              .map((f) => CAPTURE_SOURCE_OPTIONS.find((o) => o.value === f.source)?.label || f.source);
             return (
             <TableRow key={s.id}>
               <TableCell>{s.order_index}</TableCell>
               <TableCell className="font-mono text-xs">{s.step_code}</TableCell>
               <TableCell>{s.name}</TableCell>
               <TableCell><Badge variant="outline">{phaseLabel(s.phase)}</Badge></TableCell>
-              <TableCell>{ANSWER_TYPES.find((t) => t.value === s.answer_type)?.label || s.answer_type}</TableCell>
+              <TableCell>
+                <div className="space-y-1">
+                  <div>{ANSWER_TYPES.find((t) => t.value === s.answer_type)?.label || s.answer_type}</div>
+                  {isGeneral && (
+                    <Badge variant={requiredLabels.length ? 'default' : 'outline'} className="text-[10px] font-normal">
+                      {requiredLabels.length
+                        ? `Obrigatórios: ${requiredLabels.join(', ')}`
+                        : 'Sem obrigatórios'}
+                    </Badge>
+                  )}
+                </div>
+              </TableCell>
               <TableCell className="font-mono text-[11px]">
                 {paths.length === 0 ? (
                   <span className="text-muted-foreground">—</span>
