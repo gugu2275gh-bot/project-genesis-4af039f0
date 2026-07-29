@@ -30,8 +30,35 @@ export interface IntakeExtraction {
   arrival_days_ago?: number | null
   empadronado?: string | null
   empadronado_city?: string | null
+  /** Idade em anos. */
+  age?: number | string | null
+  /** Cidade onde a pessoa mora hoje. */
+  city?: string | null
+  /** 'sim' | 'nao' — possui formação superior. */
+  education_superior?: string | null
+  /** 'sim' | 'nao' — possui familiar europeu. */
+  eu_family?: string | null
+  /** 'sim' | 'nao' — esteve na Europa nos últimos 6 meses. */
+  europe_6m?: string | null
   confidence?: Record<string, number>
 }
+
+/** Dados que a IA sabe interpretar, com o campo do CRM usado por padrão. */
+export const CAPTURE_SOURCES: { source: string; default_target: string }[] = [
+  { source: 'full_name', default_target: 'contact.full_name' },
+  { source: 'email', default_target: 'contact.email' },
+  { source: 'in_spain', default_target: 'funnel.location_known' },
+  { source: 'intent', default_target: 'funnel.interest_confirmed' },
+  { source: 'arrival_date', default_target: 'funnel.entry_date_confirmed' },
+  { source: 'empadronado', default_target: 'funnel.empadronado_confirmed' },
+  { source: 'empadronado_city', default_target: 'funnel.empadronado_city' },
+  { source: 'age', default_target: 'outside.age' },
+  { source: 'city', default_target: 'funnel.empadronado_city' },
+  { source: 'education_superior', default_target: 'contact.education_level' },
+  { source: 'eu_family', default_target: 'contact.has_eu_family_member' },
+  { source: 'europe_6m', default_target: 'contact.eu_entry_last_6_months' },
+]
+
 
 export interface IntakeConfig {
   enabled: boolean
