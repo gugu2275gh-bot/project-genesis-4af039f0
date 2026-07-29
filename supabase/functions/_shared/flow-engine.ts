@@ -281,7 +281,7 @@ export function stepKindOf(step: FlowStep): StepKind {
 export interface StepGeneralCapture {
   enabled: boolean
   /** Pares "dado interpretado" -> "campo do CRM". */
-  fields: { source: string; target_field: string }[]
+  fields: { source: string; target_field: string; required?: boolean; prompts?: Record<string, string> }[]
   min_confidence: number
   /**
    * Quantos campos precisam ser entendidos para a etapa ser considerada
@@ -300,6 +300,8 @@ export function generalCaptureOf(step: FlowStep): StepGeneralCapture {
         .map((f: any) => ({
           source: String(f?.source || '').trim(),
           target_field: String(f?.target_field || '').trim(),
+          required: f?.required === true,
+          prompts: (f?.prompts && typeof f.prompts === 'object' ? f.prompts : {}) as Record<string, string>,
         }))
         .filter((f: any) => f.source && f.target_field)
     : []
