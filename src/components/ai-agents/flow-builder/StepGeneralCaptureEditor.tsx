@@ -30,11 +30,16 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
   const selected = new Map(cfg.fields!.map((f) => [f.source, f.target_field]));
 
   const toggle = (source: string, defaultTarget: string, checked: boolean) => {
+    const previous = cfg.fields!.find((f) => f.source === source);
     const next = checked
-      ? [...cfg.fields!.filter((f) => f.source !== source), { source, target_field: defaultTarget }]
+      ? [
+          ...cfg.fields!.filter((f) => f.source !== source),
+          { ...(previous || {}), source, target_field: previous?.target_field || defaultTarget },
+        ]
       : cfg.fields!.filter((f) => f.source !== source);
     onChange({ ...cfg, fields: next });
   };
+
 
   const setRequired = (source: string, required: boolean) =>
     onChange({
