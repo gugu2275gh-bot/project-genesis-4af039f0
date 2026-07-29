@@ -189,9 +189,11 @@ export async function runVisualFlowFirstTurn(
 
   /** Camada única de saída: idioma da conversa + variáveis resolvidas. */
   const localize = async (turn: FlowTurnResult) => {
-    const localized = await localizeTurn(turn, lang, { steps: plan.steps, callLLM, supabase, logTag: '[VISUAL_FLOW]' })
+    const gated = applyRequiredGate(plan.steps, turn, lang, knownFields)
+    const localized = await localizeTurn(gated, lang, { steps: plan.steps, callLLM, supabase, logTag: '[VISUAL_FLOW]' })
     return applyVarsToTurn(localized, buildFlowVars(knownFields, { profileName: opts?.profileName }))
   }
+
 
   // Nome do perfil do WhatsApp: usado como dado já conhecido (quando confiável).
   const seed = profileNameToFieldValues(opts?.profileName, opts?.phone || '')
