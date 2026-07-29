@@ -34,6 +34,8 @@ export interface IntakeExtraction {
   empadronado_city?: string | null
   /** Idade em anos. */
   age?: number | string | null
+  /** Data de nascimento em DD/MM/AAAA, exatamente como dita pelo cliente. */
+  birth_date?: string | null
   /** Cidade onde a pessoa mora hoje. */
   city?: string | null
   /** País onde a pessoa mora hoje (parte do endereço residencial). */
