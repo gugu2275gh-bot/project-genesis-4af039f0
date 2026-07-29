@@ -354,6 +354,7 @@ const SERVICE_INTEREST_HINTS: Array<[RegExp, string]> = [
   [/nacionalidade por casamento|nacionalidad por matrimonio|casamento|matrimonio|marriage/i, 'NACIONALIDADE_CASAMENTO'],
   [/nacionalidade|nacionalidad|citizenship|cidadania/i, 'NACIONALIDADE_RESIDENCIA'],
   [/comunitari|familiar europeu|eu family/i, 'RESIDENCIA_PARENTE_COMUNITARIO'],
+  [/morar|viver|residir|resid[êe]ncia|residencia|vivir|live in spain/i, 'RESIDENCIA'],
 ]
 
 function inferServiceInterest(value: string): string | null {
@@ -424,6 +425,15 @@ export async function applyCapturedFields(
         }
         break
       }
+      case 'contact.residence_country':
+        if (value) {
+          contactPatch.residence_country = value
+          // Mora fora da Espanha => marca a localização no funil.
+          const inSpainByCountry = /^(espanha|espa[nñ]a|spain|espagne)$/i.test(value)
+          contactPatch.is_in_spain = inSpainByCountry
+          funnelPatch.location_known = inSpainByCountry ? 'spain' : 'outside'
+        }
+        break
       case 'contact.education_level': {
         const b = toBoolOrNull(value)
         if (b !== null) contactPatch.education_level = b ? 'SUPERIOR' : 'NAO_SUPERIOR'
