@@ -32,6 +32,7 @@ import {
   applyRequiredGate,
   generalCaptureSatisfied,
   isBooleanField,
+  isNameField,
   isNonAnswer,
   knownFieldsOf,
   missingRequired,
