@@ -188,14 +188,16 @@ Deno.serve(async (req) => {
 
     // ------------------------------------------------------------------
     // EXECUÇÃO DETERMINÍSTICA DO FLUXO DESENHADO
-    // Quando o fluxo tem uma etapa de INÍCIO, o simulador executa o grafo
-    // (mensagens exatas, validações e ramificações) em vez de deixar o LLM
-    // improvisar. Ao terminar o fluxo, cai no modo livre com o LLM.
+    // O fluxo é executado sempre que tiver uma etapa inicial executável —
+    // "INÍCIO", informativa ou pergunta (inclusive "Pergunta geral"). Só não
+    // roda quando não há etapas ou quando a primeira etapa é "FIM".
+    // Ao terminar o fluxo, cai no modo livre com o LLM.
     // ------------------------------------------------------------------
     const runtimeCfg = (config.runtime_config && typeof config.runtime_config === 'object') ? config.runtime_config : {}
     const startStep = findStartStep(steps)
     const visualFlowEnabled =
-      runtimeCfg.execute_visual_flow !== false && !!startStep && stepKindOf(startStep) === 'INICIO'
+      runtimeCfg.execute_visual_flow !== false && !!startStep && stepKindOf(startStep) !== 'FIM'
+
 
     const flowState = (session.flow_state && typeof session.flow_state === 'object') ? session.flow_state : {}
 
