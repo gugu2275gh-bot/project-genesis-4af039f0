@@ -248,6 +248,75 @@ export function fieldAlreadyAskedIn(field: RequiredCaptureField, text: string): 
 }
 
 /**
+ * Enxuga a lista entre parênteses da abertura de uma "Pergunta geral":
+ * o que o cliente já informou na primeira mensagem sai da lista.
+ *
+ * "…me comente um pouco sobre você (idade, onde mora, formação superior,
+ * familiar europeu, esteve na Europa nos últimos 6 meses)" vira
+ * "…me comente um pouco sobre você (formação superior, esteve na Europa nos
+ * últimos 6 meses)". Se nada ficar pendente, o trecho entre parênteses some.
+ */
+export function trimKnownFromGeneralPrompt(
+  step: FlowStep,
+  text: string,
+  known: Record<string, string>,
+): string {
+  const raw = String(text || '')
+  if (!raw.trim() || !isGeneralCaptureStep(step)) return raw
+
+  const cfg = generalCaptureOf(step)
+  const fields = (cfg.fields || []) as RequiredCaptureField[]
+  if (!fields.length) return raw
+
+  // Último grupo entre parênteses da mensagem (a lista de dados pedida).
+  const matches = [...raw.matchAll(/\(([^()]*)\)/g)]
+  const group = matches[matches.length - 1]
+  if (!group) return raw
+
+  const inner = String(group[1] || '')
+  const items = inner.split(/\s*[,;]\s*/).filter((i) => i.trim())
+  if (items.length < 2) return raw
+
+  const kept = items.filter((item) => {
+    const owner = fields.find((f) => {
+      const re = FIELD_KEYWORDS[String(f.source || '')]
+      return re ? re.test(item) : false
+    })
+    if (!owner) return true
+    return !pickFieldValue(known, owner.target_field)
+  })
+
+  if (kept.length === items.length) return raw
+
+  const start = group.index ?? 0
+  const before = raw.slice(0, start)
+  const after = raw.slice(start + group[0].length)
+
+  const rebuilt = kept.length ? `${before}(${kept.join(', ')})${after}` : `${before}${after}`
+  return rebuilt
+    .replace(/\s+([.,;:!?…])/g, '$1')
+    .replace(/[,;:]\s*(?=[.!?…]|$)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+/** Aplica `trimKnownFromGeneralPrompt` nas mensagens da etapa dentro do turno. */
+function trimOutboundForStep(
+  turn: FlowTurnResult,
+  step: FlowStep,
+  code: string,
+  known: Record<string, string>,
+): FlowTurnResult {
+  const outbound = (turn.outbound || []).map((o: any) =>
+    String(o?.step_code) === code
+      ? { ...o, text: trimKnownFromGeneralPrompt(step, String(o?.text || ''), known) }
+      : o,
+  )
+  return { ...turn, outbound, messages: outbound.map((o: any) => o.text) }
+}
+
+
+/**
  * Reescreve o turno quando ele parou numa "Pergunta geral" que já tem parte
  * dos dados: em vez de repetir a pergunta aberta inteira, o agente pergunta
  * apenas o próximo campo obrigatório que falta.
