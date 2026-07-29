@@ -182,6 +182,22 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
               </p>
             )}
 
+            <div className="rounded-md border bg-muted/40 p-3 text-xs space-y-1">
+              <p className="font-medium">Variáveis disponíveis nos textos</p>
+              <p className="text-muted-foreground">
+                Escreva entre chaves e o agente substitui pelo dado do cliente no envio. Se o dado
+                não for conhecido, a variável some da frase (nunca sai <code>{'{nome}'}</code> literal).
+              </p>
+              <ul className="text-muted-foreground">
+                <li><code>{'{nome}'}</code> — primeiro nome (inclusive o do perfil do WhatsApp)</li>
+                <li><code>{'{cidade}'}</code> — cidade onde mora</li>
+                <li><code>{'{objetivo}'}</code> — objetivo/serviço de interesse</li>
+                <li><code>{'{idade}'}</code> — idade</li>
+                <li><code>{'{email}'}</code> — e-mail</li>
+              </ul>
+            </div>
+
+
             {Array.from({ length: total }).map((_, i) => (
 
               <div key={i} className="space-y-2 rounded-md border p-3">

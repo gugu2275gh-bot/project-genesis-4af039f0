@@ -40,6 +40,11 @@ export interface StepGeneralCapture {
   enabled?: boolean;
   fields?: { source: string; target_field: string }[];
   min_confidence?: number;
+  /**
+   * Quantos dados precisam ser entendidos para a etapa ser dada como
+   * respondida (e pulada quando o cliente já contou tudo na 1ª mensagem).
+   */
+  min_fields?: number;
 }
 
 

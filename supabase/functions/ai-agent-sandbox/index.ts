@@ -4,10 +4,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
 import { buildSystemPrompt } from './lib/prompt-builder.ts'
 import { advanceFlow, findStartStep, mergeFlows, startFlow, startFlowWithPrefill, stepKindOf } from '../_shared/flow-engine.ts'
-import { dropOpeningMessages, normalizeIntakeConfig, prependIntakeGreeting, renderAckMessage, renderIntakeGreeting, runIntake } from '../_shared/flow-intake.ts'
+import { dropOpeningMessages, normalizeIntakeConfig, prependIntakeGreeting, renderAckMessage, renderIntakeGreeting, runIntake, capturedFromFieldValues } from '../_shared/flow-intake.ts'
 import { createIntakeLLM } from '../_shared/intake-llm.ts'
 import { advanceFlowTurn } from '../_shared/flow-turn.ts'
 import { localizeTurn } from '../_shared/flow-i18n.ts'
+import { applyVarsToTurn, buildFlowVars, fieldValuesFromAnswers } from '../_shared/flow-vars.ts'
 import { searchKnowledgeBase } from '../_shared/kb-search.ts'
 import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
 
@@ -221,6 +222,8 @@ Deno.serve(async (req) => {
       const lang = sessionLang
       const firstTurn = firstTurnGlobal
       let turn
+      // Dados conhecidos para as variáveis das mensagens ({nome}, {cidade}…).
+      let knownFields: Record<string, string> = fieldValuesFromAnswers(steps, (flowState?.answers || {}) as any)
       if (firstTurn && intakeConfig.enabled) {
         let intakeRes: any = { prefilled: {}, greeting: '', fieldValues: {}, reason: 'exception' }
         const intakeLLM = createIntakeLLM({
@@ -248,10 +251,11 @@ Deno.serve(async (req) => {
           fields: intakeRes.fieldValues,
           steps: Object.keys(intakeRes.prefilled || {}),
         }))
+        knownFields = { ...knownFields, ...(intakeRes.fieldValues || {}) }
         const hasPrefill = Object.keys(intakeRes.prefilled || {}).length > 0
         if (hasPrefill || intakeRes.greeting) {
           const base = hasPrefill
-            ? startFlowWithPrefill(steps, lang as any, intakeRes.prefilled)
+            ? startFlowWithPrefill(steps, lang as any, intakeRes.prefilled, capturedFromFieldValues(steps, knownFields))
             : startFlow(steps, lang as any)
           turn = prependIntakeGreeting(dropOpeningMessages(base, steps), intakeRes.greeting)
         } else {
@@ -288,6 +292,11 @@ Deno.serve(async (req) => {
         supabase: service,
         logTag: '[SANDBOX]',
       })
+      // Inclui a resposta deste turno para variáveis usadas logo na sequência.
+      turn = applyVarsToTurn(turn, buildFlowVars({
+        ...knownFields,
+        ...fieldValuesFromAnswers(steps, ((turn as any)?.state?.answers || {}) as any),
+      }))
 
       await service.from('ai_agent_test_messages').insert({
         session_id,

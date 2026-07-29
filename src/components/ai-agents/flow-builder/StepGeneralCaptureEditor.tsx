@@ -19,7 +19,11 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
     enabled: value?.enabled !== false,
     fields: Array.isArray(value?.fields) ? value!.fields! : [],
     min_confidence: typeof value?.min_confidence === 'number' ? value!.min_confidence! : 0.7,
+    min_fields: typeof value?.min_fields === 'number' && value!.min_fields! > 0 ? value!.min_fields! : 2,
   };
+
+  const total = cfg.fields!.length;
+  const minFields = Math.max(1, Math.min(cfg.min_fields!, total || 1));
 
   const selected = new Map(cfg.fields!.map((f) => [f.source, f.target_field]));
 
@@ -86,6 +90,28 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
             );
           })}
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Dados suficientes para pular esta etapa</Label>
+        <Select
+          value={String(minFields)}
+          onValueChange={(v) => onChange({ ...cfg, min_fields: Number(v) })}
+          disabled={!total}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Array.from({ length: Math.max(total, 1) }, (_, i) => i + 1).map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                {n === 1 ? '1 dado entendido' : `${n} dados entendidos`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Se a primeira mensagem do cliente já trouxer pelo menos essa quantidade de dados marcados
+          acima, esta pergunta não é feita e o fluxo segue direto para a próxima pendência.
+        </p>
       </div>
 
       <div className="space-y-2">
