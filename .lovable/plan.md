@@ -1,38 +1,35 @@
-## Problema observado
+## Parte 1 — Morar fora da Espanha ≠ não estar na Espanha
 
-Mensagem: "tenho 50 anos, tio na europa e moro em paris"
+Na conversa, o cliente disse "moro em Paris" e o agente respondeu "Vi que você ainda não está na Espanha." Isso é dedução indevida: o país de residência não diz onde a pessoa está fisicamente agora.
 
-O agente respondeu "Vi que você ainda não está na Espanha." e repetiu a lista com "possui algum familiar europeu" e sem tratar Paris como país.
+Pontos confirmados no código:
+- `supabase/functions/_shared/flow-intake.ts:283` — `if (country && !out.in_spain) out.in_spain = isSpain(country) ? 'sim' : 'nao'`, que vira `funnel.location_known` e entra no resumo `buildIntakeSummary` (linhas 404-419).
+- `supabase/functions/whatsapp-webhook/lib/visual-flow.ts:436-441` — ao gravar `contact.residence_country`, escreve `contacts.is_in_spain` e `funnel.location_known` só pelo nome do país.
 
-Três falhas confirmadas na leitura do código (`supabase/functions/_shared/flow-intake.ts`) e da configuração do fluxo no banco:
+Mudanças:
+1. `flow-intake.ts`: remover a inferência de `in_spain` a partir de `residence_country`. Só existe quando o cliente afirma explicitamente ("já estou na Espanha", "ainda não cheguei") ou quando a etapa pergunta isso.
+2. `buildIntakeSummary`: a frase "Vi que você (já/ainda não) está na Espanha" só sai com afirmação explícita. Sem isso, o resumo cita apenas o que foi dito (país/objetivo), nos 4 idiomas.
+3. `visual-flow.ts`: no case `contact.residence_country`, gravar apenas `contacts.residence_country`; não tocar em `is_in_spain` nem em `funnel.location_known`. O case `funnel.location_known` (sim/não explícito) continua igual.
+4. Se o fluxo marcar `in_spain` como obrigatório, ele volta a ser perguntado normalmente, com o prompt já existente em `flow-required.ts`.
 
-1. `in_spain` é aceito como veio da IA — que deduziu "não está na Espanha" só porque a pessoa mora em Paris.
-2. "Paris" é gravado apenas em `city`; `residence_country` fica vazio, então o país obrigatório continua em aberto e o item "onde você mora" não sai da lista.
-3. "tio na europa" não vira `eu_family = sim`: a instrução do prompt pede "familiar europeu ou residente na UE" e a IA devolve `null` para menção de parentesco; a normalização por parentesco só roda quando o campo é respondido isoladamente, não no intake.
+## Parte 2 — Mensagem inicial enxuta: remover da lista o que já foi informado
 
-## O que será feito
+Hoje, mesmo quando a primeira mensagem já traz dados, a abertura sai com a lista completa ("idade, onde você mora, possui formação superior, possui algum familiar europeu, esteve na Europa nos últimos 6 meses").
 
-### 1. Nunca deduzir presença na Espanha
-- Em `flow-intake.ts`, só aceitar `in_spain` quando a mensagem citar explicitamente Espanha/España/Spain/Espagne ou um advérbio de presença ("estou aqui", "aquí", "cheguei"). Caso contrário, descartar o valor.
-- Reforçar a instrução no `buildIntakePrompt`: morar em outro país NÃO responde `in_spain`.
-- `buildIntakeSummary` deixa de afirmar "ainda não está na Espanha" quando isso não foi dito; com país conhecido usa "Vi que você mora em {país}".
+Comportamento novo:
+- Antes de enviar a abertura da etapa `PERGUNTA_GERAL`, o motor já processa a mensagem inicial (intake) e conhece os campos preenchidos.
+- A lista entre parênteses do texto da etapa passa a ser **gerada dinamicamente** a partir dos campos obrigatórios/configurados que ainda estão vazios, em vez de ser texto fixo.
+- Exemplo: usuário escreve "Meu nome é Roberto, tenho 50 anos e tenho tio na Europa e moro no Brasil" → nome, idade, familiar europeu e país já reconhecidos → sai:
+  "Olá, Roberto! Eu sou a assistente virtual da CB ASESORIA. 😊 Para entender melhor o seu caso, farei algumas perguntas… me comente um pouco sobre você (possui formação superior, esteve na Europa nos últimos 6 meses)."
+- Se todos os campos da lista já vierem preenchidos, a lista some da frase (fica só a saudação) e o fluxo avança direto para a próxima etapa (objetivo).
+- Depois dessa mensagem, a coleta dos campos faltantes segue a regra atual: um campo por vez, sem repetir o que já foi informado, nome com prioridade quando ausente.
 
-### 2. Perguntar se está na Espanha
-- Adicionar ao passo `dados_pessoais` do fluxo "Pre-Hands off G" um campo obrigatório `in_spain → funnel.location_known`, logo após o país, com pergunta nos 4 idiomas ("Você está na Espanha agora?" / "¿Estás en España ahora?" / "Are you in Spain right now?" / "Êtes-vous en Espagne en ce moment ?"). Se a pessoa já tiver dito, o campo entra preenchido e a pergunta não é feita.
-- Manter `min_fields`, mas como o campo é obrigatório ele será cobrado antes do handoff (regra "obrigatório manda no mínimo" já existente).
+Implementação:
+- Nova função em `_shared/flow-intake.ts` (ou `flow-required.ts`) que monta a lista de rótulos dos campos pendentes nos 4 idiomas (PT/ES/EN/FR), reutilizando os rótulos já existentes de cada campo.
+- A abertura da etapa passa a suportar um marcador de lista dinâmica; quando o texto da etapa contiver a lista entre parênteses, ela é substituída pelos pendentes (e removida se não houver nenhum).
+- Atualizar o texto da etapa `dados_pessoais` do fluxo "Pre-Hands off G" via SQL para usar esse marcador, mantendo as traduções.
+- Aplicar tanto na produção (`whatsapp-webhook`) quanto no sandbox (`ai-agent-sandbox`), já que ambos usam o mesmo motor.
 
-### 3. Cidade vira país
-- Instruir no prompt: quando só a cidade for dita, preencher também `residence_country` com o país dessa cidade.
-- Rede de segurança determinística: tabela de cidades conhecidas (Paris/Lyon → França, Lisboa/Porto → Portugal, Madrid/Barcelona → Espanha, São Paulo/Rio → Brasil, Roma/Milão → Itália, Londres → Reino Unido, Berlim → Alemanha, Buenos Aires → Argentina, etc.). Se `city` existir e `residence_country` estiver vazio, o país é derivado da cidade.
-- Continua sem inferir localização física a partir disso.
+## Testes
 
-### 4. Parentesco = sim
-- Prompt: "qualquer menção a parente (tio, avó, pai, primo, cônjuge...) europeu ou morando na UE = sim".
-- Pós-processamento: aplicar a normalização por parentesco (`normalizeYesNo` com `kinship`) ao campo `eu_family` do intake, para que "tio na europa" grave `sim` mesmo se a IA devolver texto livre.
-
-### 5. Lista dinâmica da abertura
-- Com país e familiar europeu resolvidos, o corte da lista entre parênteses (já implementado) passa a remover "onde você mora" e "possui algum familiar europeu" corretamente. Ajustar as palavras-chave se algum item não casar.
-
-## Detalhes técnicos
-- Arquivos: `supabase/functions/_shared/flow-intake.ts` (prompt, `extractionToSourceValues`, mapa cidade→país, `buildIntakeSummary`), `flow-required.ts` (palavras-chave da lista, se necessário) e uma migração/SQL de atualização do `validation.general_capture.fields` do passo `dados_pessoais`.
-- Testes: novos casos em `flow_intake_test.ts` (Paris → França sem `in_spain`; "tio na europa" → `sim`; lista de abertura sem os itens já respondidos) e execução da suíte completa Deno.
+`_shared/flow_intake_test.ts` e `_shared/flow_required_gate_test.ts`: país fora da Espanha não define `in_spain`; afirmação explícita continua definindo; resumo não afirma localização sem dado explícito; abertura com lista reduzida quando há dados na 1ª mensagem; abertura sem lista quando tudo já foi informado. Rodar toda a suíte de edge functions.
