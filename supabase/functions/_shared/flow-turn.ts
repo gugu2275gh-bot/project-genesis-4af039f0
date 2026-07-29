@@ -119,7 +119,10 @@ export async function advanceFlowTurn(
       extraValues = { ...(capture?.fieldValues || {}) }
       value = String(extraValues[pendingField] || '').trim()
     }
-    if (!value && text) value = text
+    // Texto solto só vira valor quando é mesmo uma resposta: "falar com
+    // atendente", "não sei" e afins deixam o campo EM BRANCO.
+    if (!value && text && !isNonAnswer(text)) value = text
+
 
     let capturedFields = {
       ...((state.captured_fields || {}) as Record<string, string>),
