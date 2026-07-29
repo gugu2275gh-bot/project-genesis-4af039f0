@@ -343,21 +343,26 @@ export function applyRequiredGate(
 
   if (!step || !isGeneralCaptureStep(step)) return turn
 
-  const required = requiredFieldsOf(step)
-  if (!required.length) return turn
-
   const known = { ...extraKnown, ...knownFieldsOf(steps, turn.state) }
   const skipped = (turn.state?.required_skipped || []) as string[]
-  const pending = missingRequired(step, known, skipped)
 
   const presentedNow = !turn.reasked && (turn.outbound || []).some((o: any) => o?.step_code === code)
+
+  // A abertura da etapa só pede o que ainda falta: o que o cliente já contou
+  // na primeira mensagem sai da lista entre parênteses.
+  let working = presentedNow ? trimOutboundForStep(turn, step, code, known) : turn
+
+  const required = requiredFieldsOf(step)
+  if (!required.length) return working
+
+  const pending = missingRequired(step, known, skipped)
 
   // Mínimo de dados atingido: a etapa não cobra mais nada — o que não foi
   // respondido fica em branco e o fluxo segue.
   if (!pending.length || generalCaptureSatisfied(step, known, skipped)) {
-    return presentedNow || turn.state?.required_field
-      ? { ...turn, state: { ...turn.state, required_field: '', required_attempts: 0 } }
-      : turn
+    return presentedNow || working.state?.required_field
+      ? { ...working, state: { ...working.state, required_field: '', required_attempts: 0 } }
+      : working
   }
 
 
@@ -368,17 +373,19 @@ export function applyRequiredGate(
     // obrigatório colado na saudação — esperamos a resposta do cliente e só
     // depois cobramos o que faltar (nome primeiro).
     return {
-      ...turn,
+      ...working,
       finished: false,
       handoff: false,
       state: {
-        ...turn.state,
+        ...working.state,
         current_step: code,
         required_field: '',
         required_attempts: 0,
       },
     }
   }
+
+
 
 
   const stay = buildStayTurn(step, requiredPrompt(next, lang), turn.state, {
