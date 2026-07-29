@@ -596,6 +596,22 @@ export async function applyCapturedFields(
 
   if (outsideTouched) funnelPatch.outside_spain_progress = outside
 
+  // Serviço: resolvido contra o catálogo real (`service_types`). Sem
+  // correspondência confiável, nada é gravado.
+  if (intentText) {
+    try {
+      const match = await resolveServiceType(supabase, intentText)
+      if (match) {
+        leadPatch.service_type_id = match.service_type_id
+        leadPatch.interest_confirmed = true
+        if (match.service_interest) leadPatch.service_interest = match.service_interest
+      }
+    } catch (e) {
+      console.warn('[VISUAL_FLOW] falha ao resolver serviço:', e instanceof Error ? e.message : e)
+    }
+  }
+
+
   try {
     if (Object.keys(contactPatch).length) {
       await supabase.from('contacts').update(contactPatch).eq('id', contactId)
