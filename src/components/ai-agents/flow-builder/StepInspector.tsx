@@ -13,6 +13,7 @@ import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRouti
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
 import { StepUnexpectedAnswerEditor } from '@/components/ai-agents/flow-builder/StepUnexpectedAnswerEditor';
 import { StepKnowledgeCheckEditor } from '@/components/ai-agents/flow-builder/StepKnowledgeCheckEditor';
+import { StepGeneralCaptureEditor } from '@/components/ai-agents/flow-builder/StepGeneralCaptureEditor';
 import { ANSWER_TYPES, FLOW_PHASES, STEP_FIELD_MAPPINGS, type AgentFlowStep } from '@/types/ai-agents';
 
 import {
@@ -51,6 +52,8 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
     [step.messages, step.message],
   );
   const kind = stepKindOf(step);
+  /** Perguntas normais e "pergunta geral" esperam resposta do cliente. */
+  const isQuestion = kind === 'PERGUNTA' || kind === 'PERGUNTA_GERAL';
   const total = messageCount(messages);
   /** Idiomas sem tradução gravada (mensagens ou repergunta). */
   const missingLangs = useMemo(() => {
@@ -97,6 +100,9 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
           <TabsTrigger value="pergunta" className="shrink-0">Mensagens</TabsTrigger>
           <TabsTrigger value="respostas" className="shrink-0">Respostas</TabsTrigger>
           <TabsTrigger value="validacao" className="shrink-0">Validação</TabsTrigger>
+          {kind === 'PERGUNTA_GERAL' && (
+            <TabsTrigger value="interpretacao" className="shrink-0">Interpretação</TabsTrigger>
+          )}
           <TabsTrigger value="base" className="shrink-0">Base de conhecimento</TabsTrigger>
           <TabsTrigger value="naosei" className="shrink-0">Resposta inesperada</TabsTrigger>
           <TabsTrigger value="comportamento" className="shrink-0">Comportamento</TabsTrigger>
@@ -196,7 +202,7 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
                 </div>
                 <MultiLangField
                   label={
-                    kind === 'PERGUNTA' && i === total - 1
+                    isQuestion && i === total - 1
                       ? 'Texto enviado ao cliente (pergunta)'
                       : 'Texto enviado ao cliente'
                   }
@@ -216,7 +222,7 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
               <Plus className="h-4 w-4 mr-1" /> Adicionar mensagem em sequência
             </Button>
 
-            {kind === 'PERGUNTA' && (
+            {isQuestion && (
               <MultiLangField
                 label="Repergunta (resposta inválida)"
                 value={step.reask_messages || {}}
@@ -228,13 +234,13 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
 
 
           <TabsContent value="respostas" className="mt-0 space-y-4">
-            {kind !== 'PERGUNTA' && (
+            {!isQuestion && (
               <p className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
                 Esta etapa é do tipo "{STEP_KINDS.find((k) => k.value === kind)?.label}" e não espera resposta
                 do cliente. Use apenas a próxima etapa padrão abaixo.
               </p>
             )}
-            {kind === 'PERGUNTA' && (
+            {isQuestion && (
             <div className="space-y-2">
               <Label>Tipo de resposta esperada</Label>
               <Select value={step.answer_type} onValueChange={(v) => onChange({ answer_type: v as any })}>
@@ -246,7 +252,7 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
             </div>
             )}
 
-            {kind === 'PERGUNTA' && (
+            {isQuestion && (
               <div className="space-y-2">
                 <Label>Salvar resposta em</Label>
                 <Select
@@ -287,10 +293,19 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
 
           </TabsContent>
 
+          {kind === 'PERGUNTA_GERAL' && (
+            <TabsContent value="interpretacao" className="mt-0 space-y-4">
+              <StepGeneralCaptureEditor
+                value={validation.general_capture}
+                onChange={(next) => setValidation({ general_capture: next })}
+              />
+            </TabsContent>
+          )}
+
           <TabsContent value="base" className="mt-0 space-y-4">
             <StepKnowledgeCheckEditor
               value={validation.kb_check}
-              isQuestion={kind === 'PERGUNTA'}
+              isQuestion={isQuestion}
               onChange={(next) => setValidation({ kb_check: next })}
             />
           </TabsContent>
