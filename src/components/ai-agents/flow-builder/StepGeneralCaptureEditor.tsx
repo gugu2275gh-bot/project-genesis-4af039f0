@@ -30,11 +30,16 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
   const selected = new Map(cfg.fields!.map((f) => [f.source, f.target_field]));
 
   const toggle = (source: string, defaultTarget: string, checked: boolean) => {
+    const previous = cfg.fields!.find((f) => f.source === source);
     const next = checked
-      ? [...cfg.fields!.filter((f) => f.source !== source), { source, target_field: defaultTarget }]
+      ? [
+          ...cfg.fields!.filter((f) => f.source !== source),
+          { ...(previous || {}), source, target_field: previous?.target_field || defaultTarget },
+        ]
       : cfg.fields!.filter((f) => f.source !== source);
     onChange({ ...cfg, fields: next });
   };
+
 
   const setRequired = (source: string, required: boolean) =>
     onChange({
@@ -61,8 +66,21 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
         <Switch checked={cfg.enabled} onCheckedChange={(v) => onChange({ ...cfg, enabled: v })} />
       </div>
 
+      <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+        <Label className="text-xs">Campos obrigatórios desta etapa</Label>
+        <p className="text-xs text-muted-foreground mt-1">
+          {requiredCount > 0
+            ? cfg.fields!
+                .filter((f) => f.required)
+                .map((f) => CAPTURE_SOURCE_OPTIONS.find((o) => o.value === f.source)?.label || f.source)
+                .join(', ')
+            : 'Nenhum — o agente aproveita o que for dito e segue em frente.'}
+        </p>
+      </div>
+
       <div className="space-y-2">
         <Label>Dados que podem ser interpretados</Label>
+
         <div className="space-y-2">
           {CAPTURE_SOURCE_OPTIONS.map((opt) => {
             const checked = selected.has(opt.value);

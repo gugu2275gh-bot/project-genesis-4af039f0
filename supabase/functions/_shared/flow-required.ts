@@ -167,16 +167,18 @@ export function applyRequiredGate(
   const required = requiredFieldsOf(step)
   if (!required.length) return turn
 
+  // A pergunta da etapa está saindo AGORA (abertura do fluxo ou entrada na
+  // etapa): ela sempre é feita pelo menos uma vez. O agente só passa a cobrar
+  // campo por campo depois que o cliente responder a essa pergunta.
+  const presentedNow = !turn.reasked && (turn.outbound || []).some((o: any) => o?.step_code === code)
+  if (presentedNow) {
+    return { ...turn, state: { ...turn.state, required_field: '', required_attempts: 0 } }
+  }
+
   const known = { ...extraKnown, ...knownFieldsOf(steps, turn.state) }
   const skipped = (turn.state?.required_skipped || []) as string[]
   const pending = missingRequired(step, known, skipped)
   if (!pending.length) return turn
-
-  // Nada conhecido ainda: a pergunta aberta original é a melhor abertura.
-  const anyKnown = required.some((f) => !!pickFieldValue(known, f.target_field))
-  if (!anyKnown && !turn.reasked && (turn.outbound || []).length) {
-    return { ...turn, state: { ...turn.state, required_field: '', required_attempts: 0 } }
-  }
 
   const next = pending[0]
   const stay = buildStayTurn(step, requiredPrompt(next, lang), turn.state, {
@@ -187,3 +189,4 @@ export function applyRequiredGate(
   })
   return { ...stay, captured: turn.captured || [], finished: false, handoff: false }
 }
+
