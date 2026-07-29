@@ -90,6 +90,89 @@ export async function advanceFlowTurn(
   let effectiveMessage = message
   let workingState: FlowRunState = state
 
+  // 0) Campo obrigatório em aberto numa "Pergunta geral": a mensagem do
+  // cliente é a resposta desse campo específico. Só depois de completar todos
+  // os obrigatórios o fluxo segue (e só então transfere para o humano).
+  const pendingField = String(state.required_field || '').trim()
+  if (pendingField && isGeneralCaptureStep(step)) {
+    const general = generalCaptureOf(step)
+    const target = general.fields.find((f: any) => f.target_field === pendingField)
+    let value = ''
+    if (text && target && deps.callLLM) {
+      const capture = await withTimeout(
+        runGeneralCapture({
+          message: text,
+          steps,
+          fields: [target],
+          minConfidence: general.min_confidence,
+          callLLM: deps.callLLM,
+        }),
+        ASSIST_TIMEOUT_MS,
+        'required_capture',
+      )
+      value = String(capture?.fieldValues?.[pendingField] || '').trim()
+    }
+    if (!value && text) value = text
+
+    let capturedFields = { ...((state.captured_fields || {}) as Record<string, string>) }
+    const skipped = [...((state.required_skipped || []) as string[])]
+    const captured: FlowCapturedField[] = []
+    if (value) {
+      capturedFields[pendingField] = value
+      captured.push({ step_code: step.step_code, field: pendingField, value })
+    } else {
+      const tries = Number(state.required_attempts || 0) + 1
+      if (tries <= MAX_REQUIRED_ATTEMPTS) {
+        return buildStayTurn(step, requiredPrompt(target || { source: pendingField, target_field: pendingField }, lang), workingState, {
+          required_attempts: tries,
+        })
+      }
+      skipped.push(pendingField)
+    }
+
+    workingState = {
+      ...workingState,
+      captured_fields: capturedFields,
+      required_skipped: skipped,
+      required_field: '',
+      required_attempts: 0,
+    }
+
+    const known = knownFieldsOf(steps, workingState)
+    const stillMissing = missingRequired(step, known, skipped)
+    console.log(`${tag}[REQUIRED_FIELD]`, JSON.stringify({
+      step: step.step_code,
+      field: pendingField,
+      saved: !!value,
+      missing: stillMissing.map((f) => f.target_field),
+    }))
+
+    if (stillMissing.length) {
+      const next = stillMissing[0]
+      const stay = buildStayTurn(step, requiredPrompt(next, lang), workingState, {
+        required_field: next.target_field,
+        required_attempts: 0,
+      })
+      return { ...stay, captured }
+    }
+
+    // Todos os obrigatórios respondidos: fecha a etapa com o resumo do que
+    // foi entendido e segue o fluxo normalmente.
+    const summary = general.fields
+      .map((f: any) => {
+        const v = String(known[f.target_field] || '').trim()
+        return v ? `${f.source}: ${v}` : ''
+      })
+      .filter(Boolean)
+      .join('; ')
+    const turn = advanceFlow(steps, workingState, summary || text || 'ok', lang, { ack: deps.ack || '' })
+    return {
+      ...turn,
+      captured: [...(turn.captured || []), ...captured],
+      state: { ...turn.state, aside_attempts: 0 },
+    }
+  }
+
   // Recursos opcionais rodam EM PARALELO (base + reconhecimento), com timeout
   // curto: nenhum deles pode atrasar a retomada do fluxo.
   const kbCfg = kbCheckOf(step)
