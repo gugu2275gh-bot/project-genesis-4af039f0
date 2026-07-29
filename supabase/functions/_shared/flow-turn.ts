@@ -98,25 +98,34 @@ export async function advanceFlowTurn(
     const general = generalCaptureOf(step)
     const target = general.fields.find((f: any) => f.target_field === pendingField)
     let value = ''
-    if (text && target && deps.callLLM) {
+    let extraValues: Record<string, string> = {}
+    if (text && deps.callLLM) {
+      // Interpreta TODOS os campos da etapa: grava o obrigatório pendente e
+      // aproveita o que mais vier junto ("Fred, moro em Recife").
       const capture = await withTimeout(
         runGeneralCapture({
           message: text,
           steps,
-          fields: [target],
+          fields: general.fields?.length ? general.fields : (target ? [target] : []),
           minConfidence: general.min_confidence,
           callLLM: deps.callLLM,
         }),
         ASSIST_TIMEOUT_MS,
         'required_capture',
       )
-      value = String(capture?.fieldValues?.[pendingField] || '').trim()
+      extraValues = { ...(capture?.fieldValues || {}) }
+      value = String(extraValues[pendingField] || '').trim()
     }
     if (!value && text) value = text
 
-    let capturedFields = { ...((state.captured_fields || {}) as Record<string, string>) }
+    let capturedFields = {
+      ...((state.captured_fields || {}) as Record<string, string>),
+      ...extraValues,
+    }
     const skipped = [...((state.required_skipped || []) as string[])]
-    const captured: FlowCapturedField[] = []
+    const captured: FlowCapturedField[] = Object.entries(extraValues)
+      .filter(([field, v]) => field !== pendingField && String(v || '').trim())
+      .map(([field, v]) => ({ step_code: step.step_code, field, value: String(v) }))
     if (value) {
       capturedFields[pendingField] = value
       captured.push({ step_code: step.step_code, field: pendingField, value })
