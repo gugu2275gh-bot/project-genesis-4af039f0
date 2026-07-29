@@ -707,7 +707,9 @@ export async function runIntake(params: {
   const extraction = parseIntakeJson(raw)
   if (!extraction) return empty('parse_error', String(raw || '').slice(0, 200))
 
-  const fieldValues = extractionToFieldValues(extraction, config.min_confidence, params.now)
+  const fieldValues = extractionToFieldValues(extraction, config.min_confidence, params.now, {
+    message: String(message || ''),
+  })
   const filtered: Record<string, string> = { ...seed }
   for (const [k, v] of Object.entries(fieldValues)) {
     if (!fieldAllowed(allowSet, k)) continue
