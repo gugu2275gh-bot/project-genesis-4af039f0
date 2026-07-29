@@ -186,9 +186,13 @@ export async function advanceFlowTurn(
       capturedFields[pendingField] = value
       captured.push({ step_code: step.step_code, field: pendingField, value })
     } else {
+      const meta = target || { source: pendingField, target_field: pendingField }
       const tries = Number(state.required_attempts || 0) + 1
-      if (tries <= MAX_REQUIRED_ATTEMPTS) {
-        return buildStayTurn(step, requiredPrompt(target || { source: pendingField, target_field: pendingField }, lang), workingState, {
+      // O nome nunca é pulado: enquanto a pessoa não se identificar, a etapa
+      // não avança para as outras perguntas.
+      if (tries <= MAX_REQUIRED_ATTEMPTS || isNameField(meta)) {
+        return buildStayTurn(step, requiredPrompt(meta, lang), workingState, {
+          required_field: pendingField,
           required_attempts: tries,
         })
       }
