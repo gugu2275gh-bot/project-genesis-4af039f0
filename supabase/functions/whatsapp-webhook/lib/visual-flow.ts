@@ -312,9 +312,14 @@ function nameFromState(steps: FlowStep[], state: FlowRunState): string {
 const YES_VALUES = new Set(['sim', 'si', 'sí', 'yes', 'oui', 'true', 's', 'y'])
 const NO_VALUES = new Set(['nao', 'não', 'no', 'non', 'false', 'n'])
 
-function toYesNo(value: string): 'yes' | 'no' {
-  return YES_VALUES.has(String(value || '').trim().toLowerCase()) ? 'yes' : 'no'
+/** Sim/Não explícito. Qualquer outro texto → null (não grava nada). */
+function toYesNo(value: string): 'yes' | 'no' | null {
+  const v = String(value || '').trim().toLowerCase()
+  if (YES_VALUES.has(v)) return 'yes'
+  if (NO_VALUES.has(v)) return 'no'
+  return null
 }
+
 
 /** Sim/Não → boolean. Devolve null quando a resposta não é claramente sim/não. */
 function toBoolOrNull(value: string): boolean | null {
