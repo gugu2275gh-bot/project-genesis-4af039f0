@@ -168,8 +168,26 @@ export function daysAgoToDate(days: number, now: Date = new Date()): string {
 // ---------------------------------------------------------------------------
 // Extração → respostas de etapa
 
-/** Valores extraídos convertidos para o vocabulário de `field_mapping`. */
-export function extractionToFieldValues(
+const YES_WORDS = ['sim', 'si', 'sí', 'yes', 'true', 'oui', 'claro']
+const NO_WORDS = ['nao', 'não', 'no', 'false', 'non']
+
+function normText(v: unknown): string {
+  return String(v ?? '').trim()
+}
+
+function toYesNo(v: unknown): string {
+  const t = normText(v).toLowerCase()
+  if (YES_WORDS.includes(t)) return 'sim'
+  if (NO_WORDS.includes(t)) return 'nao'
+  return ''
+}
+
+/**
+ * Valores extraídos por "dado interpretado" (`source`), já filtrados pela
+ * confiança mínima. É a base tanto do intake da 1ª mensagem quanto da etapa
+ * "Pergunta geral".
+ */
+export function extractionToSourceValues(
   extraction: IntakeExtraction,
   minConfidence = 0.7,
   now: Date = new Date(),
@@ -179,50 +197,73 @@ export function extractionToFieldValues(
     const c = Number(extraction?.confidence?.[key])
     return Number.isFinite(c) ? c : 1
   }
-  const norm = (v: unknown) => String(v ?? '').trim()
-  const yesNo = (v: unknown): string => {
-    const t = norm(v).toLowerCase()
-    if (['sim', 'si', 'sí', 'yes', 'true', 'oui'].includes(t)) return 'sim'
-    if (['nao', 'não', 'no', 'false', 'non'].includes(t)) return 'nao'
-    return ''
+  const put = (key: string, value: string, checkConf = true) => {
+    if (!value) return
+    if (checkConf && conf(key) < minConfidence) return
+    out[key] = value
   }
 
-  if (norm(extraction.full_name) && conf('full_name') >= minConfidence) {
-    out['contact.full_name'] = norm(extraction.full_name)
-  }
-  if (norm(extraction.email)) out['contact.email'] = norm(extraction.email)
+  put('full_name', normText(extraction.full_name))
+  put('email', normText(extraction.email), false)
+  put('in_spain', toYesNo(extraction.in_spain))
+  put('intent', normText(extraction.intent))
 
-  const inSpain = yesNo(extraction.in_spain)
-  if (inSpain && conf('in_spain') >= minConfidence) {
-    out['funnel.location_known'] = inSpain
-  }
-
-  if (norm(extraction.intent) && conf('intent') >= minConfidence) {
-    out['funnel.interest_confirmed'] = norm(extraction.intent)
-    out['lead.service_interest'] = norm(extraction.intent)
-  }
-
-  let arrival = norm(extraction.arrival_date)
+  let arrival = normText(extraction.arrival_date)
   if (!arrival && Number.isFinite(Number(extraction.arrival_days_ago))) {
     arrival = daysAgoToDate(Number(extraction.arrival_days_ago), now)
   }
-  if (arrival && conf('arrival_date') >= minConfidence) {
-    out['funnel.entry_date_confirmed'] = arrival
-    out['contact.spain_arrival_date'] = arrival
-  }
+  put('arrival_date', arrival)
 
-  const emp = yesNo(extraction.empadronado)
-  if (emp && conf('empadronado') >= minConfidence) {
-    out['funnel.empadronado_confirmed'] = emp
-    out['contact.is_empadronado'] = emp
-  }
-  if (norm(extraction.empadronado_city)) {
-    out['funnel.empadronado_city'] = norm(extraction.empadronado_city)
-    out['contact.empadronamiento_city'] = norm(extraction.empadronado_city)
-  }
+  put('empadronado', toYesNo(extraction.empadronado))
+  put('empadronado_city', normText(extraction.empadronado_city), false)
+
+  const age = Number(String(extraction.age ?? '').replace(/\D+/g, ''))
+  if (Number.isFinite(age) && age >= 14 && age <= 100) put('age', String(age))
+  put('city', normText(extraction.city))
+  put('education_superior', toYesNo(extraction.education_superior))
+  put('eu_family', toYesNo(extraction.eu_family))
+  put('europe_6m', toYesNo(extraction.europe_6m))
 
   return out
 }
+
+/** Valores extraídos convertidos para o vocabulário de `field_mapping`. */
+export function extractionToFieldValues(
+  extraction: IntakeExtraction,
+  minConfidence = 0.7,
+  now: Date = new Date(),
+): Record<string, string> {
+  const src = extractionToSourceValues(extraction, minConfidence, now)
+  const out: Record<string, string> = {}
+
+  if (src.full_name) out['contact.full_name'] = src.full_name
+  if (src.email) out['contact.email'] = src.email
+  if (src.in_spain) out['funnel.location_known'] = src.in_spain
+  if (src.intent) {
+    out['funnel.interest_confirmed'] = src.intent
+    out['lead.service_interest'] = src.intent
+  }
+  if (src.arrival_date) {
+    out['funnel.entry_date_confirmed'] = src.arrival_date
+    out['contact.spain_arrival_date'] = src.arrival_date
+  }
+  if (src.empadronado) {
+    out['funnel.empadronado_confirmed'] = src.empadronado
+    out['contact.is_empadronado'] = src.empadronado
+  }
+  const city = src.empadronado_city || src.city
+  if (city) {
+    out['funnel.empadronado_city'] = city
+    out['contact.empadronamiento_city'] = city
+  }
+  if (src.age) out['outside.age'] = src.age
+  if (src.education_superior) out['contact.education_level'] = src.education_superior
+  if (src.eu_family) out['contact.has_eu_family_member'] = src.eu_family
+  if (src.europe_6m) out['contact.eu_entry_last_6_months'] = src.europe_6m
+
+  return out
+}
+
 
 /**
  * Casa os valores extraídos com as etapas do fluxo (via `field_mapping`
