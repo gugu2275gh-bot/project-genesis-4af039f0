@@ -19,13 +19,19 @@ const FIELD_INFO: Record<string, { label: string; target: string }> = {
   'contact.education_level': { label: 'Formação superior', target: 'contacts.education_level' },
   'contact.works_remotely': { label: 'Trabalha remoto', target: 'contacts.works_remotely' },
   'contact.has_european_family': { label: 'Familiar europeu', target: 'contacts.has_european_family' },
+  'contact.has_eu_family_member': { label: 'Familiar europeu', target: 'contacts.has_eu_family_member' },
+  'contact.eu_entry_last_6_months': { label: 'Esteve na Europa (6 meses)', target: 'contacts.eu_entry_last_6_months' },
   'contact.was_in_europe_6m': { label: 'Esteve na Europa (6 meses)', target: 'contacts.was_in_europe_6m' },
   'contact.nationality': { label: 'Nacionalidade', target: 'contacts.nationality' },
+  'outside.age': { label: 'Idade', target: 'contacts.age' },
+  'funnel.interest_confirmed': { label: 'Interesse confirmado', target: 'lead_funnel_state.interest_confirmed' },
+  'funnel.location_known': { label: 'Está na Espanha', target: 'lead_funnel_state.location_known' },
   'lead.service_interest': { label: 'Serviço de interesse', target: 'leads.service_interest' },
   'lead.service_type_id': { label: 'Serviço (catálogo)', target: 'leads.service_type_id' },
   'lead.notes': { label: 'Observações', target: 'leads.notes' },
   'lead.objective': { label: 'Objetivo na Espanha', target: 'leads.notes' },
 };
+
 
 function info(field: string) {
   const known = FIELD_INFO[field];
