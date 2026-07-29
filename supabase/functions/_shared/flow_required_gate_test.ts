@@ -73,15 +73,16 @@ Deno.test('etapa já apresentada cobra o obrigatório que falta (abaixo do míni
   assertEquals(gated.state.required_field, 'outside.age')
 })
 
-Deno.test('mínimo atingido: nenhuma cobrança extra, mesmo com obrigatório vazio', () => {
+Deno.test('mínimo atingido NÃO dispensa obrigatório: a cidade ainda é cobrada', () => {
   const base = startFlow(steps as any, 'pt-BR')
   const already = { ...base, outbound: [], messages: [], reasked: true } as any
   const gated = applyRequiredGate(steps as any, already, 'pt-BR', {
     'contact.full_name': 'Rose Carla',
     'outside.age': '34',
   })
-  assertEquals(gated.state.required_field || '', '')
+  assertEquals(gated.state.required_field, 'funnel.empadronado_city')
 })
+
 
 
 Deno.test('handoff não acontece com obrigatório vazio', () => {
