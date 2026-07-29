@@ -163,7 +163,7 @@ function StepDialog({
               </Select>
             </div>
           </div>
-          {looksLikeQuestion && (validation.step_kind || 'PERGUNTA') !== 'PERGUNTA' && (
+          {looksLikeQuestion && !['PERGUNTA', 'PERGUNTA_GERAL'].includes(validation.step_kind || 'PERGUNTA') && (
             <p className="flex items-center gap-1 text-xs text-amber-600">
               <AlertTriangle className="h-3 w-3" />
               Esta etapa faz uma pergunta, mas não é do tipo "Pergunta": o agente envia a mensagem e

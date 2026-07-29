@@ -151,7 +151,7 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
               <p className="text-xs text-muted-foreground">
                 {STEP_KINDS.find((k) => k.value === kind)?.hint}
               </p>
-              {kind !== 'PERGUNTA' && JSON.stringify(step.messages || {}).includes('?') && (
+              {!isQuestion && JSON.stringify(step.messages || {}).includes('?') && (
                 <p className="text-xs text-amber-600">
                   Esta etapa faz uma pergunta, mas não é do tipo "Pergunta": o agente envia a
                   mensagem e segue direto para a próxima etapa, sem esperar a resposta.
