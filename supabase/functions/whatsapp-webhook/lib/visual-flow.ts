@@ -169,6 +169,7 @@ export async function runVisualFlowFirstTurn(
   lang: FlowLang,
   callLLM: ((prompt: string) => Promise<string>) | null,
   supabase?: any,
+  opts?: { profileName?: string | null; phone?: string },
 ): Promise<FlowTurnResult> {
   const logIntake = (payload: Record<string, unknown>) =>
     console.log('[VISUAL_FLOW][INTAKE]', JSON.stringify(payload))
@@ -177,26 +178,37 @@ export async function runVisualFlowFirstTurn(
   const localize = (turn: FlowTurnResult) =>
     localizeTurn(turn, lang, { steps: plan.steps, callLLM, supabase, logTag: '[VISUAL_FLOW]' })
 
+  // Nome do perfil do WhatsApp: usado como dado já conhecido (quando confiável).
+  const seed = profileNameToFieldValues(opts?.profileName, opts?.phone || '')
+  const seedPrefill = Object.keys(seed).length
+    ? prefillFromFieldValues(plan.steps, seed)
+    : {}
+  const startWithSeed = (): FlowTurnResult =>
+    Object.keys(seedPrefill).length
+      ? startFlowWithPrefill(plan.steps, lang, seedPrefill)
+      : startFlow(plan.steps, lang)
+
   if (!plan.intake?.enabled) {
-    logIntake({ reason: 'disabled' })
-    return await localize(startFlow(plan.steps, lang))
+    logIntake({ reason: 'disabled', profile_name: !!seed['contact.full_name'] })
+    return await localize(startWithSeed())
   }
   if (!callLLM) {
-    logIntake({ reason: 'no_llm' })
-    return startFlow(plan.steps, lang)
+    logIntake({ reason: 'no_llm', profile_name: !!seed['contact.full_name'] })
+    return startWithSeed()
   }
 
   /** Abertura sem aproveitamento: usa a "Saudação padrão" quando configurada. */
   const plainStart = (): FlowTurnResult =>
-    prependIntakeGreeting(startFlow(plan.steps, lang), renderIntakeGreeting(plan.intake, lang, {}))
+    prependIntakeGreeting(startWithSeed(), renderIntakeGreeting(plan.intake, lang, seed))
 
   let intake
   try {
-    intake = await runIntake({ message, steps: plan.steps, lang, config: plan.intake, callLLM })
+    intake = await runIntake({ message, steps: plan.steps, lang, config: plan.intake, callLLM, seed })
   } catch (e) {
     logIntake({ reason: 'exception', detail: e instanceof Error ? e.message : String(e) })
     return await localize(plainStart())
   }
+
 
   const prefilledCodes = Object.keys(intake.prefilled || {})
   logIntake({
