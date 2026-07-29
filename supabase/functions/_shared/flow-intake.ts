@@ -340,14 +340,21 @@ export function extractionToSourceValues(
       out.age = String(birth.age)
     }
   }
-  put('city', normText(extraction.city))
+  const city = normText(extraction.city)
+  put('city', city)
   const country = normalizeCountry(extraction.residence_country)
   put('residence_country', country)
+  // "Moro em Paris": só a cidade foi dita — o país vem da cidade conhecida.
+  if (!out.residence_country) {
+    const derived = countryFromCity(out.city || city)
+    if (derived) out.residence_country = derived
+  }
   // ATENÇÃO: morar fora da Espanha NÃO significa não estar na Espanha agora.
   // `in_spain` só existe quando o cliente afirma explicitamente (a IA devolve
   // o campo) — nunca é deduzido do país de residência.
   put('education_superior', toYesNo(extraction.education_superior))
-  put('eu_family', toYesNo(extraction.eu_family))
+  // "tio na europa", "minha avó é italiana" → sim (grau de parentesco).
+  put('eu_family', toYesNo(extraction.eu_family, { kinship: true }))
   put('europe_6m', toYesNo(extraction.europe_6m))
 
   return out
@@ -358,8 +365,10 @@ export function extractionToFieldValues(
   extraction: IntakeExtraction,
   minConfidence = 0.7,
   now: Date = new Date(),
+  opts: { message?: string } = {},
 ): Record<string, string> {
-  const src = extractionToSourceValues(extraction, minConfidence, now)
+  const src = extractionToSourceValues(extraction, minConfidence, now, opts)
+
   const out: Record<string, string> = {}
 
   if (src.full_name) out['contact.full_name'] = src.full_name
