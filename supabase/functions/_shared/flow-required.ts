@@ -49,6 +49,12 @@ const DEFAULT_PROMPTS: Record<string, Record<string, string>> = {
     en: 'Just one thing missing: how old are you?',
     fr: 'Il manque juste une information : quel âge avez-vous ?',
   },
+  birth_date: {
+    'pt-BR': 'Qual é a sua data de nascimento? Por favor, no formato DD/MM/AAAA (exemplo: 05/03/1990).',
+    es: '¿Cuál es tu fecha de nacimiento? Por favor, en el formato DD/MM/AAAA (ejemplo: 05/03/1990).',
+    en: 'What is your date of birth? Please use the DD/MM/YYYY format (example: 05/03/1990).',
+    fr: 'Quelle est votre date de naissance ? Merci d’utiliser le format JJ/MM/AAAA (exemple : 05/03/1990).',
+  },
   city: {
     'pt-BR': 'Em qual cidade você mora hoje?',
     es: '¿En qué ciudad vives actualmente?',
