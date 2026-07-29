@@ -143,12 +143,17 @@ export async function loadVisualFlowPlan(supabase: any): Promise<VisualFlowPlan>
     ])
     const steps = mergeFlows(preSteps, handSteps)
     const start = findStartStep(steps)
-    const enabled = !!start && stepKindOf(start) === 'INICIO' && steps.length > 0
+    // O fluxo não precisa ter uma etapa "INÍCIO": pode começar direto por uma
+    // pergunta (inclusive a "Pergunta geral") ou por uma etapa informativa.
+    // Só é inválido quando não há etapas ou quando a primeira etapa é "FIM".
+    const startKind = start ? stepKindOf(start) : null
+    const enabled = !!start && steps.length > 0 && startKind !== 'FIM'
 
     if (!enabled) {
-      console.log('[VISUAL_FLOW] fluxo configurado sem etapa de INÍCIO válida — usando funil legado')
+      console.log('[VISUAL_FLOW] fluxo sem etapa inicial executável — usando funil legado')
       return EMPTY_PLAN
     }
+
 
     return { enabled, steps, preHandoffFlowId: preId, handoffFlowId: handId, intake }
   } catch (e) {
