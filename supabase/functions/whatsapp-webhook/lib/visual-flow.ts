@@ -491,17 +491,18 @@ export async function applyCapturedFields(
         }
         break
       case 'funnel.location_known': {
-        // Sem sim/não claro (ou país), não inventa a localização.
+        // Sem sim/não claro (ou nome de país), não inventa a localização.
         const yn = toYesNo(value)
-        const byCountry = /^(espanha|espa[nñ]a|spain|espagne)$/i.test(value) ? 'yes' : null
-        const decided = yn || byCountry || (value && !/^(sim|si|s[ií]|yes|oui|n[ãa]o|no|non)$/i.test(value) ? 'no' : null)
-        if (decided) {
-          const inSpain = decided === 'yes'
+        const isSpain = /^(espanha|espa[nñ]a|spain|espagne)$/i.test(value)
+        const isCountry = !!value && /^[\p{L}\s.'-]{3,40}$/u.test(value)
+        const inSpain = yn ? yn === 'yes' : (isCountry ? isSpain : null)
+        if (inSpain !== null) {
           funnelPatch.location_known = inSpain ? 'spain' : 'outside'
           contactPatch.is_in_spain = inSpain
         }
         break
       }
+
 
       case 'funnel.entry_date_confirmed': {
         if (value) funnelPatch.entry_date_confirmed = value
