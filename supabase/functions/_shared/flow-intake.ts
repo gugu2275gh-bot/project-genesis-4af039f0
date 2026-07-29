@@ -264,6 +264,14 @@ export function extractionToSourceValues(
 
   const age = Number(String(extraction.age ?? '').replace(/\D+/g, ''))
   if (Number.isFinite(age) && age >= 14 && age <= 100) put('age', String(age))
+  // Data de nascimento: só entra se vier em DD/MM/AAAA e for uma data real.
+  const birth = checkBirthDate(normText(extraction.birth_date), { now })
+  if (birth.ok) {
+    put('birth_date', normText(extraction.birth_date))
+    if (!out.age && birth.age !== null && birth.age >= 14 && birth.age <= 100) {
+      out.age = String(birth.age)
+    }
+  }
   put('city', normText(extraction.city))
   const country = normalizeCountry(extraction.residence_country)
   put('residence_country', country)
