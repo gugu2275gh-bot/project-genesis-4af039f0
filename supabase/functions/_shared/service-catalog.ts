@@ -53,6 +53,11 @@ export function inferInterestEnum(text: string): string | null {
   return null
 }
 
+/** Limpa o cache do catálogo (usado em testes e após alterações). */
+export function clearServiceTypeCache(): void {
+  cache = null
+}
+
 export async function loadServiceTypes(supabase: any): Promise<ServiceTypeRow[]> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.rows
   try {
