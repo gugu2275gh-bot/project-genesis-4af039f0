@@ -168,3 +168,47 @@ Deno.test('respostas de escape não podem virar valor de campo', () => {
     assertEquals(isNonAnswer(t), false, t)
   }
 })
+
+// --- Sim/não assertivo e nome sempre primeiro ---------------------------------
+
+import { isDontKnow, isNameField, missingRequired } from './flow-required.ts'
+
+Deno.test('parentesco na pergunta de familiar europeu vira "sim"', () => {
+  const field = { source: 'eu_family', target_field: 'contact.has_eu_family_member' } as any
+  assertEquals(normalizeRequiredValue(field, 'tio'), 'sim')
+  assertEquals(normalizeRequiredValue(field, 'minha avó é italiana'), 'sim')
+  assertEquals(normalizeRequiredValue(field, 'mi abuelo'), 'sim')
+  assertEquals(normalizeRequiredValue(field, 'somente tenho familia no Brasil'), 'nao')
+  // Campo sem parentesco não muda de comportamento
+  const other = { source: 'europe_6m', target_field: 'contact.eu_entry_last_6_months' } as any
+  assertEquals(normalizeRequiredValue(other, 'tio'), '')
+})
+
+Deno.test('"nem sei o que é isso": explica uma vez e depois grava "nao"', () => {
+  const field = { source: 'education_superior', target_field: 'contact.education_level' } as any
+  assertEquals(isDontKnow('nem sei o que é isso'), true)
+  const first = requiredValueIssue(field, 'nem sei o que é isso', 'pt-BR', {}, 0)
+  assertEquals(first.includes('faculdade'), true)
+  assertEquals(requiredValueIssue(field, 'nem sei o que é isso', 'pt-BR', {}, 1), '')
+  assertEquals(normalizeRequiredValue(field, 'nem sei o que é isso'), 'nao')
+})
+
+Deno.test('nome pendente é sempre a primeira cobrança', () => {
+  const step = {
+    step_code: 'dados',
+    validation: {
+      step_kind: 'PERGUNTA_GERAL',
+      general_capture: {
+        enabled: true,
+        min_fields: 2,
+        fields: [
+          { source: 'age', target_field: 'outside.age', required: true },
+          { source: 'full_name', target_field: 'contact.full_name', required: true },
+        ],
+      },
+    },
+  } as any
+  const pending = missingRequired(step, {})
+  assertEquals(pending[0].target_field, 'contact.full_name')
+  assertEquals(isNameField(pending[0]), true)
+})
