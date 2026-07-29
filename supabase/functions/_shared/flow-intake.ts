@@ -21,6 +21,7 @@ import {
   type FlowTurnResult,
 } from './flow-engine.ts'
 import { fieldAllowed, pickFieldValue } from './flow-vars.ts'
+import { checkBirthDate } from './flow-birthdate.ts'
 
 export interface IntakeExtraction {
   full_name?: string | null
