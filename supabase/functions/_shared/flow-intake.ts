@@ -362,6 +362,16 @@ function firstName(full: string): string {
   return String(full || '').trim().split(/\s+/)[0] || ''
 }
 
+/** Remove vírgulas/espaços órfãos deixados por variáveis vazias ("Olá, !"). */
+export function cleanEmptyPlaceholders(text: string): string {
+  return String(text || '')
+    .replace(/([^\s,;:])\s*[,;:]\s*(?=[!?.…])/g, '$1')
+    .replace(/\s+([!?.,;:…])/g, '$1')
+    .replace(/[,;:]\s*$/gm, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 export function renderIntakeGreeting(
   cfg: IntakeConfig,
   lang: FlowLang,
@@ -373,13 +383,14 @@ export function renderIntakeGreeting(
   const bag = hasData ? cfg.greeting_personalized : cfg.greeting_default
   const template = String(bag?.[String(lang)] ?? bag?.['pt-BR'] ?? '').trim()
   if (!template) return ''
-  return template
+  const rendered = template
     .replace(/\{nome\}/g, name)
     .replace(/\{resumo\}/g, summary)
     .replace(/\{intencao\}/g, fieldValues['funnel.interest_confirmed'] || '')
     .replace(/\{localizacao\}/g, fieldValues['funnel.location_known'] || '')
     .replace(/\s{2,}/g, ' ')
     .trim()
+  return name ? rendered : cleanEmptyPlaceholders(rendered)
 }
 
 /**
