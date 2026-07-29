@@ -805,7 +805,7 @@ export async function runGeneralCapture(params: {
   if (!extraction) return empty('parse_error', String(raw || '').slice(0, 200))
 
   const minConfidence = Number.isFinite(Number(params.minConfidence)) ? Number(params.minConfidence) : 0.7
-  const sourceValues = extractionToSourceValues(extraction, minConfidence, params.now)
+  const sourceValues = extractionToSourceValues(extraction, minConfidence, params.now, { message })
 
   const fieldValues: Record<string, string> = {}
   for (const { source, target_field } of fields) {
