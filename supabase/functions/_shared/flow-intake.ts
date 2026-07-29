@@ -59,6 +59,7 @@ export const CAPTURE_SOURCES: { source: string; default_target: string }[] = [
   { source: 'empadronado', default_target: 'funnel.empadronado_confirmed' },
   { source: 'empadronado_city', default_target: 'funnel.empadronado_city' },
   { source: 'age', default_target: 'outside.age' },
+  { source: 'birth_date', default_target: 'contact.birth_date' },
   { source: 'city', default_target: 'funnel.empadronado_city' },
   { source: 'residence_country', default_target: 'contact.residence_country' },
   { source: 'education_superior', default_target: 'contact.education_level' },
