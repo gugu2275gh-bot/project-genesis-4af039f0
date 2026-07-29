@@ -436,8 +436,13 @@ function overlapRatio(part: string, whole: string): number {
 
 /** A saudação já está (essencialmente) contida na primeira mensagem do turno? */
 export function greetingAlreadyPresent(greeting: string, firstMessage: string): boolean {
-  return overlapRatio(greeting, firstMessage) >= 0.7
+  // Compara a ABERTURA da saudação (primeiros tokens) com o início da mensagem
+  // da etapa — o resto da saudação (resumo) não deve diluir a detecção.
+  const opening = tokensOf(greeting).slice(0, 10)
+  if (opening.length < 4) return false
+  return overlapRatio(opening.join(' '), firstMessage) >= 0.7
 }
+
 
 /**
  * Prefixa a saudação do intake (personalizada ou padrão) no turno.
