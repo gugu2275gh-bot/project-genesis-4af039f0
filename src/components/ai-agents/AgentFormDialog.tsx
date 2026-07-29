@@ -529,7 +529,16 @@ export function AgentFormDialog({ open, onOpenChange, agent, readOnly }: Props) 
                   ))}
                 </SelectContent>
               </Select>
+              {(flows || []).some(
+                (f: any) => f.id === draft.pre_handoff_flow_id && f.status === 'RASCUNHO',
+              ) && (
+                <p className="rounded-md border border-amber-300/60 bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                  Este fluxo está como <strong>rascunho</strong>, mas será executado normalmente no
+                  atendimento real enquanto estiver selecionado aqui.
+                </p>
+              )}
             </div>
+
 
             <div className="space-y-2">
               <LabelWithTip
