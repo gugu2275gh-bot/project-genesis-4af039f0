@@ -233,14 +233,73 @@ export function normalizeCountry(raw: unknown): string {
 }
 
 /**
+ * Cidades conhecidas → país. Rede de segurança para "moro em Paris": sem isso
+ * o país de residência (campo obrigatório) ficava vazio.
+ */
+const CITY_COUNTRY: Array<[RegExp, string]> = [
+  [/^(paris|lyon|marselha|marseille|toulouse|bordeaux|nice|nantes|estrasburgo|strasbourg)$/i, 'França'],
+  [/^(madri|madrid|barcelona|valencia|val[eè]ncia|sevilha|sevilla|bilbao|m[áa]laga|alicante|murcia|zaragoza|palma|tenerife|las palmas|granada|vigo|san sebasti[áa]n)$/i, 'Espanha'],
+  [/^(lisboa|lisbon|porto|braga|coimbra|faro|cascais)$/i, 'Portugal'],
+  [/^(s[ãa]o paulo|sao paulo|rio de janeiro|rio|bras[íi]lia|salvador|belo horizonte|curitiba|porto alegre|recife|fortaleza|manaus|goi[âa]nia|bel[ée]m|florian[óo]polis|campinas|natal|macei[óo]|s[ãa]o lu[íi]s|jo[ãa]o pessoa|vit[óo]ria|cuiab[áa])$/i, 'Brasil'],
+  [/^(roma|rome|mil[ãa]o|milano|milan|npoles|n[áa]poles|napoli|turim|torino|floren[çc]a|firenze|veneza|venezia|bolonha|bologna)$/i, 'Itália'],
+  [/^(londres|london|manchester|liverpool|birmingham|edimburgo|edinburgh|glasgow)$/i, 'Reino Unido'],
+  [/^(berlim|berlin|munique|m[üu]nchen|munich|frankfurt|hamburgo|hamburg|colônia|colonia|k[öo]ln|stuttgart|d[üu]sseldorf)$/i, 'Alemanha'],
+  [/^(buenos aires|c[óo]rdoba argentina|rosario|mendoza)$/i, 'Argentina'],
+  [/^(bogot[áa]|medell[íi]n|cali|cartagena)$/i, 'Colômbia'],
+  [/^(cidade do m[ée]xico|ciudad de m[ée]xico|mexico city|cdmx|guadalajara|monterrey)$/i, 'México'],
+  [/^(caracas|maracaibo|valencia venezuela)$/i, 'Venezuela'],
+  [/^(lima|cusco|arequipa)$/i, 'Peru'],
+  [/^(santiago|santiago do chile|valpara[íi]so)$/i, 'Chile'],
+  [/^(montevid[ée]u|montevideo)$/i, 'Uruguai'],
+  [/^(assun[çc][ãa]o|asunci[óo]n)$/i, 'Paraguai'],
+  [/^(havana|la habana)$/i, 'Cuba'],
+  [/^(bruxelas|bruselas|brussels|antu[ée]rpia|anvers)$/i, 'Bélgica'],
+  [/^(amsterd[ãa]|amsterdam|roterd[ãa]|rotterdam|haia|the hague)$/i, 'Países Baixos'],
+  [/^(dublin|cork)$/i, 'Irlanda'],
+  [/^(zurique|zurich|z[üu]rich|genebra|gen[èe]ve|geneva|berna|bern)$/i, 'Suíça'],
+  [/^(viena|vienna|wien)$/i, 'Áustria'],
+  [/^(vars[óo]via|warsaw|warszawa|crac[óo]via|krakow)$/i, 'Polônia'],
+  [/^(nova york|new york|miami|orlando|boston|chicago|los angeles|houston|washington)$/i, 'Estados Unidos'],
+  [/^(toronto|montreal|vancouver|ottawa)$/i, 'Canadá'],
+  [/^(luanda|benguela)$/i, 'Angola'],
+  [/^(maputo)$/i, 'Moçambique'],
+  [/^(casablanca|rabat|marrakech)$/i, 'Marrocos'],
+]
+
+/** País correspondente a uma cidade conhecida (vazio quando não reconhecida). */
+export function countryFromCity(raw: unknown): string {
+  const city = normText(raw).replace(/^(em|no|na|en|in|à|a)\s+/i, '').trim()
+  if (!city) return ''
+  for (const [re, country] of CITY_COUNTRY) if (re.test(city)) return country
+  return ''
+}
+
+/**
+ * A mensagem fala explicitamente da Espanha/da presença aqui? Só nesse caso
+ * `in_spain` pode ser aceito — morar em outro país NÃO significa estar fora
+ * da Espanha agora.
+ */
+const SPAIN_MENTION_RE =
+  /(espanha|espa[nñ]a|spain|espagne|\bestou aqui\b|\bestoy aqu[íi]\b|\bi'?m here\b|\bje suis ici\b|cheguei|llegu[ée]|arrived|arriv[ée])/i
+
+export function messageMentionsSpain(message: unknown): boolean {
+  return SPAIN_MENTION_RE.test(String(message || ''))
+}
+
+/**
  * Valores extraídos por "dado interpretado" (`source`), já filtrados pela
  * confiança mínima. É a base tanto do intake da 1ª mensagem quanto da etapa
  * "Pergunta geral".
+ *
+ * `opts.message` é a mensagem original: quando informada, `in_spain` só é
+ * aceito se ela citar a Espanha (evita a IA deduzir "não está na Espanha"
+ * apenas porque a pessoa mora em Paris).
  */
 export function extractionToSourceValues(
   extraction: IntakeExtraction,
   minConfidence = 0.7,
   now: Date = new Date(),
+  opts: { message?: string } = {},
 ): Record<string, string> {
   const out: Record<string, string> = {}
   const conf = (key: string) => {
@@ -255,8 +314,12 @@ export function extractionToSourceValues(
 
   put('full_name', normText(extraction.full_name))
   put('email', normText(extraction.email), false)
-  put('in_spain', toYesNo(extraction.in_spain))
+  const hasMessage = typeof opts.message === 'string' && opts.message.trim().length > 0
+  if (!hasMessage || messageMentionsSpain(opts.message)) {
+    put('in_spain', toYesNo(extraction.in_spain))
+  }
   put('intent', normalizeIntent(extraction.intent))
+
 
   let arrival = normText(extraction.arrival_date)
   if (!arrival && Number.isFinite(Number(extraction.arrival_days_ago))) {
