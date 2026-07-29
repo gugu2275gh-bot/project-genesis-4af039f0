@@ -38,6 +38,7 @@ export function AgentSandbox({ initialAgentId }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const { data: versions } = useAgentVersions(agentId || undefined);
+  const { data: flows } = useAgentFlows();
   const { data: messages } = useTestMessages(sessionId || undefined);
   const createSession = useCreateTestSession();
   const send = useSendTestMessage();
