@@ -455,3 +455,95 @@ export async function runIntake(params: {
   return { fieldValues: filtered, prefilled, greeting, reason }
 }
 
+
+// ---------------------------------------------------------------------------
+// Nome vindo do perfil do WhatsApp
+
+/** Nomes de perfil que não servem como nome real do cliente. */
+export function isUsableProfileName(raw: string | null | undefined, phone = ''): boolean {
+  const name = String(raw || '').trim()
+  if (name.length < 2) return false
+  if (/^whatsapp/i.test(name)) return false
+  const digits = phone.replace(/\D+/g, '')
+  const nameDigits = name.replace(/\D+/g, '')
+  if (nameDigits && digits && (digits.includes(nameDigits) || nameDigits.includes(digits))) return false
+  // Só números, símbolos ou emojis.
+  if (!/\p{L}/u.test(name)) return false
+  const letters = (name.match(/\p{L}/gu) || []).length
+  if (letters < 2) return false
+  return true
+}
+
+/** Nome do perfil do WhatsApp como valor de `field_mapping` (ou vazio). */
+export function profileNameToFieldValues(
+  profileName: string | null | undefined,
+  phone = '',
+): Record<string, string> {
+  if (!isUsableProfileName(profileName, phone)) return {}
+  return { 'contact.full_name': String(profileName).trim() }
+}
+
+// ---------------------------------------------------------------------------
+// Etapa "Pergunta geral": interpreta a resposta e preenche vários campos
+
+export interface GeneralCaptureResult {
+  /** Valores por campo do CRM (`field_mapping`). */
+  fieldValues: Record<string, string>
+  /** Etapas do fluxo que ficam respondidas por esses valores. */
+  prefilled: Record<string, string>
+  reason: IntakeReason
+  detail?: string
+}
+
+/**
+ * Executa a interpretação multi-campo da resposta de uma etapa "Pergunta geral".
+ * `fields` liga cada dado interpretado (`source`) ao campo do CRM escolhido.
+ */
+export async function runGeneralCapture(params: {
+  message: string
+  steps: FlowStep[]
+  fields: { source: string; target_field: string }[]
+  minConfidence?: number
+  callLLM: (prompt: string) => Promise<string>
+  now?: Date
+}): Promise<GeneralCaptureResult> {
+  const empty = (reason: IntakeReason, detail?: string): GeneralCaptureResult => ({
+    fieldValues: {},
+    prefilled: {},
+    reason,
+    ...(detail ? { detail } : {}),
+  })
+
+  const fields = (params.fields || []).filter((f) => f?.source && f?.target_field)
+  if (!fields.length) return empty('disabled')
+  const message = String(params.message || '').trim()
+  if (message.length < 2) return empty('short_message')
+
+  let raw = ''
+  try {
+    raw = await params.callLLM(buildIntakePrompt(message, fields.map((f) => f.source)))
+  } catch (e) {
+    return empty('llm_error', e instanceof Error ? e.message : String(e))
+  }
+
+  const extraction = parseIntakeJson(raw)
+  if (!extraction) return empty('parse_error', String(raw || '').slice(0, 200))
+
+  const minConfidence = Number.isFinite(Number(params.minConfidence)) ? Number(params.minConfidence) : 0.7
+  const sourceValues = extractionToSourceValues(extraction, minConfidence, params.now)
+
+  const fieldValues: Record<string, string> = {}
+  for (const { source, target_field } of fields) {
+    const value = sourceValues[source]
+    if (!value) continue
+    fieldValues[target_field] = value
+  }
+  if (!Object.keys(fieldValues).length) return empty('no_data')
+
+  const prefilled = prefillFromFieldValues(params.steps, fieldValues)
+  return {
+    fieldValues,
+    prefilled,
+    reason: Object.keys(prefilled).length ? 'ok' : 'no_match',
+  }
+}
