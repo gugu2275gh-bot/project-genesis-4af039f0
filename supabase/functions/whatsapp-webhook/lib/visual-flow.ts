@@ -441,9 +441,12 @@ export async function applyCapturedFields(
       case 'contact.education_level': {
         const b = toBoolOrNull(value)
         if (b !== null) contactPatch.education_level = b ? 'SUPERIOR' : 'NAO_SUPERIOR'
-        else if (value) contactPatch.education_level = value
+        else if (/^(superior|nao_superior|n[ãa]o_superior|fundamental|medio|m[ée]dio)$/i.test(value)) {
+          contactPatch.education_level = value.toUpperCase().replace('Ã', 'A').replace('É', 'E')
+        }
         break
       }
+
       case 'contact.works_remotely': {
         const b = toBoolOrNull(value)
         if (b !== null) contactPatch.works_remotely = b
