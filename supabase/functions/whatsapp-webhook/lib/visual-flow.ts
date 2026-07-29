@@ -534,8 +534,8 @@ export async function applyCapturedFields(
         if (Number.isFinite(years) && years >= 14 && years <= 100) {
           outside.a2_age = String(years)
           outsideTouched = true
-          const year = ageToBirthYear(value)
-          if (year) contactPatch.birth_date = `${year}-01-01`
+          // Idade NUNCA vira data de nascimento: `contacts.birth_date` só é
+          // gravado com a data real informada pelo cliente (DD/MM/AAAA).
         }
         break
       }
