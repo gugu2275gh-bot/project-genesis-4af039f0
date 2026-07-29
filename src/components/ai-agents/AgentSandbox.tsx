@@ -81,6 +81,11 @@ export function AgentSandbox({ initialAgentId }: Props) {
 
 
   const agent = (agents || []).find((a) => a.id === agentId);
+  const activeFlowId =
+    (agent as any)?.pre_handoff_flow_id || (agent as any)?.flow_id || (agent as any)?.handoff_flow_id || null;
+  const activeFlowName = activeFlowId
+    ? (flows || []).find((f) => f.id === activeFlowId)?.name || 'fluxo não encontrado'
+    : null;
 
   return (
     <Card>
