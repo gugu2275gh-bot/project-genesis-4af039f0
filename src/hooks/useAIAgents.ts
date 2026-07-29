@@ -301,7 +301,7 @@ export function useDuplicateFlow() {
         .from('ai_agent_flow_steps')
         .select('*')
         .eq('flow_id', flow.id)
-        .order('step_order', { ascending: true });
+        .order('order_index', { ascending: true });
       if (stepsError) throw stepsError;
 
       if (steps?.length) {
