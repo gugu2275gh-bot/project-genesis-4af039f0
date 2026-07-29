@@ -117,11 +117,12 @@ Deno.test('mínimo atingido e sem obrigatório pendente: etapa satisfeita', () =
   assertEquals(generalCaptureSatisfied(steps[0] as any, known), true)
 })
 
-Deno.test('obrigatório pendente impede o avanço mesmo com o mínimo atingido', () => {
+Deno.test('mínimo atingido libera o avanço mesmo com obrigatório vazio', () => {
   const known = { 'contact.full_name': 'Julio', 'outside.age': '34' }
-  // min_fields = 2 já foi atingido, mas a cidade é obrigatória
-  assertEquals(generalCaptureSatisfied(steps[0] as any, known), false)
+  // min_fields = 2 atingido: a cidade fica em branco e o fluxo segue
+  assertEquals(generalCaptureSatisfied(steps[0] as any, known), true)
 })
+
 
 Deno.test('obrigatório dispensado (skipped) libera o avanço', () => {
   const known = { 'contact.full_name': 'Julio', 'outside.age': '34' }
