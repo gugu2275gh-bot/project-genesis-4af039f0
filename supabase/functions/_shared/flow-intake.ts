@@ -406,10 +406,75 @@ export function dropOpeningMessages(turn: FlowTurnResult, steps: FlowStep[]): Fl
   return { ...turn, outbound, messages: outbound.map((m: any) => m.text) }
 }
 
-/** Prefixa a saudação do intake (personalizada ou padrão) no turno. */
-export function prependIntakeGreeting(turn: FlowTurnResult, greeting: string): FlowTurnResult {
-  return prependMessage(turn, greeting, 'intake')
+// --- Dedup de saudação ------------------------------------------------------
+
+function normalizeForCompare(s: string): string {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\{[^}]*\}/g, ' ') // placeholders ({nome}, {resumo}…)
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
+
+function tokensOf(s: string): string[] {
+  return normalizeForCompare(s).split(' ').filter((t) => t.length >= 3)
+}
+
+/** Fração dos tokens de `part` que já aparecem no início de `whole`. */
+function overlapRatio(part: string, whole: string): number {
+  const pt = tokensOf(part)
+  if (pt.length < 3) return 0
+  const head = new Set(tokensOf(whole).slice(0, 40))
+  if (!head.size) return 0
+  let hit = 0
+  for (const t of pt) if (head.has(t)) hit++
+  return hit / pt.length
+}
+
+/** A saudação já está (essencialmente) contida na primeira mensagem do turno? */
+export function greetingAlreadyPresent(greeting: string, firstMessage: string): boolean {
+  // Compara a ABERTURA da saudação (primeiros tokens) com o início da mensagem
+  // da etapa — o resto da saudação (resumo) não deve diluir a detecção.
+  const opening = tokensOf(greeting).slice(0, 6)
+  if (opening.length < 4) return false
+  return overlapRatio(opening.join(' '), firstMessage) >= 0.7
+}
+
+
+/**
+ * Prefixa a saudação do intake (personalizada ou padrão) no turno.
+ *
+ * Se a primeira mensagem do turno já abre com a mesma saudação (caso comum
+ * quando a 1ª etapa do fluxo repete "Olá, {nome}! Eu sou a assistente…"),
+ * evita a bolha duplicada: mantém apenas as frases da saudação que NÃO estão
+ * na mensagem da etapa (tipicamente o resumo do que já foi entendido).
+ */
+export function prependIntakeGreeting(turn: FlowTurnResult, greeting: string): FlowTurnResult {
+  const text = String(greeting || '').trim()
+  if (!text) return turn
+  const first = String(turn?.outbound?.[0]?.text ?? turn?.messages?.[0] ?? '')
+  if (!first || !greetingAlreadyPresent(text, first)) {
+    return prependMessage(turn, text, 'intake')
+  }
+  const remainder = text
+    .split(/(?<=[.!?…])\s+|\n+|(?<=\p{Extended_Pictographic})\s+/u)
+    .filter((sentence) => {
+      const t = tokensOf(sentence)
+      // frases curtas ("Olá, Roberto!") fazem parte da abertura repetida
+      if (t.length < 3) return false
+      return overlapRatio(sentence, first) < 0.7
+    })
+    .join(' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+
+  if (normalizeForCompare(remainder).length < 12) return turn
+  return prependMessage(turn, remainder, 'intake')
+}
+
 
 export function renderAckMessage(cfg: IntakeConfig, lang: FlowLang, name?: string): string {
   const template = String(cfg.ack_message?.[String(lang)] ?? cfg.ack_message?.['pt-BR'] ?? '').trim()

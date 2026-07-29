@@ -1,30 +1,31 @@
-## O que está acontecendo
+## O que aconteceu
 
-A configuração de campos obrigatórios vive na seção **Interpretação** da etapa do tipo "Pergunta geral" (componente `StepGeneralCaptureEditor`). Hoje ela só é renderizada no **editor visual de fluxo** (`StepInspector`, aba "Interpretação").
+Sim, é duplicidade — e a causa está confirmada nos dados:
 
-O diálogo que aparece nas suas telas — "Editar etapa", aberto pela **lista de etapas** — não renderiza esse componente em lugar nenhum. Por isso você não encontra a aba: nessa tela ela realmente não existe.
+1. O fluxo **Conversa natural** (`intake_config.greeting_personalized` pt-BR) envia:
+   `"Olá, {nome}! Eu sou a assistente virtual da CB ASESORIA. 😊 {resumo}"`
+2. A **1ª etapa** (`dados_pessoais`, `PERGUNTA_GERAL`) tem como mensagem:
+   `"Olá, {nome}! Eu sou a assistente virtual da CB ASESORIA. 😊\nPara entender melhor o seu caso, farei algumas perguntas…"`
 
-Além disso, nesse mesmo diálogo as seções "Base de conhecimento" e "Resposta diferente do esperado" só aparecem quando o tipo é `PERGUNTA` — etapas `PERGUNTA_GERAL` ficam sem elas também.
+O intake prefixa a saudação como mensagem separada (`prependIntakeGreeting` → `prependMessage`), e a etapa repete a mesma linha de abertura. Resultado: as duas bolhas da imagem.
 
-## O que vou fazer
+## Correção proposta
 
-1. **`FlowsManagement.tsx` (diálogo "Editar etapa")**
-   - Quando o tipo da etapa for **Pergunta geral**, inserir logo abaixo de "Validação da resposta" um bloco **"Interpretação e campos obrigatórios"** com o `StepGeneralCaptureEditor` já existente (mesmo componente do editor visual, gravando em `validation.general_capture`).
-   - Liberar as seções "Base de conhecimento" e "Resposta diferente do esperado" também para `PERGUNTA_GERAL` (hoje só `PERGUNTA`).
+1. **Dedup na camada de saudação** (`supabase/functions/_shared/flow-intake.ts`)
+   - Antes de prefixar, comparar a saudação já renderizada (com `{nome}`/`{resumo}` resolvidos) com o início da primeira mensagem do turno, usando normalização (minúsculas, sem acentos/emoji/pontuação/espaços extras).
+   - Se houver sobreposição relevante (a primeira linha da mensagem da etapa contém a saudação ou vice-versa, ou similaridade alta do primeiro trecho), **não prefixar**; em vez disso, se a saudação for personalizada e trouxer `{resumo}`, injetar só a parte do resumo antes da pergunta, para não perder o "entendi X, Y e Z".
+   - Vale para todos os idiomas, pois a comparação é feita sobre o texto já localizado.
 
-2. **Lista de etapas (tabela)**
-   - Adicionar um badge "Obrigatórios: idade, cidade…" (ou "Sem obrigatórios") na linha das etapas do tipo Pergunta geral, para dar visibilidade sem precisar abrir a etapa.
+2. **Limpeza do conteúdo do fluxo** (migração SQL)
+   - Remover a linha de saudação duplicada da mensagem da etapa `dados_pessoais` nos 4 idiomas do fluxo "Conversa natural", deixando a etapa começar em "Para entender melhor o seu caso…". A saudação passa a ser responsabilidade única do intake (personalizada quando há nome do WhatsApp, padrão caso contrário).
 
-3. **Editor visual (`StepInspector`)**
-   - Renomear a aba "Interpretação" para **"Interpretação / obrigatórios"**, para ficar óbvio onde marcar os campos.
-
-## Onde você vai ver depois
-
-- Lista de etapas → badge com os campos obrigatórios de cada "Pergunta geral".
-- "Editar etapa" (lista) → seção "Interpretação e campos obrigatórios", com o resumo no topo e um checkbox **"Obrigatório — perguntar antes de seguir/transferir"** em cada dado marcado.
-- Editor visual → aba "Interpretação / obrigatórios" (mesmo conteúdo).
+3. **Testes** (`supabase/functions/_shared/flow_intake_test.ts`)
+   - "oi" + nome do WhatsApp → exatamente **uma** bolha de saudação seguida da pergunta geral.
+   - 1ª mensagem com dados → saudação personalizada com resumo, sem repetir a abertura da etapa.
+   - Caso ES/EN/FR → mesma garantia de não duplicar.
 
 ## Detalhes técnicos
 
-- Nenhuma mudança de schema: `required` já existe em `StepGeneralCapture.fields[]` e o motor (`flow-required.ts` / `flow-turn.ts` / `visual-flow.ts`) já lê esse campo.
-- Alterações apenas em: `src/components/ai-agents/FlowsManagement.tsx` e `src/components/ai-agents/flow-builder/StepInspector.tsx`.
+- Alterações concentradas em `flow-intake.ts` (`prependIntakeGreeting` e helper novo `greetingAlreadyPresent`), sem mexer em `flow-engine.ts`/`flow-turn.ts`.
+- Produção (`_shared/visual-flow.ts` via `whatsapp-webhook`) e sandbox (`ai-agent-sandbox`) herdam a correção automaticamente por usarem a mesma função.
+- A migração toca apenas as linhas `messages` da etapa `dados_pessoais` do fluxo `a3e2a1d1-66d7-4527-b215-f66ae134f4ef`.

@@ -202,3 +202,44 @@ Deno.test('ack_enabled por etapa sobrepõe o padrão', () => {
   const turn = advanceFlow(steps, state, 'não', 'pt-BR', { ack })
   assertEquals(turn.messages[0], ack)
 })
+
+// --- Dedup da saudação vs. abertura da etapa --------------------------------
+import { greetingAlreadyPresent as _gap, prependIntakeGreeting as _pig } from './flow-intake.ts'
+
+function turnWith(text: string) {
+  return { outbound: [{ step_code: 'dados_pessoais', text }], messages: [text], path: ['dados_pessoais'] } as any
+}
+
+Deno.test('dedup: saudação igual à abertura da etapa não vira bolha extra', () => {
+  const greeting = 'Olá, Roberto! Eu sou a assistente virtual da CB ASESORIA. 😊'
+  const turn = turnWith('Olá, {nome}! Eu sou a assistente virtual da CB ASESORIA. 😊\nPara entender melhor o seu caso, farei algumas perguntas…')
+  assert(_gap(greeting, turn.messages[0]))
+  const out = _pig(turn, greeting)
+  assertEquals(out.messages.length, 1)
+})
+
+Deno.test('dedup: saudação diferente continua sendo prefixada', () => {
+  const turn = turnWith('Para entender melhor o seu caso, farei algumas perguntas…')
+  const out = _pig(turn, 'Olá, Roberto! Eu sou a assistente virtual da CB ASESORIA. 😊')
+  assertEquals(out.messages.length, 2)
+})
+
+Deno.test('dedup: mantém o resumo quando a abertura se repete', () => {
+  const greeting = 'Olá, Roberto! Eu sou a assistente virtual da CB ASESORIA. 😊 Entendi que você já está na Espanha e busca arraigo social.'
+  const turn = turnWith('Olá, {nome}! Eu sou a assistente virtual da CB ASESORIA. 😊\nPara entender melhor o seu caso, farei algumas perguntas…')
+  const out = _pig(turn, greeting)
+  assertEquals(out.messages.length, 2)
+  assert(out.messages[0].includes('arraigo social'))
+  assert(!/assistente virtual/i.test(out.messages[0]))
+})
+
+for (const [lang, greeting, step] of [
+  ['es', '¡Hola, Roberto! Soy la asistente virtual de CB ASESORIA. 😊', '¡Hola, {nome}! Soy la asistente virtual de CB ASESORIA. 😊\nPara entender mejor tu caso…'],
+  ['en', "Hi, Roberto! I am CB ASESORIA's virtual assistant. 😊", "Hi, {nome}! I am CB ASESORIA's virtual assistant. 😊\nTo understand your case better…"],
+  ['fr', "Bonjour, Roberto ! Je suis l'assistante virtuelle de CB ASESORIA. 😊", "Bonjour, {nome} ! Je suis l'assistante virtuelle de CB ASESORIA. 😊\nPour mieux comprendre votre situation…"],
+] as const) {
+  Deno.test(`dedup: sem duplicidade em ${lang}`, () => {
+    const out = _pig(turnWith(step), greeting)
+    assertEquals(out.messages.length, 1)
+  })
+}
