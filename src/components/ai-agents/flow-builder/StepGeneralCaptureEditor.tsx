@@ -3,6 +3,7 @@ import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { STEP_FIELD_MAPPINGS } from '@/types/ai-agents';
+import { MultiLangField } from '@/components/ai-agents/MultiLangField';
 import { CAPTURE_SOURCE_OPTIONS, type StepGeneralCapture } from '@/types/ai-agent-flow-builder';
 
 interface Props {
@@ -45,6 +46,12 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
     onChange({
       ...cfg,
       fields: cfg.fields!.map((f) => (f.source === source ? { ...f, required } : f)),
+    });
+
+  const setPrompts = (source: string, prompts: Record<string, string>) =>
+    onChange({
+      ...cfg,
+      fields: cfg.fields!.map((f) => (f.source === source ? { ...f, prompts } : f)),
     });
 
   const setTarget = (source: string, target: string) =>
@@ -108,6 +115,17 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
                     </Label>
                   </div>
                 )}
+                {checked && cfg.fields!.find((f) => f.source === opt.value)?.required === true && (
+                  <div className="pl-6">
+                    <MultiLangField
+                      label="Pergunta usada para cobrar este dado"
+                      hint="Deixe em branco para usar a pergunta padrão. Ao traduzir, o agente usa a versão do idioma do atendimento."
+                      value={(cfg.fields!.find((f) => f.source === opt.value)?.prompts || {}) as Record<string, string>}
+                      onChange={(v) => setPrompts(opt.value, v as Record<string, string>)}
+                      rows={2}
+                    />
+                  </div>
+                )}
                 {checked && (
                   <div className="pl-6 space-y-1">
                     <Label className="text-xs text-muted-foreground">Gravar em</Label>
@@ -152,8 +170,9 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
             : 'Nenhum dado obrigatório: o agente aproveita o que for dito e segue em frente.'}
         </p>
         <p className="text-xs text-muted-foreground">
-          Se a primeira mensagem do cliente já trouxer pelo menos essa quantidade de dados marcados
-          acima, esta pergunta não é feita e o fluxo segue direto para a próxima pendência.
+          Regra: os campos obrigatórios são sempre perguntados. Sem obrigatórios pendentes e com
+          essa quantidade de dados já entendidos, a etapa é encerrada e o fluxo avança para a
+          próxima pergunta.
         </p>
       </div>
 
