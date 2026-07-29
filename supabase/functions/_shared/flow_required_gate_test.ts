@@ -197,6 +197,7 @@ Deno.test('nome pendente é sempre a primeira cobrança', () => {
   const step = {
     step_code: 'dados',
     validation: {
+      step_kind: 'PERGUNTA_GERAL',
       general_capture: {
         enabled: true,
         min_fields: 2,

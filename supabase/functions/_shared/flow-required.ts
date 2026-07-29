@@ -399,9 +399,13 @@ const YES_RE =
 const NO_RE =
   /(^|\b)(n[ãa]o|nao|no|nope|non|nunca|jamais|nenhum[ao]?|ningu[eé]m|nadie|ninguno|none|nobody|negativo|s[óo] (no|na|em)|somente (no|na|em)|apenas (no|na|em)|solo en|only in|n[ãa]o tenho|nao tenho|no tengo|i don'?t|i have no|never)(\b|$)/i
 
+const KINSHIP_WORDS =
+  '(?:pai|m[\u00e3a]e|av[\u00f3\u00f4o]|av[\u00f3o]s|bisav[\u00f3\u00f4o]|filh[oa]|irm[\u00e3a]os?|irm[\u00e3a]|tios?|tias?|prim[oa]s?|sobrinh[oa]s?|espos[oa]|marido|mulher|c[\u00f4o]njuge|sogr[oa]|padrasto|madrasta|bisneto|net[oa]|padre|madre|abuel[oa]s?|hij[oa]s?|herman[oa]s?|t[\u00edi]os?|t[\u00edi]as?|sobrin[oa]s?|father|mother|grand-?(?:father|mother|pa|ma|parents?)|son|daughter|brother|sister|uncle|aunt|cousins?|nephew|niece|wife|husband|p[\u00e8e]re|m[\u00e8e]re|grand-?(?:p[\u00e8e]re|m[\u00e8e]re)|fils|fille|fr[\u00e8e]re|s(?:oe|\u0153)ur|oncle|tante|cousine?|neveu|ni[\u00e8e]ce|femme|mari)'
 /** Grau de parentesco citado como resposta ("tio", "minha avó é italiana"). */
-const KINSHIP_RE =
-  /(^|\b)(pai|m[ãa]e|av[óôo]|av[óo]s|bisav[óôo]|filh[oa]|irm[ãa]os?|irm[ãa]|tios?|tias?|prim[oa]s?|sobrinh[oa]s?|espos[oa]|marido|mulher|c[ôo]njuge|sogr[oa]|padrasto|madrasta|bisneto|neto|neta|padre|madre|abuel[oa]s?|hij[oa]s?|hermanos?|hermanas?|t[íi]os?|t[íi]as?|prim[oa]s?|sobrin[oa]s?|father|mother|grand(?:father|mother|pa|ma|parents?)|son|daughter|brother|sister|uncle|aunt|cousin|nephew|niece|wife|husband|p[èe]re|m[èe]re|grand-?(?:p[èe]re|m[èe]re)|fils|fille|fr[èe]re|s(?:oe|œ)ur|oncle|tante|cousin[e]?|neveu|ni[èe]ce|femme|mari)(\b|$)/i
+const KINSHIP_RE = new RegExp(
+  `(^|[^A-Za-z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u00ff])${KINSHIP_WORDS}([^A-Za-z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u00ff]|$)`,
+  'i',
+)
 
 /** "Não sei o que é isso" / "no sé qué es" / "what is that?" / "je ne sais pas". */
 const DONT_KNOW_RE =
