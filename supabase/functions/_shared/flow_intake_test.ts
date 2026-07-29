@@ -272,14 +272,25 @@ Deno.test('Julio: nome + país + "morar na Espanha" viram 3 dados válidos', () 
   assertEquals(values['contact.full_name'], 'Julio')
   assertEquals(values['contact.residence_country'], 'Brasil')
   assertEquals(values['funnel.interest_confirmed'], 'residência')
-  // País fora da Espanha define a localização
-  assertEquals(values['funnel.location_known'], 'nao')
+  // Morar fora da Espanha NÃO define onde a pessoa está fisicamente.
+  assertEquals(values['funnel.location_known'], undefined)
 })
 
-Deno.test('país Espanha marca a pessoa como já estando na Espanha', () => {
-  const src = extractionToSourceValues_pais({ residence_country: 'España' } as any)
-  assertEquals(src.in_spain, 'sim')
+Deno.test('país não define presença na Espanha (nem quando é a Espanha)', () => {
+  assertEquals(extractionToSourceValues_pais({ residence_country: 'España' } as any).in_spain, undefined)
+  assertEquals(extractionToSourceValues_pais({ residence_country: 'França' } as any).in_spain, undefined)
 })
+
+Deno.test('presença na Espanha só com afirmação explícita', () => {
+  const src = extractionToSourceValues_pais({
+    residence_country: 'Brasil',
+    in_spain: 'sim',
+    confidence: { residence_country: 0.9, in_spain: 0.9 },
+  } as any)
+  assertEquals(src.in_spain, 'sim')
+  assertEquals(src.residence_country, 'Brasil')
+})
+
 
 Deno.test('intenções livres normalizadas para serviços válidos', () => {
   assertEquals(normalizeIntent('vivir en España'), 'residência')
