@@ -1,37 +1,32 @@
-## O que aconteceu
+## Objetivo
 
-Verifiquei no banco e no código:
+Deixar a suíte de testes do `whatsapp-webhook` 100% verde, corrigindo duas expectativas de texto que ficaram para trás depois de mudanças já aprovadas no funil legado. Nenhuma mudança de comportamento do atendimento.
 
-- O agente de produção **AGENTE 2.0** está com `pre_handoff_flow_id` = fluxo **"teste aberto"** (confirmado na tabela `ai_agents`).
-- O fluxo "teste aberto" tem 10 etapas, mas a **primeira etapa (`abertura_geral`) é do tipo `PERGUNTA_GERAL`** — não existe nenhuma etapa `INICIO` (confirmado em `ai_agent_flow_steps`).
-- Em `supabase/functions/whatsapp-webhook/lib/visual-flow.ts` (linha 146), o plano só é considerado válido quando a etapa inicial é do tipo `INICIO`:
-  `const enabled = !!start && stepKindOf(start) === 'INICIO'`
-  Como `stepKindOf` converte `PERGUNTA_GERAL` em `PERGUNTA` (flow-engine.ts:275), a condição falha e o loader devolve `EMPTY_PLAN`, registrando "fluxo configurado sem etapa de INÍCIO válida — usando funil legado".
+## Diagnóstico (confirmado)
 
-Resultado: o fluxo visual **não rodou**. A mensagem do cliente caiu no motor legado com `kb_strict_mode: true`, que não achou resposta na base e disparou o texto genérico "Não tenho essa informação no momento. Vou encaminhar…" — repetido duas vezes por causa do reenvio/retry do Twilio.
+| Teste | Espera | Comportamento atual | Causa |
+|---|---|---|---|
+| `bpmn3_handoff_test.ts:195` — ramo B sem cidade | "Em qual cidade você **está** empadronado" | "Em qual cidade você **foi** empadronado?" | Texto de B5 reescrito em `lib/questions.ts:271` |
+| `bpmn3_handoff_test.ts:278` — ramo A sem formação | "formação superior" | Repergunta sim/não de "Europa nos últimos 6 meses" | A6 (formação superior) removida do funil (`questions.ts:502`, `prompt-template.ts:80`) |
 
-Detalhe secundário: o fluxo está com `status = 'RASCUNHO'`, e o seletor do agente permitiu escolhê-lo sem qualquer aviso.
+Em ambos os casos o gate `enforceBlockCompletion` age certo (logs `Forçando B4` e `bloco A incompleto`); só as strings esperadas envelheceram.
 
-## Correção proposta
+## Mudanças
 
-1. **Aceitar fluxos que começam por pergunta** (`visual-flow.ts`)
-   - Trocar a exigência rígida de `INICIO` por: o plano é válido se houver ao menos uma etapa e a etapa inicial for `INICIO`, `INFORMATIVA` ou `PERGUNTA` (inclui `PERGUNTA_GERAL`).
-   - Manter o log de diagnóstico quando o fluxo realmente estiver vazio/inválido.
-   - Conferir em `flow-engine.ts` (`startFlow`/`startFlowWithPrefill`) que o primeiro turno envia a mensagem da etapa inicial e **aguarda** a resposta quando ela é pergunta — ajustar se estiver auto-avançando.
+1. **`supabase/functions/whatsapp-webhook/bpmn3_handoff_test.ts` (teste do ramo B)**
+   - Trocar a asserção de string literal por uma verificação resistente a reescrita: conferir que a resposta contém "cidade" e "empadronado" (e continua sem "visão inicial"), em vez do texto exato "está empadronado".
 
-2. **Aviso de rascunho na configuração do agente** (`AgentFormDialog.tsx`, aba Fluxo)
-   - Mostrar um alerta quando o fluxo selecionado estiver em `RASCUNHO`, deixando claro que ele está em produção mesmo assim.
+2. **`supabase/functions/whatsapp-webhook/bpmn3_handoff_test.ts` (teste do ramo A)**
+   - Renomear o teste para refletir a realidade ("ramo A incompleto → força a próxima pergunta A pendente") e ajustar o cenário: o transcript deixa uma pergunta A realmente pendente, e a asserção passa a exigir que o H1 seja bloqueado e que venha uma pergunta do bloco A — sem citar "formação superior", que não existe mais no funil.
 
-3. **Blindagem contra a repetição da mensagem genérica**
-   - Verificar o caminho do fallback estrito de base (`kb_strict_mode`) para não reenviar a mesma frase em reentregas do Twilio dentro de uma janela curta (mesma proteção de idempotência já usada na saudação).
+3. **Unificar o texto de B5 (opcional, mas recomendado)**
+   - `lib/overrides.ts:1760` ainda usa a versão antiga "Em qual cidade você **está** empadronado?", enquanto `lib/questions.ts:271` usa "**foi**". Fazer o `overrides.ts` reutilizar a função de `questions.ts` (ou alinhar o texto) para não existirem duas versões da mesma pergunta indo para o cliente.
 
-4. **Testes Deno**
-   - Novo teste garantindo que um fluxo iniciado por `PERGUNTA_GERAL` retorna `enabled: true` e que o 1º turno envia a saudação/pergunta geral e aguarda a resposta.
-   - Rodar a suíte existente de `whatsapp-webhook` e `_shared`.
+## Validação
 
-5. **Deploy** das funções `whatsapp-webhook` e `ai-agent-sandbox`, e depois um teste real: mandar exatamente "tenho 34 anos, moro em Valencia, sou formado, minha avó é italiana, cheguei em maio, quero nacionalidade" e confirmar que o fluxo interpreta os campos e pula as perguntas já respondidas.
+- Rodar a suíte completa do `whatsapp-webhook` e confirmar 0 falhas.
+- Redeploy da função `whatsapp-webhook` apenas se o item 3 (unificação do texto) for aplicado.
 
 ## Detalhes técnicos
 
-- Arquivos afetados: `supabase/functions/whatsapp-webhook/lib/visual-flow.ts`, possivelmente `supabase/functions/_shared/flow-engine.ts`, `src/components/ai-agents/AgentFormDialog.tsx`, novo arquivo de teste.
-- Sem migração de banco necessária: o fluxo "teste aberto" passa a funcionar como está. Opcionalmente posso também promovê-lo de `RASCUNHO` para `ATIVO` — me diga se quer.
+Os testes ficarão baseados em asserções semânticas (palavras-chave + bloqueio do H1) em vez de comparação literal de frase, para que futuras reescritas de copy não quebrem a suíte de novo.
