@@ -32,12 +32,21 @@ Deno.test('resolveCurrentStep: state vazio → ABERTURA', () => {
   assertEquals(resolveCurrentStep(baseState), 'ABERTURA')
 })
 
-Deno.test('resolveCurrentStep: progressão NAME → EMAIL → INTEREST → LOCATION', () => {
+Deno.test('resolveCurrentStep: progressão NAME → LOCATION (EMAIL/INTEREST desativados)', () => {
   assertEquals(resolveCurrentStep({ ...baseState, step: 'nome' }), 'NAME')
-  assertEquals(resolveCurrentStep({ ...baseState, step: 'nome', name_confirmed: true }), 'EMAIL')
-  assertEquals(resolveCurrentStep({ ...baseState, name_confirmed: true, email_confirmed: true }), 'INTEREST')
-  assertEquals(resolveCurrentStep({ ...baseState, name_confirmed: true, email_confirmed: true, interest_confirmed: 'X' }), 'LOCATION')
+  assertEquals(resolveCurrentStep({ ...baseState, step: 'nome', name_confirmed: true }), 'LOCATION')
+  assertEquals(resolveCurrentStep({ ...baseState, name_confirmed: true, email_confirmed: true }), 'LOCATION')
+  // trava a regra de produto: e-mail nunca volta a ser perguntado no onboarding
+  for (const s of [
+    { ...baseState, step: 'nome', name_confirmed: true },
+    { ...baseState, name_confirmed: true, interest_confirmed: 'X' },
+    { ...baseState, name_confirmed: true, email_confirmed: true, interest_confirmed: 'X' },
+  ]) {
+    assert(resolveCurrentStep(s as any) !== 'EMAIL')
+    assert(resolveCurrentStep(s as any) !== 'INTEREST')
+  }
 })
+
 
 Deno.test('branch INSIDE: LOCATION=spain → INSIDE_ENTRY_DATE → INSIDE_EMPADRONADO → PRE_HANDOFF', () => {
   const s: any = { ...baseState, name_confirmed: true, email_confirmed: true, interest_confirmed: 'X', location_known: 'spain' }
