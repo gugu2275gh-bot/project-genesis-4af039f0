@@ -1,11 +1,16 @@
 import type { MultiLangText } from '@/types/ai-agents';
 
 /** Natureza da etapa dentro do desenho do fluxo. */
-export type StepKind = 'INICIO' | 'PERGUNTA' | 'INFORMATIVA' | 'FIM';
+export type StepKind = 'INICIO' | 'PERGUNTA' | 'PERGUNTA_GERAL' | 'INFORMATIVA' | 'FIM';
 
 export const STEP_KINDS: { value: StepKind; label: string; hint: string }[] = [
   { value: 'INICIO', label: 'Início', hint: 'Ponto de entrada do fluxo. Só pode existir um.' },
   { value: 'PERGUNTA', label: 'Pergunta', hint: 'Envia a mensagem e espera a resposta do cliente.' },
+  {
+    value: 'PERGUNTA_GERAL',
+    label: 'Pergunta geral',
+    hint: 'Pergunta aberta: a IA interpreta a resposta, preenche vários campos e pula as perguntas já respondidas.',
+  },
   {
     value: 'INFORMATIVA',
     label: 'Informativa',
@@ -13,6 +18,30 @@ export const STEP_KINDS: { value: StepKind; label: string; hint: string }[] = [
   },
   { value: 'FIM', label: 'Fim', hint: 'Encerra o fluxo (pode encaminhar para um especialista).' },
 ];
+
+/** Dados que a IA sabe interpretar numa "Pergunta geral". */
+export const CAPTURE_SOURCE_OPTIONS: { value: string; label: string; default_target: string }[] = [
+  { value: 'full_name', label: 'Nome', default_target: 'contact.full_name' },
+  { value: 'email', label: 'E-mail', default_target: 'contact.email' },
+  { value: 'age', label: 'Idade', default_target: 'outside.age' },
+  { value: 'city', label: 'Cidade onde mora', default_target: 'funnel.empadronado_city' },
+  { value: 'in_spain', label: 'Está na Espanha?', default_target: 'funnel.location_known' },
+  { value: 'intent', label: 'Objetivo / serviço de interesse', default_target: 'funnel.interest_confirmed' },
+  { value: 'arrival_date', label: 'Data de chegada', default_target: 'funnel.entry_date_confirmed' },
+  { value: 'empadronado', label: 'Está empadronado?', default_target: 'funnel.empadronado_confirmed' },
+  { value: 'empadronado_city', label: 'Cidade do empadronamento', default_target: 'funnel.empadronado_city' },
+  { value: 'education_superior', label: 'Possui formação superior?', default_target: 'contact.education_level' },
+  { value: 'eu_family', label: 'Possui familiar europeu?', default_target: 'contact.has_eu_family_member' },
+  { value: 'europe_6m', label: 'Esteve na Europa nos últimos 6 meses?', default_target: 'contact.eu_entry_last_6_months' },
+];
+
+/** Configuração de interpretação multi-campo da etapa "Pergunta geral". */
+export interface StepGeneralCapture {
+  enabled?: boolean;
+  fields?: { source: string; target_field: string }[];
+  min_confidence?: number;
+}
+
 
 /** Mensagens da etapa: por idioma, uma ou várias mensagens em sequência. */
 export type MultiLangMessages = Record<string, string | string[]>;
@@ -361,6 +390,9 @@ export interface StepValidation {
   ack_ai?: boolean;
   /** Valida a resposta desta etapa na base de conhecimento. */
   kb_check?: StepKbCheck;
+  /** Interpretação multi-campo da etapa "Pergunta geral". */
+  general_capture?: StepGeneralCapture;
+
 
   /** @deprecated formato antigo e plano ("se não souber"). */
   unknown_answer?: UnknownAnswerConfig;

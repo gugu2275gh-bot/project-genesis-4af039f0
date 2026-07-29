@@ -30,8 +30,35 @@ export interface IntakeExtraction {
   arrival_days_ago?: number | null
   empadronado?: string | null
   empadronado_city?: string | null
+  /** Idade em anos. */
+  age?: number | string | null
+  /** Cidade onde a pessoa mora hoje. */
+  city?: string | null
+  /** 'sim' | 'nao' — possui formação superior. */
+  education_superior?: string | null
+  /** 'sim' | 'nao' — possui familiar europeu. */
+  eu_family?: string | null
+  /** 'sim' | 'nao' — esteve na Europa nos últimos 6 meses. */
+  europe_6m?: string | null
   confidence?: Record<string, number>
 }
+
+/** Dados que a IA sabe interpretar, com o campo do CRM usado por padrão. */
+export const CAPTURE_SOURCES: { source: string; default_target: string }[] = [
+  { source: 'full_name', default_target: 'contact.full_name' },
+  { source: 'email', default_target: 'contact.email' },
+  { source: 'in_spain', default_target: 'funnel.location_known' },
+  { source: 'intent', default_target: 'funnel.interest_confirmed' },
+  { source: 'arrival_date', default_target: 'funnel.entry_date_confirmed' },
+  { source: 'empadronado', default_target: 'funnel.empadronado_confirmed' },
+  { source: 'empadronado_city', default_target: 'funnel.empadronado_city' },
+  { source: 'age', default_target: 'outside.age' },
+  { source: 'city', default_target: 'funnel.empadronado_city' },
+  { source: 'education_superior', default_target: 'contact.education_level' },
+  { source: 'eu_family', default_target: 'contact.has_eu_family_member' },
+  { source: 'europe_6m', default_target: 'contact.eu_entry_last_6_months' },
+]
+
 
 export interface IntakeConfig {
   enabled: boolean
@@ -86,26 +113,36 @@ export function normalizeIntakeConfig(raw: unknown): IntakeConfig {
 // ---------------------------------------------------------------------------
 // Prompt + parsing
 
-export function buildIntakePrompt(message: string): string {
-  return `Você extrai dados de uma PRIMEIRA mensagem de um cliente de uma assessoria de imigração na Espanha.
+export function buildIntakePrompt(message: string, sources: string[] = []): string {
+  const only = (sources || []).filter(Boolean)
+  const filter = only.length
+    ? `\nExtraia SOMENTE estas chaves (as demais devem ser null): ${only.join(', ')}.`
+    : ''
+  return `Você extrai dados de uma mensagem de um cliente de uma assessoria de imigração na Espanha.
 Retorne APENAS um JSON válido, sem markdown, com as chaves abaixo. Inclua SOMENTE o que foi dito
-EXPLICITAMENTE. Nunca invente. Campos desconhecidos devem ser null.
+EXPLICITAMENTE. Nunca invente. Campos desconhecidos devem ser null.${filter}
 
 {
   "full_name": "nome completo ou primeiro nome dito pela pessoa, ou null",
   "email": "e-mail ou null",
   "in_spain": "sim | nao | null (a pessoa está fisicamente na Espanha agora?)",
-  "intent": "resumo curto do objetivo (ex.: estudar, trabalhar, residência, nacionalidade) ou null",
+  "intent": "resumo curto do objetivo (ex.: estudar, trabalhar, residência, nômade digital, arraigo, nacionalidade, oferta de trabalho) ou null",
   "arrival_date": "DD/MM/AAAA se a data de chegada na Espanha foi dita, senão null",
   "arrival_days_ago": número inteiro se disse algo como "estou aqui há 5 dias", senão null,
   "empadronado": "sim | nao | null",
   "empadronado_city": "cidade do empadronamento ou null",
-  "confidence": { "full_name": 0..1, "in_spain": 0..1, "intent": 0..1, "arrival_date": 0..1, "empadronado": 0..1 }
+  "age": número inteiro da idade em anos, senão null,
+  "city": "cidade onde a pessoa mora hoje, ou null",
+  "education_superior": "sim | nao | null (possui formação superior/universitária?)",
+  "eu_family": "sim | nao | null (possui familiar europeu ou residente na UE?)",
+  "europe_6m": "sim | nao | null (esteve na Europa nos últimos 6 meses?)",
+  "confidence": { "full_name": 0..1, "in_spain": 0..1, "intent": 0..1, "arrival_date": 0..1, "empadronado": 0..1, "age": 0..1, "city": 0..1, "education_superior": 0..1, "eu_family": 0..1, "europe_6m": 0..1 }
 }
 
 Mensagem do cliente:
 """${String(message || '').slice(0, 1500)}"""`
 }
+
 
 export function parseIntakeJson(raw: string): IntakeExtraction | null {
   const text = String(raw || '')
@@ -131,8 +168,26 @@ export function daysAgoToDate(days: number, now: Date = new Date()): string {
 // ---------------------------------------------------------------------------
 // Extração → respostas de etapa
 
-/** Valores extraídos convertidos para o vocabulário de `field_mapping`. */
-export function extractionToFieldValues(
+const YES_WORDS = ['sim', 'si', 'sí', 'yes', 'true', 'oui', 'claro']
+const NO_WORDS = ['nao', 'não', 'no', 'false', 'non']
+
+function normText(v: unknown): string {
+  return String(v ?? '').trim()
+}
+
+function toYesNo(v: unknown): string {
+  const t = normText(v).toLowerCase()
+  if (YES_WORDS.includes(t)) return 'sim'
+  if (NO_WORDS.includes(t)) return 'nao'
+  return ''
+}
+
+/**
+ * Valores extraídos por "dado interpretado" (`source`), já filtrados pela
+ * confiança mínima. É a base tanto do intake da 1ª mensagem quanto da etapa
+ * "Pergunta geral".
+ */
+export function extractionToSourceValues(
   extraction: IntakeExtraction,
   minConfidence = 0.7,
   now: Date = new Date(),
@@ -142,50 +197,73 @@ export function extractionToFieldValues(
     const c = Number(extraction?.confidence?.[key])
     return Number.isFinite(c) ? c : 1
   }
-  const norm = (v: unknown) => String(v ?? '').trim()
-  const yesNo = (v: unknown): string => {
-    const t = norm(v).toLowerCase()
-    if (['sim', 'si', 'sí', 'yes', 'true', 'oui'].includes(t)) return 'sim'
-    if (['nao', 'não', 'no', 'false', 'non'].includes(t)) return 'nao'
-    return ''
+  const put = (key: string, value: string, checkConf = true) => {
+    if (!value) return
+    if (checkConf && conf(key) < minConfidence) return
+    out[key] = value
   }
 
-  if (norm(extraction.full_name) && conf('full_name') >= minConfidence) {
-    out['contact.full_name'] = norm(extraction.full_name)
-  }
-  if (norm(extraction.email)) out['contact.email'] = norm(extraction.email)
+  put('full_name', normText(extraction.full_name))
+  put('email', normText(extraction.email), false)
+  put('in_spain', toYesNo(extraction.in_spain))
+  put('intent', normText(extraction.intent))
 
-  const inSpain = yesNo(extraction.in_spain)
-  if (inSpain && conf('in_spain') >= minConfidence) {
-    out['funnel.location_known'] = inSpain
-  }
-
-  if (norm(extraction.intent) && conf('intent') >= minConfidence) {
-    out['funnel.interest_confirmed'] = norm(extraction.intent)
-    out['lead.service_interest'] = norm(extraction.intent)
-  }
-
-  let arrival = norm(extraction.arrival_date)
+  let arrival = normText(extraction.arrival_date)
   if (!arrival && Number.isFinite(Number(extraction.arrival_days_ago))) {
     arrival = daysAgoToDate(Number(extraction.arrival_days_ago), now)
   }
-  if (arrival && conf('arrival_date') >= minConfidence) {
-    out['funnel.entry_date_confirmed'] = arrival
-    out['contact.spain_arrival_date'] = arrival
-  }
+  put('arrival_date', arrival)
 
-  const emp = yesNo(extraction.empadronado)
-  if (emp && conf('empadronado') >= minConfidence) {
-    out['funnel.empadronado_confirmed'] = emp
-    out['contact.is_empadronado'] = emp
-  }
-  if (norm(extraction.empadronado_city)) {
-    out['funnel.empadronado_city'] = norm(extraction.empadronado_city)
-    out['contact.empadronamiento_city'] = norm(extraction.empadronado_city)
-  }
+  put('empadronado', toYesNo(extraction.empadronado))
+  put('empadronado_city', normText(extraction.empadronado_city), false)
+
+  const age = Number(String(extraction.age ?? '').replace(/\D+/g, ''))
+  if (Number.isFinite(age) && age >= 14 && age <= 100) put('age', String(age))
+  put('city', normText(extraction.city))
+  put('education_superior', toYesNo(extraction.education_superior))
+  put('eu_family', toYesNo(extraction.eu_family))
+  put('europe_6m', toYesNo(extraction.europe_6m))
 
   return out
 }
+
+/** Valores extraídos convertidos para o vocabulário de `field_mapping`. */
+export function extractionToFieldValues(
+  extraction: IntakeExtraction,
+  minConfidence = 0.7,
+  now: Date = new Date(),
+): Record<string, string> {
+  const src = extractionToSourceValues(extraction, minConfidence, now)
+  const out: Record<string, string> = {}
+
+  if (src.full_name) out['contact.full_name'] = src.full_name
+  if (src.email) out['contact.email'] = src.email
+  if (src.in_spain) out['funnel.location_known'] = src.in_spain
+  if (src.intent) {
+    out['funnel.interest_confirmed'] = src.intent
+    out['lead.service_interest'] = src.intent
+  }
+  if (src.arrival_date) {
+    out['funnel.entry_date_confirmed'] = src.arrival_date
+    out['contact.spain_arrival_date'] = src.arrival_date
+  }
+  if (src.empadronado) {
+    out['funnel.empadronado_confirmed'] = src.empadronado
+    out['contact.is_empadronado'] = src.empadronado
+  }
+  const city = src.empadronado_city || src.city
+  if (city) {
+    out['funnel.empadronado_city'] = city
+    out['contact.empadronamiento_city'] = city
+  }
+  if (src.age) out['outside.age'] = src.age
+  if (src.education_superior) out['contact.education_level'] = src.education_superior
+  if (src.eu_family) out['contact.has_eu_family_member'] = src.eu_family
+  if (src.europe_6m) out['contact.eu_entry_last_6_months'] = src.europe_6m
+
+  return out
+}
+
 
 /**
  * Casa os valores extraídos com as etapas do fluxo (via `field_mapping`
@@ -323,15 +401,26 @@ export async function runIntake(params: {
   config: IntakeConfig
   callLLM: (prompt: string) => Promise<string>
   now?: Date
+  /** Dados já conhecidos antes da IA (ex.: nome do perfil do WhatsApp). */
+  seed?: Record<string, string>
 }): Promise<IntakeResult> {
+  const { message, steps, lang, config, callLLM } = params
+  const allowed = config?.fields || []
+  const seed: Record<string, string> = {}
+  for (const [k, v] of Object.entries(params.seed || {})) {
+    if (!v) continue
+    if (allowed.length && !allowed.includes(k)) continue
+    seed[k] = v
+  }
+
+  /** Resultado quando a IA não roda: ainda aproveitamos o que já sabemos. */
   const empty = (reason: IntakeReason, detail?: string): IntakeResult => ({
-    fieldValues: {},
-    prefilled: {},
-    greeting: '',
+    fieldValues: { ...seed },
+    prefilled: Object.keys(seed).length ? prefillFromFieldValues(steps, seed, allowed) : {},
+    greeting: Object.keys(seed).length ? renderIntakeGreeting(config, lang, seed) : '',
     reason,
     ...(detail ? { detail } : {}),
   })
-  const { message, steps, lang, config, callLLM } = params
   if (!config?.enabled) return empty('disabled')
   if (!message || String(message).trim().length < 5) return empty('short_message')
 
@@ -346,14 +435,14 @@ export async function runIntake(params: {
   if (!extraction) return empty('parse_error', String(raw || '').slice(0, 200))
 
   const fieldValues = extractionToFieldValues(extraction, config.min_confidence, params.now)
-  const allowed = config.fields || []
-  const filtered: Record<string, string> = {}
+  const filtered: Record<string, string> = { ...seed }
   for (const [k, v] of Object.entries(fieldValues)) {
     if (allowed.length && !allowed.includes(k)) continue
     filtered[k] = v
   }
 
   const prefilled = prefillFromFieldValues(steps, filtered, allowed)
+
 
   // A saudação personalizada usa TUDO que foi entendido — inclusive um primeiro
   // nome que não serve para responder a etapa de "nome completo".
@@ -366,3 +455,95 @@ export async function runIntake(params: {
   return { fieldValues: filtered, prefilled, greeting, reason }
 }
 
+
+// ---------------------------------------------------------------------------
+// Nome vindo do perfil do WhatsApp
+
+/** Nomes de perfil que não servem como nome real do cliente. */
+export function isUsableProfileName(raw: string | null | undefined, phone = ''): boolean {
+  const name = String(raw || '').trim()
+  if (name.length < 2) return false
+  if (/^whatsapp/i.test(name)) return false
+  const digits = phone.replace(/\D+/g, '')
+  const nameDigits = name.replace(/\D+/g, '')
+  if (nameDigits && digits && (digits.includes(nameDigits) || nameDigits.includes(digits))) return false
+  // Só números, símbolos ou emojis.
+  if (!/\p{L}/u.test(name)) return false
+  const letters = (name.match(/\p{L}/gu) || []).length
+  if (letters < 2) return false
+  return true
+}
+
+/** Nome do perfil do WhatsApp como valor de `field_mapping` (ou vazio). */
+export function profileNameToFieldValues(
+  profileName: string | null | undefined,
+  phone = '',
+): Record<string, string> {
+  if (!isUsableProfileName(profileName, phone)) return {}
+  return { 'contact.full_name': String(profileName).trim() }
+}
+
+// ---------------------------------------------------------------------------
+// Etapa "Pergunta geral": interpreta a resposta e preenche vários campos
+
+export interface GeneralCaptureResult {
+  /** Valores por campo do CRM (`field_mapping`). */
+  fieldValues: Record<string, string>
+  /** Etapas do fluxo que ficam respondidas por esses valores. */
+  prefilled: Record<string, string>
+  reason: IntakeReason
+  detail?: string
+}
+
+/**
+ * Executa a interpretação multi-campo da resposta de uma etapa "Pergunta geral".
+ * `fields` liga cada dado interpretado (`source`) ao campo do CRM escolhido.
+ */
+export async function runGeneralCapture(params: {
+  message: string
+  steps: FlowStep[]
+  fields: { source: string; target_field: string }[]
+  minConfidence?: number
+  callLLM: (prompt: string) => Promise<string>
+  now?: Date
+}): Promise<GeneralCaptureResult> {
+  const empty = (reason: IntakeReason, detail?: string): GeneralCaptureResult => ({
+    fieldValues: {},
+    prefilled: {},
+    reason,
+    ...(detail ? { detail } : {}),
+  })
+
+  const fields = (params.fields || []).filter((f) => f?.source && f?.target_field)
+  if (!fields.length) return empty('disabled')
+  const message = String(params.message || '').trim()
+  if (message.length < 2) return empty('short_message')
+
+  let raw = ''
+  try {
+    raw = await params.callLLM(buildIntakePrompt(message, fields.map((f) => f.source)))
+  } catch (e) {
+    return empty('llm_error', e instanceof Error ? e.message : String(e))
+  }
+
+  const extraction = parseIntakeJson(raw)
+  if (!extraction) return empty('parse_error', String(raw || '').slice(0, 200))
+
+  const minConfidence = Number.isFinite(Number(params.minConfidence)) ? Number(params.minConfidence) : 0.7
+  const sourceValues = extractionToSourceValues(extraction, minConfidence, params.now)
+
+  const fieldValues: Record<string, string> = {}
+  for (const { source, target_field } of fields) {
+    const value = sourceValues[source]
+    if (!value) continue
+    fieldValues[target_field] = value
+  }
+  if (!Object.keys(fieldValues).length) return empty('no_data')
+
+  const prefilled = prefillFromFieldValues(params.steps, fieldValues)
+  return {
+    fieldValues,
+    prefilled,
+    reason: Object.keys(prefilled).length ? 'ok' : 'no_match',
+  }
+}

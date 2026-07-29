@@ -272,7 +272,59 @@ export function useSaveFlow() {
   });
 }
 
+/** Duplica um fluxo (com todas as etapas) como rascunho inativo. */
+export function useDuplicateFlow() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: async (flow: AgentFlow) => {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id ?? null;
+
+      const { data: created, error: flowError } = await db
+        .from('ai_agent_flows')
+        .insert({
+          ...(() => {
+            const { id, created_at, updated_at, created_by, updated_by, ...rest } = flow as any;
+            return rest;
+          })(),
+          name: `${flow.name} (cópia)`,
+          status: 'RASCUNHO',
+          created_by: userId,
+          updated_by: userId,
+        })
+        .select('id')
+        .single();
+      if (flowError) throw flowError;
+
+      const { data: steps, error: stepsError } = await db
+        .from('ai_agent_flow_steps')
+        .select('*')
+        .eq('flow_id', flow.id)
+        .order('step_order', { ascending: true });
+      if (stepsError) throw stepsError;
+
+      if (steps?.length) {
+        const copies = steps.map((s: any) => {
+          const { id, flow_id, created_at, updated_at, ...rest } = s;
+          return { ...rest, flow_id: created.id };
+        });
+        const { error } = await db.from('ai_agent_flow_steps').insert(copies);
+        if (error) throw error;
+      }
+      return created.id as string;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ai_agent_flows'] });
+      toast({ title: 'Fluxo duplicado', description: 'A cópia foi criada como rascunho inativo.' });
+    },
+    onError: (e: any) =>
+      toast({ title: 'Erro ao duplicar fluxo', description: e.message, variant: 'destructive' }),
+  });
+}
+
 export function useDeleteFlow() {
+
   const qc = useQueryClient();
   const { toast } = useToast();
   return useMutation({

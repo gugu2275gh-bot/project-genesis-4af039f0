@@ -13,16 +13,20 @@
 import {
   advanceFlow,
   buildStayTurn,
+  generalCaptureOf,
   indexSteps,
   jumpToStep,
   messagesOf,
   startFlow,
+  type FlowCapturedField,
   type FlowLang,
   type FlowRunState,
   type FlowStep,
   type FlowTurnResult,
 } from './flow-engine.ts'
+import { runGeneralCapture } from './flow-intake.ts'
 import { ackAiEnabledFor, generateAckPhrase } from './flow-ack.ts'
+
 import { kbCheckOf, kbInvalidMessage, runKbCheck } from './flow-kb-check.ts'
 import { answerAside, composeAnswerAndReask, defaultAsideAck, looksLikeQuestion } from './flow-answer-reask.ts'
 
@@ -173,13 +177,57 @@ export async function advanceFlowTurn(
     )
   }
 
-  const turn = advanceFlow(steps, workingState, effectiveMessage, lang, { ack })
+  // 4) "Pergunta geral": interpreta a resposta aberta, grava vários campos e
+  // marca como respondidas as etapas que perguntariam os mesmos dados.
+  const general = generalCaptureOf(step)
+  let generalCaptured: FlowCapturedField[] = []
+  if (general.enabled && deps.callLLM && text) {
+    const capture = await withTimeout(
+      runGeneralCapture({
+        message: text,
+        steps,
+        fields: general.fields,
+        minConfidence: general.min_confidence,
+        callLLM: deps.callLLM,
+      }),
+      ASSIST_TIMEOUT_MS,
+      'general_capture',
+    )
+    console.log(`${tag}[GENERAL_CAPTURE]`, JSON.stringify({
+      step: step.step_code,
+      reason: capture?.reason || 'timeout',
+      fields: capture?.fieldValues || {},
+      steps: Object.keys(capture?.prefilled || {}),
+    }))
 
-  // Etapa mudou: zera o contador de dúvidas respondidas.
-  if (turn.state?.current_step !== state.current_step) {
-    return { ...turn, state: { ...turn.state, aside_attempts: 0 } }
+    if (capture && Object.keys(capture.fieldValues).length) {
+      generalCaptured = Object.entries(capture.fieldValues).map(([field, value]) => ({
+        step_code: step.step_code,
+        field,
+        value,
+      }))
+      const prefilled = { ...(capture.prefilled || {}) }
+      delete prefilled[step.step_code]
+      if (Object.keys(prefilled).length) {
+        workingState = {
+          ...workingState,
+          answers: { ...(workingState.answers || {}), ...prefilled },
+        }
+      }
+    }
   }
 
-  return turn
+  const turn = advanceFlow(steps, workingState, effectiveMessage, lang, { ack })
+  const withCapture = generalCaptured.length
+    ? { ...turn, captured: [...(turn.captured || []), ...generalCaptured] }
+    : turn
+
+  // Etapa mudou: zera o contador de dúvidas respondidas.
+  if (withCapture.state?.current_step !== state.current_step) {
+    return { ...withCapture, state: { ...withCapture.state, aside_attempts: 0 } }
+  }
+
+  return withCapture
 }
+
 

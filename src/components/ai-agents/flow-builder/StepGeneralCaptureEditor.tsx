@@ -1,0 +1,107 @@
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { STEP_FIELD_MAPPINGS } from '@/types/ai-agents';
+import { CAPTURE_SOURCE_OPTIONS, type StepGeneralCapture } from '@/types/ai-agent-flow-builder';
+
+interface Props {
+  value?: StepGeneralCapture;
+  onChange: (next: StepGeneralCapture) => void;
+}
+
+/**
+ * Configuração da etapa "Pergunta geral": quais dados a IA pode interpretar da
+ * resposta aberta do cliente e em qual campo do cadastro cada um é gravado.
+ */
+export function StepGeneralCaptureEditor({ value, onChange }: Props) {
+  const cfg: StepGeneralCapture = {
+    enabled: value?.enabled !== false,
+    fields: Array.isArray(value?.fields) ? value!.fields! : [],
+    min_confidence: typeof value?.min_confidence === 'number' ? value!.min_confidence! : 0.7,
+  };
+
+  const selected = new Map(cfg.fields!.map((f) => [f.source, f.target_field]));
+
+  const toggle = (source: string, defaultTarget: string, checked: boolean) => {
+    const next = checked
+      ? [...cfg.fields!.filter((f) => f.source !== source), { source, target_field: defaultTarget }]
+      : cfg.fields!.filter((f) => f.source !== source);
+    onChange({ ...cfg, fields: next });
+  };
+
+  const setTarget = (source: string, target: string) =>
+    onChange({
+      ...cfg,
+      fields: cfg.fields!.map((f) => (f.source === source ? { ...f, target_field: target } : f)),
+    });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+        <div>
+          <Label>Interpretar a resposta com IA</Label>
+          <p className="text-xs text-muted-foreground">
+            A resposta aberta é lida pela IA, os dados reconhecidos são gravados no cadastro e as
+            próximas perguntas que pediriam esses mesmos dados são puladas automaticamente.
+          </p>
+        </div>
+        <Switch checked={cfg.enabled} onCheckedChange={(v) => onChange({ ...cfg, enabled: v })} />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Dados que podem ser interpretados</Label>
+        <div className="space-y-2">
+          {CAPTURE_SOURCE_OPTIONS.map((opt) => {
+            const checked = selected.has(opt.value);
+            return (
+              <div key={opt.value} className="rounded-md border p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={`cap-${opt.value}`}
+                    checked={checked}
+                    onCheckedChange={(v) => toggle(opt.value, opt.default_target, !!v)}
+                  />
+                  <Label htmlFor={`cap-${opt.value}`} className="cursor-pointer text-sm font-normal">
+                    {opt.label}
+                  </Label>
+                </div>
+                {checked && (
+                  <div className="pl-6 space-y-1">
+                    <Label className="text-xs text-muted-foreground">Gravar em</Label>
+                    <Select
+                      value={selected.get(opt.value) || opt.default_target}
+                      onValueChange={(v) => setTarget(opt.value, v)}
+                    >
+                      <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {STEP_FIELD_MAPPINGS.map((f) => (
+                          <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Confiança mínima da IA</Label>
+        <Select
+          value={String(cfg.min_confidence)}
+          onValueChange={(v) => onChange({ ...cfg, min_confidence: Number(v) })}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="0.5">Baixa (aproveita mais, erra mais)</SelectItem>
+            <SelectItem value="0.7">Média (recomendado)</SelectItem>
+            <SelectItem value="0.9">Alta (só quando estiver claro)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}

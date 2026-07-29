@@ -270,9 +270,41 @@ const MAX_STEPS_PER_TURN = 25
 
 export function stepKindOf(step: FlowStep): StepKind {
   const k = (step?.validation as any)?.step_kind
+  // "Pergunta geral" é uma PERGUNTA para o grafo: envia o texto e espera a
+  // resposta. A diferença (interpretar vários campos) é tratada no turno.
+  if (k === 'PERGUNTA_GERAL') return 'PERGUNTA'
   if (k === 'INICIO' || k === 'INFORMATIVA' || k === 'PERGUNTA' || k === 'FIM') return k
   return 'PERGUNTA'
 }
+
+/** Configuração de interpretação multi-campo da etapa "Pergunta geral". */
+export interface StepGeneralCapture {
+  enabled: boolean
+  /** Pares "dado interpretado" -> "campo do CRM". */
+  fields: { source: string; target_field: string }[]
+  min_confidence: number
+}
+
+export function generalCaptureOf(step: FlowStep): StepGeneralCapture {
+  const v = (step?.validation || {}) as Record<string, any>
+  const raw = (v.general_capture || {}) as Record<string, any>
+  const isGeneral = v.step_kind === 'PERGUNTA_GERAL'
+  const conf = Number(raw.min_confidence)
+  const fields = Array.isArray(raw.fields)
+    ? raw.fields
+        .map((f: any) => ({
+          source: String(f?.source || '').trim(),
+          target_field: String(f?.target_field || '').trim(),
+        }))
+        .filter((f: any) => f.source && f.target_field)
+    : []
+  return {
+    enabled: isGeneral && raw.enabled !== false && fields.length > 0,
+    fields,
+    min_confidence: Number.isFinite(conf) ? Math.min(1, Math.max(0, conf)) : 0.7,
+  }
+}
+
 
 export function messagesOf(step: FlowStep, lang: FlowLang): string[] {
   const raw = step?.messages || {}
