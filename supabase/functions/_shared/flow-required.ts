@@ -140,16 +140,25 @@ export function knownFieldsOf(steps: FlowStep[], state: FlowRunState): Record<st
   }
 }
 
-/** Campos obrigatórios da etapa que continuam sem valor. */
+/** O nome é sempre a primeira cobrança e nunca fica em branco. */
+export function isNameField(field: RequiredCaptureField): boolean {
+  return (
+    String(field?.source || '') === 'full_name' ||
+    String(field?.target_field || '') === 'contact.full_name'
+  )
+}
+
+/** Campos obrigatórios da etapa que continuam sem valor (nome sempre primeiro). */
 export function missingRequired(
   step: FlowStep,
   known: Record<string, string>,
   skipped: string[] = [],
 ): RequiredCaptureField[] {
   const ignore = new Set(skipped || [])
-  return requiredFieldsOf(step).filter(
+  const pending = requiredFieldsOf(step).filter(
     (f) => !ignore.has(f.target_field) && !pickFieldValue(known, f.target_field),
   )
+  return pending.sort((a, b) => Number(isNameField(b)) - Number(isNameField(a)))
 }
 
 /**
@@ -390,25 +399,60 @@ const YES_RE =
 const NO_RE =
   /(^|\b)(n[ãa]o|nao|no|nope|non|nunca|jamais|nenhum[ao]?|ningu[eé]m|nadie|ninguno|none|nobody|negativo|s[óo] (no|na|em)|somente (no|na|em)|apenas (no|na|em)|solo en|only in|n[ãa]o tenho|nao tenho|no tengo|i don'?t|i have no|never)(\b|$)/i
 
+/** Grau de parentesco citado como resposta ("tio", "minha avó é italiana"). */
+const KINSHIP_RE =
+  /(^|\b)(pai|m[ãa]e|av[óôo]|av[óo]s|bisav[óôo]|filh[oa]|irm[ãa]os?|irm[ãa]|tios?|tias?|prim[oa]s?|sobrinh[oa]s?|espos[oa]|marido|mulher|c[ôo]njuge|sogr[oa]|padrasto|madrasta|bisneto|neto|neta|padre|madre|abuel[oa]s?|hij[oa]s?|hermanos?|hermanas?|t[íi]os?|t[íi]as?|prim[oa]s?|sobrin[oa]s?|father|mother|grand(?:father|mother|pa|ma|parents?)|son|daughter|brother|sister|uncle|aunt|cousin|nephew|niece|wife|husband|p[èe]re|m[èe]re|grand-?(?:p[èe]re|m[èe]re)|fils|fille|fr[èe]re|s(?:oe|œ)ur|oncle|tante|cousin[e]?|neveu|ni[èe]ce|femme|mari)(\b|$)/i
+
+/** "Não sei o que é isso" / "no sé qué es" / "what is that?" / "je ne sais pas". */
+const DONT_KNOW_RE =
+  /(n[ãa]o\s+(sei|entendi|entendo|conhe[çc]o)|nem\s+sei|sei\s+l[áa]|no\s+s[ée]|no\s+entiendo|qu[eé]\s+es\s+eso|i\s+(do\s*n'?t|don'?t)\s+(know|understand)|what('| i)?s\s+that|je\s+ne\s+sais\s+pas|c'?est\s+quoi)/i
+
+export function isDontKnow(text: string): boolean {
+  const t = String(text || '').trim()
+  if (!t) return false
+  if (/^\?+$/.test(t)) return true
+  return DONT_KNOW_RE.test(t)
+}
+
 /**
  * Converte a resposta livre de um campo sim/não em "sim" | "nao".
  * Devolve string vazia quando não dá para decidir.
+ *
+ * `opts.kinship` liga a leitura de grau de parentesco como "sim" (usado na
+ * pergunta de familiar europeu: "tio", "minha avó é italiana").
  */
-export function normalizeYesNo(text: string): string {
+export function normalizeYesNo(text: string, opts: { kinship?: boolean } = {}): string {
   const t = String(text || '').trim()
   if (!t) return ''
+  if (isDontKnow(t)) return ''
   const noHit = NO_RE.test(t)
   const yesHit = YES_RE.test(t)
   // "só tenho família no Brasil" casa nos dois: a negação tem prioridade.
   if (noHit) return 'nao'
   if (yesHit) return 'sim'
+  if (opts.kinship && KINSHIP_RE.test(t)) return 'sim'
   return ''
 }
 
-/** Normaliza o valor antes de gravar (hoje: campos sim/não). */
+function kinshipField(field: RequiredCaptureField): boolean {
+  const source = String(field?.source || '')
+  const target = String(field?.target_field || '')
+  return (
+    source === 'eu_family' ||
+    target === 'contact.has_eu_family_member' ||
+    target === 'contact.has_european_family'
+  )
+}
+
+/**
+ * Normaliza o valor antes de gravar (hoje: campos sim/não).
+ * Em campo sim/não, "não sei o que é isso" já reperguntado vira "nao".
+ */
 export function normalizeRequiredValue(field: RequiredCaptureField, value: string): string {
   if (!isBooleanField(field)) return String(value || '').trim()
-  return normalizeYesNo(value)
+  const decided = normalizeYesNo(value, { kinship: kinshipField(field) })
+  if (decided) return decided
+  return isDontKnow(value) ? 'nao' : ''
 }
 
 const YES_NO_RETRY: Record<string, string> = {
@@ -418,18 +462,56 @@ const YES_NO_RETRY: Record<string, string> = {
   fr: 'Juste pour confirmer, répondez par oui ou non :',
 }
 
+/** Explicação curta para quem respondeu "não sei o que é isso". */
+const CLARIFY: Record<string, Record<string, string>> = {
+  education_superior: {
+    'pt-BR': 'Formação superior é ter concluído (ou estar cursando) uma faculdade/universidade.',
+    es: 'Formación superior es haber terminado (o estar cursando) una carrera universitaria.',
+    en: 'A university degree means you finished (or are currently studying) higher education.',
+    fr: 'Une formation supérieure signifie avoir terminé (ou suivre) des études universitaires.',
+  },
+  eu_family: {
+    'pt-BR': 'Familiar europeu é alguém da sua família (pai, mãe, avô, cônjuge, filho…) com cidadania de um país da Europa.',
+    es: 'Un familiar europeo es alguien de tu familia (padre, madre, abuelo, cónyuge, hijo…) con ciudadanía de un país europeo.',
+    en: 'A European relative is a family member (parent, grandparent, spouse, child…) who holds citizenship of a European country.',
+    fr: 'Un membre de la famille européen est un parent (père, mère, grand-parent, conjoint, enfant…) ayant la nationalité d’un pays européen.',
+  },
+  europe_6m: {
+    'pt-BR': 'A pergunta é se você viajou ou esteve em algum país da Europa nos últimos 6 meses.',
+    es: 'La pregunta es si viajaste o estuviste en algún país de Europa en los últimos 6 meses.',
+    en: 'The question is whether you travelled to or stayed in any European country in the last 6 months.',
+    fr: 'La question est de savoir si vous avez voyagé ou séjourné dans un pays européen ces 6 derniers mois.',
+  },
+  empadronado: {
+    'pt-BR': 'Empadronamento é o registro do seu endereço na prefeitura (ayuntamiento) na Espanha.',
+    es: 'El empadronamiento es el registro de tu domicilio en el ayuntamiento en España.',
+    en: 'Empadronamiento is registering your address at the local town hall in Spain.',
+    fr: 'L’empadronamiento est l’enregistrement de votre adresse à la mairie en Espagne.',
+  },
+}
+
+const ANSWER_YES_NO: Record<string, string> = {
+  'pt-BR': 'Responda apenas sim ou não:',
+  es: 'Responde solo sí o no:',
+  en: 'Please answer just yes or no:',
+  fr: 'Répondez simplement par oui ou non :',
+}
+
 /**
  * Validação específica de um campo obrigatório antes de gravar.
  * Devolve a mensagem de correção quando o valor não serve (string vazia = ok).
  *
  * Cobre a data de nascimento (DD/MM/AAAA, data real, coerente com a idade) e
- * os campos sim/não (resposta que não permite decidir é reperguntada).
+ * os campos sim/não (resposta que não permite decidir é reperguntada — e quem
+ * não sabe o que é o dado recebe a explicação uma vez; na sequência grava-se
+ * "nao").
  */
 export function requiredValueIssue(
   field: RequiredCaptureField,
   value: string,
   lang: FlowLang = 'pt-BR',
   known: Record<string, string> = {},
+  attempts = 0,
 ): string {
   const source = String(field?.source || '')
   const target = String(field?.target_field || '')
@@ -437,7 +519,14 @@ export function requiredValueIssue(
   if (isBooleanField(field)) {
     const raw = String(value || '').trim()
     if (!raw) return ''
-    if (normalizeYesNo(raw)) return ''
+    if (normalizeYesNo(raw, { kinship: kinshipField(field) })) return ''
+    if (isDontKnow(raw)) {
+      // Já explicamos uma vez: assume "não" e segue (quem não sabe, não tem).
+      if (attempts >= 1) return ''
+      const clarify = CLARIFY[source]?.[lang] || CLARIFY[source]?.['pt-BR'] || ''
+      const closing = ANSWER_YES_NO[lang] || ANSWER_YES_NO['pt-BR']
+      return [clarify, `${closing} ${requiredPrompt(field, lang)}`].filter(Boolean).join(' ')
+    }
     const prefix = YES_NO_RETRY[lang] || YES_NO_RETRY['pt-BR']
     return `${prefix} ${requiredPrompt(field, lang)}`
   }
