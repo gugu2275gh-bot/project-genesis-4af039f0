@@ -140,16 +140,25 @@ export function knownFieldsOf(steps: FlowStep[], state: FlowRunState): Record<st
   }
 }
 
-/** Campos obrigatórios da etapa que continuam sem valor. */
+/** O nome é sempre a primeira cobrança e nunca fica em branco. */
+export function isNameField(field: RequiredCaptureField): boolean {
+  return (
+    String(field?.source || '') === 'full_name' ||
+    String(field?.target_field || '') === 'contact.full_name'
+  )
+}
+
+/** Campos obrigatórios da etapa que continuam sem valor (nome sempre primeiro). */
 export function missingRequired(
   step: FlowStep,
   known: Record<string, string>,
   skipped: string[] = [],
 ): RequiredCaptureField[] {
   const ignore = new Set(skipped || [])
-  return requiredFieldsOf(step).filter(
+  const pending = requiredFieldsOf(step).filter(
     (f) => !ignore.has(f.target_field) && !pickFieldValue(known, f.target_field),
   )
+  return pending.sort((a, b) => Number(isNameField(b)) - Number(isNameField(a)))
 }
 
 /**
