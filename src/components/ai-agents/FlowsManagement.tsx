@@ -19,7 +19,8 @@ import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRouti
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
 import { StepUnexpectedAnswerEditor } from '@/components/ai-agents/flow-builder/StepUnexpectedAnswerEditor';
 import { StepKnowledgeCheckEditor } from '@/components/ai-agents/flow-builder/StepKnowledgeCheckEditor';
-import { STEP_KINDS, normalizeBranches, normalizeValidation, stepKindOf } from '@/types/ai-agent-flow-builder';
+import { StepGeneralCaptureEditor } from '@/components/ai-agents/flow-builder/StepGeneralCaptureEditor';
+import { STEP_KINDS, CAPTURE_SOURCE_OPTIONS, normalizeBranches, normalizeValidation, stepKindOf } from '@/types/ai-agent-flow-builder';
 
 
 import {
