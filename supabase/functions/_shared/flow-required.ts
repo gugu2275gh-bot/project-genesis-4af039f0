@@ -32,10 +32,10 @@ export const MAX_REQUIRED_ATTEMPTS = 2
 /** Perguntas padrão por dado, nos 4 idiomas do atendimento. */
 const DEFAULT_PROMPTS: Record<string, Record<string, string>> = {
   full_name: {
-    'pt-BR': 'Só para eu registrar direitinho: qual é o seu nome completo?',
-    es: 'Solo para registrarlo bien: ¿cuál es tu nombre completo?',
-    en: 'Just so I can record it properly: what is your full name?',
-    fr: 'Juste pour bien l’enregistrer : quel est votre nom complet ?',
+    'pt-BR': 'Como você se chama?',
+    es: '¿Cómo te llamas?',
+    en: 'What is your name?',
+    fr: 'Comment vous appelez-vous ?',
   },
   email: {
     'pt-BR': 'Qual é o seu e-mail?',
@@ -54,6 +54,12 @@ const DEFAULT_PROMPTS: Record<string, Record<string, string>> = {
     es: '¿En qué ciudad vives actualmente?',
     en: 'Which city do you live in right now?',
     fr: 'Dans quelle ville habitez-vous actuellement ?',
+  },
+  residence_country: {
+    'pt-BR': 'Em que país você mora hoje?',
+    es: '¿En qué país vives actualmente?',
+    en: 'Which country do you live in right now?',
+    fr: 'Dans quel pays habitez-vous actuellement ?',
   },
   in_spain: {
     'pt-BR': 'Você já está na Espanha?',
@@ -139,6 +145,25 @@ export function missingRequired(
   )
 }
 
+/**
+ * A etapa "Pergunta geral" já tem dados suficientes ("Dados suficientes para
+ * pular esta etapa")? Só vale depois que os obrigatórios estão completos.
+ */
+export function generalCaptureSatisfied(
+  step: FlowStep,
+  known: Record<string, string>,
+  skipped: string[] = [],
+): boolean {
+  if (!isGeneralCaptureStep(step)) return false
+  if (missingRequired(step, known, skipped).length) return false
+  const cfg = generalCaptureOf(step)
+  const fields = (cfg.fields || []) as RequiredCaptureField[]
+  if (!fields.length) return true
+  const min = Number(cfg.min_fields) > 0 ? Number(cfg.min_fields) : 1
+  const hits = fields.filter((f) => !!pickFieldValue(known, f.target_field)).length
+  return hits >= Math.min(min, fields.length)
+}
+
 /** Texto da pergunta de um campo obrigatório, no idioma do atendimento. */
 export function requiredPrompt(field: RequiredCaptureField, lang: FlowLang = 'pt-BR'): string {
   const custom = field?.prompts && (field.prompts[lang] || field.prompts['pt-BR'])
@@ -159,6 +184,7 @@ const FIELD_KEYWORDS: Record<string, RegExp> = {
   email: /(e-?mail|correo|courriel)/i,
   age: /(idade|edad|\bage\b|âge)/i,
   city: /(cidade|ciudad|\bcity\b|ville)/i,
+  residence_country: /(pa[íi]s|country|pays)/i,
   in_spain: /(na\s+espanha|en\s+espa[ñn]a|in\s+spain|en\s+espagne)/i,
   intent: /(objetivo|goal|but\b|objectif)/i,
   arrival_date: /(chegada|llegada|arrival|arriv[ée]e)/i,

@@ -385,6 +385,7 @@ export default function ContactDetail() {
         document_type: contact.document_type,
         document_number: contact.document_number,
         address: contact.address,
+        residence_country: (contact as any).residence_country,
         referral_name: contact.referral_name,
         referral_confirmed: contact.referral_confirmed,
         civil_status: contact.civil_status,
@@ -544,13 +545,18 @@ export default function ContactDetail() {
       </div>
 
       {/* Endereço */}
-      <div>
+      <div className="space-y-2">
         <Label>Endereço Residencial</Label>
         <Textarea
           value={editedContact.address || ''}
           onChange={(e) => setEditedContact({ ...editedContact, address: e.target.value })}
           placeholder="Endereço completo"
           rows={2}
+        />
+        <Input
+          value={(editedContact as any).residence_country || ''}
+          onChange={(e) => setEditedContact({ ...editedContact, residence_country: e.target.value } as any)}
+          placeholder="País onde mora"
         />
       </div>
 
@@ -1032,6 +1038,11 @@ export default function ContactDetail() {
         <div>
           <p className="text-sm text-muted-foreground">Endereço Residencial</p>
           <p className="font-medium">{contact.address || '-'}</p>
+          {(contact as any).residence_country && (
+            <p className="text-sm text-muted-foreground">
+              País onde mora: <span className="font-medium text-foreground">{(contact as any).residence_country}</span>
+            </p>
+          )}
         </div>
       </div>
 

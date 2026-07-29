@@ -30,6 +30,7 @@ import { ackAiEnabledFor, generateAckPhrase } from './flow-ack.ts'
 import {
   MAX_REQUIRED_ATTEMPTS,
   applyRequiredGate,
+  generalCaptureSatisfied,
   knownFieldsOf,
   missingRequired,
   requiredPrompt,
@@ -337,6 +338,26 @@ export async function advanceFlowTurn(
         required_attempts: 0,
       })
       return { ...stay, captured: generalCaptured }
+    }
+
+    // Sem obrigatório pendente e com a quantidade mínima de dados entendidos
+    // ("Dados suficientes para pular esta etapa"): a etapa é dada como
+    // respondida AGORA e o fluxo segue para a próxima pergunta.
+    if (generalCaptureSatisfied(step, known, skipped)) {
+      const general2 = generalCaptureOf(step)
+      const summary = (general2.fields || [])
+        .map((f: any) => {
+          const v = String(known[f.target_field] || '').trim()
+          return v ? `${f.source}: ${v}` : ''
+        })
+        .filter(Boolean)
+        .join('; ')
+      if (summary) effectiveMessage = summary
+      console.log(`${tag}[GENERAL_MIN_FIELDS]`, JSON.stringify({
+        step: step.step_code,
+        min_fields: general2.min_fields,
+        summary,
+      }))
     }
   }
 

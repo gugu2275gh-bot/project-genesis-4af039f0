@@ -424,6 +424,15 @@ export async function applyCapturedFields(
         }
         break
       }
+      case 'contact.residence_country':
+        if (value) {
+          contactPatch.residence_country = value
+          // Mora fora da Espanha => marca a localização no funil.
+          const inSpainByCountry = /^(espanha|espa[nñ]a|spain|espagne)$/i.test(value)
+          contactPatch.is_in_spain = inSpainByCountry
+          funnelPatch.location_known = inSpainByCountry ? 'spain' : 'outside'
+        }
+        break
       case 'contact.education_level': {
         const b = toBoolOrNull(value)
         if (b !== null) contactPatch.education_level = b ? 'SUPERIOR' : 'NAO_SUPERIOR'

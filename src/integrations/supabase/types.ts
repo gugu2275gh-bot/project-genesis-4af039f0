@@ -923,6 +923,7 @@ export type Database = {
           profession: string | null
           referral_confirmed: boolean | null
           referral_name: string | null
+          residence_country: string | null
           second_document_number: string | null
           second_document_type: string | null
           spain_arrival_date: string | null
@@ -980,6 +981,7 @@ export type Database = {
           profession?: string | null
           referral_confirmed?: boolean | null
           referral_name?: string | null
+          residence_country?: string | null
           second_document_number?: string | null
           second_document_type?: string | null
           spain_arrival_date?: string | null
@@ -1037,6 +1039,7 @@ export type Database = {
           profession?: string | null
           referral_confirmed?: boolean | null
           referral_name?: string | null
+          residence_country?: string | null
           second_document_number?: string | null
           second_document_type?: string | null
           spain_arrival_date?: string | null

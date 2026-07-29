@@ -36,6 +36,8 @@ export interface IntakeExtraction {
   age?: number | string | null
   /** Cidade onde a pessoa mora hoje. */
   city?: string | null
+  /** País onde a pessoa mora hoje (parte do endereço residencial). */
+  residence_country?: string | null
   /** 'sim' | 'nao' — possui formação superior. */
   education_superior?: string | null
   /** 'sim' | 'nao' — possui familiar europeu. */
@@ -56,6 +58,7 @@ export const CAPTURE_SOURCES: { source: string; default_target: string }[] = [
   { source: 'empadronado_city', default_target: 'funnel.empadronado_city' },
   { source: 'age', default_target: 'outside.age' },
   { source: 'city', default_target: 'funnel.empadronado_city' },
+  { source: 'residence_country', default_target: 'contact.residence_country' },
   { source: 'education_superior', default_target: 'contact.education_level' },
   { source: 'eu_family', default_target: 'contact.has_eu_family_member' },
   { source: 'europe_6m', default_target: 'contact.eu_entry_last_6_months' },
@@ -128,17 +131,18 @@ EXPLICITAMENTE. Nunca invente. Campos desconhecidos devem ser null.${filter}
   "full_name": "nome completo ou primeiro nome dito pela pessoa, ou null",
   "email": "e-mail ou null",
   "in_spain": "sim | nao | null (a pessoa está fisicamente na Espanha agora?)",
-  "intent": "resumo curto do objetivo (ex.: estudar, trabalhar, residência, nômade digital, arraigo, nacionalidade, oferta de trabalho) ou null",
+  "intent": "resumo curto do objetivo (ex.: estudar, trabalhar, residência, nômade digital, arraigo, nacionalidade, oferta de trabalho) ou null. Quem diz que quer morar/viver/residir na Espanha (vivir/live in Spain) tem intent = \"residência\"",
   "arrival_date": "DD/MM/AAAA se a data de chegada na Espanha foi dita, senão null",
   "arrival_days_ago": número inteiro se disse algo como "estou aqui há 5 dias", senão null,
   "empadronado": "sim | nao | null",
   "empadronado_city": "cidade do empadronamento ou null",
   "age": número inteiro da idade em anos, senão null,
   "city": "cidade onde a pessoa mora hoje, ou null",
+  "residence_country": "país onde a pessoa mora hoje (ex.: Brasil, Espanha, Portugal), ou null",
   "education_superior": "sim | nao | null (possui formação superior/universitária?)",
   "eu_family": "sim | nao | null (possui familiar europeu ou residente na UE?)",
   "europe_6m": "sim | nao | null (esteve na Europa nos últimos 6 meses?)",
-  "confidence": { "full_name": 0..1, "in_spain": 0..1, "intent": 0..1, "arrival_date": 0..1, "empadronado": 0..1, "age": 0..1, "city": 0..1, "education_superior": 0..1, "eu_family": 0..1, "europe_6m": 0..1 }
+  "confidence": { "full_name": 0..1, "residence_country": 0..1, "in_spain": 0..1, "intent": 0..1, "arrival_date": 0..1, "empadronado": 0..1, "age": 0..1, "city": 0..1, "education_superior": 0..1, "eu_family": 0..1, "europe_6m": 0..1 }
 }
 
 Mensagem do cliente:
@@ -184,6 +188,40 @@ function toYesNo(v: unknown): string {
   return ''
 }
 
+
+/** Intenções livres normalizadas para serviços válidos da assessoria. */
+const INTENT_HINTS: Array<[RegExp, string]> = [
+  [/(estud|student|curso|faculdade|master|mestrado|étud)/i, 'estudos'],
+  [/(reagrupa|reagrupaci|family reunif|regroupement)/i, 'reagrupamento familiar'],
+  [/(nacionalidade|nacionalidad|citizenship|cidadania|nationalit)/i, 'nacionalidade'],
+  [/(arraigo)/i, 'arraigo'],
+  [/(n[oô]made|nomad|teletrabalho|teletrabajo|remote)/i, 'nômade digital'],
+  [/(trabalh|emprego|\bjob\b|\bwork\b|laboral|travail)/i, 'trabalho'],
+  // "quero morar/viver na Espanha" = residência (serviço válido)
+  [/(morar|viver|residir|resid[êe]ncia|residencia|vivir|live in spain|habiter|m[ou]dar)/i, 'residência'],
+]
+
+/** "morar na Espanha" vira "residência"; o resto é mantido como veio. */
+export function normalizeIntent(raw: unknown): string {
+  const text = normText(raw)
+  if (!text) return ''
+  for (const [re, label] of INTENT_HINTS) if (re.test(text)) return label
+  return text
+}
+
+const SPAIN_RE = /^(espanha|espa[nñ]a|spain|espagne)$/i
+
+export function isSpain(country: string): boolean {
+  return SPAIN_RE.test(String(country || '').trim())
+}
+
+/** País informado em texto livre, com capitalização simples. */
+export function normalizeCountry(raw: unknown): string {
+  const text = normText(raw).replace(/^(no|na|em|en|in|do|da|de)\s+/i, '').trim()
+  if (!text || text.length < 3) return ''
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
 /**
  * Valores extraídos por "dado interpretado" (`source`), já filtrados pela
  * confiança mínima. É a base tanto do intake da 1ª mensagem quanto da etapa
@@ -208,7 +246,7 @@ export function extractionToSourceValues(
   put('full_name', normText(extraction.full_name))
   put('email', normText(extraction.email), false)
   put('in_spain', toYesNo(extraction.in_spain))
-  put('intent', normText(extraction.intent))
+  put('intent', normalizeIntent(extraction.intent))
 
   let arrival = normText(extraction.arrival_date)
   if (!arrival && Number.isFinite(Number(extraction.arrival_days_ago))) {
@@ -222,6 +260,10 @@ export function extractionToSourceValues(
   const age = Number(String(extraction.age ?? '').replace(/\D+/g, ''))
   if (Number.isFinite(age) && age >= 14 && age <= 100) put('age', String(age))
   put('city', normText(extraction.city))
+  const country = normalizeCountry(extraction.residence_country)
+  put('residence_country', country)
+  // Mora fora da Espanha => não está na Espanha (quando a IA não disse nada).
+  if (country && !out.in_spain) out.in_spain = isSpain(country) ? 'sim' : 'nao'
   put('education_superior', toYesNo(extraction.education_superior))
   put('eu_family', toYesNo(extraction.eu_family))
   put('europe_6m', toYesNo(extraction.europe_6m))
@@ -258,6 +300,7 @@ export function extractionToFieldValues(
     out['funnel.empadronado_city'] = city
     out['contact.empadronamiento_city'] = city
   }
+  if (src.residence_country) out['contact.residence_country'] = src.residence_country
   if (src.age) out['outside.age'] = src.age
   if (src.education_superior) out['contact.education_level'] = src.education_superior
   if (src.eu_family) out['contact.has_eu_family_member'] = src.eu_family
