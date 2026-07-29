@@ -42,13 +42,14 @@ Deno.test('"oi": a pergunta geral é enviada mesmo com o nome vindo do WhatsApp'
   assertEquals(gated.state.required_field || '', '')
 })
 
-Deno.test('etapa pulada por prefill ainda cobra o obrigatório que falta', () => {
-  const base = startFlowWithPrefill(steps as any, 'pt-BR', { dados_pessoais: 'nome e idade' })
-  const dropped = { ...base, outbound: [], messages: [] } as any
-  const gated = applyRequiredGate(steps as any, dropped, 'pt-BR', {
+Deno.test('etapa já apresentada cobra o obrigatório que falta', () => {
+  const base = startFlow(steps as any, 'pt-BR')
+  const already = { ...base, outbound: [], messages: [], reasked: true } as any
+  const gated = applyRequiredGate(steps as any, already, 'pt-BR', {
     'contact.full_name': 'Rose Carla',
     'outside.age': '34',
   })
   assertEquals(gated.state.required_field, 'funnel.empadronado_city')
   assertEquals(gated.messages.join(' ').toLowerCase().includes('cidade'), true)
 })
+
