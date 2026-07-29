@@ -217,6 +217,7 @@ export const STEP_FIELD_MAPPINGS: { value: string; label: string }[] = [
   { value: 'contact.spain_arrival_date', label: 'Contato — Data de chegada na Espanha' },
   { value: 'contact.is_empadronado', label: 'Contato — Está empadronado? (Sim/Não)' },
   { value: 'contact.empadronamiento_city', label: 'Contato — Cidade do empadronamento' },
+  { value: 'contact.residence_country', label: 'Contato — País onde mora (endereço residencial)' },
   { value: 'contact.empadronamiento_since', label: 'Contato — Empadronado desde (data)' },
   { value: 'contact.education_level', label: 'Contato — Formação/escolaridade' },
   { value: 'contact.works_remotely', label: 'Contato — Trabalha remoto (Sim/Não)' },
