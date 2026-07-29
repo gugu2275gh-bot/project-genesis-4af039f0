@@ -229,7 +229,7 @@ const FIELD_KEYWORDS: Record<string, RegExp> = {
   age: /(idade|edad|\bage\b|âge)/i,
   birth_date: /(nascimento|nacimiento|birth|naissance)/i,
   city: /(cidade|ciudad|\bcity\b|ville)/i,
-  residence_country: /(pa[íi]s|country|pays)/i,
+  residence_country: /(pa[íi]s|country|pays|onde\s+(?:voc[êe]\s+|vc\s+|tu\s+)?(?:mora|vive|reside)|d[óo]nde\s+vives|where\s+(?:do\s+)?you\s+live|o[uù]\s+(?:vous\s+)?habitez)/i,
   in_spain: /(na\s+espanha|en\s+espa[ñn]a|in\s+spain|en\s+espagne)/i,
   intent: /(objetivo|goal|but\b|objectif)/i,
   arrival_date: /(chegada|llegada|arrival|arriv[ée]e)/i,
@@ -350,7 +350,7 @@ export function applyRequiredGate(
 
   // A abertura da etapa só pede o que ainda falta: o que o cliente já contou
   // na primeira mensagem sai da lista entre parênteses.
-  let working = presentedNow ? trimOutboundForStep(turn, step, code, known) : turn
+  const working = presentedNow ? trimOutboundForStep(turn, step, code, known) : turn
 
   const required = requiredFieldsOf(step)
   if (!required.length) return working
