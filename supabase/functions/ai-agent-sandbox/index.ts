@@ -332,6 +332,18 @@ Deno.serve(async (req) => {
           created_by: auth.userId,
         })
 
+        // Dados entendidos até agora (o que seria gravado no cadastro fora do teste).
+        const capturedAll: Record<string, string> = {}
+        for (const [field, v] of Object.entries((turn.state?.captured_fields || {}) as Record<string, string>)) {
+          if (String(v ?? '').trim()) capturedAll[field] = String(v).trim()
+        }
+        for (const item of ((turn as any).captured || []) as Array<{ field: string; value: string }>) {
+          if (String(item?.value ?? '').trim()) capturedAll[item.field] = String(item.value).trim()
+        }
+        for (const [field, v] of Object.entries(knownFields || {})) {
+          if (String(v ?? '').trim() && !capturedAll[field]) capturedAll[field] = String(v).trim()
+        }
+
         return json({
           reply,
           provider: 'flow-engine',
@@ -346,9 +358,11 @@ Deno.serve(async (req) => {
             path: turn.path,
             lang: sessionLang,
             lang_locked: sessionLangLocked,
+            captured: capturedAll,
           },
 
         })
+
       }
       // Fluxo concluído sem mensagem nova → segue para o modo livre (LLM).
     }
