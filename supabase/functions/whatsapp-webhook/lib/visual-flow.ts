@@ -573,7 +573,10 @@ export async function applyCapturedFields(
           leadPatch.service_interest = svc
           leadPatch.interest_confirmed = true
         }
-        if (value) funnelPatch.interest_confirmed = value
+        if (value) {
+          funnelPatch.interest_confirmed = value
+          intentText = value
+        }
         break
       }
       default:
