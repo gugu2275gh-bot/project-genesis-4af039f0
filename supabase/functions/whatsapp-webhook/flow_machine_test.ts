@@ -64,11 +64,12 @@ Deno.test('handoff_sent → FREE_KB (KB livre, sem regressão)', () => {
   assertEquals(resolveCurrentStep({ ...baseState, handoff_sent: true }), 'FREE_KB')
 })
 
-Deno.test('NAME.next: depende de email_confirmed (suporta lead com email já no contato)', () => {
+Deno.test('NAME.next: sempre LOCATION (etapa de e-mail removida do onboarding)', () => {
   const def = getStepDef('NAME')
-  assertEquals(def.next({ ...baseState, email_confirmed: false } as any), 'EMAIL')
-  assertEquals(def.next({ ...baseState, email_confirmed: true } as any), 'INTEREST')
+  assertEquals(def.next({ ...baseState, email_confirmed: false } as any), 'LOCATION')
+  assertEquals(def.next({ ...baseState, email_confirmed: true } as any), 'LOCATION')
 })
+
 
 Deno.test('EMAIL.validate: aceita email válido, rejeita inválido', () => {
   const def = getStepDef('EMAIL')
