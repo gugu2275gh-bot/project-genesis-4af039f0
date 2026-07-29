@@ -406,13 +406,29 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
             const broken = paths.filter(
               (b) => !b.next_step_code || !codes.has(b.next_step_code),
             ).length;
+            const stepValidation = normalizeValidation((s as any).validation);
+            const isGeneral = stepKindOf(s as any) === 'PERGUNTA_GERAL';
+            const requiredLabels = (stepValidation.general_capture?.fields || [])
+              .filter((f) => f.required)
+              .map((f) => CAPTURE_SOURCE_OPTIONS.find((o) => o.value === f.source)?.label || f.source);
             return (
             <TableRow key={s.id}>
               <TableCell>{s.order_index}</TableCell>
               <TableCell className="font-mono text-xs">{s.step_code}</TableCell>
               <TableCell>{s.name}</TableCell>
               <TableCell><Badge variant="outline">{phaseLabel(s.phase)}</Badge></TableCell>
-              <TableCell>{ANSWER_TYPES.find((t) => t.value === s.answer_type)?.label || s.answer_type}</TableCell>
+              <TableCell>
+                <div className="space-y-1">
+                  <div>{ANSWER_TYPES.find((t) => t.value === s.answer_type)?.label || s.answer_type}</div>
+                  {isGeneral && (
+                    <Badge variant={requiredLabels.length ? 'default' : 'outline'} className="text-[10px] font-normal">
+                      {requiredLabels.length
+                        ? `Obrigatórios: ${requiredLabels.join(', ')}`
+                        : 'Sem obrigatórios'}
+                    </Badge>
+                  )}
+                </div>
+              </TableCell>
               <TableCell className="font-mono text-[11px]">
                 {paths.length === 0 ? (
                   <span className="text-muted-foreground">—</span>
