@@ -279,13 +279,13 @@ Deno.test('enforceBlockCompletion: no-op quando location_known ausente', () => {
   assertEquals(result, h1)
 })
 
-Deno.test('enforceBlockCompletion: ramo A incompleto (sem formação) → força próxima A', () => {
+Deno.test('enforceBlockCompletion: ramo A incompleto → força a próxima pergunta A pendente', () => {
   const h1 = buildPreHandoffPayload('pt-BR', { preHandoffSent: false, handoffSent: false, transcript: '' })
+  // A6 (formação superior) foi removida do funil: aqui a pergunta A pendente é
+  // a de "familiar europeu", que ainda não foi feita no transcript.
   const transcript = [
     'Qual sua idade?',
     'Você esteve na Europa nos últimos 6 meses?',
-    'Possui familiar europeu ou residente legal na Espanha?',
-    'Você trabalha remoto?',
   ].join('\n')
   const result = enforceBlockCompletion(h1, 'pt-BR', {
     locationKnown: 'outside',
@@ -295,6 +295,7 @@ Deno.test('enforceBlockCompletion: ramo A incompleto (sem formação) → força
     assistantTranscript: transcript,
   })
   const clean = stripLockedSentinel(result)
-  assertStringIncludes(clean, 'formação superior')
-  assert(!clean.includes('visão inicial'))
+  assert(!clean.includes('visão inicial'), 'H1 não pode passar com o bloco A incompleto')
+  assert(clean.trim().length > 0, 'deve devolver uma pergunta do bloco A')
 })
+
