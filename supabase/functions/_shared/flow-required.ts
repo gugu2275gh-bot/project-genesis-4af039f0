@@ -19,6 +19,7 @@ import {
   type FlowTurnResult,
 } from './flow-engine.ts'
 import { fieldValuesFromAnswers, pickFieldValue } from './flow-vars.ts'
+import { birthDateMessage, checkBirthDate } from './flow-birthdate.ts'
 
 export interface RequiredCaptureField {
   source: string
@@ -343,3 +344,28 @@ export function enforceRequiredBeforeHandoff(
 }
 
 
+
+/**
+ * Validação específica de um campo obrigatório antes de gravar.
+ * Devolve a mensagem de correção quando o valor não serve (string vazia = ok).
+ *
+ * Hoje cobre a data de nascimento: só é aceita em DD/MM/AAAA, precisa ser uma
+ * data real, não pode estar no futuro e deve ser coerente com a idade já
+ * informada.
+ */
+export function requiredValueIssue(
+  field: RequiredCaptureField,
+  value: string,
+  lang: FlowLang = 'pt-BR',
+  known: Record<string, string> = {},
+): string {
+  const source = String(field?.source || '')
+  const target = String(field?.target_field || '')
+  const isBirth = source === 'birth_date' || target === 'contact.birth_date'
+  if (!isBirth) return ''
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const declaredAge = pickFieldValue(known, 'outside.age')
+  const check = checkBirthDate(raw, { declaredAge })
+  return check.ok ? '' : birthDateMessage(check.problem, lang, declaredAge)
+}
