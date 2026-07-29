@@ -298,8 +298,9 @@ export function applyRequiredGate(
 }
 
 /**
- * Antes de encerrar/transferir: se alguma "Pergunta geral" percorrida ainda
- * tem campo obrigatório vazio, o fluxo volta para ela e pergunta.
+ * Antes de encerrar/transferir: se alguma "Pergunta geral" percorrida NEM
+ * chegou ao mínimo de dados e ainda tem obrigatório vazio, o fluxo volta para
+ * ela e pergunta. Atingido o mínimo, nada mais é cobrado.
  */
 export function enforceRequiredBeforeHandoff(
   steps: FlowStep[],
@@ -318,8 +319,10 @@ export function enforceRequiredBeforeHandoff(
   for (const code of visited) {
     const step = byCode.get(code)
     if (!step || !isGeneralCaptureStep(step)) continue
+    if (generalCaptureSatisfied(step, known, skipped)) continue
     const pending = missingRequired(step, known, skipped)
     if (!pending.length) continue
+
     const next = pending[0]
     const stay = buildStayTurn(step, requiredPrompt(next, lang), turn.state, {
       current_step: code,
