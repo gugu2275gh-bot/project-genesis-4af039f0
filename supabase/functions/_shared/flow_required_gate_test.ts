@@ -64,16 +64,25 @@ Deno.test('todos os obrigatórios conhecidos: nenhuma cobrança extra', () => {
   assertEquals(gated.messages.length, turn.messages.length)
 })
 
-Deno.test('etapa já apresentada cobra o obrigatório que falta', () => {
+Deno.test('etapa já apresentada cobra o obrigatório que falta (abaixo do mínimo)', () => {
+  const base = startFlow(steps as any, 'pt-BR')
+  const already = { ...base, outbound: [], messages: [], reasked: true } as any
+  const gated = applyRequiredGate(steps as any, already, 'pt-BR', {
+    'contact.full_name': 'Rose Carla',
+  })
+  assertEquals(gated.state.required_field, 'outside.age')
+})
+
+Deno.test('mínimo atingido: nenhuma cobrança extra, mesmo com obrigatório vazio', () => {
   const base = startFlow(steps as any, 'pt-BR')
   const already = { ...base, outbound: [], messages: [], reasked: true } as any
   const gated = applyRequiredGate(steps as any, already, 'pt-BR', {
     'contact.full_name': 'Rose Carla',
     'outside.age': '34',
   })
-  assertEquals(gated.state.required_field, 'funnel.empadronado_city')
-  assertEquals(gated.messages.join(' ').toLowerCase().includes('cidade'), true)
+  assertEquals(gated.state.required_field || '', '')
 })
+
 
 Deno.test('handoff não acontece com obrigatório vazio', () => {
   const finished = {
