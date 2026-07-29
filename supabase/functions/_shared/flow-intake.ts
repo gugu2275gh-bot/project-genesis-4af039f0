@@ -455,11 +455,17 @@ export function prependIntakeGreeting(turn: FlowTurnResult, greeting: string): F
     return prependMessage(turn, text, 'intake')
   }
   const remainder = text
-    .split(/(?<=[.!?…])\s+|\n+/)
-    .filter((sentence) => sentence.trim() && overlapRatio(sentence, first) < 0.7)
+    .split(/(?<=[.!?…])\s+|\n+|(?<=\p{Extended_Pictographic})\s+/u)
+    .filter((sentence) => {
+      const t = tokensOf(sentence)
+      // frases curtas ("Olá, Roberto!") fazem parte da abertura repetida
+      if (t.length < 3) return false
+      return overlapRatio(sentence, first) < 0.7
+    })
     .join(' ')
     .replace(/\s{2,}/g, ' ')
     .trim()
+
   if (normalizeForCompare(remainder).length < 12) return turn
   return prependMessage(turn, remainder, 'intake')
 }
