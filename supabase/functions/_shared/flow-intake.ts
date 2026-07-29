@@ -314,10 +314,8 @@ export function extractionToSourceValues(
 
   put('full_name', normText(extraction.full_name))
   put('email', normText(extraction.email), false)
-  const hasMessage = typeof opts.message === 'string' && opts.message.trim().length > 0
-  if (!hasMessage || messageMentionsSpain(opts.message)) {
-    put('in_spain', toYesNo(extraction.in_spain))
-  }
+  put('in_spain', toYesNo(extraction.in_spain))
+
   put('intent', normalizeIntent(extraction.intent))
 
 
