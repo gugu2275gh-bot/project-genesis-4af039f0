@@ -29,6 +29,7 @@ import {
 import { advanceFlowTurn } from '../../_shared/flow-turn.ts'
 import { localizeTurn } from '../../_shared/flow-i18n.ts'
 import { applyVarsToTurn, buildFlowVars, fieldValuesFromAnswers } from '../../_shared/flow-vars.ts'
+import { applyRequiredGate } from '../../_shared/flow-required.ts'
 import {
   dropOpeningMessages,
   normalizeIntakeConfig,

@@ -9,6 +9,7 @@ import { createIntakeLLM } from '../_shared/intake-llm.ts'
 import { advanceFlowTurn } from '../_shared/flow-turn.ts'
 import { localizeTurn } from '../_shared/flow-i18n.ts'
 import { applyVarsToTurn, buildFlowVars, fieldValuesFromAnswers } from '../_shared/flow-vars.ts'
+import { applyRequiredGate } from '../_shared/flow-required.ts'
 import { searchKnowledgeBase } from '../_shared/kb-search.ts'
 import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
 
