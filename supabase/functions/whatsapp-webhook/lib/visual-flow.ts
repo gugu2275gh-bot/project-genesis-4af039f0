@@ -525,33 +525,43 @@ export async function applyCapturedFields(
         }
         break
       case 'outside.age': {
-        outside.a2_age = value
-        outsideTouched = true
-        const year = ageToBirthYear(value)
-        if (year) contactPatch.birth_date = `${year}-01-01`
+        const years = Number(String(value).replace(/\D+/g, ''))
+        if (Number.isFinite(years) && years >= 14 && years <= 100) {
+          outside.a2_age = String(years)
+          outsideTouched = true
+          const year = ageToBirthYear(value)
+          if (year) contactPatch.birth_date = `${year}-01-01`
+        }
         break
       }
       case 'outside.europe_6m': {
-        outside.a3_europe_6m = toYesNo(value)
-        outsideTouched = true
-        const b = toBoolOrNull(value)
-        if (b !== null) contactPatch.eu_entry_last_6_months = b
+        const yn = toYesNo(value)
+        if (yn) {
+          outside.a3_europe_6m = yn
+          outsideTouched = true
+          contactPatch.eu_entry_last_6_months = yn === 'yes'
+        }
         break
       }
       case 'outside.eu_family': {
-        outside.a4_eu_family = toYesNo(value)
-        outsideTouched = true
-        const b = toBoolOrNull(value)
-        if (b !== null) contactPatch.has_eu_family_member = b
+        const yn = toYesNo(value)
+        if (yn) {
+          outside.a4_eu_family = yn
+          outsideTouched = true
+          contactPatch.has_eu_family_member = yn === 'yes'
+        }
         break
       }
       case 'outside.remote_work': {
-        outside.a5_remote = toYesNo(value)
-        outsideTouched = true
-        const b = toBoolOrNull(value)
-        if (b !== null) contactPatch.works_remotely = b
+        const yn = toYesNo(value)
+        if (yn) {
+          outside.a5_remote = yn
+          outsideTouched = true
+          contactPatch.works_remotely = yn === 'yes'
+        }
         break
       }
+
       case 'lead.service_interest': {
         const svc = inferServiceInterest(value)
         if (svc) {
