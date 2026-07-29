@@ -1,39 +1,57 @@
-## Causa
+## O que muda (em linguagem simples)
 
-Em `supabase/functions/_shared/flow-required.ts`, `applyRequiredGate` contém:
+Na conversa do Julio a primeira mensagem trazia 3 dados (nome, país, objetivo), mas o agente não aproveitou tudo: "Brasil" não encaixa em nenhum campo (o fluxo só tem **Cidade onde mora**), "morar na Espanha" ficou como texto solto sem virar serviço válido, a pergunta do nome exigia nome completo, e a etapa não avançou mesmo com dados suficientes.
 
-```ts
-const presentedNow = !turn.reasked && (turn.outbound || []).some(o => o?.step_code === code)
-if (presentedNow) return { ...turn, state: { ...turn.state, required_field: '', required_attempts: 0 } }
-```
+Cinco mudanças:
 
-Ou seja: no turno em que a "Pergunta geral" é apresentada, os campos obrigatórios ainda vazios **não são cobrados**. O nome (obrigatório em `dados_pessoais`) só entrou na fila um turno depois. Confirmado na sessão de teste: a cobrança do nome só apareceu após a 2ª resposta do cliente.
+1. **País onde mora** vira um dado próprio do fluxo (substitui "Cidade onde mora" no fluxo "Conversa Natural Fred") e é gravado como parte do **endereço residencial** do contato.
+2. **Nome**: pergunta passa a pedir só o nome ("Como você se chama?"), aceitando primeiro nome.
+3. **Objetivo**: "morar na Espanha", "vivir en España", "live in Spain" passam a ser entendidos como **Residência** — serviço válido, sem repetir a pergunta.
+4. **Pergunta própria por campo obrigatório**: ao marcar um campo como obrigatório, abre um campo de texto para escrever a pergunta; ao salvar, ela é **traduzida automaticamente** para PT/ES/EN/FR.
+5. **"Dados suficientes para pular esta etapa" passa a valer de verdade**: atingida a quantidade mínima, o agente vai para a próxima pergunta.
 
-Bônus confirmado no mesmo teste: a saudação saiu como "Olá, **!**" porque `{nome}` estava vazio.
+## Regra de avanço da "Pergunta geral" (o ponto da imagem)
 
-## Correção
+Ordem de decisão, a cada resposta do cliente:
 
-**1. Obrigatório cobrado já na entrada da etapa** — `flow-required.ts`
-- Manter a mensagem da "Pergunta geral" (ela continua sendo enviada uma vez), mas, quando existir campo obrigatório ainda vazio após o intake da 1ª mensagem, **anexar a pergunta do campo faltante na mesma resposta** e já marcar `required_field` no estado.
-- Resultado no caso reportado: turno 2 passa a ser
-  "…me comente um pouco sobre você (…)" + "Antes de tudo, qual é o seu nome completo?"
-- Regra de ordem: campos obrigatórios são cobrados na ordem em que aparecem na configuração da etapa, um por vez.
-- Se a mensagem da etapa já pergunta explicitamente aquele dado (detecção por sobreposição de texto, mesma técnica já usada em `greetingAlreadyPresent`), não duplica — apenas marca `required_field` para o próximo turno.
+1. Conta quantos dados marcados na etapa já são conhecidos (da 1ª mensagem + respostas + o que foi dito agora).
+2. **Falta algum obrigatório?** → o agente pergunta o obrigatório que falta (um por vez) e permanece na etapa. Obrigatório continua sendo garantia absoluta.
+3. **Nenhum obrigatório pendente e a contagem atingiu o mínimo** → a etapa é dada como respondida e o fluxo **avança imediatamente para a próxima pergunta**, sem insistir nos dados opcionais que faltam.
+4. Não atingiu o mínimo → o agente segue coletando na mesma etapa (respeitando o limite de reperguntas).
 
-**2. Não perder os demais dados da resposta** — `_shared/flow-turn.ts`
-- Hoje, com `required_field` pendente, a captura roda só para aquele campo. Passa a rodar para **todos** os campos da etapa, gravando o obrigatório e aproveitando o resto (ex.: cliente responde "Fred, moro em Recife" → grava nome e cidade).
+Ou seja: o "mínimo" governa os dados **opcionais**; o "obrigatório" nunca é pulado. Se todos os campos marcados como obrigatórios já foram preenchidos e o mínimo foi atingido, a etapa termina no mesmo turno.
 
-**3. Saudação sem nome** — `_shared/flow-intake.ts`
-- `renderIntakeGreeting`: quando o nome está vazio, usar a variante não personalizada (ou limpar a vírgula/`!` órfãos), eliminando o "Olá, !".
+## Como fica na prática
 
-**4. Garantia final antes do handoff**
-- Reforçar em `flow-turn.ts` que nenhuma etapa `HANDOFF` é alcançada com obrigatório vazio de qualquer "Pergunta geral" já percorrida (rede de segurança, além do gate por etapa).
+- Cliente: "Oi, sou o Julio, moro no Brasil e quero morar na Espanha".
+- Entendido: **nome = Julio**, **país = Brasil** (logo, fora da Espanha), **objetivo = Residência** → 3 dados.
+- O agente não repergunta nada disso; cobra só os obrigatórios que faltam (idade, formação, familiar europeu, Europa nos últimos 6 meses).
+- Assim que os obrigatórios estiverem completos e o mínimo atingido, ele passa para a etapa seguinte e depois transfere ao especialista.
 
-## Testes
-- `_shared/flow_required_gate_test.ts`: 1ª mensagem sem nome → resposta contém a pergunta geral **e** a cobrança do nome, com `required_field = contact.full_name`.
-- 1ª mensagem com nome → nenhuma cobrança extra (comportamento atual preservado).
-- Resposta ao obrigatório com dados extras → nome gravado + demais campos aproveitados.
-- Saudação com nome desconhecido → sem "Olá, !".
-- Rodar as suítes de `_shared` e `whatsapp-webhook` para garantir zero regressão.
+## Detalhes técnicos
 
-Sem alterações de banco: a configuração do fluxo "Conversa Natural Fred" permanece como está.
+**Avanço por `min_fields`**
+- `flow-turn.ts` / `flow-engine.ts`: após cada resposta em etapa `PERGUNTA_GERAL`, recontar os campos conhecidos; com `missingRequired = []` e `hits >= min_fields`, fechar a etapa e seguir para `next_step_code` no mesmo turno (hoje a etapa só fecha via prefill do intake).
+- `flow-required.ts`: `applyRequiredGate` continua tendo prioridade sobre o avanço; só libera quando não há obrigatório pendente.
+- Texto de ajuda do seletor em `StepGeneralCaptureEditor.tsx` atualizado para refletir a regra ("obrigatórios sempre perguntados; atingido o mínimo, o fluxo avança").
+
+**Novo dado `residence_country`**
+- `flow-intake.ts`: chave `residence_country` no prompt de extração e em `extractionToSourceValues` / `extractionToFieldValues`; país diferente de Espanha deriva `in_spain = nao` (e `sim` quando for Espanha).
+- Novo alvo `contact.residence_country` em `STEP_FIELD_MAPPINGS` e opção "País onde mora" em `CAPTURE_SOURCE_OPTIONS`.
+- Migração: coluna `residence_country` em `public.contacts`, exibida/editável no bloco de **Endereço residencial** em `ContactDetail.tsx`.
+- `flow-vars.ts`: variável `{pais}` e grupo de apelidos para o novo campo; persistência incluída no `whatsapp-webhook`.
+
+**Nome simples**
+- `flow-required.ts`: prompt padrão de `full_name` vira "Como você se chama?" (4 idiomas); `name_mode: 'SIMPLES'` como padrão nas etapas de Pergunta geral.
+
+**Objetivo → serviço válido**
+- Normalização multilíngue de intenção em `flow-intake.ts` mapeando "morar/viver/residir/live/vivir" → `residência`, mantendo estudos, trabalho, nômade, arraigo e nacionalidade; instrução equivalente adicionada ao prompt de extração.
+
+**Pergunta por campo obrigatório, com tradução**
+- `StepGeneralCaptureEditor.tsx`: ao marcar "Obrigatório", exibir `MultiLangField` com botão de tradução (`useAgentTranslate`), gravando em `fields[].prompts` (`pt-BR`, `es`, `en`, `fr`) — estrutura já lida pelo motor em `requiredPrompt()`. Ao salvar, traduzir automaticamente o que estiver faltando.
+
+**Fluxo "Conversa Natural Fred" (migração de dados)**
+- Trocar o obrigatório `city` por `residence_country`, ajustar o texto da etapa ("onde você mora" → "em que país você mora") nos 4 idiomas e semear `prompts` de cada obrigatório.
+
+**Testes**
+- `flow_intake_test.ts` / `flow_required_gate_test.ts`: mensagem do Julio (nome + país + residência); país fora da Espanha define `in_spain = nao`; avanço automático ao atingir o mínimo sem obrigatório pendente; permanência quando há obrigatório pendente mesmo com o mínimo atingido; pergunta personalizada usada no idioma do atendimento.
