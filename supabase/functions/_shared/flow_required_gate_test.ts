@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts'
-import { startFlow, startFlowWithPrefill } from './flow-engine.ts'
+import { startFlow } from './flow-engine.ts'
 import { applyRequiredGate } from './flow-required.ts'
 
 /** Fluxo "Conversa natural" reduzido: 2 perguntas gerais + transferência. */
