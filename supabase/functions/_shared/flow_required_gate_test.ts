@@ -64,16 +64,25 @@ Deno.test('todos os obrigatórios conhecidos: nenhuma cobrança extra', () => {
   assertEquals(gated.messages.length, turn.messages.length)
 })
 
-Deno.test('etapa já apresentada cobra o obrigatório que falta', () => {
+Deno.test('etapa já apresentada cobra o obrigatório que falta (abaixo do mínimo)', () => {
+  const base = startFlow(steps as any, 'pt-BR')
+  const already = { ...base, outbound: [], messages: [], reasked: true } as any
+  const gated = applyRequiredGate(steps as any, already, 'pt-BR', {
+    'contact.full_name': 'Rose Carla',
+  })
+  assertEquals(gated.state.required_field, 'outside.age')
+})
+
+Deno.test('mínimo atingido: nenhuma cobrança extra, mesmo com obrigatório vazio', () => {
   const base = startFlow(steps as any, 'pt-BR')
   const already = { ...base, outbound: [], messages: [], reasked: true } as any
   const gated = applyRequiredGate(steps as any, already, 'pt-BR', {
     'contact.full_name': 'Rose Carla',
     'outside.age': '34',
   })
-  assertEquals(gated.state.required_field, 'funnel.empadronado_city')
-  assertEquals(gated.messages.join(' ').toLowerCase().includes('cidade'), true)
+  assertEquals(gated.state.required_field || '', '')
 })
+
 
 Deno.test('handoff não acontece com obrigatório vazio', () => {
   const finished = {
@@ -108,11 +117,12 @@ Deno.test('mínimo atingido e sem obrigatório pendente: etapa satisfeita', () =
   assertEquals(generalCaptureSatisfied(steps[0] as any, known), true)
 })
 
-Deno.test('obrigatório pendente impede o avanço mesmo com o mínimo atingido', () => {
+Deno.test('mínimo atingido libera o avanço mesmo com obrigatório vazio', () => {
   const known = { 'contact.full_name': 'Julio', 'outside.age': '34' }
-  // min_fields = 2 já foi atingido, mas a cidade é obrigatória
-  assertEquals(generalCaptureSatisfied(steps[0] as any, known), false)
+  // min_fields = 2 atingido: a cidade fica em branco e o fluxo segue
+  assertEquals(generalCaptureSatisfied(steps[0] as any, known), true)
 })
+
 
 Deno.test('obrigatório dispensado (skipped) libera o avanço', () => {
   const known = { 'contact.full_name': 'Julio', 'outside.age': '34' }
@@ -120,4 +130,17 @@ Deno.test('obrigatório dispensado (skipped) libera o avanço', () => {
     generalCaptureSatisfied(steps[0] as any, known, ['funnel.empadronado_city']),
     true,
   )
+})
+
+// --- Nada de dado inventado ---------------------------------------------------
+
+import { isNonAnswer } from './flow-required.ts'
+
+Deno.test('respostas de escape não podem virar valor de campo', () => {
+  for (const t of ['Falar com atendente', 'não sei', 'no sé', "I don't know", 'ok', 'atendente']) {
+    assertEquals(isNonAnswer(t), true, t)
+  }
+  for (const t of ['Brasil', '49 anos', 'sim', 'não']) {
+    assertEquals(isNonAnswer(t), false, t)
+  }
 })

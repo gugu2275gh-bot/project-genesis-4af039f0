@@ -1656,12 +1656,22 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
             }
 
             // Grava as respostas com "Salvar resposta em" nos campos do CRM.
+            // Além do que foi entendido AGORA, reaplicamos tudo que já está no
+            // estado do fluxo (idempotente) — assim nenhum dado entendido em
+            // turno anterior (ex.: país) fica fora do cadastro.
+            const capturedAll = [
+              ...Object.entries((turn.state?.captured_fields || {}) as Record<string, string>)
+                .filter(([, v]) => String(v || '').trim())
+                .map(([field, v]) => ({ step_code: turn.state.current_step, field, value: String(v) })),
+              ...(turn.captured || []),
+            ]
             await applyCapturedFields(supabase, {
               leadId: lead.id,
               contactId: contact.id,
-              captured: turn.captured,
+              captured: capturedAll,
               outsideProgress: (funnelState as any)?.outside_spain_progress || {},
             })
+
 
             const funnelPatch: Record<string, unknown> = {
               visual_flow_state: nextFlowState,

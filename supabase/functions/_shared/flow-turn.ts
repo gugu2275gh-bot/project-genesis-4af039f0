@@ -31,10 +31,12 @@ import {
   MAX_REQUIRED_ATTEMPTS,
   applyRequiredGate,
   generalCaptureSatisfied,
+  isNonAnswer,
   knownFieldsOf,
   missingRequired,
   requiredPrompt,
 } from './flow-required.ts'
+
 
 import { kbCheckOf, kbInvalidMessage, runKbCheck } from './flow-kb-check.ts'
 import { answerAside, composeAnswerAndReask, defaultAsideAck, looksLikeQuestion } from './flow-answer-reask.ts'
@@ -117,7 +119,10 @@ export async function advanceFlowTurn(
       extraValues = { ...(capture?.fieldValues || {}) }
       value = String(extraValues[pendingField] || '').trim()
     }
-    if (!value && text) value = text
+    // Texto solto só vira valor quando é mesmo uma resposta: "falar com
+    // atendente", "não sei" e afins deixam o campo EM BRANCO.
+    if (!value && text && !isNonAnswer(text)) value = text
+
 
     let capturedFields = {
       ...((state.captured_fields || {}) as Record<string, string>),
@@ -157,7 +162,7 @@ export async function advanceFlowTurn(
       missing: stillMissing.map((f) => f.target_field),
     }))
 
-    if (stillMissing.length) {
+    if (stillMissing.length && !generalCaptureSatisfied(step, known, skipped)) {
       const next = stillMissing[0]
       const stay = buildStayTurn(step, requiredPrompt(next, lang), workingState, {
         required_field: next.target_field,
@@ -166,8 +171,9 @@ export async function advanceFlowTurn(
       return { ...stay, captured }
     }
 
-    // Todos os obrigatórios respondidos: fecha a etapa com o resumo do que
-    // foi entendido e segue o fluxo normalmente.
+    // Mínimo de dados atingido (ou nada mais faltando): fecha a etapa com o
+    // resumo do que foi entendido e segue o fluxo normalmente.
+
     const summary = general.fields
       .map((f: any) => {
         const v = String(known[f.target_field] || '').trim()
@@ -326,12 +332,14 @@ export async function advanceFlowTurn(
   }
 
   // Campos obrigatórios da "Pergunta geral" ainda em falta: pergunta um por
-  // vez, aproveitando tudo que já foi entendido, antes de seguir.
+  // vez, aproveitando tudo que já foi entendido — a menos que o mínimo de
+  // dados já tenha sido atingido (aí o fluxo avança e o resto fica em branco).
   if (isGeneralCaptureStep(step)) {
     const skipped = (workingState.required_skipped || []) as string[]
     const known = knownFieldsOf(steps, workingState)
+    const satisfied = generalCaptureSatisfied(step, known, skipped)
     const pending = missingRequired(step, known, skipped)
-    if (pending.length) {
+    if (pending.length && !satisfied) {
       const next = pending[0]
       const stay = buildStayTurn(step, requiredPrompt(next, lang), workingState, {
         required_field: next.target_field,
@@ -340,10 +348,11 @@ export async function advanceFlowTurn(
       return { ...stay, captured: generalCaptured }
     }
 
-    // Sem obrigatório pendente e com a quantidade mínima de dados entendidos
-    // ("Dados suficientes para pular esta etapa"): a etapa é dada como
-    // respondida AGORA e o fluxo segue para a próxima pergunta.
-    if (generalCaptureSatisfied(step, known, skipped)) {
+    // Quantidade mínima de dados entendidos ("Dados suficientes para pular
+    // esta etapa"): a etapa é dada como respondida AGORA e o fluxo segue para
+    // a próxima pergunta.
+    if (satisfied) {
+
       const general2 = generalCaptureOf(step)
       const summary = (general2.fields || [])
         .map((f: any) => {

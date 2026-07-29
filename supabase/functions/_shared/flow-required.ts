@@ -147,15 +147,16 @@ export function missingRequired(
 
 /**
  * A etapa "Pergunta geral" já tem dados suficientes ("Dados suficientes para
- * pular esta etapa")? Só vale depois que os obrigatórios estão completos.
+ * pular esta etapa")? O mínimo governa o avanço: atingida a quantidade, a
+ * etapa termina mesmo que algum campo marcado como obrigatório siga vazio
+ * (ele fica em branco, sem ser cobrado).
  */
 export function generalCaptureSatisfied(
   step: FlowStep,
   known: Record<string, string>,
-  skipped: string[] = [],
+  _skipped: string[] = [],
 ): boolean {
   if (!isGeneralCaptureStep(step)) return false
-  if (missingRequired(step, known, skipped).length) return false
   const cfg = generalCaptureOf(step)
   const fields = (cfg.fields || []) as RequiredCaptureField[]
   if (!fields.length) return true
@@ -163,6 +164,21 @@ export function generalCaptureSatisfied(
   const hits = fields.filter((f) => !!pickFieldValue(known, f.target_field)).length
   return hits >= Math.min(min, fields.length)
 }
+
+/**
+ * Respostas de escape/ruído que NÃO podem virar valor de campo — senão o
+ * cadastro fica com dado inventado ("Falar com atendente" virando "não esteve
+ * na Europa").
+ */
+const NON_ANSWER_RE =
+  /^(ok(ay)?|blz|beleza|sim,?\s*obrigad[oa]|obrigad[oa]|gracias|thanks?|merci|n[ãa]o sei|nao sei|sei l[áa]|no s[ée]|i don'?t know|je ne sais pas|talvez|maybe|quiz[áa]s|falar com (o |um )?(atendente|humano|especialista)|hablar con (un )?(agente|humano|asesor)|talk to (a |an )?(agent|human)|parler [àa] (un )?(agent|humain)|atendente|humano|agente)$/i
+
+export function isNonAnswer(text: string): boolean {
+  const t = String(text || '').trim().replace(/[.!?…]+$/, '')
+  if (!t) return true
+  return NON_ANSWER_RE.test(t)
+}
+
 
 /** Texto da pergunta de um campo obrigatório, no idioma do atendimento. */
 export function requiredPrompt(field: RequiredCaptureField, lang: FlowLang = 'pt-BR'): string {
@@ -238,11 +254,14 @@ export function applyRequiredGate(
 
   const presentedNow = !turn.reasked && (turn.outbound || []).some((o: any) => o?.step_code === code)
 
-  if (!pending.length) {
-    return presentedNow
+  // Mínimo de dados atingido: a etapa não cobra mais nada — o que não foi
+  // respondido fica em branco e o fluxo segue.
+  if (!pending.length || generalCaptureSatisfied(step, known, skipped)) {
+    return presentedNow || turn.state?.required_field
       ? { ...turn, state: { ...turn.state, required_field: '', required_attempts: 0 } }
       : turn
   }
+
 
   const next = pending[0]
 
@@ -279,8 +298,9 @@ export function applyRequiredGate(
 }
 
 /**
- * Antes de encerrar/transferir: se alguma "Pergunta geral" percorrida ainda
- * tem campo obrigatório vazio, o fluxo volta para ela e pergunta.
+ * Antes de encerrar/transferir: se alguma "Pergunta geral" percorrida NEM
+ * chegou ao mínimo de dados e ainda tem obrigatório vazio, o fluxo volta para
+ * ela e pergunta. Atingido o mínimo, nada mais é cobrado.
  */
 export function enforceRequiredBeforeHandoff(
   steps: FlowStep[],
@@ -299,8 +319,10 @@ export function enforceRequiredBeforeHandoff(
   for (const code of visited) {
     const step = byCode.get(code)
     if (!step || !isGeneralCaptureStep(step)) continue
+    if (generalCaptureSatisfied(step, known, skipped)) continue
     const pending = missingRequired(step, known, skipped)
     if (!pending.length) continue
+
     const next = pending[0]
     const stay = buildStayTurn(step, requiredPrompt(next, lang), turn.state, {
       current_step: code,

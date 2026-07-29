@@ -312,9 +312,14 @@ function nameFromState(steps: FlowStep[], state: FlowRunState): string {
 const YES_VALUES = new Set(['sim', 'si', 'sí', 'yes', 'oui', 'true', 's', 'y'])
 const NO_VALUES = new Set(['nao', 'não', 'no', 'non', 'false', 'n'])
 
-function toYesNo(value: string): 'yes' | 'no' {
-  return YES_VALUES.has(String(value || '').trim().toLowerCase()) ? 'yes' : 'no'
+/** Sim/Não explícito. Qualquer outro texto → null (não grava nada). */
+function toYesNo(value: string): 'yes' | 'no' | null {
+  const v = String(value || '').trim().toLowerCase()
+  if (YES_VALUES.has(v)) return 'yes'
+  if (NO_VALUES.has(v)) return 'no'
+  return null
 }
+
 
 /** Sim/Não → boolean. Devolve null quando a resposta não é claramente sim/não. */
 function toBoolOrNull(value: string): boolean | null {
@@ -436,30 +441,43 @@ export async function applyCapturedFields(
       case 'contact.education_level': {
         const b = toBoolOrNull(value)
         if (b !== null) contactPatch.education_level = b ? 'SUPERIOR' : 'NAO_SUPERIOR'
-        else if (value) contactPatch.education_level = value
+        else if (/^(superior|nao_superior|n[ãa]o_superior|fundamental|medio|m[ée]dio)$/i.test(value)) {
+          contactPatch.education_level = value.toUpperCase().replace('Ã', 'A').replace('É', 'E')
+        }
         break
       }
+
       case 'contact.works_remotely': {
         const b = toBoolOrNull(value)
         if (b !== null) contactPatch.works_remotely = b
-        outside.a5_remote = toYesNo(value)
-        outsideTouched = true
+        const yn = toYesNo(value)
+        if (yn) {
+          outside.a5_remote = yn
+          outsideTouched = true
+        }
         break
       }
       case 'contact.has_eu_family_member': {
         const b = toBoolOrNull(value)
         if (b !== null) contactPatch.has_eu_family_member = b
-        outside.a4_eu_family = toYesNo(value)
-        outsideTouched = true
+        const yn = toYesNo(value)
+        if (yn) {
+          outside.a4_eu_family = yn
+          outsideTouched = true
+        }
         break
       }
       case 'contact.eu_entry_last_6_months': {
         const b = toBoolOrNull(value)
         if (b !== null) contactPatch.eu_entry_last_6_months = b
-        outside.a3_europe_6m = toYesNo(value)
-        outsideTouched = true
+        const yn = toYesNo(value)
+        if (yn) {
+          outside.a3_europe_6m = yn
+          outsideTouched = true
+        }
         break
       }
+
       case 'contact.birth_date': {
         const iso = toIsoDateOrNull(value)
         if (iso) contactPatch.birth_date = iso
@@ -476,11 +494,19 @@ export async function applyCapturedFields(
         }
         break
       case 'funnel.location_known': {
-        const inSpain = toYesNo(value) === 'yes'
-        funnelPatch.location_known = inSpain ? 'spain' : 'outside'
-        contactPatch.is_in_spain = inSpain
+        // Sem sim/não claro (ou nome de país), não inventa a localização.
+        const yn = toYesNo(value)
+        const isSpain = /^(espanha|espa[nñ]a|spain|espagne)$/i.test(value)
+        const isCountry = !!value && /^[\p{L}\s.'-]{3,40}$/u.test(value)
+        const inSpain = yn ? yn === 'yes' : (isCountry ? isSpain : null)
+        if (inSpain !== null) {
+          funnelPatch.location_known = inSpain ? 'spain' : 'outside'
+          contactPatch.is_in_spain = inSpain
+        }
         break
       }
+
+
       case 'funnel.entry_date_confirmed': {
         if (value) funnelPatch.entry_date_confirmed = value
         const iso = toIsoDateOrNull(value)
@@ -502,33 +528,43 @@ export async function applyCapturedFields(
         }
         break
       case 'outside.age': {
-        outside.a2_age = value
-        outsideTouched = true
-        const year = ageToBirthYear(value)
-        if (year) contactPatch.birth_date = `${year}-01-01`
+        const years = Number(String(value).replace(/\D+/g, ''))
+        if (Number.isFinite(years) && years >= 14 && years <= 100) {
+          outside.a2_age = String(years)
+          outsideTouched = true
+          const year = ageToBirthYear(value)
+          if (year) contactPatch.birth_date = `${year}-01-01`
+        }
         break
       }
       case 'outside.europe_6m': {
-        outside.a3_europe_6m = toYesNo(value)
-        outsideTouched = true
-        const b = toBoolOrNull(value)
-        if (b !== null) contactPatch.eu_entry_last_6_months = b
+        const yn = toYesNo(value)
+        if (yn) {
+          outside.a3_europe_6m = yn
+          outsideTouched = true
+          contactPatch.eu_entry_last_6_months = yn === 'yes'
+        }
         break
       }
       case 'outside.eu_family': {
-        outside.a4_eu_family = toYesNo(value)
-        outsideTouched = true
-        const b = toBoolOrNull(value)
-        if (b !== null) contactPatch.has_eu_family_member = b
+        const yn = toYesNo(value)
+        if (yn) {
+          outside.a4_eu_family = yn
+          outsideTouched = true
+          contactPatch.has_eu_family_member = yn === 'yes'
+        }
         break
       }
       case 'outside.remote_work': {
-        outside.a5_remote = toYesNo(value)
-        outsideTouched = true
-        const b = toBoolOrNull(value)
-        if (b !== null) contactPatch.works_remotely = b
+        const yn = toYesNo(value)
+        if (yn) {
+          outside.a5_remote = yn
+          outsideTouched = true
+          contactPatch.works_remotely = yn === 'yes'
+        }
         break
       }
+
       case 'lead.service_interest': {
         const svc = inferServiceInterest(value)
         if (svc) {
