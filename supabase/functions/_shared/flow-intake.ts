@@ -279,8 +279,9 @@ export function extractionToSourceValues(
   put('city', normText(extraction.city))
   const country = normalizeCountry(extraction.residence_country)
   put('residence_country', country)
-  // Mora fora da Espanha => não está na Espanha (quando a IA não disse nada).
-  if (country && !out.in_spain) out.in_spain = isSpain(country) ? 'sim' : 'nao'
+  // ATENÇÃO: morar fora da Espanha NÃO significa não estar na Espanha agora.
+  // `in_spain` só existe quando o cliente afirma explicitamente (a IA devolve
+  // o campo) — nunca é deduzido do país de residência.
   put('education_superior', toYesNo(extraction.education_superior))
   put('eu_family', toYesNo(extraction.eu_family))
   put('europe_6m', toYesNo(extraction.europe_6m))
