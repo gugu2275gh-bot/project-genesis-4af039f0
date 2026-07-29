@@ -94,3 +94,30 @@ Deno.test('handoff não acontece com obrigatório vazio', () => {
 })
 
 
+
+// --- "Dados suficientes para pular esta etapa" -------------------------------
+
+import { generalCaptureSatisfied } from './flow-required.ts'
+
+Deno.test('mínimo atingido e sem obrigatório pendente: etapa satisfeita', () => {
+  const known = {
+    'contact.full_name': 'Julio',
+    'outside.age': '34',
+    'funnel.empadronado_city': 'Recife',
+  }
+  assertEquals(generalCaptureSatisfied(steps[0] as any, known), true)
+})
+
+Deno.test('obrigatório pendente impede o avanço mesmo com o mínimo atingido', () => {
+  const known = { 'contact.full_name': 'Julio', 'outside.age': '34' }
+  // min_fields = 2 já foi atingido, mas a cidade é obrigatória
+  assertEquals(generalCaptureSatisfied(steps[0] as any, known), false)
+})
+
+Deno.test('obrigatório dispensado (skipped) libera o avanço', () => {
+  const known = { 'contact.full_name': 'Julio', 'outside.age': '34' }
+  assertEquals(
+    generalCaptureSatisfied(steps[0] as any, known, ['funnel.empadronado_city']),
+    true,
+  )
+})

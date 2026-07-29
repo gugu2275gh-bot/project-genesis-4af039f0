@@ -254,3 +254,36 @@ Deno.test('saudação sem nome não deixa "Olá, !"', () => {
   assertEquals(out.includes(', !'), false)
   assertEquals(out.startsWith('Olá!'), true)
 })
+
+// --- País onde mora + intenção "morar na Espanha" ---------------------------
+
+import {
+  extractionToFieldValues as extractionToFieldValues_pais,
+  extractionToSourceValues as extractionToSourceValues_pais,
+  normalizeIntent,
+} from './flow-intake.ts'
+
+Deno.test('Julio: nome + país + "morar na Espanha" viram 3 dados válidos', () => {
+  const values = extractionToFieldValues_pais({
+    full_name: 'Julio',
+    residence_country: 'Brasil',
+    intent: 'quero morar na Espanha',
+  } as any)
+  assertEquals(values['contact.full_name'], 'Julio')
+  assertEquals(values['contact.residence_country'], 'Brasil')
+  assertEquals(values['funnel.interest_confirmed'], 'residência')
+  // País fora da Espanha define a localização
+  assertEquals(values['funnel.location_known'], 'nao')
+})
+
+Deno.test('país Espanha marca a pessoa como já estando na Espanha', () => {
+  const src = extractionToSourceValues_pais({ residence_country: 'España' } as any)
+  assertEquals(src.in_spain, 'sim')
+})
+
+Deno.test('intenções livres normalizadas para serviços válidos', () => {
+  assertEquals(normalizeIntent('vivir en España'), 'residência')
+  assertEquals(normalizeIntent('live in Spain'), 'residência')
+  assertEquals(normalizeIntent('quero estudar'), 'estudos')
+  assertEquals(normalizeIntent('nacionalidade espanhola'), 'nacionalidade')
+})
