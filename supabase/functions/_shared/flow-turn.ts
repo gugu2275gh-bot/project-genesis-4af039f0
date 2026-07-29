@@ -162,7 +162,7 @@ export async function advanceFlowTurn(
       missing: stillMissing.map((f) => f.target_field),
     }))
 
-    if (stillMissing.length) {
+    if (stillMissing.length && !generalCaptureSatisfied(step, known, skipped)) {
       const next = stillMissing[0]
       const stay = buildStayTurn(step, requiredPrompt(next, lang), workingState, {
         required_field: next.target_field,
@@ -171,8 +171,9 @@ export async function advanceFlowTurn(
       return { ...stay, captured }
     }
 
-    // Todos os obrigatórios respondidos: fecha a etapa com o resumo do que
-    // foi entendido e segue o fluxo normalmente.
+    // Mínimo de dados atingido (ou nada mais faltando): fecha a etapa com o
+    // resumo do que foi entendido e segue o fluxo normalmente.
+
     const summary = general.fields
       .map((f: any) => {
         const v = String(known[f.target_field] || '').trim()
