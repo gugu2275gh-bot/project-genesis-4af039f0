@@ -1,73 +1,61 @@
 ## Objetivo
 
-1. Poder **duplicar qualquer fluxo** (inclusive o ativo), gerando uma cópia inativa para editar.
-2. Criar a modalidade de etapa **"Pergunta geral"**: faz uma pergunta aberta e ampla, interpreta a resposta, preenche automaticamente vários campos do banco e **pula** as etapas seguintes já respondidas.
-3. **Aproveitar o nome do perfil do WhatsApp** para não perguntar o nome desnecessariamente.
+Criar um novo fluxo pré-handoff chamado **"teste aberto"** que reproduz exatamente o exemplo pedido: saudação já com o nome vindo do WhatsApp, uma **pergunta geral aberta** que interpreta a resposta e preenche vários campos, e perguntas de complemento só para o que não foi entendido.
 
-## Resultado esperado (exemplo real)
+Verificado no banco: hoje existem só dois fluxos (`Pré-Handsoff` e `Pré-Handsoff Aberto`), ambos em RASCUNHO — o novo será criado do zero, sem alterar os existentes.
 
-Com essas três peças, o agente passa a conseguir atuar assim:
+## Como o fluxo vai conversar
 
 ```text
-Olá, [NOME]! Eu sou a assistente virtual da CB ASESORIA. 😊
-Para entender melhor o seu caso, farei algumas perguntas… me comente um
-pouco sobre você (idade, onde você mora, possui formação superior, possui
-algum familiar europeu, esteve na Europa nos últimos 6 meses).
+1) Olá, {nome}! Eu sou a assistente virtual da CB ASESORIA. 😊
+   Para entender melhor o seu caso, farei algumas perguntas...
+   me comente um pouco sobre você (idade, onde você mora, possui
+   formação superior, possui algum familiar europeu, esteve na Europa
+   nos últimos 6 meses).
+   E qual o seu objetivo na Espanha? Visto de estudos, residência para
+   nômades, arraigos, nacionalidade espanhola, já possui oferta de
+   trabalho ou outros?
 
-E qual o seu objetivo na Espanha?
-Visto de estudos, residência para nômades, arraigos, nacionalidade
-espanhola, já possui oferta de trabalho ou outros?
+2) [cliente responde em texto livre]
+   -> IA interpreta idade, cidade, formação, familiar europeu,
+      Europa 6 meses e objetivo; grava nos campos e PULA as perguntas
+      correspondentes.
+
+3) Só o que faltou é perguntado, uma pergunta por vez.
+
+4) E-mail -> encerramento com encaminhamento ao especialista.
 ```
 
-- `[NOME]` vem do **perfil do WhatsApp** (ou do contato já cadastrado), sem precisar perguntar.
-- A resposta livre do cliente ("tenho 34 anos, moro em Valencia, sou formado, minha avó é italiana, cheguei em maio") é interpretada pela etapa **Pergunta geral**, que grava idade, cidade, formação, familiar europeu e data de entrada nos campos configurados.
-- As etapas seguintes que perguntariam esses mesmos dados são **puladas automaticamente**; o fluxo segue direto na primeira pergunta ainda pendente.
+`{nome}` vem do perfil do WhatsApp (ou do contato já cadastrado); se não houver nome utilizável, a saudação usa a versão sem nome e a pergunta de nome entra na lista de pendências.
 
-Para isso, a lista de campos interpretáveis é ampliada com: **idade**, **cidade onde mora**, **formação superior (sim/não)**, **familiar europeu (sim/não + parentesco/nacionalidade)** e **esteve na Europa nos últimos 6 meses (sim/não)**, além dos já existentes (nome, e-mail, está na Espanha, objetivo/serviço, data de entrada, empadronamento).
+## Etapas do fluxo
 
-## 1. Duplicação de fluxos
+| # | Etapa | Tipo | Grava em |
+|---|-------|------|----------|
+| 1 | Saudação + pergunta geral | **PERGUNTA_GERAL** | interpretação multi-campo |
+| 2 | Nome completo (só se faltar) | PERGUNTA | `contact.full_name` |
+| 3 | Idade | PERGUNTA | idade |
+| 4 | Cidade onde mora | PERGUNTA | cidade |
+| 5 | Formação superior (Sim/Não) | PERGUNTA | formação |
+| 6 | Familiar europeu (Sim/Não) | PERGUNTA | familiar europeu |
+| 7 | Esteve na Europa nos últimos 6 meses (Sim/Não) | PERGUNTA | Europa 6m |
+| 8 | Objetivo na Espanha | PERGUNTA (opções) | objetivo/serviço |
+| 9 | E-mail | PERGUNTA | `contact.email` |
+| 10 | Encerramento / encaminhamento | FIM (handoff) | — |
 
-- Botão **"Duplicar"** na lista de fluxos (Agentes de IA > Fluxos), ao lado de Editar/Excluir.
-- Cópia com nome `<nome original> (cópia)`, **inativa** (rascunho), mantendo configuração geral, `intake_config`, todas as etapas, mensagens em todos os idiomas, ramificações, validações e posições do canvas.
-- Códigos de etapa preservados dentro da cópia; `next_step_code` e ramificações continuam apontando para as etapas da própria cópia.
-- Confirmação antes de duplicar e navegação direta para o editor da cópia.
+Todas as etapas 2–9 ficam com "pular se o campo já estiver preenchido", para que nada seja perguntado duas vezes depois da pergunta geral.
 
-## 2. Nova modalidade "Pergunta geral"
+## Configurações
 
-### Configuração (editor de etapas)
-- Novo tipo **PERGUNTA_GERAL** no seletor "Tipo de etapa", com aba **"Interpretação"**:
-  - Lista pronta de **campos que podem ser interpretados** (incluindo os novos: idade, cidade, formação superior, familiar europeu, viagem à Europa nos últimos 6 meses).
-  - Para cada campo marcado, o **campo do banco** que será gravado vem da lista pronta existente (contato / lead / funil).
-  - **Confiança mínima** (0 a 1).
-  - Mensagens opcionais de **reconhecimento** e de **reforço** quando nada é entendido (multilíngue, passando pela camada de idioma já existente).
-
-### Comportamento em execução
-- A etapa envia a pergunta e **aguarda a resposta**.
-- Ao receber a resposta, roda a extração por IA (mesma da primeira mensagem), restrita aos campos marcados.
-- Cada valor aceito é gravado no campo configurado e marca a etapa correspondente como respondida.
-- O fluxo **pula as etapas já respondidas** e segue na primeira pergunta pendente.
-- Se nada for entendido, envia a mensagem de reforço e mantém o comportamento de "resposta diferente do esperado" da etapa.
-- Vale no **Sandbox** e no **WhatsApp em produção**.
-
-## 3. Nome vindo do WhatsApp
-
-- O webhook passa a ler o **nome de perfil do remetente** (`ProfileName` da Twilio) e a gravá-lo no contato quando ele ainda não tiver nome.
-- O nome entra como dado pré-preenchido do fluxo e pode ser usado como `{nome}` na saudação, respeitando `name_mode`:
-  - **nome simples** → pergunta de nome é pulada;
-  - **nome completo** → se o perfil trouxer só o primeiro nome, o agente pergunta de forma personalizada ("Oi, Rose! Pode me confirmar seu nome completo?").
-- Prioridade: nome dito na conversa > nome já cadastrado > nome do perfil do WhatsApp.
-- Nomes de perfil inúteis (vazio, só números, igual ao telefone, só emojis) são ignorados.
+- **Etapa 1 (Pergunta geral)**: interpretação ligada, confiança mínima 0,7, campos marcados — nome, idade, cidade, formação superior, familiar europeu, Europa nos últimos 6 meses, objetivo/serviço, e-mail. Mensagem de reforço caso nada seja entendido.
+- **Primeira mensagem (intake)**: ligada, com os mesmos campos, saudação personalizada `{nome}` e saudação padrão sem nome.
+- **Sim/Não**: etapas 5, 6 e 7 com botões de resposta rápida.
+- **Idiomas**: todas as mensagens gravadas em pt-BR, es, en e fr, para nada sair em português numa conversa em outro idioma.
+- **Status**: criado como **RASCUNHO** (inativo), para você revisar no editor visual e testar no Sandbox antes de ativar.
 
 ## Detalhes técnicos
 
-- `src/hooks/useAIAgents.ts`: `useDuplicateFlow` (copia `ai_agent_flows` + `ai_agent_flow_steps`, `is_active: false`).
-- `src/components/ai-agents/FlowsManagement.tsx`: botão Duplicar; novo tipo em `STEP_KINDS`.
-- `src/types/ai-agent-flow-builder.ts`: `StepKind` ganha `PERGUNTA_GERAL`; `StepValidation` ganha `general_capture: { enabled, fields: Array<{ source, target_field }>, min_confidence }`.
-- `src/components/ai-agents/FlowIntakeSettings.tsx` / `INTAKE_FIELDS`: novos campos (idade, cidade, formação, familiar europeu, Europa 6 meses) compartilhados entre a "Primeira mensagem" e a "Pergunta geral".
-- Novo `src/components/ai-agents/flow-builder/StepGeneralCaptureEditor.tsx` (aba Interpretação).
-- `supabase/functions/_shared/flow-intake.ts`: prompt de extração ampliado com os novos campos; `profileNameToFieldValues` para o nome do WhatsApp; reuso de `runIntake` / `prefillFromFieldValues` com a lista da etapa.
-- `supabase/functions/_shared/flow-engine.ts`: `PERGUNTA_GERAL` como pergunta que aguarda resposta + prefill em meio ao fluxo (`applyPrefillFromStep`).
-- `supabase/functions/whatsapp-webhook/*`: capturar `ProfileName`, persistir em `contacts.full_name` quando vazio e injetar no prefill inicial.
-- `supabase/functions/_shared/flow-turn.ts`, `whatsapp-webhook/lib/visual-flow.ts`, `ai-agent-sandbox/index.ts`: acionar a extração quando a etapa respondida for `PERGUNTA_GERAL`.
-- Testes Deno: extração multi-campo parcial, campos fora da lista ignorados, pulo de etapas respondidas, continuidade multilíngue e nome de perfil (simples vs completo, valores inválidos).
-- Campos novos que ainda não existam em `contacts`/`lead_funnel_state` (ex.: idade, formação superior, familiar europeu, viagem recente) exigem uma pequena migração de colunas — feita antes das mudanças de código.
+- Migração de dados: `insert` em `ai_agent_flows` (`name: 'teste aberto'`, `phase: 'PRE_HANDOFF'`, `status: 'RASCUNHO'`, `intake_config` preenchido) + `insert` das 10 linhas em `ai_agent_flow_steps` com `step_code`, `order_index`, `next_step_code`, `field_mapping`, `messages` (jsonb multi-idioma) e `validation` contendo `step_kind`, `skip_mode`, `general_capture`, `name_mode`, `options_i18n` e `unexpected_answer`.
+- `canvas` com posições em coluna para o editor visual abrir já organizado.
+- Sem mudanças de código: a modalidade `PERGUNTA_GERAL`, o prefill por nome do WhatsApp e o pulo de etapas já respondidas já existem no motor.
+- Verificação: abrir o fluxo em Agentes de IA > Fluxos e rodar um teste no Sandbox com a resposta livre do exemplo ("tenho 34 anos, moro em Valencia, sou formado, minha avó é italiana, cheguei em maio, quero nacionalidade") conferindo que só e-mail é perguntado depois.
