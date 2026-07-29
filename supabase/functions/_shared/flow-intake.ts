@@ -190,8 +190,10 @@ function toYesNo(v: unknown): string {
   const t = normText(v).toLowerCase()
   if (YES_WORDS.includes(t)) return 'sim'
   if (NO_WORDS.includes(t)) return 'nao'
-  return ''
+  // Frases livres ("somente tenho família no Brasil") também viram sim/nao.
+  return normalizeYesNo(t)
 }
+
 
 
 /** Intenções livres normalizadas para serviços válidos da assessoria. */
