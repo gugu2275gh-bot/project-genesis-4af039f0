@@ -38,7 +38,14 @@ export const CAPTURE_SOURCE_OPTIONS: { value: string; label: string; default_tar
 /** Configuração de interpretação multi-campo da etapa "Pergunta geral". */
 export interface StepGeneralCapture {
   enabled?: boolean;
-  fields?: { source: string; target_field: string }[];
+  fields?: {
+    source: string;
+    target_field: string;
+    /** Quando verdadeiro, o agente pergunta esse dado antes de seguir/transferir. */
+    required?: boolean;
+    /** Pergunta específica desse campo, por idioma (opcional). */
+    prompts?: Record<string, string>;
+  }[];
   min_confidence?: number;
   /**
    * Quantos dados precisam ser entendidos para a etapa ser dada como
