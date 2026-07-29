@@ -140,12 +140,13 @@ EXPLICITAMENTE. Nunca invente. Campos desconhecidos devem ser null.${filter}
   "empadronado": "sim | nao | null",
   "empadronado_city": "cidade do empadronamento ou null",
   "age": número inteiro da idade em anos, senão null,
+  "birth_date": "data de nascimento EXATAMENTE como dita, no formato DD/MM/AAAA, senão null. NUNCA calcule a data a partir da idade",
   "city": "cidade onde a pessoa mora hoje, ou null",
   "residence_country": "país onde a pessoa mora hoje (ex.: Brasil, Espanha, Portugal), ou null",
   "education_superior": "sim | nao | null (possui formação superior/universitária?)",
   "eu_family": "sim | nao | null (possui familiar europeu ou residente na UE?)",
   "europe_6m": "sim | nao | null (esteve na Europa nos últimos 6 meses?)",
-  "confidence": { "full_name": 0..1, "residence_country": 0..1, "in_spain": 0..1, "intent": 0..1, "arrival_date": 0..1, "empadronado": 0..1, "age": 0..1, "city": 0..1, "education_superior": 0..1, "eu_family": 0..1, "europe_6m": 0..1 }
+  "confidence": { "full_name": 0..1, "residence_country": 0..1, "in_spain": 0..1, "intent": 0..1, "arrival_date": 0..1, "empadronado": 0..1, "age": 0..1, "birth_date": 0..1, "city": 0..1, "education_superior": 0..1, "eu_family": 0..1, "europe_6m": 0..1 }
 }
 
 Mensagem do cliente:
