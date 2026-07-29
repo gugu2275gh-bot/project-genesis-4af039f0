@@ -1756,12 +1756,16 @@ const CANONICAL_BY_LANG: Record<CanonicalQuestionKey, Record<ChatLanguage, strin
     'en': 'Since when have you been registered (empadronado)?',
     'fr': 'Depuis quand êtes-vous empadronado ?',
   },
+  // Mantém exatamente o mesmo texto de getEmpadronamientoCityQuestion()
+  // (lib/questions.ts) — duas redações diferentes da mesma pergunta chegavam
+  // ao cliente dependendo da camada que a montava.
   empadronadoCity: {
-    'pt-BR': 'Em qual cidade você está empadronado?',
-    'es': '¿En qué ciudad estás empadronado?',
-    'en': 'In which city are you registered (empadronado)?',
-    'fr': 'Dans quelle ville êtes-vous empadronado ?',
+    'pt-BR': 'Em qual cidade você foi empadronado?',
+    'es': '¿En qué ciudad fuiste empadronado?',
+    'en': 'In which city were you registered (empadronado)?',
+    'fr': 'Dans quelle ville avez-vous été empadronado ?',
   },
+
   askName: {
     'pt-BR': 'Antes de tudo, como é seu nome completo?',
     'es': 'Antes de nada, ¿cuál es tu nombre completo?',
