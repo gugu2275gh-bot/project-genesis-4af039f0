@@ -243,3 +243,14 @@ for (const [lang, greeting, step] of [
     assertEquals(out.messages.length, 1)
   })
 }
+
+Deno.test('saudação sem nome não deixa "Olá, !"', () => {
+  const cfg: any = {
+    enabled: true,
+    greeting_personalized: { 'pt-BR': 'Olá, {nome}! Eu sou a assistente virtual da CB ASESORIA. 😊 {resumo}' },
+    greeting_default: { 'pt-BR': 'Olá! Eu sou a assistente virtual da CB ASESORIA. 😊' },
+  }
+  const out = renderIntakeGreeting(cfg, 'pt-BR', { 'funnel.location_known': 'nao' })
+  assertEquals(out.includes(', !'), false)
+  assertEquals(out.startsWith('Olá!'), true)
+})
