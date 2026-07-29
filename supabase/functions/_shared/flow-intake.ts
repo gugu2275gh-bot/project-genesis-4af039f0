@@ -22,6 +22,8 @@ import {
 } from './flow-engine.ts'
 import { fieldAllowed, pickFieldValue } from './flow-vars.ts'
 import { checkBirthDate } from './flow-birthdate.ts'
+import { normalizeYesNo } from './flow-required.ts'
+
 
 export interface IntakeExtraction {
   full_name?: string | null
