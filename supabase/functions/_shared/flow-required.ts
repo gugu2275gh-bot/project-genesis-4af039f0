@@ -8,7 +8,6 @@
  */
 
 import {
-  appendMessage,
   buildStayTurn,
   generalCaptureOf,
   indexSteps,
@@ -296,27 +295,22 @@ export function applyRequiredGate(
   const next = pending[0]
 
   if (presentedNow) {
-    // A pergunta aberta continua sendo enviada; a cobrança do obrigatório é
-    // acrescentada na MESMA resposta (a menos que o texto já a contenha).
-    const presentedText = (turn.outbound || [])
-      .filter((o: any) => o?.step_code === code)
-      .map((o: any) => o?.text || '')
-      .join(' ')
-    const base = fieldAlreadyAskedIn(next, presentedText)
-      ? turn
-      : appendMessage(turn, requiredPrompt(next, lang), code)
+    // Primeira apresentação da etapa: sai SÓ a pergunta aberta. Nada de campo
+    // obrigatório colado na saudação — esperamos a resposta do cliente e só
+    // depois cobramos o que faltar (nome primeiro).
     return {
-      ...base,
+      ...turn,
       finished: false,
       handoff: false,
       state: {
-        ...base.state,
+        ...turn.state,
         current_step: code,
-        required_field: next.target_field,
+        required_field: '',
         required_attempts: 0,
       },
     }
   }
+
 
   const stay = buildStayTurn(step, requiredPrompt(next, lang), turn.state, {
     current_step: code,
