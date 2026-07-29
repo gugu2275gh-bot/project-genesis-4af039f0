@@ -877,7 +877,18 @@ export function startFlowWithPrefill(
     captured.push(...captureOf(step, answers[code]))
   }
 
-  return run(index, start.step_code, { answers, visited: [], attempts: 0, lang }, lang, captured)
+  const capturedFields: Record<string, string> = {}
+  for (const c of captured) {
+    if (c?.field && c?.value) capturedFields[c.field] = String(c.value)
+  }
+
+  return run(
+    index,
+    start.step_code,
+    { answers, visited: [], attempts: 0, lang, captured_fields: capturedFields },
+    lang,
+    captured,
+  )
 }
 
 
