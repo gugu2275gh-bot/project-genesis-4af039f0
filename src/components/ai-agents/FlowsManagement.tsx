@@ -249,7 +249,18 @@ function StepDialog({
             onChange={(patch) => set({ validation: { ...validation, ...patch } })}
           />
 
-          {stepKindOf({ validation, handoff: draft.handoff }) === 'PERGUNTA' && (
+          {stepKindOf({ validation, handoff: draft.handoff }) === 'PERGUNTA_GERAL' && (
+            <>
+              <Separator />
+              <p className="text-sm font-medium">Interpretação e campos obrigatórios</p>
+              <StepGeneralCaptureEditor
+                value={validation.general_capture}
+                onChange={(next) => set({ validation: { ...validation, general_capture: next } })}
+              />
+            </>
+          )}
+
+          {['PERGUNTA', 'PERGUNTA_GERAL'].includes(stepKindOf({ validation, handoff: draft.handoff })) && (
             <>
               <Separator />
               <p className="text-sm font-medium">Base de conhecimento</p>
