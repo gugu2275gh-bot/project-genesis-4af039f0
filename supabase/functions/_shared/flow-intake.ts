@@ -189,12 +189,12 @@ function normText(v: unknown): string {
   return String(v ?? '').trim()
 }
 
-function toYesNo(v: unknown): string {
+function toYesNo(v: unknown, opts: { kinship?: boolean } = {}): string {
   const t = normText(v).toLowerCase()
   if (YES_WORDS.includes(t)) return 'sim'
   if (NO_WORDS.includes(t)) return 'nao'
   // Frases livres ("somente tenho família no Brasil") também viram sim/nao.
-  return normalizeYesNo(t)
+  return normalizeYesNo(t, opts)
 }
 
 
