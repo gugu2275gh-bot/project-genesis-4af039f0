@@ -107,7 +107,14 @@ Deno.test('handoff não acontece com obrigatório vazio', () => {
 
 // --- "Dados suficientes para pular esta etapa" -------------------------------
 
-import { generalCaptureSatisfied } from './flow-required.ts'
+import {
+  generalCaptureSatisfied,
+  isBooleanField,
+  normalizeRequiredValue,
+  normalizeYesNo,
+  requiredValueIssue,
+} from './flow-required.ts'
+
 
 Deno.test('mínimo atingido e sem obrigatório pendente: etapa satisfeita', () => {
   const known = {
