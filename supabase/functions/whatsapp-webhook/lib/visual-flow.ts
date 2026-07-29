@@ -447,24 +447,34 @@ export async function applyCapturedFields(
       case 'contact.works_remotely': {
         const b = toBoolOrNull(value)
         if (b !== null) contactPatch.works_remotely = b
-        outside.a5_remote = toYesNo(value)
-        outsideTouched = true
+        const yn = toYesNo(value)
+        if (yn) {
+          outside.a5_remote = yn
+          outsideTouched = true
+        }
         break
       }
       case 'contact.has_eu_family_member': {
         const b = toBoolOrNull(value)
         if (b !== null) contactPatch.has_eu_family_member = b
-        outside.a4_eu_family = toYesNo(value)
-        outsideTouched = true
+        const yn = toYesNo(value)
+        if (yn) {
+          outside.a4_eu_family = yn
+          outsideTouched = true
+        }
         break
       }
       case 'contact.eu_entry_last_6_months': {
         const b = toBoolOrNull(value)
         if (b !== null) contactPatch.eu_entry_last_6_months = b
-        outside.a3_europe_6m = toYesNo(value)
-        outsideTouched = true
+        const yn = toYesNo(value)
+        if (yn) {
+          outside.a3_europe_6m = yn
+          outsideTouched = true
+        }
         break
       }
+
       case 'contact.birth_date': {
         const iso = toIsoDateOrNull(value)
         if (iso) contactPatch.birth_date = iso
