@@ -9,6 +9,7 @@ import { Send, RotateCcw, Loader2, FlaskConical } from 'lucide-react';
 import {
   useAIAgents,
   useAgentVersions,
+  useAgentFlows,
   useCreateTestSession,
   useSendTestMessage,
   useTestMessages,
