@@ -170,9 +170,10 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
             : 'Nenhum dado obrigatório: o agente aproveita o que for dito e segue em frente.'}
         </p>
         <p className="text-xs text-muted-foreground">
-          Regra: os campos obrigatórios são sempre perguntados. Sem obrigatórios pendentes e com
-          essa quantidade de dados já entendidos, a etapa é encerrada e o fluxo avança para a
-          próxima pergunta.
+          Regra: o mínimo vale apenas para os campos opcionais. Todo campo marcado como
+          obrigatório é sempre perguntado — a etapa só é encerrada quando nenhum obrigatório
+          estiver em branco.
+
         </p>
       </div>
 
