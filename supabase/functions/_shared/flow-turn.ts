@@ -297,6 +297,13 @@ export async function advanceFlowTurn(
         field,
         value,
       }))
+      workingState = {
+        ...workingState,
+        captured_fields: {
+          ...((workingState.captured_fields || {}) as Record<string, string>),
+          ...capture.fieldValues,
+        },
+      }
       const prefilled = { ...(capture.prefilled || {}) }
       delete prefilled[step.step_code]
       if (Object.keys(prefilled).length) {
@@ -305,6 +312,22 @@ export async function advanceFlowTurn(
           answers: { ...(workingState.answers || {}), ...prefilled },
         }
       }
+    }
+  }
+
+  // Campos obrigatórios da "Pergunta geral" ainda em falta: pergunta um por
+  // vez, aproveitando tudo que já foi entendido, antes de seguir.
+  if (isGeneralCaptureStep(step)) {
+    const skipped = (workingState.required_skipped || []) as string[]
+    const known = knownFieldsOf(steps, workingState)
+    const pending = missingRequired(step, known, skipped)
+    if (pending.length) {
+      const next = pending[0]
+      const stay = buildStayTurn(step, requiredPrompt(next, lang), workingState, {
+        required_field: next.target_field,
+        required_attempts: 0,
+      })
+      return { ...stay, captured: generalCaptured }
     }
   }
 
