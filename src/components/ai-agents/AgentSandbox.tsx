@@ -36,6 +36,7 @@ export function AgentSandbox({ initialAgentId }: Props) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [detectedLang, setDetectedLang] = useState<string | null>(null);
+  const [captured, setCaptured] = useState<Record<string, string>>({});
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -53,6 +54,7 @@ export function AgentSandbox({ initialAgentId }: Props) {
     setSessionId(null);
     setVersionId('current');
     setDetectedLang(null);
+    setCaptured({});
   }, [agentId]);
 
 
@@ -79,6 +81,10 @@ export function AgentSandbox({ initialAgentId }: Props) {
     const res = await send.mutateAsync({ sessionId: id, message: text });
     const lang = (res as any)?.flow?.lang;
     if (lang) setDetectedLang(lang);
+    const fields = (res as any)?.flow?.captured;
+    if (fields && typeof fields === 'object') {
+      setCaptured((prev) => ({ ...prev, ...(fields as Record<string, string>) }));
+    }
   };
 
 
@@ -129,7 +135,7 @@ export function AgentSandbox({ initialAgentId }: Props) {
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                onClick={() => { setSessionId(null); setDetectedLang(null); }}
+                onClick={() => { setSessionId(null); setDetectedLang(null); setCaptured({}); }}
                 disabled={!agentId}
               >
                 <RotateCcw className="h-4 w-4 mr-1" /> Novo teste
@@ -186,6 +192,8 @@ export function AgentSandbox({ initialAgentId }: Props) {
           )}
           <div ref={bottomRef} />
         </div>
+
+        <CapturedFieldsCard captured={captured} />
 
         <div className="flex gap-2">
           <Input
