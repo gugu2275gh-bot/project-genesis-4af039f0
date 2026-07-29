@@ -337,11 +337,12 @@ export async function advanceFlowTurn(
     : turn
 
   // Etapa mudou: zera o contador de dúvidas respondidas.
-  if (withCapture.state?.current_step !== state.current_step) {
-    return { ...withCapture, state: { ...withCapture.state, aside_attempts: 0 } }
-  }
+  const finalTurn = withCapture.state?.current_step !== state.current_step
+    ? { ...withCapture, state: { ...withCapture.state, aside_attempts: 0 } }
+    : withCapture
 
-  return withCapture
+  // A próxima etapa também pode ser uma "Pergunta geral" com obrigatórios.
+  return applyRequiredGate(steps, finalTurn, lang)
 }
 
 
