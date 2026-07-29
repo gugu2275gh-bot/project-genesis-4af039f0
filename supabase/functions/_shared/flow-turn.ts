@@ -15,6 +15,7 @@ import {
   buildStayTurn,
   generalCaptureOf,
   indexSteps,
+  isGeneralCaptureStep,
   jumpToStep,
   messagesOf,
   startFlow,
@@ -26,6 +27,13 @@ import {
 } from './flow-engine.ts'
 import { runGeneralCapture } from './flow-intake.ts'
 import { ackAiEnabledFor, generateAckPhrase } from './flow-ack.ts'
+import {
+  MAX_REQUIRED_ATTEMPTS,
+  applyRequiredGate,
+  knownFieldsOf,
+  missingRequired,
+  requiredPrompt,
+} from './flow-required.ts'
 
 import { kbCheckOf, kbInvalidMessage, runKbCheck } from './flow-kb-check.ts'
 import { answerAside, composeAnswerAndReask, defaultAsideAck, looksLikeQuestion } from './flow-answer-reask.ts'
