@@ -435,10 +435,8 @@ export async function applyCapturedFields(
       case 'contact.residence_country':
         if (value) {
           contactPatch.residence_country = value
-          // Mora fora da Espanha => marca a localização no funil.
-          const inSpainByCountry = /^(espanha|espa[nñ]a|spain|espagne)$/i.test(value)
-          contactPatch.is_in_spain = inSpainByCountry
-          funnelPatch.location_known = inSpainByCountry ? 'spain' : 'outside'
+          // NÃO deduz presença na Espanha a partir do país de residência:
+          // morar fora não significa não estar na Espanha agora.
         }
         break
       case 'contact.education_level': {
