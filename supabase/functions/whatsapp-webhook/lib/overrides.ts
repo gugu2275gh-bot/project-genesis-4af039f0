@@ -1800,8 +1800,10 @@ const CANON_DETECTORS: Array<{ key: CanonicalQuestionKey; re: RegExp; matchLang?
   { key: 'empadronado', re: /est[áa]s empadronad[oa]\??/i },
   { key: 'empadronadoSince', re: /desde quando (voc[êe] )?est[áa] empadronad/i },
   { key: 'empadronadoSince', re: /desde cu[áa]ndo est[áa]s empadronad/i },
-  { key: 'empadronadoCity', re: /em qual cidade (voc[êe] )?est[áa] empadronad/i },
-  { key: 'empadronadoCity', re: /en qu[eé] ciudad est[áa]s empadronad/i },
+  // aceita as duas redações ("está"/"foi") para reconhecer históricos antigos
+  { key: 'empadronadoCity', re: /em qual cidade (voc[êe] )?(est[áa]|foi) empadronad/i },
+  { key: 'empadronadoCity', re: /en qu[eé] ciudad (est[áa]s|fuiste) empadronad/i },
+
   // nome
   { key: 'askName', re: /(antes de tudo|antes de mais nada),? como [eé] seu nome completo\??/i },
   { key: 'askName', re: /(antes de nada|para empezar),? ?¿cu[áa]l es tu nombre completo\??/i },
