@@ -315,6 +315,7 @@ export function extractionToFieldValues(
   }
   if (src.residence_country) out['contact.residence_country'] = src.residence_country
   if (src.age) out['outside.age'] = src.age
+  if (src.birth_date) out['contact.birth_date'] = src.birth_date
   if (src.education_superior) out['contact.education_level'] = src.education_superior
   if (src.eu_family) out['contact.has_eu_family_member'] = src.eu_family
   if (src.europe_6m) out['contact.eu_entry_last_6_months'] = src.europe_6m
