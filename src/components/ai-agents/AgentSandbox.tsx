@@ -144,6 +144,9 @@ export function AgentSandbox({ initialAgentId }: Props) {
             <Badge variant="secondary">
               idioma: {detectedLang ? LANG_LABELS[detectedLang] || detectedLang : 'aguardando 1ª resposta'}
             </Badge>
+            <Badge variant="secondary">
+              fluxo: {activeFlowName || 'nenhum (modo livre)'}
+            </Badge>
           </div>
 
         )}
