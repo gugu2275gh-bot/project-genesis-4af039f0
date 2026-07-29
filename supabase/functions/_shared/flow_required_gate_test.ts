@@ -73,15 +73,16 @@ Deno.test('etapa já apresentada cobra o obrigatório que falta (abaixo do míni
   assertEquals(gated.state.required_field, 'outside.age')
 })
 
-Deno.test('mínimo atingido: nenhuma cobrança extra, mesmo com obrigatório vazio', () => {
+Deno.test('mínimo atingido NÃO dispensa obrigatório: a cidade ainda é cobrada', () => {
   const base = startFlow(steps as any, 'pt-BR')
   const already = { ...base, outbound: [], messages: [], reasked: true } as any
   const gated = applyRequiredGate(steps as any, already, 'pt-BR', {
     'contact.full_name': 'Rose Carla',
     'outside.age': '34',
   })
-  assertEquals(gated.state.required_field || '', '')
+  assertEquals(gated.state.required_field, 'funnel.empadronado_city')
 })
+
 
 
 Deno.test('handoff não acontece com obrigatório vazio', () => {
@@ -106,7 +107,14 @@ Deno.test('handoff não acontece com obrigatório vazio', () => {
 
 // --- "Dados suficientes para pular esta etapa" -------------------------------
 
-import { generalCaptureSatisfied } from './flow-required.ts'
+import {
+  generalCaptureSatisfied,
+  isBooleanField,
+  normalizeRequiredValue,
+  normalizeYesNo,
+  requiredValueIssue,
+} from './flow-required.ts'
+
 
 Deno.test('mínimo atingido e sem obrigatório pendente: etapa satisfeita', () => {
   const known = {
@@ -117,11 +125,27 @@ Deno.test('mínimo atingido e sem obrigatório pendente: etapa satisfeita', () =
   assertEquals(generalCaptureSatisfied(steps[0] as any, known), true)
 })
 
-Deno.test('mínimo atingido libera o avanço mesmo com obrigatório vazio', () => {
+Deno.test('obrigatório vazio bloqueia o avanço, mesmo com o mínimo atingido', () => {
   const known = { 'contact.full_name': 'Julio', 'outside.age': '34' }
-  // min_fields = 2 atingido: a cidade fica em branco e o fluxo segue
-  assertEquals(generalCaptureSatisfied(steps[0] as any, known), true)
+  assertEquals(generalCaptureSatisfied(steps[0] as any, known), false)
 })
+
+Deno.test('respostas livres viram sim/nao nos campos booleanos', () => {
+  assertEquals(normalizeYesNo('somente tenho familia no Brasil'), 'nao')
+  assertEquals(normalizeYesNo('nenhum'), 'nao')
+  assertEquals(normalizeYesNo('sim, tenho um tio espanhol'), 'sim')
+  assertEquals(normalizeYesNo('claro'), 'sim')
+  assertEquals(normalizeYesNo('talvez algum dia'), '')
+})
+
+Deno.test('campo sim/não com resposta indecisa é reperguntado', () => {
+  const field = { source: 'eu_family', target_field: 'contact.has_eu_family_member' } as any
+  assertEquals(isBooleanField(field), true)
+  assertEquals(requiredValueIssue(field, 'somente tenho familia no Brasil', 'pt-BR') === '', true)
+  assertEquals(requiredValueIssue(field, 'talvez algum dia', 'pt-BR') !== '', true)
+  assertEquals(normalizeRequiredValue(field, 'somente tenho familia no Brasil'), 'nao')
+})
+
 
 
 Deno.test('obrigatório dispensado (skipped) libera o avanço', () => {

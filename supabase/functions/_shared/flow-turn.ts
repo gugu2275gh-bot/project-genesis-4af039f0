@@ -31,11 +31,14 @@ import {
   MAX_REQUIRED_ATTEMPTS,
   applyRequiredGate,
   generalCaptureSatisfied,
+  isBooleanField,
   isNonAnswer,
   knownFieldsOf,
   missingRequired,
+  normalizeRequiredValue,
   requiredPrompt,
   requiredValueIssue,
+
 } from './flow-required.ts'
 
 
@@ -146,6 +149,26 @@ export async function advanceFlowTurn(
         delete extraValues[pendingField]
       }
     }
+
+    // Campos sim/não nunca guardam a frase crua ("só tenho família no Brasil").
+    if (value) {
+      const normalized = normalizeRequiredValue(
+        target || { source: pendingField, target_field: pendingField },
+        value,
+      )
+      if (normalized) {
+        value = normalized
+        if (extraValues[pendingField]) extraValues[pendingField] = normalized
+      }
+    }
+    for (const [field, raw] of Object.entries(extraValues)) {
+      const meta = general.fields?.find((f: any) => f.target_field === field)
+      if (!meta || !isBooleanField(meta)) continue
+      const norm = normalizeRequiredValue(meta, String(raw || ''))
+      if (norm) extraValues[field] = norm
+      else delete extraValues[field]
+    }
+
 
 
 

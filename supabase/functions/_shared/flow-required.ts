@@ -153,24 +153,37 @@ export function missingRequired(
 }
 
 /**
- * A etapa "Pergunta geral" já tem dados suficientes ("Dados suficientes para
- * pular esta etapa")? O mínimo governa o avanço: atingida a quantidade, a
- * etapa termina mesmo que algum campo marcado como obrigatório siga vazio
- * (ele fica em branco, sem ser cobrado).
+ * A etapa "Pergunta geral" já pode ser encerrada?
+ *
+ * REGRA: o obrigatório manda mais que o mínimo. Enquanto houver campo marcado
+ * como obrigatório sem valor (e que ainda não esgotou as tentativas), a etapa
+ * NÃO é considerada satisfeita. O "mínimo de dados" vale apenas para os campos
+ * opcionais — e só governa quando a etapa não tem nenhum obrigatório.
  */
 export function generalCaptureSatisfied(
   step: FlowStep,
   known: Record<string, string>,
-  _skipped: string[] = [],
+  skipped: string[] = [],
 ): boolean {
   if (!isGeneralCaptureStep(step)) return false
   const cfg = generalCaptureOf(step)
-  const fields = (cfg.fields || []) as RequiredCaptureField[]
+  const fields = (cfg.fields || []) as Array<RequiredCaptureField & { required?: boolean }>
   if (!fields.length) return true
+
+  const ignore = new Set(skipped || [])
+  const required = fields.filter((f) => (f as any)?.required === true)
+  if (required.length) {
+    const pending = required.filter(
+      (f) => !ignore.has(f.target_field) && !pickFieldValue(known, f.target_field),
+    )
+    return pending.length === 0
+  }
+
   const min = Number(cfg.min_fields) > 0 ? Number(cfg.min_fields) : 1
   const hits = fields.filter((f) => !!pickFieldValue(known, f.target_field)).length
   return hits >= Math.min(min, fields.length)
 }
+
 
 /**
  * Respostas de escape/ruído que NÃO podem virar valor de campo — senão o
@@ -343,15 +356,74 @@ export function enforceRequiredBeforeHandoff(
   return turn
 }
 
+/** Campos cuja resposta só pode ser "sim" ou "nao". */
+const BOOLEAN_SOURCES = new Set([
+  'eu_family',
+  'europe_6m',
+  'education_superior',
+  'empadronado',
+  'in_spain',
+  'works_remotely',
+])
 
+const BOOLEAN_TARGETS = new Set([
+  'contact.has_eu_family_member',
+  'contact.has_european_family',
+  'contact.eu_entry_last_6_months',
+  'contact.was_in_europe_6m',
+  'contact.education_level',
+  'contact.is_empadronado',
+  'contact.is_in_spain',
+  'contact.works_remotely',
+  'funnel.location_known',
+])
+
+export function isBooleanField(field: RequiredCaptureField): boolean {
+  return (
+    BOOLEAN_SOURCES.has(String(field?.source || '')) ||
+    BOOLEAN_TARGETS.has(String(field?.target_field || ''))
+  )
+}
+
+const YES_RE =
+  /(^|\b)(sim|s[ií]|yes|yeah|yep|oui|claro|com certeza|certamente|tenho|tengo|possuo|j[áa] estive|estive|ja fui|j[áa] fui|i (do|have|was)|j['e]ai|positivo|afirmativo|isso|exato|verdade)(\b|$)/i
+const NO_RE =
+  /(^|\b)(n[ãa]o|nao|no|nope|non|nunca|jamais|nenhum[ao]?|ningu[eé]m|nadie|ninguno|none|nobody|negativo|s[óo] (no|na|em)|somente (no|na|em)|apenas (no|na|em)|solo en|only in|n[ãa]o tenho|nao tenho|no tengo|i don'?t|i have no|never)(\b|$)/i
+
+/**
+ * Converte a resposta livre de um campo sim/não em "sim" | "nao".
+ * Devolve string vazia quando não dá para decidir.
+ */
+export function normalizeYesNo(text: string): string {
+  const t = String(text || '').trim()
+  if (!t) return ''
+  const noHit = NO_RE.test(t)
+  const yesHit = YES_RE.test(t)
+  // "só tenho família no Brasil" casa nos dois: a negação tem prioridade.
+  if (noHit) return 'nao'
+  if (yesHit) return 'sim'
+  return ''
+}
+
+/** Normaliza o valor antes de gravar (hoje: campos sim/não). */
+export function normalizeRequiredValue(field: RequiredCaptureField, value: string): string {
+  if (!isBooleanField(field)) return String(value || '').trim()
+  return normalizeYesNo(value)
+}
+
+const YES_NO_RETRY: Record<string, string> = {
+  'pt-BR': 'Só para confirmar, responda com sim ou não:',
+  es: 'Solo para confirmar, responde con sí o no:',
+  en: 'Just to confirm, please answer yes or no:',
+  fr: 'Juste pour confirmer, répondez par oui ou non :',
+}
 
 /**
  * Validação específica de um campo obrigatório antes de gravar.
  * Devolve a mensagem de correção quando o valor não serve (string vazia = ok).
  *
- * Hoje cobre a data de nascimento: só é aceita em DD/MM/AAAA, precisa ser uma
- * data real, não pode estar no futuro e deve ser coerente com a idade já
- * informada.
+ * Cobre a data de nascimento (DD/MM/AAAA, data real, coerente com a idade) e
+ * os campos sim/não (resposta que não permite decidir é reperguntada).
  */
 export function requiredValueIssue(
   field: RequiredCaptureField,
@@ -361,8 +433,18 @@ export function requiredValueIssue(
 ): string {
   const source = String(field?.source || '')
   const target = String(field?.target_field || '')
+
+  if (isBooleanField(field)) {
+    const raw = String(value || '').trim()
+    if (!raw) return ''
+    if (normalizeYesNo(raw)) return ''
+    const prefix = YES_NO_RETRY[lang] || YES_NO_RETRY['pt-BR']
+    return `${prefix} ${requiredPrompt(field, lang)}`
+  }
+
   const isBirth = source === 'birth_date' || target === 'contact.birth_date'
   if (!isBirth) return ''
+
   const raw = String(value || '').trim()
   if (!raw) return ''
   const declaredAge = pickFieldValue(known, 'outside.age')
