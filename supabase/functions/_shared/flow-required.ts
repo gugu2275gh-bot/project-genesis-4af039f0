@@ -205,6 +205,7 @@ const FIELD_KEYWORDS: Record<string, RegExp> = {
   full_name: /(nome\s+completo|seu\s+nome|nombre|full\s+name|your\s+name|votre\s+nom)/i,
   email: /(e-?mail|correo|courriel)/i,
   age: /(idade|edad|\bage\b|âge)/i,
+  birth_date: /(nascimento|nacimiento|birth|naissance)/i,
   city: /(cidade|ciudad|\bcity\b|ville)/i,
   residence_country: /(pa[íi]s|country|pays)/i,
   in_spain: /(na\s+espanha|en\s+espa[ñn]a|in\s+spain|en\s+espagne)/i,
