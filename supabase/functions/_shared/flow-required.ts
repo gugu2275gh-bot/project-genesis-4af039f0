@@ -254,11 +254,14 @@ export function applyRequiredGate(
 
   const presentedNow = !turn.reasked && (turn.outbound || []).some((o: any) => o?.step_code === code)
 
-  if (!pending.length) {
-    return presentedNow
+  // Mínimo de dados atingido: a etapa não cobra mais nada — o que não foi
+  // respondido fica em branco e o fluxo segue.
+  if (!pending.length || generalCaptureSatisfied(step, known, skipped)) {
+    return presentedNow || turn.state?.required_field
       ? { ...turn, state: { ...turn.state, required_field: '', required_attempts: 0 } }
       : turn
   }
+
 
   const next = pending[0]
 
