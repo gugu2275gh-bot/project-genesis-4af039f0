@@ -283,6 +283,11 @@ export interface StepGeneralCapture {
   /** Pares "dado interpretado" -> "campo do CRM". */
   fields: { source: string; target_field: string }[]
   min_confidence: number
+  /**
+   * Quantos campos precisam ser entendidos para a etapa ser considerada
+   * respondida (e portanto pulada quando os dados vieram na 1ª mensagem).
+   */
+  min_fields: number
 }
 
 export function generalCaptureOf(step: FlowStep): StepGeneralCapture {
@@ -298,11 +303,19 @@ export function generalCaptureOf(step: FlowStep): StepGeneralCapture {
         }))
         .filter((f: any) => f.source && f.target_field)
     : []
+  const minFieldsRaw = Number(raw.min_fields)
+  const minFields = Number.isFinite(minFieldsRaw) && minFieldsRaw > 0 ? Math.round(minFieldsRaw) : 2
   return {
     enabled: isGeneral && raw.enabled !== false && fields.length > 0,
     fields,
     min_confidence: Number.isFinite(conf) ? Math.min(1, Math.max(0, conf)) : 0.7,
+    min_fields: Math.max(1, Math.min(minFields, fields.length || 1)),
   }
+}
+
+/** `true` quando a etapa é a "Pergunta geral" (interpretação multi-campo). */
+export function isGeneralCaptureStep(step: FlowStep): boolean {
+  return (step?.validation as any)?.step_kind === 'PERGUNTA_GERAL'
 }
 
 
@@ -826,6 +839,7 @@ export function startFlowWithPrefill(
   steps: FlowStep[],
   lang: FlowLang = 'pt-BR',
   prefilled: Record<string, string> = {},
+  extraCaptured: FlowCapturedField[] = [],
 ): FlowTurnResult {
   const index = indexSteps(steps)
   const start = findStartStep(steps)
@@ -835,12 +849,18 @@ export function startFlowWithPrefill(
 
   // Só aceita respostas que passem na validação da própria etapa.
   const answers: Record<string, string> = {}
-  const captured: FlowCapturedField[] = []
+  const captured: FlowCapturedField[] = [...(extraCaptured || [])]
   for (const [code, raw] of Object.entries(prefilled || {})) {
     const step = index.get(code)
     if (!step) continue
     const value = String(raw ?? '').trim()
     if (!value) continue
+    // A "Pergunta geral" não tem um formato único de resposta: o que vale é o
+    // conjunto de campos já entendidos, validados na origem.
+    if (isGeneralCaptureStep(step)) {
+      answers[code] = value
+      continue
+    }
     const check = validateAnswer(step, value)
     if (!check.valid) continue
     answers[code] = check.value ?? value

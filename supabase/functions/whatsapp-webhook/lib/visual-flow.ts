@@ -28,6 +28,7 @@ import {
 } from '../../_shared/flow-engine.ts'
 import { advanceFlowTurn } from '../../_shared/flow-turn.ts'
 import { localizeTurn } from '../../_shared/flow-i18n.ts'
+import { applyVarsToTurn, buildFlowVars, fieldValuesFromAnswers } from '../../_shared/flow-vars.ts'
 import {
   dropOpeningMessages,
   normalizeIntakeConfig,
@@ -37,6 +38,7 @@ import {
   profileNameToFieldValues,
   renderIntakeGreeting,
   runIntake,
+  capturedFromFieldValues,
   type IntakeConfig,
 } from '../../_shared/flow-intake.ts'
 
@@ -181,12 +183,19 @@ export async function runVisualFlowFirstTurn(
   const logIntake = (payload: Record<string, unknown>) =>
     console.log('[VISUAL_FLOW][INTAKE]', JSON.stringify(payload))
 
-  /** Camada única de saída: nada sai fora do idioma da conversa. */
-  const localize = (turn: FlowTurnResult) =>
-    localizeTurn(turn, lang, { steps: plan.steps, callLLM, supabase, logTag: '[VISUAL_FLOW]' })
+  // Dados conhecidos para as variáveis das mensagens ({nome}, {cidade}…).
+  // Vai sendo enriquecido conforme o intake entende mais coisas.
+  let knownFields: Record<string, string> = {}
+
+  /** Camada única de saída: idioma da conversa + variáveis resolvidas. */
+  const localize = async (turn: FlowTurnResult) => {
+    const localized = await localizeTurn(turn, lang, { steps: plan.steps, callLLM, supabase, logTag: '[VISUAL_FLOW]' })
+    return applyVarsToTurn(localized, buildFlowVars(knownFields, { profileName: opts?.profileName }))
+  }
 
   // Nome do perfil do WhatsApp: usado como dado já conhecido (quando confiável).
   const seed = profileNameToFieldValues(opts?.profileName, opts?.phone || '')
+  knownFields = { ...seed }
   const seedPrefill = Object.keys(seed).length
     ? prefillFromFieldValues(plan.steps, seed)
     : {}
@@ -201,7 +210,8 @@ export async function runVisualFlowFirstTurn(
   }
   if (!callLLM) {
     logIntake({ reason: 'no_llm', profile_name: !!seed['contact.full_name'] })
-    return startWithSeed()
+    // Sem IA não há tradução, mas as variáveis ({nome}…) precisam sair resolvidas.
+    return applyVarsToTurn(startWithSeed(), buildFlowVars(knownFields, { profileName: opts?.profileName }))
   }
 
   /** Abertura sem aproveitamento: usa a "Saudação padrão" quando configurada. */
@@ -217,6 +227,7 @@ export async function runVisualFlowFirstTurn(
   }
 
 
+  knownFields = { ...knownFields, ...(intake.fieldValues || {}) }
   const prefilledCodes = Object.keys(intake.prefilled || {})
   logIntake({
     reason: intake.reason,
@@ -230,7 +241,7 @@ export async function runVisualFlowFirstTurn(
   if (!prefilledCodes.length && !intake.greeting) return await localize(plainStart())
 
   const base = prefilledCodes.length
-    ? startFlowWithPrefill(plan.steps, lang, intake.prefilled)
+    ? startFlowWithPrefill(plan.steps, lang, intake.prefilled, capturedFromFieldValues(plan.steps, knownFields))
     : startFlow(plan.steps, lang)
 
   // A saudação personalizada substitui a abertura informativa do fluxo.
@@ -249,13 +260,19 @@ export async function runVisualFlowTurn(
     supabase?: any
   } = {},
 ): Promise<FlowTurnResult> {
-  const localize = (turn: FlowTurnResult) =>
-    localizeTurn(turn, lang, {
+  const localize = async (turn: FlowTurnResult) => {
+    const localized = await localizeTurn(turn, lang, {
       steps: plan.steps,
       callLLM: deps.callLLM || null,
       supabase: deps.supabase,
       logTag: '[VISUAL_FLOW]',
     })
+    const known = fieldValuesFromAnswers(plan.steps, {
+      ...((state?.answers || {}) as Record<string, string>),
+      ...(((localized as any)?.state?.answers || {}) as Record<string, string>),
+    })
+    return applyVarsToTurn(localized, buildFlowVars(known))
+  }
 
   const started = !!state?.current_step
   if (!started) return await localize(startFlow(plan.steps, lang))

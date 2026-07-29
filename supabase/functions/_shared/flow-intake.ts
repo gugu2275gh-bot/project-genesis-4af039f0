@@ -11,6 +11,7 @@
  */
 
 import {
+  generalCaptureOf,
   inferFieldMapping,
   prependMessage,
   stepKindOf,
@@ -19,6 +20,7 @@ import {
   type FlowStep,
   type FlowTurnResult,
 } from './flow-engine.ts'
+import { fieldAllowed, pickFieldValue } from './flow-vars.ts'
 
 export interface IntakeExtraction {
   full_name?: string | null
@@ -268,6 +270,11 @@ export function extractionToFieldValues(
 /**
  * Casa os valores extraídos com as etapas do fluxo (via `field_mapping`
  * explícito ou inferido) e devolve `step_code -> resposta` já validada.
+ *
+ * A etapa "Pergunta geral" não tem um único `field_mapping`: ela é considerada
+ * respondida quando o intake já entendeu pelo menos `min_fields` dos dados que
+ * ela captura — foi essa lacuna que fazia o agente reperguntar tudo mesmo com
+ * a 1ª mensagem já cheia de informação.
  */
 export function prefillFromFieldValues(
   steps: FlowStep[],
@@ -278,10 +285,22 @@ export function prefillFromFieldValues(
   const prefilled: Record<string, string> = {}
 
   for (const step of steps || []) {
+    const general = generalCaptureOf(step)
+    if (general.enabled) {
+      const hits: string[] = []
+      for (const f of general.fields) {
+        if (!fieldAllowed(allow, f.target_field)) continue
+        const value = pickFieldValue(fieldValues, f.target_field)
+        if (value) hits.push(`${f.source}: ${value}`)
+      }
+      if (hits.length >= general.min_fields) prefilled[step.step_code] = hits.join('; ')
+      continue
+    }
+
     const field = inferFieldMapping(step)
     if (!field) continue
-    if (allow.size && !allow.has(field)) continue
-    const raw = fieldValues[field]
+    if (!fieldAllowed(allow, field)) continue
+    const raw = pickFieldValue(fieldValues, field)
     if (!raw) continue
     const check = validateAnswer(step, raw)
     if (!check.valid) continue
@@ -289,6 +308,23 @@ export function prefillFromFieldValues(
   }
 
   return prefilled
+}
+
+/**
+ * Campos entendidos que NÃO têm etapa própria no fluxo — precisam ser gravados
+ * no cadastro mesmo assim (ex.: data de chegada quando não há etapa de data).
+ */
+export function capturedFromFieldValues(
+  steps: FlowStep[],
+  fieldValues: Record<string, string>,
+): { step_code: string; field: string; value: string }[] {
+  const out: { step_code: string; field: string; value: string }[] = []
+  for (const [field, value] of Object.entries(fieldValues || {})) {
+    const text = String(value ?? '').trim()
+    if (!text) continue
+    out.push({ step_code: 'intake', field, value: text })
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------
@@ -406,10 +442,11 @@ export async function runIntake(params: {
 }): Promise<IntakeResult> {
   const { message, steps, lang, config, callLLM } = params
   const allowed = config?.fields || []
+  const allowSet = new Set(allowed.filter(Boolean))
   const seed: Record<string, string> = {}
   for (const [k, v] of Object.entries(params.seed || {})) {
     if (!v) continue
-    if (allowed.length && !allowed.includes(k)) continue
+    if (!fieldAllowed(allowSet, k)) continue
     seed[k] = v
   }
 
@@ -437,7 +474,7 @@ export async function runIntake(params: {
   const fieldValues = extractionToFieldValues(extraction, config.min_confidence, params.now)
   const filtered: Record<string, string> = { ...seed }
   for (const [k, v] of Object.entries(fieldValues)) {
-    if (allowed.length && !allowed.includes(k)) continue
+    if (!fieldAllowed(allowSet, k)) continue
     filtered[k] = v
   }
 
