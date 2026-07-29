@@ -131,3 +131,16 @@ Deno.test('obrigatório dispensado (skipped) libera o avanço', () => {
     true,
   )
 })
+
+// --- Nada de dado inventado ---------------------------------------------------
+
+import { isNonAnswer } from './flow-required.ts'
+
+Deno.test('respostas de escape não podem virar valor de campo', () => {
+  for (const t of ['Falar com atendente', 'não sei', 'no sé', "I don't know", 'ok', 'atendente']) {
+    assertEquals(isNonAnswer(t), true, t)
+  }
+  for (const t of ['Brasil', '49 anos', 'sim', 'não']) {
+    assertEquals(isNonAnswer(t), false, t)
+  }
+})
