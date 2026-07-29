@@ -340,16 +340,26 @@ export function extractionToSourceValues(
   }
   const city = normText(extraction.city)
   put('city', city)
-  const country = normalizeCountry(extraction.residence_country)
-  put('residence_country', country)
   // "Moro em Paris": só a cidade foi dita — o país vem da cidade conhecida.
   if (!out.residence_country) {
     const derived = countryFromCity(out.city || city)
     if (derived) out.residence_country = derived
   }
   // ATENÇÃO: morar fora da Espanha NÃO significa não estar na Espanha agora.
-  // `in_spain` só existe quando o cliente afirma explicitamente (a IA devolve
-  // o campo) — nunca é deduzido do país de residência.
+  // Quando o cliente só disse onde mora (sem citar a Espanha), qualquer
+  // `in_spain` devolvido pela IA é dedução: é descartado e a pergunta continua
+  // em aberto para ser feita ao cliente.
+  const hasMessage = typeof opts.message === 'string' && opts.message.trim().length > 0
+  if (
+    out.in_spain &&
+    hasMessage &&
+    !messageMentionsSpain(opts.message) &&
+    (out.residence_country || out.city) &&
+    !isSpain(out.residence_country)
+  ) {
+    delete out.in_spain
+  }
+
   put('education_superior', toYesNo(extraction.education_superior))
   // "tio na europa", "minha avó é italiana" → sim (grau de parentesco).
   put('eu_family', toYesNo(extraction.eu_family, { kinship: true }))
