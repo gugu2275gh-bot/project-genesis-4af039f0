@@ -284,11 +284,12 @@ export function useDuplicateFlow() {
       const { data: created, error: flowError } = await db
         .from('ai_agent_flows')
         .insert({
+          ...(() => {
+            const { id, created_at, updated_at, created_by, updated_by, ...rest } = flow as any;
+            return rest;
+          })(),
           name: `${flow.name} (cópia)`,
-          description: flow.description ?? null,
-          flow_type: (flow as any).flow_type,
-          is_active: false,
-          config: (flow as any).config ?? {},
+          status: 'RASCUNHO',
           created_by: userId,
           updated_by: userId,
         })

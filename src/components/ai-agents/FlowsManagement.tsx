@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Pencil, Trash2, ListOrdered, Workflow, AlertTriangle, Sparkles } from 'lucide-react';
+import { Plus, Pencil, Copy, Trash2, ListOrdered, Workflow, AlertTriangle, Sparkles } from 'lucide-react';
 import { FlowIntakeSettings } from '@/components/ai-agents/FlowIntakeSettings';
 import { FlowCanvas } from '@/components/ai-agents/flow-builder/FlowCanvas';
 
@@ -25,6 +25,7 @@ import { STEP_KINDS, normalizeBranches, normalizeValidation, stepKindOf } from '
 import {
   useAgentFlows,
   useDeleteFlow,
+  useDuplicateFlow,
   useDeleteFlowStep,
   useFlowSteps,
   useSaveFlow,
@@ -455,6 +456,7 @@ export function FlowsManagement() {
   const { data: flows, isLoading } = useAgentFlows();
   const saveFlow = useSaveFlow();
   const delFlow = useDeleteFlow();
+  const dupFlow = useDuplicateFlow();
   const [selected, setSelected] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editorDirty, setEditorDirty] = useState(false);
@@ -496,6 +498,15 @@ export function FlowsManagement() {
 
                 <Button size="icon" variant="ghost" onClick={() => { setDraft(f); setDialogOpen(true); }}>
                   <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  title="Duplicar fluxo (cria uma cópia como rascunho)"
+                  disabled={dupFlow.isPending}
+                  onClick={() => dupFlow.mutate(f as any)}
+                >
+                  <Copy className="h-4 w-4" />
                 </Button>
                 <Button size="icon" variant="ghost" onClick={() => delFlow.mutate(f.id)}>
                   <Trash2 className="h-4 w-4" />
