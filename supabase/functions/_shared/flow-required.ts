@@ -19,6 +19,7 @@ import {
   type FlowTurnResult,
 } from './flow-engine.ts'
 import { fieldValuesFromAnswers, pickFieldValue } from './flow-vars.ts'
+import { birthDateMessage, checkBirthDate } from './flow-birthdate.ts'
 
 export interface RequiredCaptureField {
   source: string
@@ -48,6 +49,12 @@ const DEFAULT_PROMPTS: Record<string, Record<string, string>> = {
     es: 'Solo falta un dato: ¿cuál es tu edad?',
     en: 'Just one thing missing: how old are you?',
     fr: 'Il manque juste une information : quel âge avez-vous ?',
+  },
+  birth_date: {
+    'pt-BR': 'Qual é a sua data de nascimento? Por favor, no formato DD/MM/AAAA (exemplo: 05/03/1990).',
+    es: '¿Cuál es tu fecha de nacimiento? Por favor, en el formato DD/MM/AAAA (ejemplo: 05/03/1990).',
+    en: 'What is your date of birth? Please use the DD/MM/YYYY format (example: 05/03/1990).',
+    fr: 'Quelle est votre date de naissance ? Merci d’utiliser le format JJ/MM/AAAA (exemple : 05/03/1990).',
   },
   city: {
     'pt-BR': 'Em qual cidade você mora hoje?',
@@ -199,6 +206,7 @@ const FIELD_KEYWORDS: Record<string, RegExp> = {
   full_name: /(nome\s+completo|seu\s+nome|nombre|full\s+name|your\s+name|votre\s+nom)/i,
   email: /(e-?mail|correo|courriel)/i,
   age: /(idade|edad|\bage\b|âge)/i,
+  birth_date: /(nascimento|nacimiento|birth|naissance)/i,
   city: /(cidade|ciudad|\bcity\b|ville)/i,
   residence_country: /(pa[íi]s|country|pays)/i,
   in_spain: /(na\s+espanha|en\s+espa[ñn]a|in\s+spain|en\s+espagne)/i,
@@ -336,3 +344,28 @@ export function enforceRequiredBeforeHandoff(
 }
 
 
+
+/**
+ * Validação específica de um campo obrigatório antes de gravar.
+ * Devolve a mensagem de correção quando o valor não serve (string vazia = ok).
+ *
+ * Hoje cobre a data de nascimento: só é aceita em DD/MM/AAAA, precisa ser uma
+ * data real, não pode estar no futuro e deve ser coerente com a idade já
+ * informada.
+ */
+export function requiredValueIssue(
+  field: RequiredCaptureField,
+  value: string,
+  lang: FlowLang = 'pt-BR',
+  known: Record<string, string> = {},
+): string {
+  const source = String(field?.source || '')
+  const target = String(field?.target_field || '')
+  const isBirth = source === 'birth_date' || target === 'contact.birth_date'
+  if (!isBirth) return ''
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const declaredAge = pickFieldValue(known, 'outside.age')
+  const check = checkBirthDate(raw, { declaredAge })
+  return check.ok ? '' : birthDateMessage(check.problem, lang, declaredAge)
+}

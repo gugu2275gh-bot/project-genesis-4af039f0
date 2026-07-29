@@ -21,6 +21,7 @@ import {
   type FlowTurnResult,
 } from './flow-engine.ts'
 import { fieldAllowed, pickFieldValue } from './flow-vars.ts'
+import { checkBirthDate } from './flow-birthdate.ts'
 
 export interface IntakeExtraction {
   full_name?: string | null
@@ -34,6 +35,8 @@ export interface IntakeExtraction {
   empadronado_city?: string | null
   /** Idade em anos. */
   age?: number | string | null
+  /** Data de nascimento em DD/MM/AAAA, exatamente como dita pelo cliente. */
+  birth_date?: string | null
   /** Cidade onde a pessoa mora hoje. */
   city?: string | null
   /** País onde a pessoa mora hoje (parte do endereço residencial). */
@@ -57,6 +60,7 @@ export const CAPTURE_SOURCES: { source: string; default_target: string }[] = [
   { source: 'empadronado', default_target: 'funnel.empadronado_confirmed' },
   { source: 'empadronado_city', default_target: 'funnel.empadronado_city' },
   { source: 'age', default_target: 'outside.age' },
+  { source: 'birth_date', default_target: 'contact.birth_date' },
   { source: 'city', default_target: 'funnel.empadronado_city' },
   { source: 'residence_country', default_target: 'contact.residence_country' },
   { source: 'education_superior', default_target: 'contact.education_level' },
@@ -137,12 +141,13 @@ EXPLICITAMENTE. Nunca invente. Campos desconhecidos devem ser null.${filter}
   "empadronado": "sim | nao | null",
   "empadronado_city": "cidade do empadronamento ou null",
   "age": número inteiro da idade em anos, senão null,
+  "birth_date": "data de nascimento EXATAMENTE como dita, no formato DD/MM/AAAA, senão null. NUNCA calcule a data a partir da idade",
   "city": "cidade onde a pessoa mora hoje, ou null",
   "residence_country": "país onde a pessoa mora hoje (ex.: Brasil, Espanha, Portugal), ou null",
   "education_superior": "sim | nao | null (possui formação superior/universitária?)",
   "eu_family": "sim | nao | null (possui familiar europeu ou residente na UE?)",
   "europe_6m": "sim | nao | null (esteve na Europa nos últimos 6 meses?)",
-  "confidence": { "full_name": 0..1, "residence_country": 0..1, "in_spain": 0..1, "intent": 0..1, "arrival_date": 0..1, "empadronado": 0..1, "age": 0..1, "city": 0..1, "education_superior": 0..1, "eu_family": 0..1, "europe_6m": 0..1 }
+  "confidence": { "full_name": 0..1, "residence_country": 0..1, "in_spain": 0..1, "intent": 0..1, "arrival_date": 0..1, "empadronado": 0..1, "age": 0..1, "birth_date": 0..1, "city": 0..1, "education_superior": 0..1, "eu_family": 0..1, "europe_6m": 0..1 }
 }
 
 Mensagem do cliente:
@@ -259,6 +264,14 @@ export function extractionToSourceValues(
 
   const age = Number(String(extraction.age ?? '').replace(/\D+/g, ''))
   if (Number.isFinite(age) && age >= 14 && age <= 100) put('age', String(age))
+  // Data de nascimento: só entra se vier em DD/MM/AAAA e for uma data real.
+  const birth = checkBirthDate(normText(extraction.birth_date), { now })
+  if (birth.ok) {
+    put('birth_date', normText(extraction.birth_date))
+    if (!out.age && birth.age !== null && birth.age >= 14 && birth.age <= 100) {
+      out.age = String(birth.age)
+    }
+  }
   put('city', normText(extraction.city))
   const country = normalizeCountry(extraction.residence_country)
   put('residence_country', country)
@@ -302,6 +315,7 @@ export function extractionToFieldValues(
   }
   if (src.residence_country) out['contact.residence_country'] = src.residence_country
   if (src.age) out['outside.age'] = src.age
+  if (src.birth_date) out['contact.birth_date'] = src.birth_date
   if (src.education_superior) out['contact.education_level'] = src.education_superior
   if (src.eu_family) out['contact.has_eu_family_member'] = src.eu_family
   if (src.europe_6m) out['contact.eu_entry_last_6_months'] = src.europe_6m

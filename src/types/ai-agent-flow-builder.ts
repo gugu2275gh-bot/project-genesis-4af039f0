@@ -24,6 +24,7 @@ export const CAPTURE_SOURCE_OPTIONS: { value: string; label: string; default_tar
   { value: 'full_name', label: 'Nome', default_target: 'contact.full_name' },
   { value: 'email', label: 'E-mail', default_target: 'contact.email' },
   { value: 'age', label: 'Idade', default_target: 'outside.age' },
+  { value: 'birth_date', label: 'Data de nascimento (DD/MM/AAAA)', default_target: 'contact.birth_date' },
   { value: 'city', label: 'Cidade onde mora', default_target: 'funnel.empadronado_city' },
   { value: 'residence_country', label: 'País onde mora', default_target: 'contact.residence_country' },
   { value: 'in_spain', label: 'Está na Espanha?', default_target: 'funnel.location_known' },

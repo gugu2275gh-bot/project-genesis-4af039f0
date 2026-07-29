@@ -35,6 +35,7 @@ import {
   knownFieldsOf,
   missingRequired,
   requiredPrompt,
+  requiredValueIssue,
 } from './flow-required.ts'
 
 
@@ -122,6 +123,31 @@ export async function advanceFlowTurn(
     // Texto solto só vira valor quando é mesmo uma resposta: "falar com
     // atendente", "não sei" e afins deixam o campo EM BRANCO.
     if (!value && text && !isNonAnswer(text)) value = text
+
+    // Validação específica do campo (ex.: data de nascimento em DD/MM/AAAA).
+    if (value) {
+      const knownNow = knownFieldsOf(steps, workingState)
+      const issue = requiredValueIssue(
+        target || { source: pendingField, target_field: pendingField },
+        value,
+        lang,
+        knownNow,
+      )
+      if (issue) {
+        const tries = Number(state.required_attempts || 0) + 1
+        if (tries <= MAX_REQUIRED_ATTEMPTS) {
+          return buildStayTurn(step, issue, workingState, {
+            required_field: pendingField,
+            required_attempts: tries,
+          })
+        }
+        // Esgotadas as tentativas: não grava valor inválido.
+        value = ''
+        delete extraValues[pendingField]
+      }
+    }
+
+
 
 
     let capturedFields = {

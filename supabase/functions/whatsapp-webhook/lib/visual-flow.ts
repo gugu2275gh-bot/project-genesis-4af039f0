@@ -30,6 +30,8 @@ import { advanceFlowTurn } from '../../_shared/flow-turn.ts'
 import { localizeTurn } from '../../_shared/flow-i18n.ts'
 import { applyVarsToTurn, buildFlowVars, fieldValuesFromAnswers } from '../../_shared/flow-vars.ts'
 import { applyRequiredGate } from '../../_shared/flow-required.ts'
+import { checkBirthDate } from '../../_shared/flow-birthdate.ts'
+import { resolveServiceType } from '../../_shared/service-catalog.ts'
 import {
   dropOpeningMessages,
   normalizeIntakeConfig,
@@ -385,6 +387,7 @@ export async function applyCapturedFields(
   const leadPatch: Record<string, unknown> = {}
   const outside: Record<string, unknown> = { ...(params.outsideProgress || {}) }
   let outsideTouched = false
+  let intentText = ''
 
   for (const item of captured) {
     const value = String(item?.value ?? '').trim()
@@ -479,13 +482,21 @@ export async function applyCapturedFields(
       }
 
       case 'contact.birth_date': {
-        const iso = toIsoDateOrNull(value)
-        if (iso) contactPatch.birth_date = iso
+        // Só grava a data REAL informada em DD/MM/AAAA (validada).
+        const check = checkBirthDate(value, { declaredAge: outside.a2_age as string })
+        if (check.ok && check.iso) {
+          contactPatch.birth_date = check.iso
+          if (check.age !== null) {
+            outside.a2_age = String(check.age)
+            outsideTouched = true
+          }
+        }
         break
       }
       case 'funnel.interest_confirmed':
         if (value) {
           funnelPatch.interest_confirmed = value
+          intentText = value
           const svc = inferServiceInterest(value)
           if (svc) {
             leadPatch.service_interest = svc
@@ -532,8 +543,8 @@ export async function applyCapturedFields(
         if (Number.isFinite(years) && years >= 14 && years <= 100) {
           outside.a2_age = String(years)
           outsideTouched = true
-          const year = ageToBirthYear(value)
-          if (year) contactPatch.birth_date = `${year}-01-01`
+          // Idade NUNCA vira data de nascimento: `contacts.birth_date` só é
+          // gravado com a data real informada pelo cliente (DD/MM/AAAA).
         }
         break
       }
@@ -571,7 +582,10 @@ export async function applyCapturedFields(
           leadPatch.service_interest = svc
           leadPatch.interest_confirmed = true
         }
-        if (value) funnelPatch.interest_confirmed = value
+        if (value) {
+          funnelPatch.interest_confirmed = value
+          intentText = value
+        }
         break
       }
       default:
@@ -581,6 +595,22 @@ export async function applyCapturedFields(
   }
 
   if (outsideTouched) funnelPatch.outside_spain_progress = outside
+
+  // Serviço: resolvido contra o catálogo real (`service_types`). Sem
+  // correspondência confiável, nada é gravado.
+  if (intentText) {
+    try {
+      const match = await resolveServiceType(supabase, intentText)
+      if (match) {
+        leadPatch.service_type_id = match.service_type_id
+        leadPatch.interest_confirmed = true
+        if (match.service_interest) leadPatch.service_interest = match.service_interest
+      }
+    } catch (e) {
+      console.warn('[VISUAL_FLOW] falha ao resolver serviço:', e instanceof Error ? e.message : e)
+    }
+  }
+
 
   try {
     if (Object.keys(contactPatch).length) {
