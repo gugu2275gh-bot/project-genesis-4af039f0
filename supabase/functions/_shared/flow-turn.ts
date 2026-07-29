@@ -175,11 +175,11 @@ export async function advanceFlowTurn(
       .filter(Boolean)
       .join('; ')
     const turn = advanceFlow(steps, workingState, summary || text || 'ok', lang, { ack: deps.ack || '' })
-    return {
+    return applyRequiredGate(steps, {
       ...turn,
       captured: [...(turn.captured || []), ...captured],
       state: { ...turn.state, aside_attempts: 0 },
-    }
+    }, lang)
   }
 
   // Recursos opcionais rodam EM PARALELO (base + reconhecimento), com timeout
