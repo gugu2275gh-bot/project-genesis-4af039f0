@@ -481,13 +481,21 @@ export async function applyCapturedFields(
       }
 
       case 'contact.birth_date': {
-        const iso = toIsoDateOrNull(value)
-        if (iso) contactPatch.birth_date = iso
+        // Só grava a data REAL informada em DD/MM/AAAA (validada).
+        const check = checkBirthDate(value, { declaredAge: outside.a2_age as string })
+        if (check.ok && check.iso) {
+          contactPatch.birth_date = check.iso
+          if (check.age !== null) {
+            outside.a2_age = String(check.age)
+            outsideTouched = true
+          }
+        }
         break
       }
       case 'funnel.interest_confirmed':
         if (value) {
           funnelPatch.interest_confirmed = value
+          intentText = value
           const svc = inferServiceInterest(value)
           if (svc) {
             leadPatch.service_interest = svc
