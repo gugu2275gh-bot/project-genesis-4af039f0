@@ -136,7 +136,7 @@ EXPLICITAMENTE. Nunca invente. Campos desconhecidos devem ser null.${filter}
 {
   "full_name": "nome completo ou primeiro nome dito pela pessoa, ou null",
   "email": "e-mail ou null",
-  "in_spain": "sim | nao | null (a pessoa está fisicamente na Espanha agora?)",
+  "in_spain": "sim | nao | null (a pessoa está FISICAMENTE na Espanha agora?). Só preencha se ela disser isso claramente (ex.: 'estou na Espanha', 'cheguei aqui', 'moro em Madri'). Morar em outro país NÃO responde esta pergunta: nesse caso use null",
   "intent": "resumo curto do objetivo (ex.: estudar, trabalhar, residência, nômade digital, arraigo, nacionalidade, oferta de trabalho) ou null. Quem diz que quer morar/viver/residir na Espanha (vivir/live in Spain) tem intent = \"residência\"",
   "arrival_date": "DD/MM/AAAA se a data de chegada na Espanha foi dita, senão null",
   "arrival_days_ago": número inteiro se disse algo como "estou aqui há 5 dias", senão null,
@@ -145,10 +145,11 @@ EXPLICITAMENTE. Nunca invente. Campos desconhecidos devem ser null.${filter}
   "age": número inteiro da idade em anos, senão null,
   "birth_date": "data de nascimento EXATAMENTE como dita, no formato DD/MM/AAAA, senão null. NUNCA calcule a data a partir da idade",
   "city": "cidade onde a pessoa mora hoje, ou null",
-  "residence_country": "país onde a pessoa mora hoje (ex.: Brasil, Espanha, Portugal), ou null",
+  "residence_country": "país onde a pessoa mora hoje (ex.: Brasil, Espanha, Portugal), ou null. Se apenas a CIDADE for dita (ex.: 'moro em Paris'), preencha o país correspondente a essa cidade (França)",
   "education_superior": "sim | nao | null (possui formação superior/universitária?)",
-  "eu_family": "sim | nao | null (possui familiar europeu ou residente na UE?)",
+  "eu_family": "sim | nao | null (possui familiar europeu ou morando na UE?). QUALQUER menção a um parente (tio, avó, pai, primo, cônjuge…) europeu ou na Europa = \"sim\"",
   "europe_6m": "sim | nao | null (esteve na Europa nos últimos 6 meses?)",
+
   "confidence": { "full_name": 0..1, "residence_country": 0..1, "in_spain": 0..1, "intent": 0..1, "arrival_date": 0..1, "empadronado": 0..1, "age": 0..1, "birth_date": 0..1, "city": 0..1, "education_superior": 0..1, "eu_family": 0..1, "europe_6m": 0..1 }
 }
 
