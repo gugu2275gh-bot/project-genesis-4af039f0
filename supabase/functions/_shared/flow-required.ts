@@ -153,24 +153,37 @@ export function missingRequired(
 }
 
 /**
- * A etapa "Pergunta geral" já tem dados suficientes ("Dados suficientes para
- * pular esta etapa")? O mínimo governa o avanço: atingida a quantidade, a
- * etapa termina mesmo que algum campo marcado como obrigatório siga vazio
- * (ele fica em branco, sem ser cobrado).
+ * A etapa "Pergunta geral" já pode ser encerrada?
+ *
+ * REGRA: o obrigatório manda mais que o mínimo. Enquanto houver campo marcado
+ * como obrigatório sem valor (e que ainda não esgotou as tentativas), a etapa
+ * NÃO é considerada satisfeita. O "mínimo de dados" vale apenas para os campos
+ * opcionais — e só governa quando a etapa não tem nenhum obrigatório.
  */
 export function generalCaptureSatisfied(
   step: FlowStep,
   known: Record<string, string>,
-  _skipped: string[] = [],
+  skipped: string[] = [],
 ): boolean {
   if (!isGeneralCaptureStep(step)) return false
   const cfg = generalCaptureOf(step)
-  const fields = (cfg.fields || []) as RequiredCaptureField[]
+  const fields = (cfg.fields || []) as Array<RequiredCaptureField & { required?: boolean }>
   if (!fields.length) return true
+
+  const ignore = new Set(skipped || [])
+  const required = fields.filter((f) => (f as any)?.required === true)
+  if (required.length) {
+    const pending = required.filter(
+      (f) => !ignore.has(f.target_field) && !pickFieldValue(known, f.target_field),
+    )
+    return pending.length === 0
+  }
+
   const min = Number(cfg.min_fields) > 0 ? Number(cfg.min_fields) : 1
   const hits = fields.filter((f) => !!pickFieldValue(known, f.target_field)).length
   return hits >= Math.min(min, fields.length)
 }
+
 
 /**
  * Respostas de escape/ruído que NÃO podem virar valor de campo — senão o
