@@ -401,15 +401,26 @@ export async function runIntake(params: {
   config: IntakeConfig
   callLLM: (prompt: string) => Promise<string>
   now?: Date
+  /** Dados já conhecidos antes da IA (ex.: nome do perfil do WhatsApp). */
+  seed?: Record<string, string>
 }): Promise<IntakeResult> {
+  const { message, steps, lang, config, callLLM } = params
+  const allowed = config?.fields || []
+  const seed: Record<string, string> = {}
+  for (const [k, v] of Object.entries(params.seed || {})) {
+    if (!v) continue
+    if (allowed.length && !allowed.includes(k)) continue
+    seed[k] = v
+  }
+
+  /** Resultado quando a IA não roda: ainda aproveitamos o que já sabemos. */
   const empty = (reason: IntakeReason, detail?: string): IntakeResult => ({
-    fieldValues: {},
-    prefilled: {},
-    greeting: '',
+    fieldValues: { ...seed },
+    prefilled: Object.keys(seed).length ? prefillFromFieldValues(steps, seed, allowed) : {},
+    greeting: Object.keys(seed).length ? renderIntakeGreeting(config, lang, seed) : '',
     reason,
     ...(detail ? { detail } : {}),
   })
-  const { message, steps, lang, config, callLLM } = params
   if (!config?.enabled) return empty('disabled')
   if (!message || String(message).trim().length < 5) return empty('short_message')
 
@@ -424,14 +435,14 @@ export async function runIntake(params: {
   if (!extraction) return empty('parse_error', String(raw || '').slice(0, 200))
 
   const fieldValues = extractionToFieldValues(extraction, config.min_confidence, params.now)
-  const allowed = config.fields || []
-  const filtered: Record<string, string> = {}
+  const filtered: Record<string, string> = { ...seed }
   for (const [k, v] of Object.entries(fieldValues)) {
     if (allowed.length && !allowed.includes(k)) continue
     filtered[k] = v
   }
 
   const prefilled = prefillFromFieldValues(steps, filtered, allowed)
+
 
   // A saudação personalizada usa TUDO que foi entendido — inclusive um primeiro
   // nome que não serve para responder a etapa de "nome completo".
