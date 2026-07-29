@@ -33,6 +33,8 @@ import {
   normalizeIntakeConfig,
   prependIntakeGreeting,
   renderAckMessage,
+  prefillFromFieldValues,
+  profileNameToFieldValues,
   renderIntakeGreeting,
   runIntake,
   type IntakeConfig,
