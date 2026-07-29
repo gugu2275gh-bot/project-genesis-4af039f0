@@ -136,7 +136,7 @@ EXPLICITAMENTE. Nunca invente. Campos desconhecidos devem ser null.${filter}
 {
   "full_name": "nome completo ou primeiro nome dito pela pessoa, ou null",
   "email": "e-mail ou null",
-  "in_spain": "sim | nao | null (a pessoa está fisicamente na Espanha agora?)",
+  "in_spain": "sim | nao | null (a pessoa está FISICAMENTE na Espanha agora?). Só preencha se ela disser isso claramente (ex.: 'estou na Espanha', 'cheguei aqui', 'moro em Madri'). Morar em outro país NÃO responde esta pergunta: nesse caso use null",
   "intent": "resumo curto do objetivo (ex.: estudar, trabalhar, residência, nômade digital, arraigo, nacionalidade, oferta de trabalho) ou null. Quem diz que quer morar/viver/residir na Espanha (vivir/live in Spain) tem intent = \"residência\"",
   "arrival_date": "DD/MM/AAAA se a data de chegada na Espanha foi dita, senão null",
   "arrival_days_ago": número inteiro se disse algo como "estou aqui há 5 dias", senão null,
@@ -145,10 +145,11 @@ EXPLICITAMENTE. Nunca invente. Campos desconhecidos devem ser null.${filter}
   "age": número inteiro da idade em anos, senão null,
   "birth_date": "data de nascimento EXATAMENTE como dita, no formato DD/MM/AAAA, senão null. NUNCA calcule a data a partir da idade",
   "city": "cidade onde a pessoa mora hoje, ou null",
-  "residence_country": "país onde a pessoa mora hoje (ex.: Brasil, Espanha, Portugal), ou null",
+  "residence_country": "país onde a pessoa mora hoje (ex.: Brasil, Espanha, Portugal), ou null. Se apenas a CIDADE for dita (ex.: 'moro em Paris'), preencha o país correspondente a essa cidade (França)",
   "education_superior": "sim | nao | null (possui formação superior/universitária?)",
-  "eu_family": "sim | nao | null (possui familiar europeu ou residente na UE?)",
+  "eu_family": "sim | nao | null (possui familiar europeu ou morando na UE?). QUALQUER menção a um parente (tio, avó, pai, primo, cônjuge…) europeu ou na Europa = \"sim\"",
   "europe_6m": "sim | nao | null (esteve na Europa nos últimos 6 meses?)",
+
   "confidence": { "full_name": 0..1, "residence_country": 0..1, "in_spain": 0..1, "intent": 0..1, "arrival_date": 0..1, "empadronado": 0..1, "age": 0..1, "birth_date": 0..1, "city": 0..1, "education_superior": 0..1, "eu_family": 0..1, "europe_6m": 0..1 }
 }
 
@@ -188,12 +189,12 @@ function normText(v: unknown): string {
   return String(v ?? '').trim()
 }
 
-function toYesNo(v: unknown): string {
+function toYesNo(v: unknown, opts: { kinship?: boolean } = {}): string {
   const t = normText(v).toLowerCase()
   if (YES_WORDS.includes(t)) return 'sim'
   if (NO_WORDS.includes(t)) return 'nao'
   // Frases livres ("somente tenho família no Brasil") também viram sim/nao.
-  return normalizeYesNo(t)
+  return normalizeYesNo(t, opts)
 }
 
 
@@ -232,14 +233,73 @@ export function normalizeCountry(raw: unknown): string {
 }
 
 /**
+ * Cidades conhecidas → país. Rede de segurança para "moro em Paris": sem isso
+ * o país de residência (campo obrigatório) ficava vazio.
+ */
+const CITY_COUNTRY: Array<[RegExp, string]> = [
+  [/^(paris|lyon|marselha|marseille|toulouse|bordeaux|nice|nantes|estrasburgo|strasbourg)$/i, 'França'],
+  [/^(madri|madrid|barcelona|valencia|val[eè]ncia|sevilha|sevilla|bilbao|m[áa]laga|alicante|murcia|zaragoza|palma|tenerife|las palmas|granada|vigo|san sebasti[áa]n)$/i, 'Espanha'],
+  [/^(lisboa|lisbon|porto|braga|coimbra|faro|cascais)$/i, 'Portugal'],
+  [/^(s[ãa]o paulo|sao paulo|rio de janeiro|rio|bras[íi]lia|salvador|belo horizonte|curitiba|porto alegre|recife|fortaleza|manaus|goi[âa]nia|bel[ée]m|florian[óo]polis|campinas|natal|macei[óo]|s[ãa]o lu[íi]s|jo[ãa]o pessoa|vit[óo]ria|cuiab[áa])$/i, 'Brasil'],
+  [/^(roma|rome|mil[ãa]o|milano|milan|npoles|n[áa]poles|napoli|turim|torino|floren[çc]a|firenze|veneza|venezia|bolonha|bologna)$/i, 'Itália'],
+  [/^(londres|london|manchester|liverpool|birmingham|edimburgo|edinburgh|glasgow)$/i, 'Reino Unido'],
+  [/^(berlim|berlin|munique|m[üu]nchen|munich|frankfurt|hamburgo|hamburg|colônia|colonia|k[öo]ln|stuttgart|d[üu]sseldorf)$/i, 'Alemanha'],
+  [/^(buenos aires|c[óo]rdoba argentina|rosario|mendoza)$/i, 'Argentina'],
+  [/^(bogot[áa]|medell[íi]n|cali|cartagena)$/i, 'Colômbia'],
+  [/^(cidade do m[ée]xico|ciudad de m[ée]xico|mexico city|cdmx|guadalajara|monterrey)$/i, 'México'],
+  [/^(caracas|maracaibo|valencia venezuela)$/i, 'Venezuela'],
+  [/^(lima|cusco|arequipa)$/i, 'Peru'],
+  [/^(santiago|santiago do chile|valpara[íi]so)$/i, 'Chile'],
+  [/^(montevid[ée]u|montevideo)$/i, 'Uruguai'],
+  [/^(assun[çc][ãa]o|asunci[óo]n)$/i, 'Paraguai'],
+  [/^(havana|la habana)$/i, 'Cuba'],
+  [/^(bruxelas|bruselas|brussels|antu[ée]rpia|anvers)$/i, 'Bélgica'],
+  [/^(amsterd[ãa]|amsterdam|roterd[ãa]|rotterdam|haia|the hague)$/i, 'Países Baixos'],
+  [/^(dublin|cork)$/i, 'Irlanda'],
+  [/^(zurique|zurich|z[üu]rich|genebra|gen[èe]ve|geneva|berna|bern)$/i, 'Suíça'],
+  [/^(viena|vienna|wien)$/i, 'Áustria'],
+  [/^(vars[óo]via|warsaw|warszawa|crac[óo]via|krakow)$/i, 'Polônia'],
+  [/^(nova york|new york|miami|orlando|boston|chicago|los angeles|houston|washington)$/i, 'Estados Unidos'],
+  [/^(toronto|montreal|vancouver|ottawa)$/i, 'Canadá'],
+  [/^(luanda|benguela)$/i, 'Angola'],
+  [/^(maputo)$/i, 'Moçambique'],
+  [/^(casablanca|rabat|marrakech)$/i, 'Marrocos'],
+]
+
+/** País correspondente a uma cidade conhecida (vazio quando não reconhecida). */
+export function countryFromCity(raw: unknown): string {
+  const city = normText(raw).replace(/^(em|no|na|en|in|à|a)\s+/i, '').trim()
+  if (!city) return ''
+  for (const [re, country] of CITY_COUNTRY) if (re.test(city)) return country
+  return ''
+}
+
+/**
+ * A mensagem fala explicitamente da Espanha/da presença aqui? Só nesse caso
+ * `in_spain` pode ser aceito — morar em outro país NÃO significa estar fora
+ * da Espanha agora.
+ */
+const SPAIN_MENTION_RE =
+  /(espanha|espa[nñ]a|spain|espagne|\bestou aqui\b|\bestoy aqu[íi]\b|\bi'?m here\b|\bje suis ici\b|cheguei|llegu[ée]|arrived|arriv[ée])/i
+
+export function messageMentionsSpain(message: unknown): boolean {
+  return SPAIN_MENTION_RE.test(String(message || ''))
+}
+
+/**
  * Valores extraídos por "dado interpretado" (`source`), já filtrados pela
  * confiança mínima. É a base tanto do intake da 1ª mensagem quanto da etapa
  * "Pergunta geral".
+ *
+ * `opts.message` é a mensagem original: quando informada, `in_spain` só é
+ * aceito se ela citar a Espanha (evita a IA deduzir "não está na Espanha"
+ * apenas porque a pessoa mora em Paris).
  */
 export function extractionToSourceValues(
   extraction: IntakeExtraction,
   minConfidence = 0.7,
   now: Date = new Date(),
+  opts: { message?: string } = {},
 ): Record<string, string> {
   const out: Record<string, string> = {}
   const conf = (key: string) => {
@@ -255,7 +315,9 @@ export function extractionToSourceValues(
   put('full_name', normText(extraction.full_name))
   put('email', normText(extraction.email), false)
   put('in_spain', toYesNo(extraction.in_spain))
+
   put('intent', normalizeIntent(extraction.intent))
+
 
   let arrival = normText(extraction.arrival_date)
   if (!arrival && Number.isFinite(Number(extraction.arrival_days_ago))) {
@@ -276,14 +338,33 @@ export function extractionToSourceValues(
       out.age = String(birth.age)
     }
   }
-  put('city', normText(extraction.city))
-  const country = normalizeCountry(extraction.residence_country)
-  put('residence_country', country)
+  const city = normText(extraction.city)
+  put('city', city)
+  put('residence_country', normalizeCountry(extraction.residence_country))
+  // "Moro em Paris": só a cidade foi dita — o país vem da cidade conhecida.
+
+  if (!out.residence_country) {
+    const derived = countryFromCity(out.city || city)
+    if (derived) out.residence_country = derived
+  }
   // ATENÇÃO: morar fora da Espanha NÃO significa não estar na Espanha agora.
-  // `in_spain` só existe quando o cliente afirma explicitamente (a IA devolve
-  // o campo) — nunca é deduzido do país de residência.
+  // Quando o cliente só disse onde mora (sem citar a Espanha), qualquer
+  // `in_spain` devolvido pela IA é dedução: é descartado e a pergunta continua
+  // em aberto para ser feita ao cliente.
+  const hasMessage = typeof opts.message === 'string' && opts.message.trim().length > 0
+  if (
+    out.in_spain &&
+    hasMessage &&
+    !messageMentionsSpain(opts.message) &&
+    (out.residence_country || out.city) &&
+    !isSpain(out.residence_country)
+  ) {
+    delete out.in_spain
+  }
+
   put('education_superior', toYesNo(extraction.education_superior))
-  put('eu_family', toYesNo(extraction.eu_family))
+  // "tio na europa", "minha avó é italiana" → sim (grau de parentesco).
+  put('eu_family', toYesNo(extraction.eu_family, { kinship: true }))
   put('europe_6m', toYesNo(extraction.europe_6m))
 
   return out
@@ -294,8 +375,10 @@ export function extractionToFieldValues(
   extraction: IntakeExtraction,
   minConfidence = 0.7,
   now: Date = new Date(),
+  opts: { message?: string } = {},
 ): Record<string, string> {
-  const src = extractionToSourceValues(extraction, minConfidence, now)
+  const src = extractionToSourceValues(extraction, minConfidence, now, opts)
+
   const out: Record<string, string> = {}
 
   if (src.full_name) out['contact.full_name'] = src.full_name
@@ -624,7 +707,9 @@ export async function runIntake(params: {
   const extraction = parseIntakeJson(raw)
   if (!extraction) return empty('parse_error', String(raw || '').slice(0, 200))
 
-  const fieldValues = extractionToFieldValues(extraction, config.min_confidence, params.now)
+  const fieldValues = extractionToFieldValues(extraction, config.min_confidence, params.now, {
+    message: String(message || ''),
+  })
   const filtered: Record<string, string> = { ...seed }
   for (const [k, v] of Object.entries(fieldValues)) {
     if (!fieldAllowed(allowSet, k)) continue
@@ -720,7 +805,7 @@ export async function runGeneralCapture(params: {
   if (!extraction) return empty('parse_error', String(raw || '').slice(0, 200))
 
   const minConfidence = Number.isFinite(Number(params.minConfidence)) ? Number(params.minConfidence) : 0.7
-  const sourceValues = extractionToSourceValues(extraction, minConfidence, params.now)
+  const sourceValues = extractionToSourceValues(extraction, minConfidence, params.now, { message })
 
   const fieldValues: Record<string, string> = {}
   for (const { source, target_field } of fields) {
