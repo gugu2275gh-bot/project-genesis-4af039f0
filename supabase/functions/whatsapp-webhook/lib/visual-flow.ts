@@ -30,6 +30,8 @@ import { advanceFlowTurn } from '../../_shared/flow-turn.ts'
 import { localizeTurn } from '../../_shared/flow-i18n.ts'
 import { applyVarsToTurn, buildFlowVars, fieldValuesFromAnswers } from '../../_shared/flow-vars.ts'
 import { applyRequiredGate } from '../../_shared/flow-required.ts'
+import { checkBirthDate } from '../../_shared/flow-birthdate.ts'
+import { resolveServiceType } from '../../_shared/service-catalog.ts'
 import {
   dropOpeningMessages,
   normalizeIntakeConfig,
