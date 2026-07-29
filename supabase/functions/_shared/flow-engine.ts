@@ -59,6 +59,14 @@ export interface FlowRunState {
   unknown_attempts?: number
   /** Tentativas rejeitadas pela checagem na base de conhecimento. */
   kb_attempts?: number
+  /** Campos já entendidos (`field_mapping` -> valor), acumulados no atendimento. */
+  captured_fields?: Record<string, string>
+  /** Campo obrigatório sendo perguntado agora numa "Pergunta geral". */
+  required_field?: string
+  /** Insistências no campo obrigatório atual. */
+  required_attempts?: number
+  /** Campos obrigatórios desistidos após as tentativas. */
+  required_skipped?: string[]
 
   /** Fluxo concluído (chegou a uma etapa FIM). */
   finished?: boolean
