@@ -29,6 +29,7 @@ import {
 import { advanceFlowTurn } from '../../_shared/flow-turn.ts'
 import { localizeTurn } from '../../_shared/flow-i18n.ts'
 import { applyVarsToTurn, buildFlowVars, fieldValuesFromAnswers } from '../../_shared/flow-vars.ts'
+import { applyRequiredGate } from '../../_shared/flow-required.ts'
 import {
   dropOpeningMessages,
   normalizeIntakeConfig,
@@ -189,9 +190,11 @@ export async function runVisualFlowFirstTurn(
 
   /** Camada única de saída: idioma da conversa + variáveis resolvidas. */
   const localize = async (turn: FlowTurnResult) => {
-    const localized = await localizeTurn(turn, lang, { steps: plan.steps, callLLM, supabase, logTag: '[VISUAL_FLOW]' })
+    const gated = applyRequiredGate(plan.steps, turn, lang, knownFields)
+    const localized = await localizeTurn(gated, lang, { steps: plan.steps, callLLM, supabase, logTag: '[VISUAL_FLOW]' })
     return applyVarsToTurn(localized, buildFlowVars(knownFields, { profileName: opts?.profileName }))
   }
+
 
   // Nome do perfil do WhatsApp: usado como dado já conhecido (quando confiável).
   const seed = profileNameToFieldValues(opts?.profileName, opts?.phone || '')
@@ -261,7 +264,8 @@ export async function runVisualFlowTurn(
   } = {},
 ): Promise<FlowTurnResult> {
   const localize = async (turn: FlowTurnResult) => {
-    const localized = await localizeTurn(turn, lang, {
+    const gated = applyRequiredGate(plan.steps, turn, lang)
+    const localized = await localizeTurn(gated, lang, {
       steps: plan.steps,
       callLLM: deps.callLLM || null,
       supabase: deps.supabase,

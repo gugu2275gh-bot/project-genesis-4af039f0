@@ -59,6 +59,14 @@ export interface FlowRunState {
   unknown_attempts?: number
   /** Tentativas rejeitadas pela checagem na base de conhecimento. */
   kb_attempts?: number
+  /** Campos já entendidos (`field_mapping` -> valor), acumulados no atendimento. */
+  captured_fields?: Record<string, string>
+  /** Campo obrigatório sendo perguntado agora numa "Pergunta geral". */
+  required_field?: string
+  /** Insistências no campo obrigatório atual. */
+  required_attempts?: number
+  /** Campos obrigatórios desistidos após as tentativas. */
+  required_skipped?: string[]
 
   /** Fluxo concluído (chegou a uma etapa FIM). */
   finished?: boolean
@@ -281,7 +289,7 @@ export function stepKindOf(step: FlowStep): StepKind {
 export interface StepGeneralCapture {
   enabled: boolean
   /** Pares "dado interpretado" -> "campo do CRM". */
-  fields: { source: string; target_field: string }[]
+  fields: { source: string; target_field: string; required?: boolean; prompts?: Record<string, string> }[]
   min_confidence: number
   /**
    * Quantos campos precisam ser entendidos para a etapa ser considerada
@@ -300,6 +308,8 @@ export function generalCaptureOf(step: FlowStep): StepGeneralCapture {
         .map((f: any) => ({
           source: String(f?.source || '').trim(),
           target_field: String(f?.target_field || '').trim(),
+          required: f?.required === true,
+          prompts: (f?.prompts && typeof f.prompts === 'object' ? f.prompts : {}) as Record<string, string>,
         }))
         .filter((f: any) => f.source && f.target_field)
     : []
@@ -867,7 +877,18 @@ export function startFlowWithPrefill(
     captured.push(...captureOf(step, answers[code]))
   }
 
-  return run(index, start.step_code, { answers, visited: [], attempts: 0, lang }, lang, captured)
+  const capturedFields: Record<string, string> = {}
+  for (const c of captured) {
+    if (c?.field && c?.value) capturedFields[c.field] = String(c.value)
+  }
+
+  return run(
+    index,
+    start.step_code,
+    { answers, visited: [], attempts: 0, lang, captured_fields: capturedFields },
+    lang,
+    captured,
+  )
 }
 
 

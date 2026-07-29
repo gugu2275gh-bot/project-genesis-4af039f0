@@ -9,6 +9,7 @@ import { createIntakeLLM } from '../_shared/intake-llm.ts'
 import { advanceFlowTurn } from '../_shared/flow-turn.ts'
 import { localizeTurn } from '../_shared/flow-i18n.ts'
 import { applyVarsToTurn, buildFlowVars, fieldValuesFromAnswers } from '../_shared/flow-vars.ts'
+import { applyRequiredGate } from '../_shared/flow-required.ts'
 import { searchKnowledgeBase } from '../_shared/kb-search.ts'
 import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
 
@@ -281,6 +282,9 @@ Deno.serve(async (req) => {
           logTag: '[SANDBOX]',
         })
       }
+
+      // Campos obrigatórios pendentes da "Pergunta geral".
+      turn = applyRequiredGate(steps, turn as any, lang as any, knownFields) as any
 
       // Camada única de saída: nada é enviado fora do idioma da conversa.
       turn = await localizeTurn(turn, lang as any, {

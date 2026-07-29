@@ -1,48 +1,66 @@
-## O que aconteceu (diagnóstico confirmado no código e no banco)
+## Objetivo
 
-O cliente escreveu: *"tenho 34 anos, moro em Valencia, sou formado, minha avó é italiana, cheguei em maio, quero nacionalidade"*. O agente respondeu duas mensagens: uma saudação personalizada correta e, logo depois, a pergunta geral inteira de novo — inclusive com `{nome}` cru na tela.
+Criar um fluxo novo com duas "perguntas gerais" (dados pessoais e objetivo) que aproveitam tudo que o cliente já disse, com **campos obrigatórios opcionais por etapa**, e transferir para o humano só depois de completar os obrigatórios que faltarem.
 
-Três causas independentes, todas verificadas:
+## 1. Campos obrigatórios na "Pergunta geral"
 
-**1. A etapa "Pergunta geral" nunca é marcada como respondida.**
-O aproveitamento (`prefillFromFieldValues`) percorre as etapas e casa **um** campo por etapa (`field_mapping`). A etapa `abertura_geral` do fluxo "teste aberto" tem `field_mapping = null` (ela captura 8 campos via `general_capture`, não um só). Resultado: ela não entra no mapa de prefill, o motor começa no INÍCIO, chega nela como primeira pergunta pendente e a envia — mesmo com todos os dados já extraídos. As etapas seguintes até estavam prefilhadas, mas o fluxo parou antes de chegar nelas.
+Hoje a etapa geral só tem "quantos dados bastam para pular" (`min_fields`). Adicionar:
 
-**2. `{nome}` não é substituído nas mensagens das etapas.**
-A troca de `{nome}` / `{resumo}` só existe nos templates de saudação do intake (`renderIntakeGreeting`). O texto de uma etapa comum sai literal — por isso o `{nome}` apareceu no WhatsApp.
+- No tipo `StepGeneralCapture`, cada item de `fields` ganha `required?: boolean`.
+- No editor (`StepGeneralCaptureEditor.tsx`): checkbox "Obrigatório" por campo, com aviso de que os obrigatórios que faltarem serão perguntados individualmente antes de seguir.
+- Por campo, texto opcional da repergunta (multi-idioma), com fallback automático a partir do rótulo do campo.
 
-**3. Vocabulário de campos divergente entre extração e etapas.**
-A extração emite `outside.eu_family` e `outside.europe_6m`; as etapas do fluxo (e o editor) usam `contact.has_eu_family_member` e `contact.eu_entry_last_6_months`. Esses dois campos nunca casariam nem depois de corrigir o item 1.
+## 2. Comportamento no motor do fluxo
 
-## O que vou fazer
+Em `flow-engine.ts` / `flow-intake.ts`:
 
-**A. Pergunta geral passa a ser "satisfeita" pelo intake**
-- Em `flow-intake.ts`: além do casamento 1-campo, tratar etapas `PERGUNTA_GERAL` — se o intake capturou pelo menos N dos campos configurados em `general_capture.fields` (padrão: 2, configurável na etapa), a etapa é marcada como respondida, com um resumo do que foi entendido como "resposta".
-- Os campos capturados continuam sendo gravados no CRM normalmente (`captured`), como se o cliente tivesse respondido a etapa.
+- Ao entrar na etapa geral, calcular quais campos obrigatórios ainda estão vazios (usando os aliases de `flow-vars.ts`, para não repetir o que já veio antes).
+- Depois da resposta: rodar a extração multi-campo; se sobrar obrigatório vazio, mini-loop dentro da própria etapa perguntando **um campo por vez**, nunca repetindo campo já preenchido, respeitando `max_reasks` e as regras de "resposta diferente do esperado".
+- Sem obrigatórios pendentes (ou nenhum marcado): grava o que foi entendido e avança direto.
+- Todo texto passa por `localizeTurn()` (`flow-i18n`) e `applyVars` para manter idioma e `{nome}`.
 
-**B. Alias de campos (uma única tabela de equivalências)**
-- Mapa bidirecional: `outside.eu_family` ↔ `contact.has_eu_family_member`, `outside.europe_6m` ↔ `contact.eu_entry_last_6_months`, `funnel.empadronado_city` ↔ `contact.empadronamiento_city`, `outside.age` ↔ `contact.age`, `funnel.interest_confirmed` ↔ `lead.service_interest`.
-- O prefill consulta o alias antes de desistir, então tanto faz qual vocabulário o usuário escolher no editor.
+## 3. Os dois cenários de entrada (garantidos)
 
-**C. Substituição de variáveis em todas as falas do agente**
-- Nova função aplicada a toda mensagem de saída (etapas, reperguntas, ack, encerramento): `{nome}`/`{name}`/`{nombre}`, `{cidade}`, `{objetivo}`, `{idade}`.
-- Fonte: respostas já dadas no fluxo → campos aproveitados do intake → nome do perfil do WhatsApp.
-- Se a variável ficar vazia, a frase é limpa sem deixar buraco (ex.: "Olá, {nome}!" → "Olá!"), nunca sai `{nome}` cru.
+**A) Primeira mensagem já traz informações** ("tenho 34 anos, moro em Valencia, quero arraigo")
+- O intake inicial (`flow-intake.ts`) extrai os campos antes de qualquer pergunta.
+- A etapa 1 é considerada satisfeita e pulada (via `min_fields`/obrigatórios já preenchidos); se só o objetivo faltar, o fluxo cai direto na etapa 2; se tudo estiver preenchido, vai direto ao handoff.
+- Nada já informado é perguntado de novo.
 
-**D. Sem saudação duplicada**
-- Quando a saudação personalizada do intake é enviada e a etapa geral foi satisfeita, a abertura da etapa é descartada (já existe `dropOpeningMessages`; passa a cobrir também a etapa geral satisfeita).
+**B) Primeira mensagem é só "oi"**
+- Nenhum campo extraído → o fluxo envia normalmente a saudação + pergunta geral 1, depois a 2, depois handoff.
+- `{nome}` usa o nome do perfil do WhatsApp quando existir; se não existir, a variável some do texto sem deixar buraco (`applyVars` já faz isso).
 
-**E. Editor de fluxos (para você montar fluxos parecidos à mão)**
-- Em `StepGeneralCaptureEditor`: campo "Considerar respondida quando o agente entender pelo menos **N** campos" e um resumo visual de quais campos essa etapa cobre e em qual campo do CRM cada um grava.
-- Em `StepInspector`: painel de ajuda "Variáveis disponíveis" (`{nome}`, `{cidade}`, `{objetivo}`, `{idade}`) com clique para inserir no texto, válido em qualquer etapa.
-- Aviso na etapa quando o texto usa uma variável que nenhuma etapa/intake anterior consegue preencher.
+Testes cobrindo os dois caminhos serão adicionados.
 
-**F. Ajuste do fluxo "teste aberto"**
-- Migração leve para completar a configuração da etapa `abertura_geral` (limiar de campos e alias de `city`), sem recriar o fluxo — você continua livre para editá-lo no editor.
+## 4. Idiomas
 
-## Validação
-- Testes em `_shared/flow_intake_test.ts` e `whatsapp-webhook/flow_field_capture_test.ts` com exatamente a frase do print: deve pular a etapa geral, pular idade/cidade/formação/familiar/objetivo, e parar na primeira pergunta realmente pendente (e-mail), sem `{nome}` em nenhuma mensagem.
-- Teste do caso oposto ("oi") — abertura normal, com `{nome}` resolvido pelo nome do WhatsApp.
-- Deploy de `whatsapp-webhook` e `ai-agent-sandbox`, e conferência no sandbox do agente antes de você testar no WhatsApp.
+- Textos das duas etapas gravados na migração em **pt-BR, es, en e fr** (mensagens, reperguntas de campo obrigatório e mensagem de handoff).
+- A camada `flow-i18n` continua como rede de segurança: qualquer texto sem tradução é traduzido em runtime e persistido no banco.
+- Detecção de idioma na 1ª mensagem e trava de idioma (regras já existentes) permanecem válidas.
 
-## Detalhes técnicos
-Arquivos: `supabase/functions/_shared/flow-intake.ts`, `flow-engine.ts` (prefill multi-campo, `generalCaptureOf`, interpolação), `flow-i18n.ts` (interpolar depois de traduzir), `whatsapp-webhook/lib/visual-flow.ts`, `ai-agent-sandbox/index.ts`, `src/components/ai-agents/flow-builder/StepGeneralCaptureEditor.tsx`, `StepInspector.tsx`, `src/types/ai-agent-flow-builder.ts`.
+## 5. Fluxo novo (migração SQL)
+
+Nome: **"Conversa natural"** (status RASCUNHO, você ativa quando quiser).
+
+```text
+inicio
+  -> perfil (PERGUNTA_GERAL)
+       "Olá, {nome}! Eu sou a assistente virtual da CB ASESORIA. 😊
+        Para entender melhor o seu caso, farei algumas perguntas… me comente
+        um pouco sobre você (idade, onde você mora, possui formação superior,
+        possui algum familiar europeu, esteve na Europa nos últimos 6 meses)"
+       campos: idade, cidade, formação superior, familiar europeu, Europa 6 meses
+  -> objetivo (PERGUNTA_GERAL)
+       "E qual o seu objetivo na Espanha?
+        Visto de estudos, residência para nômades, arraigos, nacionalidade
+        espanhola, já possui oferta de trabalho ou outros?"
+       campo: objetivo / serviço de interesse
+  -> handoff (FIM, transfere para atendente humano)
+```
+
+Gravação via `field_mapping` existente (contact/funnel/outside). Padrão: **nenhum campo obrigatório** (aproveita e segue); você marca no editor o que quiser exigir.
+
+## 6. Validação
+
+- Testes Deno: sem obrigatórios avança; obrigatório faltando pergunta só o que falta; campo já preenchido não é reperguntado; cenário "oi" e cenário "mensagem completa".
+- Rodar a suíte de fluxo completa e redeployar `whatsapp-webhook` e `ai-agent-sandbox`.

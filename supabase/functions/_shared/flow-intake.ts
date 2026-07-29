@@ -288,12 +288,21 @@ export function prefillFromFieldValues(
     const general = generalCaptureOf(step)
     if (general.enabled) {
       const hits: string[] = []
+      let missingRequired = false
       for (const f of general.fields) {
-        if (!fieldAllowed(allow, f.target_field)) continue
+        if (!fieldAllowed(allow, f.target_field)) {
+          if ((f as any).required) missingRequired = true
+          continue
+        }
         const value = pickFieldValue(fieldValues, f.target_field)
         if (value) hits.push(`${f.source}: ${value}`)
+        else if ((f as any).required) missingRequired = true
       }
-      if (hits.length >= general.min_fields) prefilled[step.step_code] = hits.join('; ')
+      // Campo obrigatório em falta: a etapa NÃO é dada como respondida — o
+      // agente ainda precisa perguntar o que falta antes de seguir.
+      if (!missingRequired && hits.length >= general.min_fields) {
+        prefilled[step.step_code] = hits.join('; ')
+      }
       continue
     }
 

@@ -25,6 +25,8 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
   const total = cfg.fields!.length;
   const minFields = Math.max(1, Math.min(cfg.min_fields!, total || 1));
 
+  const requiredCount = cfg.fields!.filter((f) => f.required).length;
+
   const selected = new Map(cfg.fields!.map((f) => [f.source, f.target_field]));
 
   const toggle = (source: string, defaultTarget: string, checked: boolean) => {
@@ -33,6 +35,12 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
       : cfg.fields!.filter((f) => f.source !== source);
     onChange({ ...cfg, fields: next });
   };
+
+  const setRequired = (source: string, required: boolean) =>
+    onChange({
+      ...cfg,
+      fields: cfg.fields!.map((f) => (f.source === source ? { ...f, required } : f)),
+    });
 
   const setTarget = (source: string, target: string) =>
     onChange({
@@ -71,6 +79,18 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
                   </Label>
                 </div>
                 {checked && (
+                  <div className="pl-6 flex items-center gap-2">
+                    <Checkbox
+                      id={`req-${opt.value}`}
+                      checked={cfg.fields!.find((f) => f.source === opt.value)?.required === true}
+                      onCheckedChange={(v) => setRequired(opt.value, !!v)}
+                    />
+                    <Label htmlFor={`req-${opt.value}`} className="cursor-pointer text-xs font-normal">
+                      Obrigatório — perguntar antes de seguir/transferir
+                    </Label>
+                  </div>
+                )}
+                {checked && (
                   <div className="pl-6 space-y-1">
                     <Label className="text-xs text-muted-foreground">Gravar em</Label>
                     <Select
@@ -108,6 +128,11 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
             ))}
           </SelectContent>
         </Select>
+        <p className="text-xs text-muted-foreground">
+          {requiredCount > 0
+            ? `${requiredCount} dado(s) obrigatório(s): mesmo que a etapa seja pulada, o agente pergunta o que faltar antes de seguir.`
+            : 'Nenhum dado obrigatório: o agente aproveita o que for dito e segue em frente.'}
+        </p>
         <p className="text-xs text-muted-foreground">
           Se a primeira mensagem do cliente já trouxer pelo menos essa quantidade de dados marcados
           acima, esta pergunta não é feita e o fluxo segue direto para a próxima pendência.
