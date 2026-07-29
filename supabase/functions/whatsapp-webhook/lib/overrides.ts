@@ -1756,12 +1756,16 @@ const CANONICAL_BY_LANG: Record<CanonicalQuestionKey, Record<ChatLanguage, strin
     'en': 'Since when have you been registered (empadronado)?',
     'fr': 'Depuis quand êtes-vous empadronado ?',
   },
+  // Mantém exatamente o mesmo texto de getEmpadronamientoCityQuestion()
+  // (lib/questions.ts) — duas redações diferentes da mesma pergunta chegavam
+  // ao cliente dependendo da camada que a montava.
   empadronadoCity: {
-    'pt-BR': 'Em qual cidade você está empadronado?',
-    'es': '¿En qué ciudad estás empadronado?',
-    'en': 'In which city are you registered (empadronado)?',
-    'fr': 'Dans quelle ville êtes-vous empadronado ?',
+    'pt-BR': 'Em qual cidade você foi empadronado?',
+    'es': '¿En qué ciudad fuiste empadronado?',
+    'en': 'In which city were you registered (empadronado)?',
+    'fr': 'Dans quelle ville avez-vous été empadronado ?',
   },
+
   askName: {
     'pt-BR': 'Antes de tudo, como é seu nome completo?',
     'es': 'Antes de nada, ¿cuál es tu nombre completo?',
@@ -1796,8 +1800,10 @@ const CANON_DETECTORS: Array<{ key: CanonicalQuestionKey; re: RegExp; matchLang?
   { key: 'empadronado', re: /est[áa]s empadronad[oa]\??/i },
   { key: 'empadronadoSince', re: /desde quando (voc[êe] )?est[áa] empadronad/i },
   { key: 'empadronadoSince', re: /desde cu[áa]ndo est[áa]s empadronad/i },
-  { key: 'empadronadoCity', re: /em qual cidade (voc[êe] )?est[áa] empadronad/i },
-  { key: 'empadronadoCity', re: /en qu[eé] ciudad est[áa]s empadronad/i },
+  // aceita as duas redações ("está"/"foi") para reconhecer históricos antigos
+  { key: 'empadronadoCity', re: /em qual cidade (voc[êe] )?(est[áa]|foi) empadronad/i },
+  { key: 'empadronadoCity', re: /en qu[eé] ciudad (est[áa]s|fuiste) empadronad/i },
+
   // nome
   { key: 'askName', re: /(antes de tudo|antes de mais nada),? como [eé] seu nome completo\??/i },
   { key: 'askName', re: /(antes de nada|para empezar),? ?¿cu[áa]l es tu nombre completo\??/i },
