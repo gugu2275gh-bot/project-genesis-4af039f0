@@ -222,3 +222,57 @@ Deno.test('nome pendente é sempre a primeira cobrança', () => {
   assertEquals(pending[0].target_field, 'contact.full_name')
   assertEquals(isNameField(pending[0]), true)
 })
+
+// --- Abertura enxuta: a lista pede só o que ainda falta ---------------------
+
+import { trimKnownFromGeneralPrompt } from './flow-required.ts'
+
+const listStep: any = {
+  step_code: 'dados_pessoais',
+  answer_type: 'TEXTO_LIVRE',
+  validation: {
+    step_kind: 'PERGUNTA_GERAL',
+    general_capture: {
+      enabled: true,
+      fields: [
+        { source: 'age', target_field: 'outside.age', required: true },
+        { source: 'residence_country', target_field: 'contact.residence_country', required: true },
+        { source: 'education_superior', target_field: 'contact.education_level', required: true },
+        { source: 'eu_family', target_field: 'contact.has_eu_family_member', required: true },
+        { source: 'europe_6m', target_field: 'contact.eu_entry_last_6_months', required: true },
+      ],
+    },
+  },
+}
+
+const LIST_TEXT =
+  'Olá! Eu sou a assistente virtual da CB ASESORIA. 😊 Para entender melhor o seu caso, farei algumas perguntas… me comente um pouco sobre você (idade, onde você mora, possui formação superior, possui algum familiar europeu, esteve na Europa nos últimos 6 meses).'
+
+Deno.test('abertura remove da lista o que já foi informado', () => {
+  const out = trimKnownFromGeneralPrompt(listStep, LIST_TEXT, {
+    'outside.age': '50',
+    'contact.residence_country': 'Brasil',
+    'contact.has_eu_family_member': 'sim',
+  })
+  assertEquals(out.includes('idade'), false)
+  assertEquals(out.includes('onde você mora'), false)
+  assertEquals(out.includes('familiar europeu'), false)
+  assertEquals(out.includes('formação superior'), true)
+  assertEquals(out.includes('últimos 6 meses'), true)
+})
+
+Deno.test('abertura sem lista quando tudo já é conhecido', () => {
+  const out = trimKnownFromGeneralPrompt(listStep, LIST_TEXT, {
+    'outside.age': '50',
+    'contact.residence_country': 'Brasil',
+    'contact.education_level': 'sim',
+    'contact.has_eu_family_member': 'sim',
+    'contact.eu_entry_last_6_months': 'nao',
+  })
+  assertEquals(out.includes('('), false)
+  assertEquals(out.endsWith('sobre você.'), true)
+})
+
+Deno.test('abertura intacta quando nada foi informado', () => {
+  assertEquals(trimKnownFromGeneralPrompt(listStep, LIST_TEXT, {}), LIST_TEXT)
+})
