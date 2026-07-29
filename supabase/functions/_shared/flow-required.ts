@@ -8,7 +8,6 @@
  */
 
 import {
-  appendMessage,
   buildStayTurn,
   generalCaptureOf,
   indexSteps,
