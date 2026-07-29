@@ -32,12 +32,21 @@ Deno.test('resolveCurrentStep: state vazio → ABERTURA', () => {
   assertEquals(resolveCurrentStep(baseState), 'ABERTURA')
 })
 
-Deno.test('resolveCurrentStep: progressão NAME → EMAIL → INTEREST → LOCATION', () => {
+Deno.test('resolveCurrentStep: progressão NAME → LOCATION (EMAIL/INTEREST desativados)', () => {
   assertEquals(resolveCurrentStep({ ...baseState, step: 'nome' }), 'NAME')
-  assertEquals(resolveCurrentStep({ ...baseState, step: 'nome', name_confirmed: true }), 'EMAIL')
-  assertEquals(resolveCurrentStep({ ...baseState, name_confirmed: true, email_confirmed: true }), 'INTEREST')
-  assertEquals(resolveCurrentStep({ ...baseState, name_confirmed: true, email_confirmed: true, interest_confirmed: 'X' }), 'LOCATION')
+  assertEquals(resolveCurrentStep({ ...baseState, step: 'nome', name_confirmed: true }), 'LOCATION')
+  assertEquals(resolveCurrentStep({ ...baseState, name_confirmed: true, email_confirmed: true }), 'LOCATION')
+  // trava a regra de produto: e-mail nunca volta a ser perguntado no onboarding
+  for (const s of [
+    { ...baseState, step: 'nome', name_confirmed: true },
+    { ...baseState, name_confirmed: true, interest_confirmed: 'X' },
+    { ...baseState, name_confirmed: true, email_confirmed: true, interest_confirmed: 'X' },
+  ]) {
+    assert(resolveCurrentStep(s as any) !== 'EMAIL')
+    assert(resolveCurrentStep(s as any) !== 'INTEREST')
+  }
 })
+
 
 Deno.test('branch INSIDE: LOCATION=spain → INSIDE_ENTRY_DATE → INSIDE_EMPADRONADO → PRE_HANDOFF', () => {
   const s: any = { ...baseState, name_confirmed: true, email_confirmed: true, interest_confirmed: 'X', location_known: 'spain' }
@@ -55,11 +64,12 @@ Deno.test('handoff_sent → FREE_KB (KB livre, sem regressão)', () => {
   assertEquals(resolveCurrentStep({ ...baseState, handoff_sent: true }), 'FREE_KB')
 })
 
-Deno.test('NAME.next: depende de email_confirmed (suporta lead com email já no contato)', () => {
+Deno.test('NAME.next: sempre LOCATION (etapa de e-mail removida do onboarding)', () => {
   const def = getStepDef('NAME')
-  assertEquals(def.next({ ...baseState, email_confirmed: false } as any), 'EMAIL')
-  assertEquals(def.next({ ...baseState, email_confirmed: true } as any), 'INTEREST')
+  assertEquals(def.next({ ...baseState, email_confirmed: false } as any), 'LOCATION')
+  assertEquals(def.next({ ...baseState, email_confirmed: true } as any), 'LOCATION')
 })
+
 
 Deno.test('EMAIL.validate: aceita email válido, rejeita inválido', () => {
   const def = getStepDef('EMAIL')

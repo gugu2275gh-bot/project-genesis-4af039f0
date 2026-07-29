@@ -15,20 +15,15 @@ import { getPromptTemplates } from './lib/language.ts'
 
 // ---------- BUG do screenshot: insideIntro NÃO vaza no bloco fora ----------
 
-Deno.test('OUTSIDE A6 (formação): pergunta literal SEM insideIntro (bug do screenshot)', () => {
-  const transcript = [
-    'Qual sua idade?',
-    'Você esteve na Europa nos últimos 6 meses?',
-    'Possui familiar europeu ou residente legal na Espanha?',
-    'Você trabalha remoto?',
-  ].join('\n')
+Deno.test('OUTSIDE fim do bloco (A5 respondida): pré-handoff SEM insideIntro (bug do screenshot)', () => {
   const out = getNextScriptedQuestion('aprofundamento', 'pt-BR', {
     userInSpain: false,
     userOutsideSpain: true,
-    assistantTranscript: transcript,
+    assistantTranscript: '',
     locationKnown: 'outside',
+    outsideProgress: { a2_age: '34', a3_europe_6m: 'no', a4_eu_family: 'no', a5_remote: 'yes' },
   })
-  assertStringIncludes(out, 'formação superior')
+  assertStringIncludes(out, 'visão inicial')
   assert(!out.includes('Agora preciso entender'), 'NUNCA deve emitir B1 intro no bloco fora')
   assert(!out.includes('como está sua situação aqui'))
 })
@@ -46,19 +41,19 @@ Deno.test('OUTSIDE A2 (idade): pergunta literal "Qual sua idade?" sem preâmbulo
 
 // ---------- Bloco INSIDE (B1-B5) ----------
 
-Deno.test('INSIDE B2 1º turno: emite insideIntro + pergunta de data de entrada', () => {
-  const t = getPromptTemplates('pt-BR')
+Deno.test('INSIDE B2 1º turno: pergunta de data de entrada, sem insideIntro', () => {
   const out = getInsideSpainNextQuestion('pt-BR', '', {})
-  assertStringIncludes(out, t.insideIntro)
-  assertStringIncludes(out, 'data exata da sua entrada')
+  assert(!out.includes('Agora preciso entender'), 'intro B1 foi removido do fluxo')
+  assertStringIncludes(out, 'data exata de entrada')
 })
 
-Deno.test('INSIDE B2 2º turno (intro já enviado): NÃO repete insideIntro', () => {
+Deno.test('INSIDE B2 2º turno (intro no transcript): continua sem repetir insideIntro', () => {
   const transcript = 'Perfeito. Agora preciso entender como está sua situação aqui.'
   const out = getInsideSpainNextQuestion('pt-BR', transcript, {})
   assert(!out.includes('Agora preciso entender'))
-  assertStringIncludes(out, 'data exata da sua entrada')
+  assertStringIncludes(out, 'data exata de entrada')
 })
+
 
 Deno.test('INSIDE B3: empadronado? — após data de entrada confirmada', () => {
   const out = getInsideSpainNextQuestion('pt-BR', '', { entryDateConfirmed: '2024-05-01' })
@@ -189,16 +184,17 @@ Deno.test('getShortAck: sem pergunta anterior → vazio', () => {
   assertEquals(getShortAck('pt-BR', '', 'Olá'), '')
 })
 
-// ---------- Idiomas: insideIntro localizado em ES ----------
+// ---------- Idiomas: B2 (data de entrada) localizado, sem intro ----------
 
-Deno.test('INSIDE B2 1º turno em ES: emite intro localizado', () => {
+Deno.test('INSIDE B2 1º turno em ES: pergunta literal localizada, sem intro', () => {
   const out = getInsideSpainNextQuestion('es', '', {})
-  assertStringIncludes(out, 'Ahora necesito entender')
-  assertStringIncludes(out, 'fecha exacta de tu entrada')
+  assert(!out.includes('Ahora necesito entender'), 'intro B1 foi removido do fluxo')
+  assertStringIncludes(out, 'fecha exacta de entrada')
 })
 
-Deno.test('INSIDE B2 1º turno em FR: emite intro localizado', () => {
+Deno.test('INSIDE B2 1º turno em FR: pergunta literal localizada, sem intro', () => {
   const out = getInsideSpainNextQuestion('fr', '', {})
-  assertStringIncludes(out, 'Maintenant je dois comprendre')
-  assertStringIncludes(out, "date exacte de votre entrée")
+  assert(!out.includes('Maintenant je dois comprendre'), 'intro B1 foi removido do fluxo')
+  assertStringIncludes(out, "date exacte d'entrée")
 })
+

@@ -1,31 +1,33 @@
-## O que aconteceu
+## Contexto
 
-Sim, é duplicidade — e a causa está confirmada nos dados:
+A suíte `supabase/functions/whatsapp-webhook/` está em 470 passando / 15 falhando. Nenhuma falha vem da correção de duplicidade de saudação: todas são expectativas de testes escritas para o funil roteirizado antigo, que foi substituído por decisões de produto já aplicadas no código.
 
-1. O fluxo **Conversa natural** (`intake_config.greeting_personalized` pt-BR) envia:
-   `"Olá, {nome}! Eu sou a assistente virtual da CB ASESORIA. 😊 {resumo}"`
-2. A **1ª etapa** (`dados_pessoais`, `PERGUNTA_GERAL`) tem como mensagem:
-   `"Olá, {nome}! Eu sou a assistente virtual da CB ASESORIA. 😊\nPara entender melhor o seu caso, farei algumas perguntas…"`
+Evidências verificadas nesta sessão:
+- `lib/flow-machine.ts` (linhas 91 e 295): comentário e transição confirmam que a etapa **EMAIL foi removida do onboarding** (NAME → LOCATION direto).
+- `wave7_test.ts:111` exige pré-handoff em 2 bolhas (`|||`), enquanto o teste D4 do mesmo arquivo — que passa — exige handoff em bolha única (BPMN v2). Expectativas conflitantes.
+- `scripted_dispatch_test.ts` valida o `insideIntro` e as perguntas A1–A6 do dispatch roteirizado, hoje substituído pelo fluxo visual configurável.
 
-O intake prefixa a saudação como mensagem separada (`prependIntakeGreeting` → `prependMessage`), e a etapa repete a mesma linha de abertura. Resultado: as duas bolhas da imagem.
+## Mapa das 15 falhas
 
-## Correção proposta
+| Arquivo | Falhas | Causa |
+|---|---|---|
+| `flow_machine_test.ts` | 2 | esperam etapa `EMAIL` |
+| `offtopic_step_authority_test.ts` | 2 | classificação off-topic na etapa `email` |
+| `turn_orchestrator_test.ts` | 5 | fluxo NAME → EMAIL → INTEREST |
+| `scripted_dispatch_test.ts` | 5 | `insideIntro` / dispatch roteirizado |
+| `wave7_test.ts` | 1 | pré-handoff em 2 bolhas |
 
-1. **Dedup na camada de saudação** (`supabase/functions/_shared/flow-intake.ts`)
-   - Antes de prefixar, comparar a saudação já renderizada (com `{nome}`/`{resumo}` resolvidos) com o início da primeira mensagem do turno, usando normalização (minúsculas, sem acentos/emoji/pontuação/espaços extras).
-   - Se houver sobreposição relevante (a primeira linha da mensagem da etapa contém a saudação ou vice-versa, ou similaridade alta do primeiro trecho), **não prefixar**; em vez disso, se a saudação for personalizada e trouxer `{resumo}`, injetar só a parte do resumo antes da pergunta, para não perder o "entendi X, Y e Z".
-   - Vale para todos os idiomas, pois a comparação é feita sobre o texto já localizado.
+## O que fazer
 
-2. **Limpeza do conteúdo do fluxo** (migração SQL)
-   - Remover a linha de saudação duplicada da mensagem da etapa `dados_pessoais` nos 4 idiomas do fluxo "Conversa natural", deixando a etapa começar em "Para entender melhor o seu caso…". A saudação passa a ser responsabilidade única do intake (personalizada quando há nome do WhatsApp, padrão caso contrário).
+1. **`flow_machine_test.ts`** — reescrever os 2 casos para a progressão atual: `NAME → LOCATION → (INSIDE_ENTRY_DATE | OUTSIDE_AGE)`. Manter uma asserção explícita de que `EMAIL` nunca é retornado por `resolveCurrentStep`, para travar a regra "não perguntar e-mail".
+2. **`turn_orchestrator_test.ts`** — trocar os 5 casos de etapa `email` por casos equivalentes na etapa `LOCATION` (resposta válida avança, resposta repetida faz reask, pergunta factual parqueia como off-topic), preservando a cobertura de comportamento sem depender da etapa extinta.
+3. **`offtopic_step_authority_test.ts`** — mesma migração: os 2 casos passam a validar a autoridade da etapa `LOCATION`.
+4. **`wave7_test.ts`** — ajustar o caso D3 `getOutsideSpainNextQuestion` para a expectativa de bolha única, coerente com o D4 (BPMN v2), removendo a asserção de `|||`.
+5. **`scripted_dispatch_test.ts`** — os 5 casos cobrem um dispatch desativado. Verificar antes se `getInsideSpainNextQuestion`/`insideIntro` ainda são chamados em runtime por algum caminho de produção:
+   - se ainda forem: corrigir as expectativas ao texto atual;
+   - se forem código morto: remover o arquivo de teste junto com as funções órfãs, em um commit separado e identificado.
+6. **Rodar a suíte completa** (`_shared/` + `whatsapp-webhook/`) e fechar em 0 falhas, sem alterar nenhum arquivo de produção fora do item 5.
 
-3. **Testes** (`supabase/functions/_shared/flow_intake_test.ts`)
-   - "oi" + nome do WhatsApp → exatamente **uma** bolha de saudação seguida da pergunta geral.
-   - 1ª mensagem com dados → saudação personalizada com resumo, sem repetir a abertura da etapa.
-   - Caso ES/EN/FR → mesma garantia de não duplicar.
+## Fora de escopo
 
-## Detalhes técnicos
-
-- Alterações concentradas em `flow-intake.ts` (`prependIntakeGreeting` e helper novo `greetingAlreadyPresent`), sem mexer em `flow-engine.ts`/`flow-turn.ts`.
-- Produção (`_shared/visual-flow.ts` via `whatsapp-webhook`) e sandbox (`ai-agent-sandbox`) herdam a correção automaticamente por usarem a mesma função.
-- A migração toca apenas as linhas `messages` da etapa `dados_pessoais` do fluxo `a3e2a1d1-66d7-4527-b215-f66ae134f4ef`.
+Nenhuma mudança de comportamento do agente, do fluxo visual ou do banco. Este trabalho é exclusivamente de alinhamento de testes; qualquer ajuste de produção fica limitado à remoção de código comprovadamente morto no item 5.

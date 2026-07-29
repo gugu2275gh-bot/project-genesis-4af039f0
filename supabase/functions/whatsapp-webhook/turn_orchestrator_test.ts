@@ -22,14 +22,15 @@ const stateAtName: any = {
 }
 const contact: any = { id: 'C1', full_name: null, email: null, preferred_language: 'pt-BR' }
 
-Deno.test('NAME: nome válido → advance para EMAIL e grava em answers', () => {
+Deno.test('NAME: nome válido → advance para LOCATION e grava em answers', () => {
   const ctx = buildConversationContext(stateAtName, contact, 'pt-BR')
   const d = decideTurn(ctx, 'João Carlos Silva')
   assertEquals(d.action.kind, 'advance')
-  assertEquals(d.next_step, 'EMAIL')
+  assertEquals(d.next_step, 'LOCATION')
   assertEquals(d.state_patch.name_confirmed, true)
   assert(d.state_patch.answers && (d.state_patch.answers as any).NAME)
 })
+
 
 Deno.test('NAME: pergunta paralela ("O que é TIE?") → park_offtopic, NÃO perde etapa', () => {
   const ctx = buildConversationContext(stateAtName, contact, 'pt-BR')
@@ -47,14 +48,15 @@ Deno.test('NAME: resposta inválida (1 palavra) → reask, não avança', () => 
   assertEquals(d.next_step, 'NAME')
 })
 
-Deno.test('EMAIL: email válido → advance para INTEREST', () => {
-  const s = { ...stateAtName, step: 'email', name_confirmed: true }
+Deno.test('LOCATION: e-mail enviado espontaneamente → não avança (etapa e-mail desativada)', () => {
+  const s = { ...stateAtName, step: 'localizacao', name_confirmed: true }
   const ctx = buildConversationContext(s, contact, 'pt-BR')
   const d = decideTurn(ctx, 'joao@email.com')
-  assertEquals(d.action.kind, 'advance')
-  assertEquals(d.next_step, 'INTEREST')
-  assertEquals(d.state_patch.email_confirmed, true)
+  assertEquals(d.current_step, 'LOCATION')
+  assertEquals(d.next_step, 'LOCATION')
+  assertEquals(d.state_patch.email_confirmed, undefined)
 })
+
 
 Deno.test('LOCATION: "estou en España" → INSIDE_ENTRY_DATE com branch=INSIDE', () => {
   const s = { ...stateAtName, name_confirmed: true, email_confirmed: true, interest_confirmed: 'X' }
@@ -83,32 +85,24 @@ Deno.test('PRE_HANDOFF/INSIDE_ENTRY_DATE: pass_through (delegado a handler legad
   assertEquals(d.current_step, 'INSIDE_ENTRY_DATE')
 })
 
-Deno.test('EMAIL: cliente repete o nome → reask (não parqueia, não avança)', () => {
-  const s = { ...stateAtName, step: 'email', name_confirmed: true }
+Deno.test('LOCATION: cliente repete o nome → parqueia, não avança', () => {
+  const s = { ...stateAtName, step: 'localizacao', name_confirmed: true }
   const ctx = buildConversationContext(s, contact, 'pt-BR')
   const d = decideTurn(ctx, 'gustavo braga')
-  assertEquals(d.action.kind, 'reask_current')
-  assertEquals(d.current_step, 'EMAIL')
-  assertEquals(d.next_step, 'EMAIL')
-  assertEquals((d.state_patch as any).pending_questions, undefined)
-  assertEquals(d.state_patch.email_confirmed, undefined)
+  assertEquals(d.action.kind, 'park_offtopic')
+  assertEquals(d.current_step, 'LOCATION')
+  assertEquals(d.next_step, 'LOCATION')
+  assertEquals(d.state_patch.location_known, undefined)
 })
 
-Deno.test('EMAIL: texto curto sem @ ("João Silva") → reask, não parqueia', () => {
-  const s = { ...stateAtName, step: 'email', name_confirmed: true }
-  const ctx = buildConversationContext(s, contact, 'pt-BR')
-  const d = decideTurn(ctx, 'João Silva')
-  assertEquals(d.action.kind, 'reask_current')
-  assertEquals(d.next_step, 'EMAIL')
-})
-
-Deno.test('EMAIL: pergunta factual ("o que é NIE?") → parqueia como off-topic', () => {
-  const s = { ...stateAtName, step: 'email', name_confirmed: true }
+Deno.test('LOCATION: pergunta factual ("o que é NIE?") → parqueia como off-topic', () => {
+  const s = { ...stateAtName, step: 'localizacao', name_confirmed: true }
   const ctx = buildConversationContext(s, contact, 'pt-BR')
   const d = decideTurn(ctx, 'o que é NIE?')
   assertEquals(d.action.kind, 'park_offtopic')
-  assertEquals(d.next_step, 'EMAIL')
+  assertEquals(d.next_step, 'LOCATION')
 })
+
 
 
 

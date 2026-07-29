@@ -13,15 +13,18 @@ Deno.test('Roberto: "O quê é TIE" na etapa email → off-topic question', () =
   assertEquals(r?.kind, 'question')
 })
 
-Deno.test('etapa email: "residencia" sem ser pergunta → off-topic (não é e-mail nem recusa)', () => {
-  const r = classifyOffTopic('residencia', Q_EMAIL, { ...ctx, currentStep: 'email' })
+const Q_LOCAL = 'Você já está na Espanha?'
+
+Deno.test('etapa localizacao: "residencia" → off-topic (não é localização)', () => {
+  const r = classifyOffTopic('residencia', Q_LOCAL, { ...ctx, currentStep: 'localizacao' })
   assertEquals(r?.kind, 'request')
 })
 
-Deno.test('etapa email: "Sim" → off-topic (não é e-mail)', () => {
-  const r = classifyOffTopic('Sim', Q_EMAIL, { ...ctx, currentStep: 'email' })
+Deno.test('etapa localizacao: "meu nome é João Silva" → off-topic (não é localização)', () => {
+  const r = classifyOffTopic('meu nome é João Silva', Q_LOCAL, { ...ctx, currentStep: 'localizacao' })
   assertEquals(r?.kind, 'request')
 })
+
 
 Deno.test('etapa email: e-mail válido → não parqueia', () => {
   const r = classifyOffTopic('cliente@email.com', Q_EMAIL, { ...ctx, currentStep: 'email' })
