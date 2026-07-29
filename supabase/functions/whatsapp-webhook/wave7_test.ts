@@ -108,7 +108,7 @@ Deno.test('D3: buildPreHandoffPayload returns empty when both already sent (idem
   assertEquals(payload, '')
 })
 
-Deno.test('D3: getOutsideSpainNextQuestion at end emits 2-message payload', () => {
+Deno.test('D3: getOutsideSpainNextQuestion at end emits single-bubble handoff (BPMN v2)', () => {
   // Transcript indicating all questions A1-A6 already asked
   const transcript = [
     'Qual sua idade?', 'Você esteve na Europa nos últimos 6 meses?',
@@ -116,10 +116,10 @@ Deno.test('D3: getOutsideSpainNextQuestion at end emits 2-message payload', () =
     'Você trabalha remoto?', 'Você possui formação superior?',
   ].join('\n')
   const result = getOutsideSpainNextQuestion('pt-BR', transcript, { entryDateConfirmed: null, locationKnown: 'outside' })
-  assert(result.includes('|||'), 'final pre-handoff must be 2-message split')
-  assertStringIncludes(result, 'visão inicial')
+  assert(!result.includes('|||'), 'handoff final deve ser bolha única (H3)')
   assertStringIncludes(result, 'encaminhar')
 })
+
 
 Deno.test('D3: forceCorrectBlockForLocation final branch (Spain block complete) emits 2-message payload', () => {
   const result = forceCorrectBlockForLocation('Qual sua idade?', 'pt-BR', {
