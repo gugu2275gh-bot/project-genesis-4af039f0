@@ -340,7 +340,9 @@ export function extractionToSourceValues(
   }
   const city = normText(extraction.city)
   put('city', city)
+  put('residence_country', normalizeCountry(extraction.residence_country))
   // "Moro em Paris": só a cidade foi dita — o país vem da cidade conhecida.
+
   if (!out.residence_country) {
     const derived = countryFromCity(out.city || city)
     if (derived) out.residence_country = derived
