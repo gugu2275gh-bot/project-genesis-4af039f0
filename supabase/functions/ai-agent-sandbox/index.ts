@@ -283,6 +283,9 @@ Deno.serve(async (req) => {
         })
       }
 
+      // Campos obrigatórios pendentes da "Pergunta geral".
+      turn = applyRequiredGate(steps, turn as any, lang as any, knownFields) as any
+
       // Camada única de saída: nada é enviado fora do idioma da conversa.
       turn = await localizeTurn(turn, lang as any, {
         steps,

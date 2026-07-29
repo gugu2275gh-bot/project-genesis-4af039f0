@@ -264,7 +264,8 @@ export async function runVisualFlowTurn(
   } = {},
 ): Promise<FlowTurnResult> {
   const localize = async (turn: FlowTurnResult) => {
-    const localized = await localizeTurn(turn, lang, {
+    const gated = applyRequiredGate(plan.steps, turn, lang)
+    const localized = await localizeTurn(gated, lang, {
       steps: plan.steps,
       callLLM: deps.callLLM || null,
       supabase: deps.supabase,
