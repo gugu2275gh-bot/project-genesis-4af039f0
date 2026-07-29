@@ -438,7 +438,7 @@ function overlapRatio(part: string, whole: string): number {
 export function greetingAlreadyPresent(greeting: string, firstMessage: string): boolean {
   // Compara a ABERTURA da saudação (primeiros tokens) com o início da mensagem
   // da etapa — o resto da saudação (resumo) não deve diluir a detecção.
-  const opening = tokensOf(greeting).slice(0, 10)
+  const opening = tokensOf(greeting).slice(0, 6)
   if (opening.length < 4) return false
   return overlapRatio(opening.join(' '), firstMessage) >= 0.7
 }
