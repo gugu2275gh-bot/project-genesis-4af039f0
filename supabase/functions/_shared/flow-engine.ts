@@ -267,6 +267,17 @@ export function prependMessage(turn: FlowTurnResult, text: string, stepCode = 'a
   }
 }
 
+/** Acrescenta uma mensagem ao final do turno (ex.: cobrança de obrigatório). */
+export function appendMessage(turn: FlowTurnResult, text: string, stepCode = 'ack'): FlowTurnResult {
+  const clean = String(text || '').trim()
+  if (!clean) return turn
+  return {
+    ...turn,
+    messages: [...(turn.messages || []), clean],
+    outbound: [...(turn.outbound || []), { text: clean, step_code: stepCode, quick_reply: false }],
+  }
+}
+
 
 
 
