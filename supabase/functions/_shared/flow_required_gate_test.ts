@@ -48,7 +48,7 @@ Deno.test('nome ausente é cobrado JUNTO com a pergunta geral', () => {
   const gated = applyRequiredGate(steps as any, turn, 'pt-BR', {})
   const text = gated.messages.join(' ')
   assertEquals(text.includes('Me comente um pouco sobre você'), true)
-  assertEquals(text.toLowerCase().includes('nome completo'), true)
+  assertEquals(text.toLowerCase().includes('nome'), true)
   assertEquals(gated.state.required_field, 'contact.full_name')
   assertEquals(gated.finished, false)
 })

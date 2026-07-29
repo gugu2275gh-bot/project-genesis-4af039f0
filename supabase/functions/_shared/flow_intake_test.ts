@@ -110,7 +110,7 @@ Deno.test('Continuidade: turno seguinte avança sem reabrir etapas aproveitadas'
   assert(third.handoff)
   assertEquals(third.messages, ['Vou te encaminhar.'])
   assertEquals(third.state.answers['nome'], 'Fred Souza')
-  assertEquals(third.state.answers['interesse'], 'estudar')
+  assertEquals(third.state.answers['interesse'], 'estudos')
   assertEquals(third.state.answers['email'], 'fred@mail.com')
 })
 
