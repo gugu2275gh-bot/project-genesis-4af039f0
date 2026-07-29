@@ -34,24 +34,34 @@ const steps: any[] = [
   },
 ]
 
-Deno.test('"oi": a pergunta geral é enviada e já marca o obrigatório que falta', () => {
+Deno.test('"oi": sai só a pergunta geral, sem cobrar campo na mesma bolha', () => {
   const turn = startFlow(steps as any, 'pt-BR')
   const gated = applyRequiredGate(steps as any, turn, 'pt-BR', { 'contact.full_name': 'Rose Carla' })
   assertEquals(gated.state.current_step, 'dados_pessoais')
   assertEquals(gated.messages.join(' ').includes('Me comente um pouco sobre você'), true)
-  // "idade" já está no texto da etapa: não duplica a bolha, mas fica pendente
-  assertEquals(gated.state.required_field, 'outside.age')
+  assertEquals(gated.messages.length, turn.messages.length)
+  // A resposta do cliente é lida como pergunta geral (nenhum campo travado)
+  assertEquals(gated.state.required_field || '', '')
 })
 
-Deno.test('nome ausente é cobrado JUNTO com a pergunta geral', () => {
+Deno.test('nome NÃO é pedido junto com a primeira mensagem', () => {
   const turn = startFlow(steps as any, 'pt-BR')
   const gated = applyRequiredGate(steps as any, turn, 'pt-BR', {})
   const text = gated.messages.join(' ')
   assertEquals(text.includes('Me comente um pouco sobre você'), true)
-  assertEquals(text.toLowerCase().includes('nome'), true)
-  assertEquals(gated.state.required_field, 'contact.full_name')
+  assertEquals(gated.messages.length, turn.messages.length)
+  assertEquals(gated.state.required_field || '', '')
   assertEquals(gated.finished, false)
 })
+
+Deno.test('depois da resposta sem nome, o nome é a primeira cobrança', () => {
+  const base = startFlow(steps as any, 'pt-BR')
+  const already = { ...base, outbound: [], messages: [], reasked: true } as any
+  const gated = applyRequiredGate(steps as any, already, 'pt-BR', { 'outside.age': '34' })
+  assertEquals(gated.state.required_field, 'contact.full_name')
+  assertEquals(gated.messages.join(' ').toLowerCase().includes('nome'), true)
+})
+
 
 Deno.test('todos os obrigatórios conhecidos: nenhuma cobrança extra', () => {
   const turn = startFlow(steps as any, 'pt-BR')
