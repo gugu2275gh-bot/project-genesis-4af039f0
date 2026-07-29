@@ -229,7 +229,7 @@ const FIELD_KEYWORDS: Record<string, RegExp> = {
   age: /(idade|edad|\bage\b|âge)/i,
   birth_date: /(nascimento|nacimiento|birth|naissance)/i,
   city: /(cidade|ciudad|\bcity\b|ville)/i,
-  residence_country: /(pa[íi]s|country|pays)/i,
+  residence_country: /(pa[íi]s|country|pays|onde\s+(?:voc[êe]\s+|vc\s+|tu\s+)?(?:mora|vive|reside)|d[óo]nde\s+vives|where\s+(?:do\s+)?you\s+live|o[uù]\s+(?:vous\s+)?habitez)/i,
   in_spain: /(na\s+espanha|en\s+espa[ñn]a|in\s+spain|en\s+espagne)/i,
   intent: /(objetivo|goal|but\b|objectif)/i,
   arrival_date: /(chegada|llegada|arrival|arriv[ée]e)/i,
@@ -246,6 +246,75 @@ export function fieldAlreadyAskedIn(field: RequiredCaptureField, text: string): 
   const re = FIELD_KEYWORDS[field.source]
   return re ? re.test(t) : false
 }
+
+/**
+ * Enxuga a lista entre parênteses da abertura de uma "Pergunta geral":
+ * o que o cliente já informou na primeira mensagem sai da lista.
+ *
+ * "…me comente um pouco sobre você (idade, onde mora, formação superior,
+ * familiar europeu, esteve na Europa nos últimos 6 meses)" vira
+ * "…me comente um pouco sobre você (formação superior, esteve na Europa nos
+ * últimos 6 meses)". Se nada ficar pendente, o trecho entre parênteses some.
+ */
+export function trimKnownFromGeneralPrompt(
+  step: FlowStep,
+  text: string,
+  known: Record<string, string>,
+): string {
+  const raw = String(text || '')
+  if (!raw.trim() || !isGeneralCaptureStep(step)) return raw
+
+  const cfg = generalCaptureOf(step)
+  const fields = (cfg.fields || []) as RequiredCaptureField[]
+  if (!fields.length) return raw
+
+  // Último grupo entre parênteses da mensagem (a lista de dados pedida).
+  const matches = [...raw.matchAll(/\(([^()]*)\)/g)]
+  const group = matches[matches.length - 1]
+  if (!group) return raw
+
+  const inner = String(group[1] || '')
+  const items = inner.split(/\s*[,;]\s*/).filter((i) => i.trim())
+  if (items.length < 2) return raw
+
+  const kept = items.filter((item) => {
+    const owner = fields.find((f) => {
+      const re = FIELD_KEYWORDS[String(f.source || '')]
+      return re ? re.test(item) : false
+    })
+    if (!owner) return true
+    return !pickFieldValue(known, owner.target_field)
+  })
+
+  if (kept.length === items.length) return raw
+
+  const start = group.index ?? 0
+  const before = raw.slice(0, start)
+  const after = raw.slice(start + group[0].length)
+
+  const rebuilt = kept.length ? `${before}(${kept.join(', ')})${after}` : `${before}${after}`
+  return rebuilt
+    .replace(/\s+([.,;:!?…])/g, '$1')
+    .replace(/[,;:]\s*(?=[.!?…]|$)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+/** Aplica `trimKnownFromGeneralPrompt` nas mensagens da etapa dentro do turno. */
+function trimOutboundForStep(
+  turn: FlowTurnResult,
+  step: FlowStep,
+  code: string,
+  known: Record<string, string>,
+): FlowTurnResult {
+  const outbound = (turn.outbound || []).map((o: any) =>
+    String(o?.step_code) === code
+      ? { ...o, text: trimKnownFromGeneralPrompt(step, String(o?.text || ''), known) }
+      : o,
+  )
+  return { ...turn, outbound, messages: outbound.map((o: any) => o.text) }
+}
+
 
 /**
  * Reescreve o turno quando ele parou numa "Pergunta geral" que já tem parte
@@ -274,21 +343,26 @@ export function applyRequiredGate(
 
   if (!step || !isGeneralCaptureStep(step)) return turn
 
-  const required = requiredFieldsOf(step)
-  if (!required.length) return turn
-
   const known = { ...extraKnown, ...knownFieldsOf(steps, turn.state) }
   const skipped = (turn.state?.required_skipped || []) as string[]
-  const pending = missingRequired(step, known, skipped)
 
   const presentedNow = !turn.reasked && (turn.outbound || []).some((o: any) => o?.step_code === code)
+
+  // A abertura da etapa só pede o que ainda falta: o que o cliente já contou
+  // na primeira mensagem sai da lista entre parênteses.
+  const working = presentedNow ? trimOutboundForStep(turn, step, code, known) : turn
+
+  const required = requiredFieldsOf(step)
+  if (!required.length) return working
+
+  const pending = missingRequired(step, known, skipped)
 
   // Mínimo de dados atingido: a etapa não cobra mais nada — o que não foi
   // respondido fica em branco e o fluxo segue.
   if (!pending.length || generalCaptureSatisfied(step, known, skipped)) {
-    return presentedNow || turn.state?.required_field
-      ? { ...turn, state: { ...turn.state, required_field: '', required_attempts: 0 } }
-      : turn
+    return presentedNow || working.state?.required_field
+      ? { ...working, state: { ...working.state, required_field: '', required_attempts: 0 } }
+      : working
   }
 
 
@@ -299,17 +373,19 @@ export function applyRequiredGate(
     // obrigatório colado na saudação — esperamos a resposta do cliente e só
     // depois cobramos o que faltar (nome primeiro).
     return {
-      ...turn,
+      ...working,
       finished: false,
       handoff: false,
       state: {
-        ...turn.state,
+        ...working.state,
         current_step: code,
         required_field: '',
         required_attempts: 0,
       },
     }
   }
+
+
 
 
   const stay = buildStayTurn(step, requiredPrompt(next, lang), turn.state, {

@@ -279,8 +279,9 @@ export function extractionToSourceValues(
   put('city', normText(extraction.city))
   const country = normalizeCountry(extraction.residence_country)
   put('residence_country', country)
-  // Mora fora da Espanha => não está na Espanha (quando a IA não disse nada).
-  if (country && !out.in_spain) out.in_spain = isSpain(country) ? 'sim' : 'nao'
+  // ATENÇÃO: morar fora da Espanha NÃO significa não estar na Espanha agora.
+  // `in_spain` só existe quando o cliente afirma explicitamente (a IA devolve
+  // o campo) — nunca é deduzido do país de residência.
   put('education_superior', toYesNo(extraction.education_superior))
   put('eu_family', toYesNo(extraction.eu_family))
   put('europe_6m', toYesNo(extraction.europe_6m))
@@ -400,19 +401,25 @@ export function capturedFromFieldValues(
 // ---------------------------------------------------------------------------
 // Saudação humana
 
-const SUMMARY_TEMPLATES: Record<string, { spain: string; outside: string; intent: string; joiner: string }> = {
-  'pt-BR': { spain: 'Vi que você já está na Espanha', outside: 'Vi que você ainda não está na Espanha', intent: 'e que seu objetivo é {intencao}', joiner: '. ' },
-  es: { spain: 'Vi que ya estás en España', outside: 'Vi que todavía no estás en España', intent: 'y que tu objetivo es {intencao}', joiner: '. ' },
-  en: { spain: 'I see you are already in Spain', outside: 'I see you are not in Spain yet', intent: 'and that your goal is {intencao}', joiner: '. ' },
-  fr: { spain: 'Je vois que vous êtes déjà en Espagne', outside: 'Je vois que vous n’êtes pas encore en Espagne', intent: 'et que votre objectif est {intencao}', joiner: '. ' },
+const SUMMARY_TEMPLATES: Record<
+  string,
+  { spain: string; outside: string; country: string; intent: string; joiner: string }
+> = {
+  'pt-BR': { spain: 'Vi que você já está na Espanha', outside: 'Vi que você ainda não está na Espanha', country: 'Vi que você mora em {pais}', intent: 'e que seu objetivo é {intencao}', joiner: '. ' },
+  es: { spain: 'Vi que ya estás en España', outside: 'Vi que todavía no estás en España', country: 'Vi que vives en {pais}', intent: 'y que tu objetivo es {intencao}', joiner: '. ' },
+  en: { spain: 'I see you are already in Spain', outside: 'I see you are not in Spain yet', country: 'I see you live in {pais}', intent: 'and that your goal is {intencao}', joiner: '. ' },
+  fr: { spain: 'Je vois que vous êtes déjà en Espagne', outside: 'Je vois que vous n’êtes pas encore en Espagne', country: 'Je vois que vous habitez en {pais}', intent: 'et que votre objectif est {intencao}', joiner: '. ' },
 }
 
 export function buildIntakeSummary(fieldValues: Record<string, string>, lang: FlowLang): string {
   const t = SUMMARY_TEMPLATES[String(lang)] || SUMMARY_TEMPLATES['pt-BR']
   const parts: string[] = []
+  // Localização só é afirmada quando o cliente disse explicitamente onde está.
   const loc = fieldValues['funnel.location_known']
+  const country = fieldValues['contact.residence_country']
   if (loc === 'sim') parts.push(t.spain)
   else if (loc === 'nao') parts.push(t.outside)
+  else if (country) parts.push(t.country.replace('{pais}', country))
   const intent = fieldValues['funnel.interest_confirmed']
   if (intent) parts.push(t.intent.replace('{intencao}', intent))
   if (!parts.length) return ''
