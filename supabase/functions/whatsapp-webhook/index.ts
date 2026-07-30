@@ -915,8 +915,12 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       media_url: storedMediaUrl,
       media_filename: mediaFilename,
       media_mimetype: mediaMimetype,
-    }).select('id').single()
+    }).select('id, created_at').single()
     void insertedMsg
+
+    // Identidade resolvida e mensagem gravada: libera o lock para o próximo balão.
+    await releaseIdentityLock()
+
 
     // ============================================================
     // TRAVA DE FLUXO VISUAL ATIVO
