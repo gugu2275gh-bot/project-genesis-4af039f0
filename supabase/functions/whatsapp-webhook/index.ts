@@ -1328,21 +1328,26 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       // Buffer adaptativo (otimização de latência):
       //  - mensagem "completa" (longa ou terminando em pontuação): 300ms
       //  - etapa de fluxo que espera resposta curta (Sim/Não, opção, data): 0ms
-      //  - demais casos: 700ms para consolidar balões em sequência
+      //  - balão curto ("oi", "boa tarde"): 1800ms — é o caso típico de o cliente
+      //    mandar 2-3 balões seguidos; esperamos para consolidar em UMA resposta
+      //  - demais casos: 700ms
       const incomingText = (displayBody || message.body || '').trim()
       const looksComplete = incomingText.length > 120 || /[.!?…]$/.test(incomingText)
       const shortAnswerStep = visualFlowActive && expectsShortAnswer(visualFlowPlan, visualFlowSavedState?.current_step)
-      const bufferMs = shortAnswerStep ? 0 : (looksComplete ? 300 : 700)
-      console.log(`Buffer: waiting ${bufferMs}ms for additional messages (complete=${looksComplete}, shortAnswerStep=${shortAnswerStep})...`)
+      const isShortBubble = incomingText.length <= 25
+      const bufferMs = shortAnswerStep ? 0 : (isShortBubble ? 1800 : (looksComplete ? 300 : 700))
+      console.log(`Buffer: waiting ${bufferMs}ms for additional messages (complete=${looksComplete}, short=${isShortBubble}, shortAnswerStep=${shortAnswerStep})...`)
       if (bufferMs > 0) await new Promise(resolve => setTimeout(resolve, bufferMs))
       __perf.mark('buffer_ms')
 
 
-      // Check if newer messages arrived from the same lead after our message was inserted
+      // Check if newer messages arrived from the same PHONE after our message was inserted.
+      // Escopo por telefone (e não por lead) porque webhooks concorrentes podem ter
+      // criado leads distintos para o mesmo número.
       const { data: newerMessages } = await supabase
         .from('mensagens_cliente')
         .select('id')
-        .eq('id_lead', lead.id)
+        .eq('phone_id', parseInt(phoneNumber))
         .not('mensagem_cliente', 'is', null)
         .gt('id', insertedMsg?.id || 0)
         .limit(1)
@@ -1363,21 +1368,21 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       }
 
       // ANTI-DOUBLE-RESPONSE GUARD: check if another AI/SISTEMA response was already sent
-      // for this lead AFTER the current customer message arrived (race condition between
-      // parallel webhooks or Twilio retries)
+      // for this phone AFTER the current customer message arrived (race condition between
+      // parallel webhooks, Twilio retries ou leads duplicados do mesmo número)
       const currentMsgCreatedAt = insertedMsg?.created_at
       if (currentMsgCreatedAt) {
         const { data: recentOutbound } = await supabase
           .from('mensagens_cliente')
           .select('id, origem, created_at')
-          .eq('id_lead', lead.id)
+          .eq('phone_id', parseInt(phoneNumber))
           .not('mensagem_IA', 'is', null)
           .gt('created_at', currentMsgCreatedAt)
           .in('origem', ['IA', 'SISTEMA'])
           .limit(1)
 
         if (recentOutbound && recentOutbound.length > 0) {
-          console.log('Buffer: another outbound message already exists for this lead after customer message, skipping to avoid duplicate AI response', recentOutbound[0])
+          console.log('Buffer: another outbound message already exists for this phone after customer message, skipping to avoid duplicate AI response', recentOutbound[0])
           if (webhookLog?.id) {
             await supabase.from('webhook_logs').update({ processed: true }).eq('id', webhookLog.id)
           }
@@ -1388,6 +1393,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           )
         }
       }
+
 
       console.log('Buffer: no newer messages and no concurrent response, proceeding with AI response')
     }
