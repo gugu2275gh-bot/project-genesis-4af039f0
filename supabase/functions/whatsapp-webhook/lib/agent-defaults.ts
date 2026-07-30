@@ -9,7 +9,7 @@
 
 import { AGENT_TEXT_KEYS, getAgentRuntime, setAgentRuntime, type ChatLanguage } from './agent-runtime.ts'
 import { DEFAULT_PROMPT_FLOW } from './prompt-template.ts'
-import { getDefaultPromptTemplates, getTransientErrorReply } from './language.ts'
+import { getDefaultPromptTemplates, getNoKnowledgeBaseReply, getTransientErrorReply } from './language.ts'
 import {
   getEmailQuestion,
   getEmailReaskQuestion,
