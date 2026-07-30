@@ -104,6 +104,7 @@ export const AGENT_TEXT_KEYS: Array<{ key: string; label: string; group: string 
   { key: 'handoff.postWaitSuffix', label: 'Sufixo pós-handoff', group: 'Handoff' },
 
   { key: 'system.transientError', label: 'Erro temporário de resposta', group: 'Sistema' },
+  { key: 'system.noKnowledgeBase', label: 'Resposta quando não há informações na base', group: 'Sistema' },
 ]
 
 const EMPTY_CASCADE: AgentRuntime['modelCascade'] = []

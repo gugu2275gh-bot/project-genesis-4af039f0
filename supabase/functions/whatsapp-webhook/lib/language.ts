@@ -29,6 +29,14 @@ export function getTransientErrorReply(language: ChatLanguage): string {
   return agentText('system.transientError', language, def)
 }
 
+export function getNoKnowledgeBaseReply(language: ChatLanguage): string {
+  let def = 'O especialista da CB Asesoría analisará o seu caso para te dar todas as orientações necessárias.'
+  if (language === 'es') def = 'El especialista de CB Asesoría analizará tu caso para darte todas las orientaciones necesarias.'
+  if (language === 'en') def = 'The CB Asesoría specialist will analyze your case to provide all the necessary guidance.'
+  if (language === 'fr') def = 'Le spécialiste de CB Asesoría analysera votre cas pour vous donner toutes les orientations nécessaires.'
+  return agentText('system.noKnowledgeBase', language, def)
+}
+
 export function normalizeForLanguageChecks(text: string): string {
   return text
     .toLowerCase()

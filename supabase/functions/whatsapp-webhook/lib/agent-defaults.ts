@@ -9,7 +9,7 @@
 
 import { AGENT_TEXT_KEYS, getAgentRuntime, setAgentRuntime, type ChatLanguage } from './agent-runtime.ts'
 import { DEFAULT_PROMPT_FLOW } from './prompt-template.ts'
-import { getDefaultPromptTemplates, getTransientErrorReply } from './language.ts'
+import { getDefaultPromptTemplates, getNoKnowledgeBaseReply, getTransientErrorReply } from './language.ts'
 import {
   getEmailQuestion,
   getEmailReaskQuestion,
@@ -100,7 +100,9 @@ const RESOLVERS: Record<string, (lang: ChatLanguage) => string> = {
   'handoff.postWaitSuffix': getPostHandoffWaitSuffix,
 
   'system.transientError': getTransientErrorReply,
+  'system.noKnowledgeBase': getNoKnowledgeBaseReply,
 }
+
 
 export interface DefaultTextEntry {
   text_key: string
