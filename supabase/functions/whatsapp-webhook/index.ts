@@ -766,6 +766,26 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
     const phoneNumber = message.from.replace(/\D/g, '')
     console.log('Processing message from:', phoneNumber)
 
+    // IDENTITY LOCK (por telefone): duas mensagens quase simultâneas de um
+    // número novo criavam DOIS contatos/leads em paralelo — e cada webhook
+    // enviava a saudação (mensagem duplicada). Aqui serializamos a resolução
+    // de identidade: quem chega depois espera o primeiro terminar.
+    const identityLockKey = `identity_lock:${phoneNumber}`
+    let identityLockAcquired = false
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const { error: idLockErr } = await supabase
+        .from('message_dedup')
+        .insert({ message_id: identityLockKey })
+      if (!idLockErr) { identityLockAcquired = true; break }
+      if ((idLockErr as any).code !== '23505') break // erro inesperado → segue sem lock
+      await new Promise(r => setTimeout(r, 250))
+    }
+    const releaseIdentityLock = async () => {
+      if (!identityLockAcquired) return
+      identityLockAcquired = false
+      try { await supabase.from('message_dedup').delete().eq('message_id', identityLockKey) } catch (_e) { /* noop */ }
+    }
+
     // Find existing contact by phone
     let contact: { id: string; full_name: string; email: string | null; preferred_language: string | null; name_source: string | null } | null = null
     // Use .limit(1) instead of .single() to avoid error when duplicate contacts exist for same phone
@@ -777,6 +797,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       .limit(1)
 
     contact = existingContacts?.[0] || null
+
 
     // If no contact, create one
     if (!contact) {
@@ -894,8 +915,12 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       media_url: storedMediaUrl,
       media_filename: mediaFilename,
       media_mimetype: mediaMimetype,
-    }).select('id').single()
+    }).select('id, created_at').single()
     void insertedMsg
+
+    // Identidade resolvida e mensagem gravada: libera o lock para o próximo balão.
+    await releaseIdentityLock()
+
 
     // ============================================================
     // TRAVA DE FLUXO VISUAL ATIVO
@@ -1303,21 +1328,26 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       // Buffer adaptativo (otimização de latência):
       //  - mensagem "completa" (longa ou terminando em pontuação): 300ms
       //  - etapa de fluxo que espera resposta curta (Sim/Não, opção, data): 0ms
-      //  - demais casos: 700ms para consolidar balões em sequência
+      //  - balão curto ("oi", "boa tarde"): 1800ms — é o caso típico de o cliente
+      //    mandar 2-3 balões seguidos; esperamos para consolidar em UMA resposta
+      //  - demais casos: 700ms
       const incomingText = (displayBody || message.body || '').trim()
       const looksComplete = incomingText.length > 120 || /[.!?…]$/.test(incomingText)
       const shortAnswerStep = visualFlowActive && expectsShortAnswer(visualFlowPlan, visualFlowSavedState?.current_step)
-      const bufferMs = shortAnswerStep ? 0 : (looksComplete ? 300 : 700)
-      console.log(`Buffer: waiting ${bufferMs}ms for additional messages (complete=${looksComplete}, shortAnswerStep=${shortAnswerStep})...`)
+      const isShortBubble = incomingText.length <= 25
+      const bufferMs = shortAnswerStep ? 0 : (isShortBubble ? 1800 : (looksComplete ? 300 : 700))
+      console.log(`Buffer: waiting ${bufferMs}ms for additional messages (complete=${looksComplete}, short=${isShortBubble}, shortAnswerStep=${shortAnswerStep})...`)
       if (bufferMs > 0) await new Promise(resolve => setTimeout(resolve, bufferMs))
       __perf.mark('buffer_ms')
 
 
-      // Check if newer messages arrived from the same lead after our message was inserted
+      // Check if newer messages arrived from the same PHONE after our message was inserted.
+      // Escopo por telefone (e não por lead) porque webhooks concorrentes podem ter
+      // criado leads distintos para o mesmo número.
       const { data: newerMessages } = await supabase
         .from('mensagens_cliente')
         .select('id')
-        .eq('id_lead', lead.id)
+        .eq('phone_id', parseInt(phoneNumber))
         .not('mensagem_cliente', 'is', null)
         .gt('id', insertedMsg?.id || 0)
         .limit(1)
@@ -1338,21 +1368,21 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       }
 
       // ANTI-DOUBLE-RESPONSE GUARD: check if another AI/SISTEMA response was already sent
-      // for this lead AFTER the current customer message arrived (race condition between
-      // parallel webhooks or Twilio retries)
+      // for this phone AFTER the current customer message arrived (race condition between
+      // parallel webhooks, Twilio retries ou leads duplicados do mesmo número)
       const currentMsgCreatedAt = insertedMsg?.created_at
       if (currentMsgCreatedAt) {
         const { data: recentOutbound } = await supabase
           .from('mensagens_cliente')
           .select('id, origem, created_at')
-          .eq('id_lead', lead.id)
+          .eq('phone_id', parseInt(phoneNumber))
           .not('mensagem_IA', 'is', null)
           .gt('created_at', currentMsgCreatedAt)
           .in('origem', ['IA', 'SISTEMA'])
           .limit(1)
 
         if (recentOutbound && recentOutbound.length > 0) {
-          console.log('Buffer: another outbound message already exists for this lead after customer message, skipping to avoid duplicate AI response', recentOutbound[0])
+          console.log('Buffer: another outbound message already exists for this phone after customer message, skipping to avoid duplicate AI response', recentOutbound[0])
           if (webhookLog?.id) {
             await supabase.from('webhook_logs').update({ processed: true }).eq('id', webhookLog.id)
           }
@@ -1363,6 +1393,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
           )
         }
       }
+
 
       console.log('Buffer: no newer messages and no concurrent response, proceeding with AI response')
     }
@@ -1448,7 +1479,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
     if (!aiPausedByHuman && !skipAIAgent) {
       try {
         const bucket = Math.floor(Date.now() / 30_000)
-        concurrentLockKey = `ai_lock:${lead.id}:${bucket}`
+        concurrentLockKey = `ai_lock:${phoneNumber}:${bucket}`
         const { error: lockErr } = await supabase
           .from('message_dedup')
           .insert({ message_id: concurrentLockKey })
@@ -2066,11 +2097,12 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         }
 
         // ========== CONSOLIDATE BUFFERED MESSAGES ==========
-        // Collect all unanswered client messages (no AI response yet) for this lead
+        // Collect all unanswered client messages (no AI response yet) for this phone.
+        // Escopo por telefone: balões concorrentes podem ter caído em leads distintos.
         const { data: lastOutboundBeforeReply } = await supabase
           .from('mensagens_cliente')
           .select('created_at')
-          .eq('id_lead', lead.id)
+          .eq('phone_id', parseInt(phoneNumber))
           .not('mensagem_IA', 'is', null)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -2078,8 +2110,9 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         let unansweredQuery = supabase
           .from('mensagens_cliente')
           .select('mensagem_cliente, media_type')
-          .eq('id_lead', lead.id)
+          .eq('phone_id', parseInt(phoneNumber))
           .not('mensagem_cliente', 'is', null)
+
 
         const lastOutboundAt = lastOutboundBeforeReply?.[0]?.created_at
         if (lastOutboundAt) {
