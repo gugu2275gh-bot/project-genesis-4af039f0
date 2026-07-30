@@ -1479,7 +1479,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
     if (!aiPausedByHuman && !skipAIAgent) {
       try {
         const bucket = Math.floor(Date.now() / 30_000)
-        concurrentLockKey = `ai_lock:${lead.id}:${bucket}`
+        concurrentLockKey = `ai_lock:${phoneNumber}:${bucket}`
         const { error: lockErr } = await supabase
           .from('message_dedup')
           .insert({ message_id: concurrentLockKey })
