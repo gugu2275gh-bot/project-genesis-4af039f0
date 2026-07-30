@@ -766,6 +766,26 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
     const phoneNumber = message.from.replace(/\D/g, '')
     console.log('Processing message from:', phoneNumber)
 
+    // IDENTITY LOCK (por telefone): duas mensagens quase simultâneas de um
+    // número novo criavam DOIS contatos/leads em paralelo — e cada webhook
+    // enviava a saudação (mensagem duplicada). Aqui serializamos a resolução
+    // de identidade: quem chega depois espera o primeiro terminar.
+    const identityLockKey = `identity_lock:${phoneNumber}`
+    let identityLockAcquired = false
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const { error: idLockErr } = await supabase
+        .from('message_dedup')
+        .insert({ message_id: identityLockKey })
+      if (!idLockErr) { identityLockAcquired = true; break }
+      if ((idLockErr as any).code !== '23505') break // erro inesperado → segue sem lock
+      await new Promise(r => setTimeout(r, 250))
+    }
+    const releaseIdentityLock = async () => {
+      if (!identityLockAcquired) return
+      identityLockAcquired = false
+      try { await supabase.from('message_dedup').delete().eq('message_id', identityLockKey) } catch (_e) { /* noop */ }
+    }
+
     // Find existing contact by phone
     let contact: { id: string; full_name: string; email: string | null; preferred_language: string | null; name_source: string | null } | null = null
     // Use .limit(1) instead of .single() to avoid error when duplicate contacts exist for same phone
@@ -777,6 +797,7 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
       .limit(1)
 
     contact = existingContacts?.[0] || null
+
 
     // If no contact, create one
     if (!contact) {
