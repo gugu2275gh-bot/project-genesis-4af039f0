@@ -100,7 +100,9 @@ const RESOLVERS: Record<string, (lang: ChatLanguage) => string> = {
   'handoff.postWaitSuffix': getPostHandoffWaitSuffix,
 
   'system.transientError': getTransientErrorReply,
+  'system.noKnowledgeBase': getNoKnowledgeBaseReply,
 }
+
 
 export interface DefaultTextEntry {
   text_key: string
