@@ -2097,11 +2097,12 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         }
 
         // ========== CONSOLIDATE BUFFERED MESSAGES ==========
-        // Collect all unanswered client messages (no AI response yet) for this lead
+        // Collect all unanswered client messages (no AI response yet) for this phone.
+        // Escopo por telefone: balões concorrentes podem ter caído em leads distintos.
         const { data: lastOutboundBeforeReply } = await supabase
           .from('mensagens_cliente')
           .select('created_at')
-          .eq('id_lead', lead.id)
+          .eq('phone_id', parseInt(phoneNumber))
           .not('mensagem_IA', 'is', null)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -2109,8 +2110,9 @@ Depois, responda normalmente à dúvida do cliente usando a Base de Conhecimento
         let unansweredQuery = supabase
           .from('mensagens_cliente')
           .select('mensagem_cliente, media_type')
-          .eq('id_lead', lead.id)
+          .eq('phone_id', parseInt(phoneNumber))
           .not('mensagem_cliente', 'is', null)
+
 
         const lastOutboundAt = lastOutboundBeforeReply?.[0]?.created_at
         if (lastOutboundAt) {
