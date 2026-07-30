@@ -4,6 +4,7 @@ import {
   type ChatLanguage,
   getLanguageDirective,
   getLanguageName,
+  getNoKnowledgeBaseReply,
   getTransientErrorReply,
   looksPortuguese,
 } from './language.ts'
