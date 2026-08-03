@@ -9,12 +9,16 @@
 
 Causa provável (ainda não confirmada): no ambiente de teste, o portão só é avaliado depois do bloco do fluxo e usa a configuração possivelmente vinda do snapshot de versão, e não o cadastro atual do agente. A primeira etapa do trabalho é instrumentar e confirmar.
 
+## Regra
+
+Se existe mensagem de espera cadastrada no agente (ou o "Handoff liberado" está desligado) e o pré-handoff já terminou, a IA **não** é chamada: o sistema envia exatamente o texto cadastrado, no idioma da conversa. Nada de base de conhecimento, nada de modelo.
+
 ## O que será feito
 
 1. **Confirmar o desvio**: adicionar um registro de diagnóstico no ambiente de teste mostrando, a cada turno, se o handoff está liberado ou bloqueado e qual idioma foi usado. Rodar um teste igual ao do usuário e ler o log.
 2. **Ler sempre o cadastro atual do agente**: o interruptor "Handoff liberado" e a mensagem de espera passam a vir do registro do agente, mesmo quando a sessão de teste aponta para uma versão antiga (snapshots antigos não têm esses campos e não podem reabrir o handoff).
-3. **Bloquear antes de qualquer LLM**: garantir que, com o handoff bloqueado e o pré-handoff concluído, o teste responda apenas a mensagem de espera cadastrada, sem consultar base de conhecimento nem modelo.
-4. **Testes**: casos cobrindo (a) handoff bloqueado após o fluxo terminar → repete a mensagem cadastrada; (b) sessão com versão antiga selecionada → continua bloqueado; (c) handoff liberado → comportamento atual preservado.
+3. **Bloquear antes de qualquer LLM**: com o pré-handoff concluído e mensagem cadastrada (ou handoff bloqueado), o teste e a produção respondem apenas o texto cadastrado, sem consultar base de conhecimento nem modelo.
+4. **Testes**: casos cobrindo (a) handoff bloqueado após o fluxo terminar → repete a mensagem cadastrada; (b) sessão com versão antiga selecionada → continua bloqueado; (c) handoff liberado e sem mensagem cadastrada → comportamento atual preservado.
 
 ## Detalhes técnicos
 
