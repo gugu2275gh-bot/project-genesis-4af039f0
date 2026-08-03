@@ -389,18 +389,14 @@ Deno.serve(async (req) => {
     const holdCfg = (agent.handoff_hold_message && typeof agent.handoff_hold_message === 'object')
       ? agent.handoff_hold_message
       : {}
-    const hasHoldText = Object.values(holdCfg).some((v: any) => String(v ?? '').trim())
-    const handoffBlocked = agent.handoff_released === false || hasHoldText
+    const handoffBlocked = agentHandoffBlocked(agent)
     console.log('[SANDBOX][HANDOFF_GATE]', JSON.stringify({
       released: agent.handoff_released !== false,
-      has_hold_text: hasHoldText,
+      has_hold_text: hasHoldText(holdCfg),
       blocked: handoffBlocked,
       lang: sessionLang,
     }))
-    if (isHandoffBlocked({
-      handoffReleased: !handoffBlocked,
-      handoffHoldMessage: holdCfg,
-    })) {
+    if (handoffBlocked) {
       const holdText = handoffHoldMessage({
         handoffReleased: false,
         handoffHoldMessage: holdCfg,
