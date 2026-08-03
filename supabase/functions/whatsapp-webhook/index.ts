@@ -462,6 +462,7 @@ export {
 // Wave 3b step 7: Twilio + AI providers + extraction moved to lib/
 import { getMediaPlaceholder, sendWhatsAppMessage, sendOutgoingIdempotent } from './lib/twilio.ts'
 import { YES_NO_LABELS } from './lib/quick-reply.ts'
+import { isHandoffBlocked, handoffHoldMessage } from '../_shared/handoff-gate.ts'
 import {
   rewriteResponseToLanguage,
   enforceResponseLanguage,
@@ -1651,14 +1652,19 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
               const __holdLang = (isFlowLanguage(__vfState?.lang) ? __vfState.lang : detectedChatLanguage) as ChatLanguage
               const __holdText = handoffHoldMessage(__runtimeAgent, __holdLang)
               console.log('[HANDOFF_GATE] handoff bloqueado — repetindo mensagem de espera', JSON.stringify({ lang: __holdLang }))
-              const __holdRes = await sendOutgoingIdempotent(supabase, {
+              let __holdRes = await sendOutgoingIdempotent(supabase, {
                 phone: phoneNumber,
                 leadId: lead.id,
                 body: __holdText,
                 language: __holdLang,
-                // Repetir literalmente é o comportamento desejado aqui.
-                allowDuplicate: true,
+                quickReply: 'off',
               })
+              // A mensagem de espera é a MESMA sempre: quando a deduplicação
+              // barra o envio, mandamos direto para o cliente não ficar mudo.
+              if (!__holdRes.sent && (__holdRes.reason === 'dedup_hash' || __holdRes.reason === 'near_duplicate')) {
+                await sendWhatsAppMessage(phoneNumber, __holdText)
+                __holdRes = { sent: true }
+              }
               if (__holdRes.sent) {
                 fireAndForget(supabase.from('mensagens_cliente').insert({
                   id_lead: lead.id,
