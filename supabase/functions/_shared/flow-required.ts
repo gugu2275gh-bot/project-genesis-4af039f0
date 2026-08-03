@@ -187,6 +187,10 @@ export function generalCaptureSatisfied(
     return pending.length === 0
   }
 
+  // Etapa não bloqueante: os dados são opcionais, então ela nunca segura o
+  // fluxo — o cliente conta o que quiser e o atendimento segue.
+  if (cfg.non_blocking) return true
+
   const min = Number(cfg.min_fields) > 0 ? Number(cfg.min_fields) : 1
   const hits = fields.filter((f) => !!pickFieldValue(known, f.target_field)).length
   return hits >= Math.min(min, fields.length)
