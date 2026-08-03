@@ -21,7 +21,9 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
     fields: Array.isArray(value?.fields) ? value!.fields! : [],
     min_confidence: typeof value?.min_confidence === 'number' ? value!.min_confidence! : 0.7,
     min_fields: typeof value?.min_fields === 'number' && value!.min_fields! > 0 ? value!.min_fields! : 2,
+    non_blocking: value?.non_blocking === true,
   };
+
 
   const total = cfg.fields!.length;
   const minFields = Math.max(1, Math.min(cfg.min_fields!, total || 1));
