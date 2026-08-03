@@ -307,6 +307,12 @@ export interface StepGeneralCapture {
    * respondida (e portanto pulada quando os dados vieram na 1ª mensagem).
    */
   min_fields: number
+  /**
+   * Etapa apenas informativa: a pergunta é feita UMA vez e o fluxo segue com o
+   * que o cliente quiser contar (inclusive nada). Nenhum campo opcional pode
+   * bloquear o avanço nem o handoff.
+   */
+  non_blocking: boolean
 }
 
 export function generalCaptureOf(step: FlowStep): StepGeneralCapture {
@@ -331,8 +337,10 @@ export function generalCaptureOf(step: FlowStep): StepGeneralCapture {
     fields,
     min_confidence: Number.isFinite(conf) ? Math.min(1, Math.max(0, conf)) : 0.7,
     min_fields: Math.max(1, Math.min(minFields, fields.length || 1)),
+    non_blocking: raw.non_blocking === true,
   }
 }
+
 
 /** `true` quando a etapa é a "Pergunta geral" (interpretação multi-campo). */
 export function isGeneralCaptureStep(step: FlowStep): boolean {
