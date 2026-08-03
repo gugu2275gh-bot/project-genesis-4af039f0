@@ -77,6 +77,11 @@ export interface IntakeConfig {
   fields: string[]
   /** Confiança mínima (0..1) para aceitar um dado extraído. */
   min_confidence: number
+  /**
+   * Nome só vale quando dito pelo próprio cliente: o nome de perfil do
+   * WhatsApp (ou qualquer metadado) nunca preenche `contact.full_name`.
+   */
+  strict_name: boolean
   /** Saudação usada quando nada foi aproveitado. */
   greeting_default: Record<string, string>
   /** Saudação usada quando houve aproveitamento ({nome}, {resumo}). */
@@ -84,6 +89,7 @@ export interface IntakeConfig {
   /** Frase curta de reconhecimento humano ({nome}). */
   ack_message: Record<string, string>
 }
+
 
 export const DEFAULT_INTAKE_CONFIG: IntakeConfig = {
   enabled: false,
