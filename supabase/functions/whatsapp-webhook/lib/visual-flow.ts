@@ -199,7 +199,9 @@ export async function runVisualFlowFirstTurn(
 
 
   // Nome do perfil do WhatsApp: usado como dado já conhecido (quando confiável).
-  const seed = profileNameToFieldValues(opts?.profileName, opts?.phone || '')
+  const seed = profileNameToFieldValues(opts?.profileName, opts?.phone || '', {
+    strictName: plan.intake?.strict_name === true,
+  })
   knownFields = { ...seed }
   const seedPrefill = Object.keys(seed).length
     ? prefillFromFieldValues(plan.steps, seed)
