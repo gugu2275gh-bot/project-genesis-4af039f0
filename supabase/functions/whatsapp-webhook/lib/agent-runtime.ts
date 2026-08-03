@@ -16,6 +16,7 @@
 export type ChatLanguage = 'pt-BR' | 'es' | 'en' | 'fr'
 
 import { cached } from './perf.ts'
+import { agentHandoffBlocked } from '../../_shared/handoff-gate.ts'
 
 
 export interface AgentRuntime {
