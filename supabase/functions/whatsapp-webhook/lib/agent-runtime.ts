@@ -201,9 +201,7 @@ async function fetchProductionAgentRuntime(supabase: any): Promise<AgentRuntime 
       },
       // Se existe mensagem de espera cadastrada, ela manda: a IA não responde
       // depois do pré-handoff, mesmo que o interruptor esteja ligado.
-      handoffReleased: agent.handoff_released !== false
-        && !Object.values((agent.handoff_hold_message && typeof agent.handoff_hold_message === 'object') ? agent.handoff_hold_message : {})
-          .some((v: any) => String(v ?? '').trim()),
+      handoffReleased: !agentHandoffBlocked(agent),
       handoffHoldMessage: (agent.handoff_hold_message && typeof agent.handoff_hold_message === 'object')
         ? agent.handoff_hold_message
         : {},
