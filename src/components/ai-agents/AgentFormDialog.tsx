@@ -57,6 +57,8 @@ const emptyDraft = () => ({
   flow_id: null as string | null,
   pre_handoff_flow_id: null as string | null,
   handoff_flow_id: null as string | null,
+  handoff_released: true,
+  handoff_hold_message: {} as Record<string, string>,
   capabilities: { ...DEFAULT_CAPABILITIES },
   behavior: { ...DEFAULT_BEHAVIOR },
   is_production: false,
@@ -145,6 +147,8 @@ export function AgentFormDialog({ open, onOpenChange, agent, readOnly }: Props) 
         prompt_flow: agent.prompt_flow || '',
         pre_handoff_flow_id: agent.pre_handoff_flow_id ?? null,
         handoff_flow_id: agent.handoff_flow_id ?? null,
+        handoff_released: (agent as any).handoff_released !== false,
+        handoff_hold_message: ((agent as any).handoff_hold_message || {}) as Record<string, string>,
         model_cascade: Array.isArray(agent.model_cascade) ? agent.model_cascade : [],
         runtime_config: agent.runtime_config || {},
       });
@@ -558,6 +562,38 @@ export function AgentFormDialog({ open, onOpenChange, agent, readOnly }: Props) 
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <LabelWithTip
+                    label="Handoff liberado"
+                    tip="Ligado: depois do pré-handoff o agente continua respondendo dúvidas com a base de conhecimento. Desligado: o agente não consulta a base e repete sempre a mensagem de espera abaixo, até um atendente humano assumir."
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {draft.handoff_released === false
+                      ? 'Desligado: o agente repete a mensagem de espera após o pré-handoff.'
+                      : 'Ligado: o agente responde pela base de conhecimento após o pré-handoff.'}
+                  </p>
+                </div>
+                <Switch
+                  disabled={readOnly}
+                  checked={draft.handoff_released !== false}
+                  onCheckedChange={(v) => set({ handoff_released: v })}
+                />
+              </div>
+
+              {draft.handoff_released === false && (
+                <MultiLangField
+                  label="Mensagem de espera"
+                  hint="Repetida a cada mensagem do cliente enquanto o handoff não estiver liberado."
+                  disabled={readOnly}
+                  value={(draft.handoff_hold_message || {}) as MultiLangText}
+                  onChange={(v) => set({ handoff_hold_message: v })}
+                  rows={2}
+                />
+              )}
             </div>
 
             <p className="text-xs text-muted-foreground">
