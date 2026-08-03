@@ -77,6 +77,11 @@ export interface IntakeConfig {
   fields: string[]
   /** Confiança mínima (0..1) para aceitar um dado extraído. */
   min_confidence: number
+  /**
+   * Nome só vale quando dito pelo próprio cliente: o nome de perfil do
+   * WhatsApp (ou qualquer metadado) nunca preenche `contact.full_name`.
+   */
+  strict_name: boolean
   /** Saudação usada quando nada foi aproveitado. */
   greeting_default: Record<string, string>
   /** Saudação usada quando houve aproveitamento ({nome}, {resumo}). */
@@ -85,10 +90,12 @@ export interface IntakeConfig {
   ack_message: Record<string, string>
 }
 
+
 export const DEFAULT_INTAKE_CONFIG: IntakeConfig = {
   enabled: false,
   fields: [],
   min_confidence: 0.7,
+  strict_name: false,
   greeting_default: {},
   greeting_personalized: {
     'pt-BR': 'Olá, {nome}! 😊 Sou a assistente virtual da CB Asesoria. {resumo} Vou continuar de onde você parou.',
@@ -111,6 +118,7 @@ export function normalizeIntakeConfig(raw: unknown): IntakeConfig {
     enabled: v.enabled === true,
     fields: Array.isArray(v.fields) ? v.fields.map((f) => String(f || '')).filter(Boolean) : [],
     min_confidence: Number.isFinite(conf) ? Math.min(1, Math.max(0, conf)) : DEFAULT_INTAKE_CONFIG.min_confidence,
+    strict_name: (v as any).strict_name === true,
     greeting_default: (v.greeting_default && typeof v.greeting_default === 'object' ? v.greeting_default : {}) as Record<string, string>,
     greeting_personalized: (v.greeting_personalized && typeof v.greeting_personalized === 'object' && Object.keys(v.greeting_personalized).length
       ? v.greeting_personalized
@@ -668,7 +676,10 @@ export function isUsableProfileName(raw: string | null | undefined, phone = ''):
 export function profileNameToFieldValues(
   profileName: string | null | undefined,
   phone = '',
+  opts: { strictName?: boolean } = {},
 ): Record<string, string> {
+  // Portão do nome: em modo estrito o nome só vale se o cliente escrever.
+  if (opts.strictName) return {}
   if (!isUsableProfileName(profileName, phone)) return {}
   return { 'contact.full_name': String(profileName).trim() }
 }
