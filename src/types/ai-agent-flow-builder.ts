@@ -54,6 +54,11 @@ export interface StepGeneralCapture {
    * respondida (e pulada quando o cliente já contou tudo na 1ª mensagem).
    */
   min_fields?: number;
+  /**
+   * Etapa informativa: a pergunta é feita uma única vez e o fluxo segue com o
+   * que o cliente quiser contar — nenhum dado opcional bloqueia o avanço.
+   */
+  non_blocking?: boolean;
 }
 
 
