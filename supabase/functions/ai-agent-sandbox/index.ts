@@ -12,6 +12,7 @@ import { applyVarsToTurn, buildFlowVars, fieldValuesFromAnswers } from '../_shar
 import { applyRequiredGate } from '../_shared/flow-required.ts'
 import { searchKnowledgeBase } from '../_shared/kb-search.ts'
 import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
+import { isHandoffBlocked, handoffHoldMessage } from '../_shared/handoff-gate.ts'
 
 
 
@@ -378,6 +379,41 @@ Deno.serve(async (req) => {
           .update({ flow_state: { ...flowState, lang: sessionLang }, updated_at: new Date().toISOString() })
           .eq('id', session_id)
       }
+    }
+
+    // Portão do handoff: com "Handoff liberado" desligado, o agente não
+    // consulta a base nem chama o LLM depois do pré-handoff — repete sempre a
+    // mensagem de espera configurada no agente.
+    if (isHandoffBlocked({
+      handoffReleased: config.handoff_released !== false,
+      handoffHoldMessage: config.handoff_hold_message || {},
+    })) {
+      const holdText = handoffHoldMessage({
+        handoffReleased: false,
+        handoffHoldMessage: config.handoff_hold_message || {},
+      }, sessionLang)
+      if (!userMessageStored) {
+        await service.from('ai_agent_test_messages').insert({
+          session_id,
+          agent_id: agent.id,
+          role: 'user',
+          content: message,
+          created_by: auth.userId,
+        })
+      }
+      await service.from('ai_agent_test_messages').insert({
+        session_id,
+        agent_id: agent.id,
+        role: 'assistant',
+        content: holdText,
+        created_by: auth.userId,
+      })
+      return json({
+        reply: holdText,
+        engine: 'handoff-gate',
+        handoff_released: false,
+        lang: sessionLang,
+      })
     }
 
     const systemPrompt = `${buildSystemPrompt(config, steps)}\n\n${getFlowLanguageDirective(sessionLang)}`

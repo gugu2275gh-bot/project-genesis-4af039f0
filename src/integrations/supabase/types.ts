@@ -368,7 +368,9 @@ export type Database = {
           fallback_message: string
           flow_id: string | null
           handoff_flow_id: string | null
+          handoff_hold_message: Json
           handoff_message: string
+          handoff_released: boolean
           id: string
           is_production: boolean
           max_tokens: number
@@ -399,7 +401,9 @@ export type Database = {
           fallback_message?: string
           flow_id?: string | null
           handoff_flow_id?: string | null
+          handoff_hold_message?: Json
           handoff_message?: string
+          handoff_released?: boolean
           id?: string
           is_production?: boolean
           max_tokens?: number
@@ -430,7 +434,9 @@ export type Database = {
           fallback_message?: string
           flow_id?: string | null
           handoff_flow_id?: string | null
+          handoff_hold_message?: Json
           handoff_message?: string
+          handoff_released?: boolean
           id?: string
           is_production?: boolean
           max_tokens?: number

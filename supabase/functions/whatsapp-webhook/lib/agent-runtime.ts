@@ -28,6 +28,10 @@ export interface AgentRuntime {
   texts: Record<string, Partial<Record<ChatLanguage, string>>>
   /** Fluxos visuais configurados no agente (quando houver). */
   flowIds: { pre_handoff: string | null; handoff: string | null; legacy: string | null }
+  /** Após o pré-handoff, o agente pode responder pela base de conhecimento? */
+  handoffReleased: boolean
+  /** Mensagem de espera (por idioma) usada quando o handoff NÃO está liberado. */
+  handoffHoldMessage: Record<string, string>
 }
 
 
@@ -156,7 +160,7 @@ async function fetchProductionAgentRuntime(supabase: any): Promise<AgentRuntime 
   try {
     const { data: agent, error } = await supabase
       .from('ai_agents')
-      .select('id, name, prompt_base, prompt_flow, prompt_blocks, model_cascade, runtime_config, status, is_production, flow_id, pre_handoff_flow_id, handoff_flow_id')
+      .select('id, name, prompt_base, prompt_flow, prompt_blocks, model_cascade, runtime_config, status, is_production, flow_id, pre_handoff_flow_id, handoff_flow_id, handoff_released, handoff_hold_message')
       .eq('is_production', true)
       .maybeSingle()
 
@@ -195,6 +199,10 @@ async function fetchProductionAgentRuntime(supabase: any): Promise<AgentRuntime 
         handoff: agent.handoff_flow_id || null,
         legacy: agent.flow_id || null,
       },
+      handoffReleased: agent.handoff_released !== false,
+      handoffHoldMessage: (agent.handoff_hold_message && typeof agent.handoff_hold_message === 'object')
+        ? agent.handoff_hold_message
+        : {},
     }
     setAgentRuntime(runtime)
     return runtime

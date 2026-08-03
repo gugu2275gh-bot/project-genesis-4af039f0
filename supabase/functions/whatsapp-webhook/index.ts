@@ -462,6 +462,7 @@ export {
 // Wave 3b step 7: Twilio + AI providers + extraction moved to lib/
 import { getMediaPlaceholder, sendWhatsAppMessage, sendOutgoingIdempotent } from './lib/twilio.ts'
 import { YES_NO_LABELS } from './lib/quick-reply.ts'
+import { isHandoffBlocked, handoffHoldMessage } from '../_shared/handoff-gate.ts'
 import {
   rewriteResponseToLanguage,
   enforceResponseLanguage,
@@ -1628,6 +1629,78 @@ const handler = async (req: Request, deps: HandlerDeps = {}): Promise<Response> 
             detectedChatLanguage = agentDefault
             console.log('[LANG] provisório (sem sinal claro, sem lock persistido):', detectedChatLanguage)
           }
+        }
+
+        // ============================================================
+        // PORTÃO DO HANDOFF (configuração do agente)
+        // ------------------------------------------------------------
+        // Com "Handoff liberado" DESLIGADO, depois que o pré-handoff termina o
+        // agente não consulta a base nem chama o LLM: responde sempre a mesma
+        // mensagem de espera até um atendente humano assumir (já tratado pelo
+        // guard de `origem = 'SISTEMA'` acima).
+        // ============================================================
+        try {
+          const __runtimeAgent = getAgentRuntime()
+          if (isHandoffBlocked(__runtimeAgent)) {
+            const __vfState = (funnelState as any)?.visual_flow_state
+            const __preHandoffDone = !!(
+              (__vfState && typeof __vfState === 'object' && __vfState.finished)
+              || (funnelState as any)?.pre_handoff_sent
+              || (funnelState as any)?.handoff_sent
+            )
+            if (__preHandoffDone) {
+              const __holdLang = (isFlowLanguage(__vfState?.lang) ? __vfState.lang : detectedChatLanguage) as ChatLanguage
+              const __holdText = handoffHoldMessage(__runtimeAgent, __holdLang)
+              console.log('[HANDOFF_GATE] handoff bloqueado — repetindo mensagem de espera', JSON.stringify({ lang: __holdLang }))
+              let __holdRes = await sendOutgoingIdempotent(supabase, {
+                phone: phoneNumber,
+                leadId: lead.id,
+                body: __holdText,
+                language: __holdLang,
+                quickReply: 'off',
+              })
+              // A mensagem de espera é a MESMA sempre: quando a deduplicação
+              // barra o envio, mandamos direto para o cliente não ficar mudo.
+              if (!__holdRes.sent && (__holdRes.reason === 'dedup_hash' || __holdRes.reason === 'near_duplicate')) {
+                await sendWhatsAppMessage(phoneNumber, __holdText)
+                __holdRes = { sent: true }
+              }
+              if (__holdRes.sent) {
+                fireAndForget(supabase.from('mensagens_cliente').insert({
+                  id_lead: lead.id,
+                  phone_id: parseInt(phoneNumber),
+                  mensagem_IA: __holdText,
+                  origem: 'IA',
+                }), 'persist_msg')
+                fireAndForget(supabase.from('interactions').insert({
+                  lead_id: lead.id,
+                  contact_id: contact.id,
+                  channel: 'WHATSAPP',
+                  direction: 'OUTBOUND',
+                  content: __holdText,
+                  origin_bot: true,
+                }), 'persist_interaction')
+              }
+              fireAndForget(logTurn({
+                supabase,
+                exit_reason: __holdRes.sent ? 'REPLIED' : 'NO_REPLY',
+                lead_id: lead.id,
+                contact_id: contact.id,
+                phone: phoneNumber,
+                message_id: message.messageId,
+                inbound_text: message.body,
+                response_chars: __holdText.length,
+                details: { engine: 'handoff-gate', released: false, sent: __holdRes.sent },
+              }), 'log_turn')
+              await releaseConcurrentLock()
+              return new Response(
+                JSON.stringify({ success: true, engine: 'handoff-gate', released: false, sent: __holdRes.sent }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+              )
+            }
+          }
+        } catch (holdErr) {
+          console.warn('[HANDOFF_GATE] erro não-bloqueante:', holdErr instanceof Error ? holdErr.message : holdErr)
         }
 
 
