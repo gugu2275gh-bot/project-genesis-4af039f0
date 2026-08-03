@@ -111,6 +111,11 @@ export interface AIAgent {
   pre_handoff_flow_id?: string | null;
   /** Fluxo executado no encaminhamento para atendente. */
   handoff_flow_id?: string | null;
+  /** Após o pré-handoff, o agente pode responder pela base de conhecimento. */
+  handoff_released?: boolean;
+  /** Mensagem de espera (por idioma) quando o handoff não está liberado. */
+  handoff_hold_message?: MultiLangText | null;
+
 
 }
 
