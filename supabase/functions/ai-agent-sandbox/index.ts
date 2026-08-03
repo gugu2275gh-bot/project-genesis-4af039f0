@@ -12,7 +12,7 @@ import { applyVarsToTurn, buildFlowVars, fieldValuesFromAnswers } from '../_shar
 import { applyRequiredGate } from '../_shared/flow-required.ts'
 import { searchKnowledgeBase } from '../_shared/kb-search.ts'
 import { getFlowLanguageDirective, resolveFlowLanguage } from '../_shared/language-detect.ts'
-import { isHandoffBlocked, handoffHoldMessage } from '../_shared/handoff-gate.ts'
+import { agentHandoffBlocked, handoffHoldMessage, hasHoldText } from '../_shared/handoff-gate.ts'
 
 
 
