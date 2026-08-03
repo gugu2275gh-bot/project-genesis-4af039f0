@@ -381,16 +381,29 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Portão do handoff: com "Handoff liberado" desligado, o agente não
-    // consulta a base nem chama o LLM depois do pré-handoff — repete sempre a
-    // mensagem de espera configurada no agente.
+    // Portão do handoff: se existe mensagem de espera cadastrada (ou o
+    // "Handoff liberado" está desligado), o agente NÃO chama a IA depois do
+    // pré-handoff — repete sempre a mensagem cadastrada.
+    // A flag vem sempre do cadastro atual do agente: snapshots de versão
+    // antigos não têm esses campos e não podem reabrir o handoff.
+    const holdCfg = (agent.handoff_hold_message && typeof agent.handoff_hold_message === 'object')
+      ? agent.handoff_hold_message
+      : {}
+    const hasHoldText = Object.values(holdCfg).some((v: any) => String(v ?? '').trim())
+    const handoffBlocked = agent.handoff_released === false || hasHoldText
+    console.log('[SANDBOX][HANDOFF_GATE]', JSON.stringify({
+      released: agent.handoff_released !== false,
+      has_hold_text: hasHoldText,
+      blocked: handoffBlocked,
+      lang: sessionLang,
+    }))
     if (isHandoffBlocked({
-      handoffReleased: config.handoff_released !== false,
-      handoffHoldMessage: config.handoff_hold_message || {},
+      handoffReleased: !handoffBlocked,
+      handoffHoldMessage: holdCfg,
     })) {
       const holdText = handoffHoldMessage({
         handoffReleased: false,
-        handoffHoldMessage: config.handoff_hold_message || {},
+        handoffHoldMessage: holdCfg,
       }, sessionLang)
       if (!userMessageStored) {
         await service.from('ai_agent_test_messages').insert({
