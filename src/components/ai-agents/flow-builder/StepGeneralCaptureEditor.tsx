@@ -21,7 +21,9 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
     fields: Array.isArray(value?.fields) ? value!.fields! : [],
     min_confidence: typeof value?.min_confidence === 'number' ? value!.min_confidence! : 0.7,
     min_fields: typeof value?.min_fields === 'number' && value!.min_fields! > 0 ? value!.min_fields! : 2,
+    non_blocking: value?.non_blocking === true,
   };
+
 
   const total = cfg.fields!.length;
   const minFields = Math.max(1, Math.min(cfg.min_fields!, total || 1));
@@ -71,6 +73,20 @@ export function StepGeneralCaptureEditor({ value, onChange }: Props) {
           </p>
         </div>
         <Switch checked={cfg.enabled} onCheckedChange={(v) => onChange({ ...cfg, enabled: v })} />
+      </div>
+
+      <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+        <div>
+          <Label>Etapa não bloqueante (dados opcionais)</Label>
+          <p className="text-xs text-muted-foreground">
+            A pergunta é feita uma única vez. Depois da resposta do cliente — mesmo parcial ou
+            recusada — o fluxo segue para a próxima etapa e nada aqui impede a transferência.
+          </p>
+        </div>
+        <Switch
+          checked={cfg.non_blocking === true}
+          onCheckedChange={(v) => onChange({ ...cfg, non_blocking: v })}
+        />
       </div>
 
       <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
