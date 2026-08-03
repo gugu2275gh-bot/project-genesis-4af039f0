@@ -29,6 +29,23 @@ export function isHandoffBlocked(runtime: HandoffRuntimeLike | null | undefined)
   return runtime.handoffReleased === false
 }
 
+/**
+ * Decide a partir da linha do agente: se existe mensagem de espera cadastrada,
+ * ela manda — a IA não responde depois do pré-handoff, mesmo com o interruptor
+ * "Handoff liberado" ligado.
+ */
+export function agentHandoffBlocked(agentRow: any): boolean {
+  if (!agentRow) return false
+  if (agentRow.handoff_released === false) return true
+  return hasHoldText(agentRow.handoff_hold_message)
+}
+
+/** Verdadeiro quando há pelo menos um idioma com mensagem de espera preenchida. */
+export function hasHoldText(holdMessage: unknown): boolean {
+  if (!holdMessage || typeof holdMessage !== 'object') return false
+  return Object.values(holdMessage as Record<string, unknown>).some((v) => String(v ?? '').trim())
+}
+
 /** Mensagem de espera localizada (com fallback pt-BR e texto padrão). */
 export function handoffHoldMessage(
   runtime: HandoffRuntimeLike | null | undefined,
