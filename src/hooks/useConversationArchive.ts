@@ -37,7 +37,6 @@ export interface ArchivedConversation {
   started_at: string;
   ended_at: string;
   message_count: number;
-  messages: ArchivedMessage[];
 }
 
 export interface ConversationFilters {
@@ -47,66 +46,111 @@ export interface ConversationFilters {
   to?: string;
 }
 
-/** Mensagens arquivadas, já agrupadas por rodada de testes + telefone. */
-export function useConversationArchive(filters: ConversationFilters) {
+const PAGE = 1000;
+const MAX_ROWS = 100000;
+
+/** Busca todas as linhas em páginas de 1000 (o Supabase limita cada request). */
+async function fetchAll(build: () => any): Promise<any[]> {
+  const out: any[] = [];
+  for (let offset = 0; offset < MAX_ROWS; offset += PAGE) {
+    const { data, error } = await build().range(offset, offset + PAGE - 1);
+    if (error) throw error;
+    const rows = data || [];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
+function applyFilters(query: any, filters: ConversationFilters) {
+  if (filters.session && filters.session !== 'all') query = query.eq('session_seq', filters.session);
+  if (filters.from) query = query.gte('created_at', new Date(filters.from).toISOString());
+  if (filters.to) {
+    const end = new Date(filters.to);
+    end.setHours(23, 59, 59, 999);
+    query = query.lte('created_at', end.toISOString());
+  }
+  return query;
+}
+
+/**
+ * Cabeçalhos de todas as conversas arquivadas (rodada + telefone), sem teto fixo:
+ * lê apenas colunas leves e pagina até esgotar o arquivo.
+ */
+export function useConversationList(filters: ConversationFilters) {
   return useQuery({
-    queryKey: ['conversation-archive', filters],
-    queryFn: async (): Promise<ArchivedConversation[]> => {
-      let query = (supabase as any)
-        .from('whatsapp_conversation_archive')
-        .select('*')
-        .order('created_at', { ascending: true })
-        .limit(5000);
+    queryKey: ['conversation-archive-list', filters],
+    queryFn: async (): Promise<{ conversations: ArchivedConversation[]; totalMessages: number }> => {
+      const rows = await fetchAll(() =>
+        applyFilters(
+          (supabase as any)
+            .from('whatsapp_conversation_archive')
+            .select('session_seq, phone, contact_name, created_at, body')
+            .order('created_at', { ascending: true }),
+          filters,
+        ),
+      );
 
-      if (filters.session && filters.session !== 'all') query = query.eq('session_seq', filters.session);
-      if (filters.from) query = query.gte('created_at', new Date(filters.from).toISOString());
-      if (filters.to) {
-        const end = new Date(filters.to);
-        end.setHours(23, 59, 59, 999);
-        query = query.lte('created_at', end.toISOString());
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      const rows = (data || []) as ArchivedMessage[];
       const term = (filters.search || '').trim().toLowerCase();
-
       const map = new Map<string, ArchivedConversation>();
-      for (const row of rows) {
+      const matched = new Set<string>();
+
+      for (const row of rows as any[]) {
         const phone = row.phone || 'sem-telefone';
         const key = `${row.session_seq}::${phone}`;
         const existing = map.get(key);
         if (existing) {
-          existing.messages.push(row);
           existing.message_count += 1;
           existing.ended_at = row.created_at;
           if (!existing.contact_name && row.contact_name) existing.contact_name = row.contact_name;
         } else {
           map.set(key, {
             key,
-            session_seq: row.session_seq,
+            session_seq: Number(row.session_seq),
             phone,
             contact_name: row.contact_name,
             started_at: row.created_at,
             ended_at: row.created_at,
             message_count: 1,
-            messages: [row],
           });
+        }
+        if (
+          term &&
+          (phone.toLowerCase().includes(term) ||
+            (row.contact_name || '').toLowerCase().includes(term) ||
+            (row.body || '').toLowerCase().includes(term))
+        ) {
+          matched.add(key);
         }
       }
 
       let list = Array.from(map.values());
-      if (term) {
-        list = list.filter(
-          (c) =>
-            c.phone.toLowerCase().includes(term) ||
-            (c.contact_name || '').toLowerCase().includes(term) ||
-            c.messages.some((m) => (m.body || '').toLowerCase().includes(term)),
-        );
-      }
+      if (term) list = list.filter((c) => matched.has(c.key));
 
-      return list.sort((a, b) => (a.ended_at < b.ended_at ? 1 : -1));
+      return {
+        conversations: list.sort((a, b) => (a.ended_at < b.ended_at ? 1 : -1)),
+        totalMessages: rows.length,
+      };
+    },
+  });
+}
+
+/** Transcrição completa de uma conversa (carregada sob demanda). */
+export function useConversationMessages(sessionSeq?: number, phone?: string) {
+  return useQuery({
+    queryKey: ['conversation-archive-messages', sessionSeq, phone],
+    enabled: !!phone && sessionSeq !== undefined,
+    queryFn: async (): Promise<ArchivedMessage[]> => {
+      const rows = await fetchAll(() => {
+        let q = (supabase as any)
+          .from('whatsapp_conversation_archive')
+          .select('*')
+          .eq('session_seq', sessionSeq)
+          .order('created_at', { ascending: true });
+        q = phone === 'sem-telefone' ? q.is('phone', null) : q.eq('phone', phone);
+        return q;
+      });
+      return rows as ArchivedMessage[];
     },
   });
 }
@@ -134,13 +178,13 @@ export function useConversationSessions() {
   return useQuery({
     queryKey: ['conversation-archive-sessions'],
     queryFn: async (): Promise<number[]> => {
-      const { data, error } = await (supabase as any)
-        .from('whatsapp_conversation_archive')
-        .select('session_seq')
-        .order('session_seq', { ascending: false })
-        .limit(5000);
-      if (error) throw error;
-      const set = new Set<number>((data || []).map((r: any) => Number(r.session_seq)));
+      const rows = await fetchAll(() =>
+        (supabase as any)
+          .from('whatsapp_conversation_archive')
+          .select('session_seq')
+          .order('session_seq', { ascending: false }),
+      );
+      const set = new Set<number>(rows.map((r: any) => Number(r.session_seq)));
       return Array.from(set).sort((a, b) => b - a);
     },
   });
