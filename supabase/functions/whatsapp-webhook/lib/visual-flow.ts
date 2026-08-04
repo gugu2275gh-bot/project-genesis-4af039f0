@@ -379,10 +379,20 @@ function inferServiceInterest(value: string): string | null {
  */
 export async function applyCapturedFields(
   supabase: any,
-  params: { leadId: string; contactId: string; captured: FlowCapturedField[]; outsideProgress?: Record<string, unknown> },
+  params: { leadId: string; contactId: string; captured: FlowCapturedField[]; outsideProgress?: Record<string, unknown>; flowId?: string | null; phone?: string | null },
 ): Promise<void> {
   const { leadId, contactId, captured } = params
   if (!captured?.length) return
+
+  // Auditoria documental do período de testes (não bloqueia o atendimento).
+  archiveCapturedFields(supabase, {
+    leadId,
+    contactId,
+    phone: params.phone ?? null,
+    flowId: params.flowId ?? null,
+    captured,
+  }).catch(() => {})
+
 
   const contactPatch: Record<string, unknown> = {}
   const funnelPatch: Record<string, unknown> = {}
