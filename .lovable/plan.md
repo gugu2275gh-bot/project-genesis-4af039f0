@@ -6,7 +6,8 @@ Objetivo: guardar uma cópia permanente de tudo o que foi conversado no WhatsApp
 
 - Nova chave em **Configurações > Sistema**: "Gravar conversas do WhatsApp (auditoria de testes)". Ligada/desligada por ADMIN.
 - Com a chave ligada, toda mensagem registrada no chat (entrada do cliente e saída do agente/atendente) é copiada para um arquivo separado de auditoria.
-- O arquivo de auditoria **não** é apagado pela limpeza de base. Ao limpar a base, o contador de "rodada de testes" avança: as conversas seguintes do mesmo número entram como conversa nova, e o histórico anterior continua consultável.
+- Junto de cada conversa também ficam gravados os **campos identificados pelo agente** (nome, idade, país/cidade, formação, familiar europeu, esteve na Europa, objetivo/serviço etc.), com o valor reconhecido, a etapa do fluxo e o campo do CRM em que foi gravado.
+- O arquivo de auditoria **nunca** é apagado pela limpeza de base — ele só cresce. Ao limpar a base, o contador de "rodada de testes" avança: as conversas seguintes do mesmo número entram como conversa nova, e todas as rodadas anteriores continuam consultáveis.
 - Nada é lido de volta pelo agente: o arquivo é apenas documental, não entra no contexto da IA nem em nenhuma regra de fluxo.
 
 ## Consulta
@@ -14,8 +15,8 @@ Objetivo: guardar uma cópia permanente de tudo o que foi conversado no WhatsApp
 Nova aba em Configurações: **Logs de Conversas**.
 
 - Lista agrupada por rodada de testes + telefone, com nome do contato (quando existia), data de início/fim e nº de mensagens.
-- Ao abrir, mostra a transcrição em ordem cronológica, marcando cada linha como Cliente ou Agente, com data/hora e canal.
-- Botão de exportar a conversa (ou o filtro atual) em CSV.
+- Ao abrir, mostra a transcrição em ordem cronológica, marcando cada linha como Cliente ou Agente, com data/hora e canal, e ao lado um painel com os campos identificados naquela conversa (valor, quando foi capturado e onde foi gravado).
+- Botão de exportar a conversa (ou o filtro atual) em CSV, incluindo os campos identificados.
 
 ## Detalhes técnicos
 
