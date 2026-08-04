@@ -22,10 +22,15 @@ Nova aba em Configurações: **Logs de Conversas**.
 
 **Banco (migração):**
 - Tabela `whatsapp_conversation_archive`: `id`, `session_seq` (rodada de testes), `phone` (text), `lead_id`, `contact_id`, `contact_name`, `direction` (`INBOUND`/`OUTBOUND`), `body`, `media_url`, `media_type`, `origem`, `setor`, `source_message_id`, `created_at`. Índices em `(session_seq, phone, created_at)` e `created_at`.
-- GRANTs: `SELECT` para `authenticated`, `ALL` para `service_role` (sem `anon`). RLS ligada; leitura apenas para ADMIN/MANAGER/SUPERVISOR/DIRETORIA via `has_any_role`; escrita apenas pelo trigger (security definer) e `service_role`.
+- Tabela `whatsapp_conversation_fields`: `id`, `session_seq`, `phone`, `lead_id`, `contact_id`, `field_key` (ex.: `full_name`, `age`, `residence_country`, `objetivo`), `field_label`, `value_text`, `value_raw` (jsonb), `crm_target` (campo do CRM alvo, ex.: `contact.full_name`), `flow_id`, `step_code`, `captured_at`, `created_at`. Índice em `(session_seq, phone)` e único por `(session_seq, phone, field_key, captured_at)`.
+- GRANTs em ambas: `SELECT` para `authenticated`, `ALL` para `service_role` (sem `anon`). RLS ligada; leitura apenas para ADMIN/MANAGER/SUPERVISOR/DIRETORIA via `has_any_role`; escrita apenas via trigger/edge function com `service_role`.
 - Trigger `AFTER INSERT` em `mensagens_cliente` (função security definer) que, se `system_config.whatsapp_conversation_logging_enabled = 'true'`, grava uma linha por lado preenchido (`mensagem_cliente` → INBOUND, `mensagem_IA` → OUTBOUND) com o `session_seq` atual. Trigger com tratamento de exceção para nunca quebrar o atendimento.
 - Chaves em `system_config`: `whatsapp_conversation_logging_enabled` (default `true`) e `whatsapp_conversation_log_session` (default `1`).
-- `cleanup_test_data()`: incrementar `whatsapp_conversation_log_session` ao final e **não** incluir `whatsapp_conversation_archive` na lista de tabelas apagadas.
+- `cleanup_test_data()`: incrementar `whatsapp_conversation_log_session` ao final e **não** incluir `whatsapp_conversation_archive` nem `whatsapp_conversation_fields` na lista de tabelas apagadas.
+
+**Captura dos campos identificados:**
+- Ponto único de gravação em `supabase/functions/whatsapp-webhook/lib/visual-flow.ts`, onde os `captured_fields` do turno já são consolidados e persistidos no CRM: além da gravação atual, enviar (fire-and-forget) o diff de campos novos/alterados para `whatsapp_conversation_fields`, junto com `flow_id`/`step_code` e o `crm_target` derivado do `field_mapping` da etapa.
+- A gravação é assíncrona e protegida por try/catch: falha na auditoria nunca interrompe o atendimento; se a chave estiver desligada, nada é enviado.
 
 **Frontend:**
 - `src/pages/settings/SystemSettings.tsx`: nova entrada booleana na categoria de integrações.
