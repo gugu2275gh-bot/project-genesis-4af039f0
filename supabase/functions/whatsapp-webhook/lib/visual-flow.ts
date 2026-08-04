@@ -45,6 +45,7 @@ import {
   type IntakeConfig,
 } from '../../_shared/flow-intake.ts'
 
+import { archiveCapturedFields } from '../../_shared/conversation-audit.ts'
 import { getAgentRuntime } from './agent-runtime.ts'
 import { cached } from './perf.ts'
 
