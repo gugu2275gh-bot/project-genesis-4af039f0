@@ -10,7 +10,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Archive, Download, MessageSquare, Tags } from 'lucide-react';
 import {
-  useConversationArchive,
+  useConversationList,
+  useConversationMessages,
   useConversationFields,
   useConversationSessions,
   type ArchivedConversation,
@@ -45,19 +46,24 @@ export default function ConversationLogs() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   const { data: sessions } = useConversationSessions();
-  const { data: conversations, isLoading } = useConversationArchive({ session, search, from, to });
+  const { data, isLoading } = useConversationList({ session, search, from, to });
+  const conversations = data?.conversations;
 
   const selected: ArchivedConversation | undefined = useMemo(
     () => conversations?.find((c) => c.key === selectedKey) || conversations?.[0],
     [conversations, selectedKey],
   );
 
+  const { data: messages, isLoading: loadingMessages } = useConversationMessages(
+    selected?.session_seq,
+    selected?.phone,
+  );
   const { data: fields } = useConversationFields(selected?.session_seq, selected?.phone);
 
   const exportConversation = () => {
     if (!selected) return;
     const rows: string[][] = [['Data/Hora', 'Lado', 'Mensagem', 'Setor', 'Origem']];
-    selected.messages.forEach((m) =>
+    (messages || []).forEach((m) =>
       rows.push([
         fmt(m.created_at),
         m.direction === 'INBOUND' ? 'Cliente' : 'Agente',
@@ -87,7 +93,12 @@ export default function ConversationLogs() {
             apagado pela limpeza de base — cada limpeza inicia uma nova rodada de testes.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2 text-xs">
+            <Badge variant="secondary">{conversations?.length || 0} conversas</Badge>
+            <Badge variant="secondary">{data?.totalMessages || 0} mensagens</Badge>
+            <Badge variant="secondary">{sessions?.length || 0} rodadas</Badge>
+          </div>
           <div className="grid gap-4 md:grid-cols-4">
             <div className="space-y-2">
               <Label>Rodada de testes</Label>
@@ -189,7 +200,8 @@ export default function ConversationLogs() {
           <CardContent className="space-y-4">
             <ScrollArea className="h-[340px] pr-3">
               <div className="space-y-3">
-                {(selected?.messages || []).map((m) => (
+                {loadingMessages && <Skeleton className="h-20" />}
+                {(messages || []).map((m) => (
                   <div
                     key={m.id}
                     className={`flex ${m.direction === 'INBOUND' ? 'justify-start' : 'justify-end'}`}
