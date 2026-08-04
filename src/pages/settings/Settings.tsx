@@ -154,6 +154,11 @@ export default function Settings() {
             <Brain className="h-4 w-4" />
             <span className="hidden sm:inline">LLM</span>
           </TabsTrigger>
+          <TabsTrigger value="conversation-logs" className="gap-2">
+            <Archive className="h-4 w-4" />
+            <span className="hidden sm:inline">Logs de Conversas</span>
+          </TabsTrigger>
+
           {hasRole('ADMIN') && (
             <TabsTrigger value="ai-agents" className="gap-2">
               <Bot className="h-4 w-4" />
