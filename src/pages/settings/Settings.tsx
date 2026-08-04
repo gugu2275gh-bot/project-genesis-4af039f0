@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { useAuth } from '@/contexts/AuthContext';
  import { useSuperuser } from '@/hooks/useSuperuser';
 import { Navigate } from 'react-router-dom';
-import { Users, Clock, Settings as SettingsIcon, FileText, Bell, Layers, Briefcase, UserCog, Table2, ChevronDown, Database, Download, Wallet, MessageSquare, Truck, Receipt, Brain, Bot } from 'lucide-react';
+import { Users, Clock, Settings as SettingsIcon, FileText, Bell, Layers, Briefcase, UserCog, Table2, ChevronDown, Database, Download, Wallet, MessageSquare, Truck, Receipt, Brain, Bot, Archive } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +26,7 @@ import WhatsAppTemplatesSettings from './WhatsAppTemplatesSettings';
 import SuppliersManagement from './SuppliersManagement';
 import ExpenseCategoriesManagement from './ExpenseCategoriesManagement';
 import LLMSettings from './LLMSettings';
+import ConversationLogs from './ConversationLogs';
 import AIAgents from '@/pages/ai-agents/AIAgents';
 
 const TABLE_TABS = ['profiles', 'sectors', 'service-types', 'payment-settings', 'suppliers', 'expense-categories'] as const;
@@ -153,6 +154,11 @@ export default function Settings() {
             <Brain className="h-4 w-4" />
             <span className="hidden sm:inline">LLM</span>
           </TabsTrigger>
+          <TabsTrigger value="conversation-logs" className="gap-2">
+            <Archive className="h-4 w-4" />
+            <span className="hidden sm:inline">Logs de Conversas</span>
+          </TabsTrigger>
+
           {hasRole('ADMIN') && (
             <TabsTrigger value="ai-agents" className="gap-2">
               <Bot className="h-4 w-4" />
@@ -224,6 +230,11 @@ export default function Settings() {
         <TabsContent value="llm">
           <LLMSettings />
         </TabsContent>
+
+        <TabsContent value="conversation-logs">
+          <ConversationLogs />
+        </TabsContent>
+
 
         {hasRole('ADMIN') && (
           <TabsContent value="ai-agents">
