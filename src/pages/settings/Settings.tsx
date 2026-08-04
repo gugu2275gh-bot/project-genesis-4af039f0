@@ -231,6 +231,11 @@ export default function Settings() {
           <LLMSettings />
         </TabsContent>
 
+        <TabsContent value="conversation-logs">
+          <ConversationLogs />
+        </TabsContent>
+
+
         {hasRole('ADMIN') && (
           <TabsContent value="ai-agents">
             <AIAgents embedded />
