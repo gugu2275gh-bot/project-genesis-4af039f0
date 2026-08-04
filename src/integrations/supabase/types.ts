@@ -3613,6 +3613,108 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_conversation_archive: {
+        Row: {
+          body: string | null
+          contact_id: string | null
+          contact_name: string | null
+          created_at: string
+          direction: string
+          id: string
+          lead_id: string | null
+          media_type: string | null
+          media_url: string | null
+          origem: string | null
+          phone: string | null
+          session_seq: number
+          setor: string | null
+          source_message_id: string | null
+        }
+        Insert: {
+          body?: string | null
+          contact_id?: string | null
+          contact_name?: string | null
+          created_at?: string
+          direction: string
+          id?: string
+          lead_id?: string | null
+          media_type?: string | null
+          media_url?: string | null
+          origem?: string | null
+          phone?: string | null
+          session_seq?: number
+          setor?: string | null
+          source_message_id?: string | null
+        }
+        Update: {
+          body?: string | null
+          contact_id?: string | null
+          contact_name?: string | null
+          created_at?: string
+          direction?: string
+          id?: string
+          lead_id?: string | null
+          media_type?: string | null
+          media_url?: string | null
+          origem?: string | null
+          phone?: string | null
+          session_seq?: number
+          setor?: string | null
+          source_message_id?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_conversation_fields: {
+        Row: {
+          captured_at: string
+          contact_id: string | null
+          created_at: string
+          crm_target: string | null
+          field_key: string
+          field_label: string | null
+          flow_id: string | null
+          id: string
+          lead_id: string | null
+          phone: string | null
+          session_seq: number
+          step_code: string | null
+          value_raw: Json | null
+          value_text: string | null
+        }
+        Insert: {
+          captured_at?: string
+          contact_id?: string | null
+          created_at?: string
+          crm_target?: string | null
+          field_key: string
+          field_label?: string | null
+          flow_id?: string | null
+          id?: string
+          lead_id?: string | null
+          phone?: string | null
+          session_seq?: number
+          step_code?: string | null
+          value_raw?: Json | null
+          value_text?: string | null
+        }
+        Update: {
+          captured_at?: string
+          contact_id?: string | null
+          created_at?: string
+          crm_target?: string | null
+          field_key?: string
+          field_label?: string | null
+          flow_id?: string | null
+          id?: string
+          lead_id?: string | null
+          phone?: string | null
+          session_seq?: number
+          step_code?: string | null
+          value_raw?: Json | null
+          value_text?: string | null
+        }
+        Relationships: []
+      }
       whatsapp_template_logs: {
         Row: {
           action: string
@@ -3800,6 +3902,7 @@ export type Database = {
         Args: { p_payment_id: string }
         Returns: string
       }
+      current_conversation_log_session: { Args: never; Returns: number }
       get_user_roles: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"][]
