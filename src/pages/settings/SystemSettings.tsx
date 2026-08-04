@@ -113,7 +113,7 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
     value: 'true',
     label: 'Gravar Logs de Conversas (WhatsApp)',
     description:
-      'Arquiva permanentemente todas as mensagens e os campos identificados pelo agente. O arquivo não é apagado pela limpeza de base.',
+      'Arquiva permanentemente todas as mensagens e os campos identificados pelo agente. O arquivo nunca é apagado pela limpeza de base. Atenção: se desligar, o período desligado fica sem registro na auditoria.',
     type: 'boolean',
     category: 'integration',
   },
