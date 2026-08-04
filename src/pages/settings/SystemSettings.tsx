@@ -108,7 +108,17 @@ const SYSTEM_CONFIGS: SystemConfig[] = [
     type: 'boolean',
     category: 'integration',
   },
+  {
+    key: 'whatsapp_conversation_logging_enabled',
+    value: 'true',
+    label: 'Gravar Logs de Conversas (WhatsApp)',
+    description:
+      'Arquiva permanentemente todas as mensagens e os campos identificados pelo agente. O arquivo não é apagado pela limpeza de base.',
+    type: 'boolean',
+    category: 'integration',
+  },
   // Reactivation settings
+
   {
     key: 'enable_smart_reactivation',
     value: 'true',
