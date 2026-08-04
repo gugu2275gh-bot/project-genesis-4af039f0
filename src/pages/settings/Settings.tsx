@@ -26,6 +26,7 @@ import WhatsAppTemplatesSettings from './WhatsAppTemplatesSettings';
 import SuppliersManagement from './SuppliersManagement';
 import ExpenseCategoriesManagement from './ExpenseCategoriesManagement';
 import LLMSettings from './LLMSettings';
+import ConversationLogs from './ConversationLogs';
 import AIAgents from '@/pages/ai-agents/AIAgents';
 
 const TABLE_TABS = ['profiles', 'sectors', 'service-types', 'payment-settings', 'suppliers', 'expense-categories'] as const;
