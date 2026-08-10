@@ -44,7 +44,7 @@ import {
 
 
 import { kbCheckOf, kbInvalidMessage, runKbCheck } from './flow-kb-check.ts'
-import { answerAside, composeAnswerAndReask, defaultAsideAck, looksLikeQuestion } from './flow-answer-reask.ts'
+import { answerAside, asideAnswerOf, asideFixedMessage, composeAnswerAndReask, defaultAsideAck, looksLikeQuestion } from './flow-answer-reask.ts'
 
 /** Nenhum recurso opcional pode segurar o turno além disto. */
 const ASSIST_TIMEOUT_MS = 6000
@@ -105,6 +105,17 @@ export async function advanceFlowTurn(
   if (pendingField && isGeneralCaptureStep(step)) {
     const general = generalCaptureOf(step)
     const target = general.fields.find((f: any) => f.target_field === pendingField)
+    // Dúvida do cliente no meio da coleta: quando a etapa está configurada para
+    // "Só retomar a pergunta", o texto NÃO vira resposta — só repetimos o pedido.
+    const asideHere = asideAnswerOf(step)
+    if (asideHere.mode === 'SO_RETOMAR' && looksLikeQuestion(text, 0)) {
+      return buildStayTurn(
+        step,
+        requiredPrompt(target || { source: pendingField, target_field: pendingField }, lang),
+        workingState,
+        { required_field: pendingField, required_attempts: Number(state.required_attempts || 0) },
+      )
+    }
     let value = ''
     let extraValues: Record<string, string> = {}
     if (text && deps.callLLM) {
@@ -249,9 +260,13 @@ export async function advanceFlowTurn(
   const kbCfg = kbCheckOf(step)
   const wantsKbCheck = kbCfg.enabled && !!deps.callLLM && !!deps.kbSearch && !!text
   const wantsAck = ackAiEnabledFor(step) && !!deps.callLLM
-  // A "resposta e retomada" só é possível quando há LLM + base e a mensagem
-  // parece uma dúvida — mas só é EXECUTADA se o fluxo realmente reperguntar.
-  const canAside = !!deps.callLLM && !!deps.kbSearch && looksLikeQuestion(text)
+  // A "resposta e retomada" só é possível quando a etapa permite (editor de
+  // fluxos) e a mensagem parece uma dúvida com tamanho mínimo configurado.
+  const asideCfg = asideAnswerOf(step)
+  const isAside = looksLikeQuestion(text, asideCfg.min_chars)
+  const canAside = isAside
+    && asideCfg.attempts > 0
+    && (asideCfg.mode === 'MENSAGEM_FIXA' || (asideCfg.mode === 'RESPONDER_BASE' && !!deps.callLLM && !!deps.kbSearch))
 
   const [kbContext, ackGenerated] = await Promise.all([
     wantsKbCheck && deps.kbSearch
@@ -309,28 +324,41 @@ export async function advanceFlowTurn(
   // 2) Reconhecimento humanizado: gerado pela IA quando a etapa pedir.
   const ack = ackGenerated || deps.ack || ''
 
-  // 3) "Responde e volta na hora": a mensagem é uma dúvida, não a resposta da
-  // etapa. Respondemos pela base e repetimos a pergunta na MESMA bolha, sem
-  // gravar a dúvida como resposta. Uma vez por etapa, para nunca criar laço.
+  // 3) Dúvida do cliente no meio da etapa. O tratamento vem SÓ da configuração
+  // da etapa (editor de fluxos): só retomar, responder pela base ou mensagem
+  // fixa. Em todos os casos a pergunta da etapa volta na MESMA bolha e a dúvida
+  // não é gravada como resposta.
   const asideTries = Number(state.aside_attempts || 0)
-  if (canAside && asideTries < 1) {
-    const ctx = kbContext ?? (await withTimeout(
-      Promise.resolve(deps.kbSearch(text)),
-      ASSIST_TIMEOUT_MS,
-      'kb_search_aside',
-    ))
-    const aside = ctx
-      ? await withTimeout(
-        answerAside({ question: text, lang, kbContext: ctx, callLLM: deps.callLLM }),
+
+  if (asideCfg.mode === 'SO_RETOMAR' && looksLikeQuestion(text, 0)) {
+    console.log(`${tag}[ANSWER_REASK]`, JSON.stringify({ step: step.step_code, mode: 'SO_RETOMAR' }))
+    return buildStayTurn(step, question, workingState, { aside_attempts: asideTries + 1 })
+  }
+
+  if (canAside && asideTries < asideCfg.attempts) {
+    let answer = ''
+    if (asideCfg.mode === 'MENSAGEM_FIXA') {
+      answer = asideFixedMessage(asideCfg, lang)
+    } else {
+      const ctx = kbContext ?? (await withTimeout(
+        Promise.resolve(deps.kbSearch(text)),
         ASSIST_TIMEOUT_MS,
-        'answer_aside',
-      )
-      : null
-    const answer = aside || defaultAsideAck(lang)
-    console.log(`${tag}[ANSWER_REASK]`, JSON.stringify({
-      step: step.step_code,
-      from_kb: !!aside,
-    }))
+        'kb_search_aside',
+      ))
+      const aside = ctx
+        ? await withTimeout(
+          answerAside({ question: text, lang, kbContext: ctx, callLLM: deps.callLLM }),
+          ASSIST_TIMEOUT_MS,
+          'answer_aside',
+        )
+        : null
+      answer = aside || defaultAsideAck(lang)
+      console.log(`${tag}[ANSWER_REASK]`, JSON.stringify({
+        step: step.step_code,
+        mode: asideCfg.mode,
+        from_kb: !!aside,
+      }))
+    }
     return buildStayTurn(
       step,
       composeAnswerAndReask(answer, question, lang),
