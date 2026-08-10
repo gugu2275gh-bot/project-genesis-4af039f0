@@ -33,10 +33,44 @@ const ACK_FALLBACK: Record<string, string> = {
   fr: 'Je comprends votre point — je vous explique cela juste après.',
 }
 
+/** Configuração de dúvidas da etapa (definida no editor de fluxos). */
+export interface AsideAnswerCfg {
+  mode: 'SO_RETOMAR' | 'RESPONDER_BASE' | 'MENSAGEM_FIXA'
+  min_chars: number
+  attempts: number
+  messages: Record<string, string>
+}
+
+const ASIDE_MODES = ['SO_RETOMAR', 'RESPONDER_BASE', 'MENSAGEM_FIXA']
+
+/**
+ * Lê `validation.aside_answer` da etapa. Sem configuração, mantém o
+ * comportamento histórico (responder pela base, 1 vez por etapa).
+ */
+export function asideAnswerOf(step: Record<string, unknown> | null | undefined): AsideAnswerCfg {
+  const v = ((step as any)?.validation || {}) as Record<string, unknown>
+  const raw = (v.aside_answer && typeof v.aside_answer === 'object' ? v.aside_answer : {}) as Record<string, unknown>
+  const minChars = Number(raw.min_chars)
+  const attempts = Number(raw.attempts)
+  return {
+    mode: ASIDE_MODES.includes(String(raw.mode)) ? (String(raw.mode) as AsideAnswerCfg['mode']) : 'RESPONDER_BASE',
+    min_chars: Number.isFinite(minChars) && minChars >= 0 ? Math.min(200, Math.round(minChars)) : 12,
+    attempts: Number.isFinite(attempts) && attempts >= 0 ? Math.min(5, Math.round(attempts)) : 1,
+    messages: (raw.messages && typeof raw.messages === 'object' ? raw.messages : {}) as Record<string, string>,
+  }
+}
+
+/** Texto fixo cadastrado na etapa para o idioma corrente (ou vazio). */
+export function asideFixedMessage(cfg: AsideAnswerCfg, lang: FlowLang): string {
+  const m = cfg.messages || {}
+  return String(m[String(lang)] || m['pt-BR'] || '').trim()
+}
+
 /** A mensagem parece uma pergunta ou um assunto fora da etapa? */
-export function looksLikeQuestion(text: string): boolean {
+export function looksLikeQuestion(text: string, minChars = 0): boolean {
   const t = String(text || '').trim()
   if (!t) return false
+  if (t.length < Number(minChars || 0)) return false
   if (t.includes('?')) return true
   return /^(o que|oque|que |qual|quais|quanto|quantos|quanta|como|onde|quando|por que|porque|porqu[eê]|preciso|posso|pode|d[aá] para|tem como|serve|vale|é poss[ií]vel|explica|me explica|qu[ée]|cu[aá]l|cu[aá]les|cu[aá]nto|c[oó]mo|d[oó]nde|cu[aá]ndo|por qu[eé]|puedo|puede|what|which|how|where|when|why|can i|could|do i|is it|does it|quoi|quel|quelle|comment|combien|o[uù]|quand|pourquoi|puis-je|est-ce)\b/i.test(t)
 }
