@@ -324,6 +324,10 @@ export function StepInspector({ step, allSteps, onChange, onDelete, onClose }: P
               isQuestion={isQuestion}
               onChange={(next) => setValidation({ kb_check: next })}
             />
+            <StepAsideAnswerEditor
+              value={validation.aside_answer}
+              onChange={(next) => setValidation({ aside_answer: next })}
+            />
           </TabsContent>
 
 
