@@ -105,6 +105,17 @@ export async function advanceFlowTurn(
   if (pendingField && isGeneralCaptureStep(step)) {
     const general = generalCaptureOf(step)
     const target = general.fields.find((f: any) => f.target_field === pendingField)
+    // Dúvida do cliente no meio da coleta: quando a etapa está configurada para
+    // "Só retomar a pergunta", o texto NÃO vira resposta — só repetimos o pedido.
+    const asideHere = asideAnswerOf(step)
+    if (asideHere.mode === 'SO_RETOMAR' && looksLikeQuestion(text, 0)) {
+      return buildStayTurn(
+        step,
+        requiredPrompt(target || { source: pendingField, target_field: pendingField }, lang),
+        workingState,
+        { required_field: pendingField, required_attempts: Number(state.required_attempts || 0) },
+      )
+    }
     let value = ''
     let extraValues: Record<string, string> = {}
     if (text && deps.callLLM) {
