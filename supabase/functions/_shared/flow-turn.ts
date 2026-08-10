@@ -249,9 +249,13 @@ export async function advanceFlowTurn(
   const kbCfg = kbCheckOf(step)
   const wantsKbCheck = kbCfg.enabled && !!deps.callLLM && !!deps.kbSearch && !!text
   const wantsAck = ackAiEnabledFor(step) && !!deps.callLLM
-  // A "resposta e retomada" só é possível quando há LLM + base e a mensagem
-  // parece uma dúvida — mas só é EXECUTADA se o fluxo realmente reperguntar.
-  const canAside = !!deps.callLLM && !!deps.kbSearch && looksLikeQuestion(text)
+  // A "resposta e retomada" só é possível quando a etapa permite (editor de
+  // fluxos) e a mensagem parece uma dúvida com tamanho mínimo configurado.
+  const asideCfg = asideAnswerOf(step)
+  const isAside = looksLikeQuestion(text, asideCfg.min_chars)
+  const canAside = isAside
+    && asideCfg.attempts > 0
+    && (asideCfg.mode === 'MENSAGEM_FIXA' || (asideCfg.mode === 'RESPONDER_BASE' && !!deps.callLLM && !!deps.kbSearch))
 
   const [kbContext, ackGenerated] = await Promise.all([
     wantsKbCheck && deps.kbSearch
