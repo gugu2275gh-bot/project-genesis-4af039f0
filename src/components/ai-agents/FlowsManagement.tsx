@@ -19,8 +19,9 @@ import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRouti
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
 import { StepUnexpectedAnswerEditor } from '@/components/ai-agents/flow-builder/StepUnexpectedAnswerEditor';
 import { StepKnowledgeCheckEditor } from '@/components/ai-agents/flow-builder/StepKnowledgeCheckEditor';
+import { StepAsideAnswerEditor } from '@/components/ai-agents/flow-builder/StepAsideAnswerEditor';
 import { StepGeneralCaptureEditor } from '@/components/ai-agents/flow-builder/StepGeneralCaptureEditor';
-import { STEP_KINDS, CAPTURE_SOURCE_OPTIONS, normalizeBranches, normalizeValidation, stepKindOf } from '@/types/ai-agent-flow-builder';
+import { STEP_KINDS, CAPTURE_SOURCE_OPTIONS, normalizeAsideAnswer, normalizeBranches, normalizeValidation, stepKindOf } from '@/types/ai-agent-flow-builder';
 
 
 import {
@@ -270,6 +271,12 @@ function StepDialog({
                 onChange={(next) => set({ validation: { ...validation, kb_check: next } })}
               />
 
+              <StepAsideAnswerEditor
+                value={validation.aside_answer}
+                onChange={(next) => set({ validation: { ...validation, aside_answer: next } })}
+              />
+
+
               <Separator />
               <p className="text-sm font-medium">Resposta diferente do esperado</p>
               <StepUnexpectedAnswerEditor
@@ -411,6 +418,8 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
             const requiredLabels = (stepValidation.general_capture?.fields || [])
               .filter((f) => f.required)
               .map((f) => CAPTURE_SOURCE_OPTIONS.find((o) => o.value === f.source)?.label || f.source);
+            const aside = normalizeAsideAnswer(stepValidation.aside_answer);
+            const isQuestionStep = ['PERGUNTA', 'PERGUNTA_GERAL'].includes(stepKindOf(s as any));
             return (
             <TableRow key={s.id}>
               <TableCell>{s.order_index}</TableCell>
@@ -427,8 +436,15 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
                         : 'Sem obrigatórios'}
                     </Badge>
                   )}
+                  {isQuestionStep && aside.mode === 'SO_RETOMAR' && (
+                    <Badge variant="secondary" className="text-[10px] font-normal">Dúvidas: só retoma</Badge>
+                  )}
+                  {isQuestionStep && aside.mode === 'MENSAGEM_FIXA' && (
+                    <Badge variant="secondary" className="text-[10px] font-normal">Dúvidas: mensagem fixa</Badge>
+                  )}
                 </div>
               </TableCell>
+
               <TableCell className="font-mono text-[11px]">
                 {paths.length === 0 ? (
                   <span className="text-muted-foreground">—</span>

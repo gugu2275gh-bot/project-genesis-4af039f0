@@ -145,7 +145,9 @@ function AppRoutes() {
 
         {/* Agentes de IA */}
         <Route path="/ai-agents" element={<AIAgents />} />
+
       </Route>
+
 
       {/* Portal do Cliente - Rota separada */}
       <Route path="/portal/onboarding" element={<ProtectedRoute><PortalOnboarding /></ProtectedRoute>} />
