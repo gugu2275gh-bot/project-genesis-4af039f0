@@ -13,6 +13,7 @@ import { StepRoutingEditor } from '@/components/ai-agents/flow-builder/StepRouti
 import { StepValidationEditor } from '@/components/ai-agents/flow-builder/StepValidationEditor';
 import { StepUnexpectedAnswerEditor } from '@/components/ai-agents/flow-builder/StepUnexpectedAnswerEditor';
 import { StepKnowledgeCheckEditor } from '@/components/ai-agents/flow-builder/StepKnowledgeCheckEditor';
+import { StepAsideAnswerEditor } from '@/components/ai-agents/flow-builder/StepAsideAnswerEditor';
 import { StepGeneralCaptureEditor } from '@/components/ai-agents/flow-builder/StepGeneralCaptureEditor';
 import { ANSWER_TYPES, FLOW_PHASES, STEP_FIELD_MAPPINGS, type AgentFlowStep } from '@/types/ai-agents';
 
