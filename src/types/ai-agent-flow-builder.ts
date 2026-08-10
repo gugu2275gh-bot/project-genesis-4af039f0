@@ -462,6 +462,8 @@ export interface StepValidation {
   ack_ai?: boolean;
   /** Valida a resposta desta etapa na base de conhecimento. */
   kb_check?: StepKbCheck;
+  /** Tratativa de dúvidas do cliente no meio da etapa. */
+  aside_answer?: StepAsideAnswer;
   /** Interpretação multi-campo da etapa "Pergunta geral". */
   general_capture?: StepGeneralCapture;
 
