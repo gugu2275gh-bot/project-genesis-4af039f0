@@ -145,6 +145,8 @@ function AppRoutes() {
 
         {/* Agentes de IA */}
         <Route path="/ai-agents" element={<AIAgents />} />
+        <Route path="/__preview-aside" element={<PreviewAside />} />
+
       </Route>
 
       {/* Portal do Cliente - Rota separada */}
