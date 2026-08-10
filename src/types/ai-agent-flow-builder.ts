@@ -378,6 +378,59 @@ export function normalizeKbCheck(raw: unknown): StepKbCheck {
   };
 }
 
+/** O que fazer quando o cliente manda uma dúvida no meio da etapa. */
+export type AsideAnswerMode = 'SO_RETOMAR' | 'RESPONDER_BASE' | 'MENSAGEM_FIXA';
+
+export const ASIDE_ANSWER_MODES: { value: AsideAnswerMode; label: string; hint: string }[] = [
+  {
+    value: 'SO_RETOMAR',
+    label: 'Só retomar a pergunta',
+    hint: 'O agente ignora o desvio e repete a pergunta da etapa. Nada da base é usado.',
+  },
+  {
+    value: 'RESPONDER_BASE',
+    label: 'Responder pela base e retomar',
+    hint: 'Resposta curta com a base de conhecimento e, na mesma mensagem, a pergunta da etapa.',
+  },
+  {
+    value: 'MENSAGEM_FIXA',
+    label: 'Mensagem fixa e retomar',
+    hint: 'Envia o texto cadastrado abaixo e, na mesma mensagem, a pergunta da etapa.',
+  },
+];
+
+/** Tratativa de dúvidas do cliente durante a etapa. */
+export interface StepAsideAnswer {
+  mode: AsideAnswerMode;
+  /** Abaixo desse tamanho a mensagem nunca é tratada como dúvida (ex.: "?"). */
+  min_chars: number;
+  /** Quantas vezes responder a dúvida por etapa. */
+  attempts: number;
+  /** Texto por idioma usado no modo "Mensagem fixa". */
+  messages: Record<string, string>;
+}
+
+export const DEFAULT_ASIDE_ANSWER: StepAsideAnswer = {
+  mode: 'RESPONDER_BASE',
+  min_chars: 12,
+  attempts: 1,
+  messages: {},
+};
+
+export function normalizeAsideAnswer(raw: unknown): StepAsideAnswer {
+  const v = (raw && typeof raw === 'object' ? raw : {}) as Partial<StepAsideAnswer>;
+  const minChars = Number(v.min_chars);
+  const attempts = Number(v.attempts);
+  return {
+    mode: (['SO_RETOMAR', 'RESPONDER_BASE', 'MENSAGEM_FIXA'] as const).includes(v.mode as AsideAnswerMode)
+      ? (v.mode as AsideAnswerMode)
+      : 'RESPONDER_BASE',
+    min_chars: Number.isFinite(minChars) && minChars >= 0 ? Math.min(200, Math.round(minChars)) : 12,
+    attempts: Number.isFinite(attempts) && attempts >= 0 ? Math.min(5, Math.round(attempts)) : 1,
+    messages: (v.messages && typeof v.messages === 'object' ? v.messages : {}) as Record<string, string>,
+  };
+}
+
 /** Conteúdo estruturado da coluna `validation` (jsonb). */
 export interface StepValidation {
   required?: boolean;
