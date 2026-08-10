@@ -418,6 +418,8 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
             const requiredLabels = (stepValidation.general_capture?.fields || [])
               .filter((f) => f.required)
               .map((f) => CAPTURE_SOURCE_OPTIONS.find((o) => o.value === f.source)?.label || f.source);
+            const aside = normalizeAsideAnswer(stepValidation.aside_answer);
+            const isQuestionStep = ['PERGUNTA', 'PERGUNTA_GERAL'].includes(stepKindOf(s as any));
             return (
             <TableRow key={s.id}>
               <TableCell>{s.order_index}</TableCell>
@@ -434,8 +436,15 @@ function FlowSteps({ flow, onDirtyChange }: { flow: AgentFlow; onDirtyChange?: (
                         : 'Sem obrigatórios'}
                     </Badge>
                   )}
+                  {isQuestionStep && aside.mode === 'SO_RETOMAR' && (
+                    <Badge variant="secondary" className="text-[10px] font-normal">Dúvidas: só retoma</Badge>
+                  )}
+                  {isQuestionStep && aside.mode === 'MENSAGEM_FIXA' && (
+                    <Badge variant="secondary" className="text-[10px] font-normal">Dúvidas: mensagem fixa</Badge>
+                  )}
                 </div>
               </TableCell>
+
               <TableCell className="font-mono text-[11px]">
                 {paths.length === 0 ? (
                   <span className="text-muted-foreground">—</span>
