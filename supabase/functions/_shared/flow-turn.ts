@@ -44,7 +44,7 @@ import {
 
 
 import { kbCheckOf, kbInvalidMessage, runKbCheck } from './flow-kb-check.ts'
-import { answerAside, composeAnswerAndReask, defaultAsideAck, looksLikeQuestion } from './flow-answer-reask.ts'
+import { answerAside, asideAnswerOf, asideFixedMessage, composeAnswerAndReask, defaultAsideAck, looksLikeQuestion } from './flow-answer-reask.ts'
 
 /** Nenhum recurso opcional pode segurar o turno além disto. */
 const ASSIST_TIMEOUT_MS = 6000
