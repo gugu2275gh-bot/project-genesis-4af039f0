@@ -271,6 +271,12 @@ function StepDialog({
                 onChange={(next) => set({ validation: { ...validation, kb_check: next } })}
               />
 
+              <StepAsideAnswerEditor
+                value={validation.aside_answer}
+                onChange={(next) => set({ validation: { ...validation, aside_answer: next } })}
+              />
+
+
               <Separator />
               <p className="text-sm font-medium">Resposta diferente do esperado</p>
               <StepUnexpectedAnswerEditor
