@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.prevent_profile_sensitive_self_update() FROM anon, authenticated, PUBLIC;
