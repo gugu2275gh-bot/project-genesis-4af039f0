@@ -484,7 +484,6 @@ function buildRegularizacionExtraordinaria(data: ContractData, dateStr: string):
     heading('PRIMERA. Objeto del Contrato'),
     para('El presente documento tiene por objeto reservar y anticipar la prestación de servicios profesionales relacionados con el futuro trámite de Regularización Excepcional Única, actualmente pendiente de aprobación legislativa y, por tanto, no disponible ni garantizado en la normativa vigente.'),
     ...(data.serviceDescription ? [para(data.serviceDescription, { bold: true })] : []),
-    para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA.'),
 
     ...buildHonorariosSection(data),
     ...buildBankAccountSection(data),
@@ -536,9 +535,8 @@ function buildNacionalidad(data: ContractData, dateStr: string): Paragraph[] {
     ...contractParties(data.clientName, data.documentType || '', data.documentNumber),
 
     heading('PRIMERA. Objeto del Contrato'),
-    para('El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA, consistentes en:'),
+    para('El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA.'),
     ...(data.serviceDescription ? [para(data.serviceDescription, { bold: true })] : []),
-    para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA.'),
 
     ...buildHonorariosSection(data),
     ...buildBankAccountSection(data),
@@ -584,9 +582,8 @@ function buildDocumentos(data: ContractData, dateStr: string): Paragraph[] {
     ...contractParties(data.clientName, data.documentType || '', data.documentNumber),
 
     heading('PRIMERA. Objeto del Contrato'),
-    para('El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA, consistentes en:'),
+    para('El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA.'),
     ...(data.serviceDescription ? [para(data.serviceDescription, { bold: true })] : []),
-    para('Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA.'),
 
     ...buildHonorariosSection(data),
     ...buildBankAccountSection(data),
@@ -988,7 +985,6 @@ export function getContractSections(data: ContractData): ContractSection[] {
         { type: 'heading', text: 'PRIMERA. Objeto del Contrato' },
         { type: 'paragraph', text: 'El presente documento tiene por objeto reservar y anticipar la prestación de servicios profesionales relacionados con el futuro trámite de Regularización Excepcional Única, actualmente pendiente de aprobación legislativa y, por tanto, no disponible ni garantizado en la normativa vigente.' },
         ...(data.serviceDescription ? [{ type: 'paragraph' as const, text: data.serviceDescription, bold: true }] : []),
-        { type: 'paragraph', text: 'Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA.' },
         ...honorarios,
         ...sectionsBankAccount(data),
         { type: 'paragraph', text: '2.1. Los honorarios no incluyen:', bold: true },
@@ -1020,9 +1016,8 @@ export function getContractSections(data: ContractData): ContractSection[] {
       return [
         ...header, ...parties,
         { type: 'heading', text: 'PRIMERA. Objeto del Contrato' },
-        { type: 'paragraph', text: 'El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA, consistentes en:' },
+        { type: 'paragraph', text: 'El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA.' },
         ...(data.serviceDescription ? [{ type: 'paragraph' as const, text: data.serviceDescription, bold: true }] : []),
-        { type: 'paragraph', text: 'Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA.' },
         ...honorarios,
         ...sectionsBankAccount(data),
         { type: 'paragraph', text: '2.1. Los honorarios no incluyen:', bold: true },
@@ -1051,9 +1046,8 @@ export function getContractSections(data: ContractData): ContractSection[] {
       return [
         ...header, ...parties,
         { type: 'heading', text: 'PRIMERA. Objeto del Contrato' },
-        { type: 'paragraph', text: 'El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA, consistentes en:' },
+        { type: 'paragraph', text: 'El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA.' },
         ...(data.serviceDescription ? [{ type: 'paragraph' as const, text: data.serviceDescription, bold: true }] : []),
-        { type: 'paragraph', text: 'Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA.' },
         ...honorarios,
         ...sectionsBankAccount(data),
         { type: 'heading', text: '2.1. Los honorarios no incluyen:' },
