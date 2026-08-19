@@ -392,15 +392,7 @@ export default function CashFlow() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Data de Vencimento</Label>
-                  <Input
-                    type="date"
-                    value={formData.due_date || ''}
-                    onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                  />
-                </div>
+              <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
                   <Label>Data de Pagamento</Label>
                   <Input
@@ -409,15 +401,8 @@ export default function CashFlow() {
                     onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Data de Confirmação</Label>
-                  <Input
-                    type="date"
-                    value={formData.payment_confirmed_date || ''}
-                    onChange={(e) => setFormData({ ...formData, payment_confirmed_date: e.target.value })}
-                  />
-                </div>
               </div>
+
 
               <div className="space-y-2">
                 <Label>Conta</Label>
