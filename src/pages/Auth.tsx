@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, Loader2, Mail, ArrowLeft } from 'lucide-react';
+import { Building2, Loader2, Mail, ArrowLeft, Wrench } from 'lucide-react';
+import { useMaintenanceMode } from '@/hooks/useMaintenanceMode';
 import { toast } from 'sonner';
 
 type AuthMode = 'login' | 'forgot-password';
@@ -23,6 +24,11 @@ export default function AuthPage() {
   // Forgot password form
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [emailSent, setEmailSent] = useState(false);
+
+  // Modo manutenção (destravar com 5 cliques no logo)
+  const { isEnabled: maintenance } = useMaintenanceMode();
+  const [logoClicks, setLogoClicks] = useState(0);
+  const showMaintenance = maintenance && logoClicks < 5;
 
   if (user) {
     navigate('/dashboard');
@@ -144,7 +150,7 @@ export default function AuthPage() {
             </>
           )}
 
-          {mode === 'forgot-password' && !emailSent && (
+          {!showMaintenance && mode === 'forgot-password' && !emailSent && (
             <>
               <CardHeader className="text-center">
                 <div className="mx-auto mb-4 w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -187,7 +193,7 @@ export default function AuthPage() {
             </>
           )}
 
-          {mode === 'forgot-password' && emailSent && (
+          {!showMaintenance && mode === 'forgot-password' && emailSent && (
             <>
               <CardHeader className="text-center">
                 <div className="mx-auto mb-4 w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center">
