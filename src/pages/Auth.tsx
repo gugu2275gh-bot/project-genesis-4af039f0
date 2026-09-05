@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, Loader2, Mail, ArrowLeft } from 'lucide-react';
+import { Building2, Loader2, Mail, ArrowLeft, Wrench } from 'lucide-react';
+import { useMaintenanceMode } from '@/hooks/useMaintenanceMode';
 import { toast } from 'sonner';
 
 type AuthMode = 'login' | 'forgot-password';
@@ -23,6 +24,11 @@ export default function AuthPage() {
   // Forgot password form
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [emailSent, setEmailSent] = useState(false);
+
+  // Modo manutenção (destravar com 5 cliques no logo)
+  const { isEnabled: maintenance } = useMaintenanceMode();
+  const [logoClicks, setLogoClicks] = useState(0);
+  const showMaintenance = maintenance && logoClicks < 5;
 
   if (user) {
     navigate('/dashboard');
@@ -66,17 +72,35 @@ export default function AuthPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
       <div className="w-full max-w-md animate-fade-in">
         <div className="flex flex-col items-center mb-8">
-          <div className="flex items-center gap-2 mb-2">
+          <button
+            type="button"
+            onClick={() => setLogoClicks((c) => c + 1)}
+            className="flex items-center gap-2 mb-2 focus:outline-none"
+            aria-label="CB Asesoria"
+          >
             <Building2 className="h-10 w-10 text-primary" />
             <span className="font-display font-bold text-2xl">CB Asesoria</span>
-          </div>
+          </button>
           <p className="text-muted-foreground text-center">
             Sistema de gestão de consultoria de imigração
           </p>
         </div>
 
         <Card className="shadow-soft-lg">
-          {mode === 'login' && (
+          {showMaintenance && (
+            <CardContent className="py-16 text-center space-y-4">
+              <Wrench className="h-12 w-12 text-primary mx-auto" />
+              <h1 className="font-display font-bold text-3xl sm:text-4xl tracking-tight text-primary">
+                SISTEMA EM MANUTENÇÃO
+              </h1>
+              <p className="text-muted-foreground">
+                Estamos realizando manutenção. Por favor, tente novamente mais tarde.
+              </p>
+            </CardContent>
+          )}
+
+          {!showMaintenance && mode === 'login' && (
+
             <>
               <CardHeader className="text-center">
                 <CardTitle>Entrar</CardTitle>
@@ -126,7 +150,7 @@ export default function AuthPage() {
             </>
           )}
 
-          {mode === 'forgot-password' && !emailSent && (
+          {!showMaintenance && mode === 'forgot-password' && !emailSent && (
             <>
               <CardHeader className="text-center">
                 <div className="mx-auto mb-4 w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -169,7 +193,7 @@ export default function AuthPage() {
             </>
           )}
 
-          {mode === 'forgot-password' && emailSent && (
+          {!showMaintenance && mode === 'forgot-password' && emailSent && (
             <>
               <CardHeader className="text-center">
                 <div className="mx-auto mb-4 w-12 h-12 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center">

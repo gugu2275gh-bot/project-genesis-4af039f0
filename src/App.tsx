@@ -3,7 +3,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { useMaintenanceMode, MAINTENANCE_OWNER_EMAIL } from "@/hooks/useMaintenanceMode";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { PortalLayout } from "@/components/portal/PortalLayout";
@@ -89,6 +91,19 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 
+function MaintenanceGuard() {
+  const { user, signOut } = useAuth();
+  const { isEnabled } = useMaintenanceMode();
+
+  useEffect(() => {
+    if (!isEnabled || !user) return;
+    if ((user.email || '').toLowerCase() === MAINTENANCE_OWNER_EMAIL) return;
+    signOut();
+  }, [isEnabled, user, signOut]);
+
+  return null;
+}
+
 function AppRoutes() {
   const { user } = useAuth();
   // Check if we're on the reset-password route - don't redirect even if user is set
@@ -172,6 +187,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <MaintenanceGuard />
             <AppRoutes />
           </BrowserRouter>
         </TooltipProvider>
