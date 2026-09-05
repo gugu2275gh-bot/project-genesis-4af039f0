@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Settings, Save, Globe, Brain, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import KnowledgeBaseManager from '@/components/settings/KnowledgeBaseManager';
 import { useSuperuser } from '@/hooks/useSuperuser';
+import { useMaintenanceMode, MAINTENANCE_OWNER_EMAIL } from '@/hooks/useMaintenanceMode';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -167,7 +168,9 @@ export default function SystemSettings() {
   const SENSITIVE_KEYS = ['openai_api_key', 'gemini_api_key'];
 
   const { toast } = useToast();
-  const { hasRole } = useAuth();
+  const { hasRole, user } = useAuth();
+  const isMaintenanceOwner = (user?.email || '').toLowerCase() === MAINTENANCE_OWNER_EMAIL;
+  const { isEnabled: maintenanceEnabled, setMaintenance } = useMaintenanceMode();
   const queryClient = useQueryClient();
   const isAdmin = hasRole('ADMIN');
 
@@ -422,6 +425,63 @@ export default function SystemSettings() {
 
       {/* Knowledge Base */}
       <KnowledgeBaseManager />
+
+      {/* Modo Manutenção — restrito */}
+      {isMaintenanceOwner && (
+        <Card className="border-primary/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-primary" />
+              Modo Manutenção
+            </CardTitle>
+            <CardDescription>
+              Quando ativado, todos os usuários são desconectados (exceto você) e a tela de login
+              passa a exibir apenas o aviso "SISTEMA EM MANUTENÇÃO". Para entrar durante a
+              manutenção, clique 5 vezes no logo da tela de login.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label className="text-base">
+                  {maintenanceEnabled ? 'Sistema em manutenção' : 'Sistema operando normalmente'}
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Alterna o acesso de todos os usuários ao sistema.
+                </p>
+              </div>
+              {maintenanceEnabled ? (
+                <Switch
+                  checked
+                  disabled={setMaintenance.isPending}
+                  onCheckedChange={() => setMaintenance.mutate(false)}
+                />
+              ) : (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Switch checked={false} disabled={setMaintenance.isPending} />
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Ativar modo manutenção?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Todos os usuários conectados serão desconectados e não poderão entrar
+                        enquanto o modo estiver ativo. Somente você continuará com acesso.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => setMaintenance.mutate(true)}>
+                        Sim, ativar
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Danger Zone — Cleanup test data */}
       {isAdmin && (
