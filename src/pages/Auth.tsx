@@ -66,17 +66,35 @@ export default function AuthPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
       <div className="w-full max-w-md animate-fade-in">
         <div className="flex flex-col items-center mb-8">
-          <div className="flex items-center gap-2 mb-2">
+          <button
+            type="button"
+            onClick={() => setLogoClicks((c) => c + 1)}
+            className="flex items-center gap-2 mb-2 focus:outline-none"
+            aria-label="CB Asesoria"
+          >
             <Building2 className="h-10 w-10 text-primary" />
             <span className="font-display font-bold text-2xl">CB Asesoria</span>
-          </div>
+          </button>
           <p className="text-muted-foreground text-center">
             Sistema de gestão de consultoria de imigração
           </p>
         </div>
 
         <Card className="shadow-soft-lg">
-          {mode === 'login' && (
+          {showMaintenance && (
+            <CardContent className="py-16 text-center space-y-4">
+              <Wrench className="h-12 w-12 text-primary mx-auto" />
+              <h1 className="font-display font-bold text-3xl sm:text-4xl tracking-tight text-primary">
+                SISTEMA EM MANUTENÇÃO
+              </h1>
+              <p className="text-muted-foreground">
+                Estamos realizando manutenção. Por favor, tente novamente mais tarde.
+              </p>
+            </CardContent>
+          )}
+
+          {!showMaintenance && mode === 'login' && (
+
             <>
               <CardHeader className="text-center">
                 <CardTitle>Entrar</CardTitle>
