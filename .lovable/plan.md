@@ -1,46 +1,30 @@
-# Diagnóstico do valor incorreto no serviço
+# Corrigir pagamentos únicos duplicados por serviço
 
-## Onde está acontecendo
+## Diagnóstico confirmado
 
-Na tela do contrato, o valor exibido vem dos registros da tabela `payments`, não do cadastro do tipo de serviço.
+A tela do contrato mostra o valor a partir dos pagamentos vinculados ao contrato (`gross_amount`, `vat_amount`, `amount`), não do cadastro do tipo de serviço (que não guarda preço).
 
-O ponto da tela que monta esse bloco é o detalhe do contrato, no trecho que gera as informações de pagamento. Ele usa:
+No contrato nº 87 (MARINA AGOSTO, serviço "Certificado de antecedentes penales (en Brasil)") existem dois pagamentos confirmados para o mesmo serviço:
 
-- `gross_amount` para mostrar **Valor do Serviço**;
-- `vat_amount` para mostrar o IVA;
-- `amount` para mostrar **Total Final**.
+- correto: base € 100,00 + IVA € 21,00 = € 121,00
+- incorreto: € 73,26 sem IVA (criado depois, também confirmado)
 
-## O que encontrei no banco
+Existem duas faturas emitidas nesse contrato: uma de € 121,00 (correta) e uma de € 73,26 (do pagamento incorreto).
 
-Para o contrato da cliente **MARINA AGOSTO** / contrato nº **87**, serviço **Certificado de antecedentes penales (en Brasil)**, existem dois pagamentos confirmados vinculados ao mesmo contrato:
+## O que será feito
 
-1. Pagamento correto:
-   - valor base: **€ 100,00**
-   - IVA: **€ 21,00**
-   - total: **€ 121,00**
+1. Cancelar a fatura de € 73,26 desse contrato e remover o pagamento incorreto de € 73,26, mantendo somente o pagamento de € 121,00.
+2. Levantar todos os contratos com mais de um pagamento único confirmado para o mesmo serviço/beneficiário e corrigir do mesmo jeito: manter o pagamento correto e cancelar fatura + remover o pagamento duplicado.
+3. Criar uma proteção no banco que impeça dois pagamentos únicos ativos para o mesmo contrato, serviço e beneficiário, permitindo normalmente várias parcelas de um plano parcelado.
 
-2. Pagamento incorreto/extra:
-   - valor base: **€ 73,26**
-   - IVA: **€ 0,00**
-   - total: **€ 73,26**
+## Detalhes técnicos
 
-Também existem duas faturas emitidas para o mesmo contrato:
+- Limpeza de dados via comandos de atualização/remoção nas tabelas `invoices` e `payments`, respeitando os registros ligados (fatura antes do pagamento).
+- Proteção por gatilho de validação em `payments` (não por CHECK), verificando duplicidade de pagamento com `payment_form = 'UNICO'` no mesmo `contract_id` + `opportunity_id` + `beneficiary_contact_id` quando o status não for estornado/cancelado.
+- Antes da proteção entrar em vigor, todos os casos existentes precisam estar corrigidos, senão futuras edições desses pagamentos passariam a falhar.
 
-1. Uma fatura com base **€ 60,55** e total **€ 73,26**.
-2. Uma fatura com base **€ 100,00** e total **€ 121,00**.
+## Validação
 
-## Motivo da diferença
-
-O problema não está no cadastro do serviço. O cadastro do tipo de serviço só tem nome/código e não guarda preço.
-
-A diferença acontece porque há um pagamento antigo/extra de **€ 73,26** ainda vinculado ao contrato. A tela lê os pagamentos do contrato e, por isso, ainda consegue exibir esse valor mesmo depois do pagamento correto de **€ 100,00 + IVA** ter sido criado.
-
-Pelo histórico, o pagamento de **€ 73,26** foi criado depois do pagamento correto e depois também foi confirmado. Isso deixou dois pagamentos confirmados para o mesmo serviço/contrato.
-
-## Próxima correção sugerida
-
-Se quiser que eu corrija, o ajuste deve ser:
-
-1. Remover ou cancelar o pagamento/fatura incorretos de **€ 73,26** desse contrato.
-2. Manter apenas o pagamento correto de **€ 100,00 + IVA = € 121,00**.
-3. Adicionar uma proteção para evitar dois pagamentos únicos confirmados para o mesmo serviço no mesmo contrato, quando não forem parcelas.
+- Reabrir o contrato nº 87 e confirmar que aparece somente € 100,00 + IVA = € 121,00.
+- Conferir em Faturas que a fatura de € 73,26 está cancelada e a de € 121,00 permanece.
+- Conferir um contrato parcelado para garantir que as parcelas continuam funcionando.
