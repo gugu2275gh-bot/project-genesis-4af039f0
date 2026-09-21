@@ -185,6 +185,23 @@
   @apply bg-primary/30 rounded-full hover:bg-primary/50 transition-colors;
 }
 
+/* Tabela de faturas: scroll lateral sempre visível */
+.invoices-table-scroll {
+  overflow-x: scroll;
+}
+
+.invoices-table-scroll::-webkit-scrollbar {
+  height: 12px;
+}
+
+.invoices-table-scroll::-webkit-scrollbar-track {
+  @apply bg-muted rounded-full;
+}
+
+.invoices-table-scroll::-webkit-scrollbar-thumb {
+  @apply bg-primary/50 rounded-full hover:bg-primary/70 transition-colors;
+}
+
 /* Status Badges */
 .status-novo { @apply bg-info/10 text-info border-info/30; }
 .status-pendente { @apply bg-warning/10 text-warning border-warning/30; }

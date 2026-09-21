@@ -1038,7 +1038,9 @@ function InvoicesTable({ invoices, columns }: { invoices: Invoice[]; columns: Co
             <Input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} />
           </div>
         </div>
-        <DataTable columns={columns} data={filtered} emptyMessage="Nenhuma fatura encontrada" />
+        <div className="invoices-table-scroll">
+          <DataTable columns={columns} data={filtered} emptyMessage="Nenhuma fatura encontrada" />
+        </div>
       </CardContent>
     </Card>
   );
