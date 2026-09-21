@@ -73,7 +73,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = ATTEMPT_TIM
   }
 }
 
-async function callGemini(model: string, prompt: string) {
+async function callGemini(model: string, prompt: string, timeoutMs = ATTEMPT_TIMEOUT_MS) {
   const key = Deno.env.get('CBAsesoria_Key')
   if (!key) throw new Error('CBAsesoria_Key não configurada')
   const resp = await fetchWithTimeout(
@@ -86,13 +86,14 @@ async function callGemini(model: string, prompt: string) {
         generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
       }),
     },
+    timeoutMs,
   )
   const data = await resp.json()
   if (!resp.ok) throw new Error(data?.error?.message || `HTTP ${resp.status}`)
   return data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') || ''
 }
 
-async function callOpenAICompatible(provider: string, model: string, prompt: string) {
+async function callOpenAICompatible(provider: string, model: string, prompt: string, timeoutMs = ATTEMPT_TIMEOUT_MS) {
   const keyName = provider === 'lovable' ? 'LOVABLE_API_KEY' : 'OPENAI_API_KEY'
   const key = Deno.env.get(keyName)
   if (!key) throw new Error(`${keyName} não configurada`)
