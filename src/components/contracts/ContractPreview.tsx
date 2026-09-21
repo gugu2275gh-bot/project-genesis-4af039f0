@@ -59,6 +59,7 @@ export function ContractPreview({
   const [editedPayments, setEditedPayments] = useState<PaymentData[]>(payments || []);
   const [editedDate, setEditedDate] = useState(date ? date.toISOString().split('T')[0] : '');
   const [spanishDynamicText, setSpanishDynamicText] = useState<Record<string, string>>({});
+  const [translatedKeys, setTranslatedKeys] = useState<string[]>([]);
   const translate = useAgentTranslate();
 
   const translationSource = useMemo(() => {
@@ -74,6 +75,7 @@ export function ContractPreview({
     let active = true;
     if (translationSource.length === 0) {
       setSpanishDynamicText({});
+      setTranslatedKeys([]);
       return () => { active = false; };
     }
 
@@ -81,17 +83,22 @@ export function ContractPreview({
       const translated = await Promise.all(translationSource.map(async ([key, text]) => {
         try {
           const result = await translate.mutateAsync({ text, source: 'pt-BR', targets: ['es'] });
-          return [key, result.es || text] as const;
+          return [key, result.es || ''] as const;
         } catch {
-          return [key, text] as const;
+          return [key, ''] as const;
         }
       }));
-      if (active) setSpanishDynamicText(Object.fromEntries(translated));
+      if (active) {
+        setSpanishDynamicText(Object.fromEntries(translated));
+        setTranslatedKeys(translated.map(([key]) => key));
+      }
     };
 
     void translateDynamicText();
     return () => { active = false; };
   }, [translationSource]);
+
+  const translationReady = translationSource.every(([key]) => translatedKeys.includes(key));
 
   const currentData: ContractData = {
     template,
@@ -100,16 +107,16 @@ export function ContractPreview({
     documentNumber: isEditing ? editedDocument : documentNumber,
     contractNumber: isEditing ? editedContractNumber : contractNumber,
     date,
-    serviceDescription: spanishDynamicText.serviceDescription || serviceDescription,
+    serviceDescription: spanishDynamicText.serviceDescription,
     feeAmount: isEditing && editedFeeAmount ? parseFloat(editedFeeAmount) : feeAmount,
     vatRate,
     totalAmount: isEditing && editedFeeAmount ? parseFloat(editedFeeAmount) * (1 + (vatRate || 0)) : totalAmount,
-    paymentConditions: spanishDynamicText.paymentConditions || (isEditing ? editedPaymentConditions : paymentConditions),
+    paymentConditions: spanishDynamicText.paymentConditions,
     paymentMethod,
     bankAccount,
     beneficiaries: beneficiaries?.map((beneficiary, index) => ({
       ...beneficiary,
-      serviceName: spanishDynamicText[`beneficiary_${index}`] || beneficiary.serviceName,
+      serviceName: spanishDynamicText[`beneficiary_${index}`],
     })),
     phone,
     email,
@@ -121,12 +128,12 @@ export function ContractPreview({
   const sections = getContractSections(currentData);
 
   const handleDownloadPDF = async () => {
-    if (translate.isPending) return;
+    if (!translationReady) return;
     await generateContractDocument(currentData);
   };
 
   const handleDownloadWord = async () => {
-    if (translate.isPending) return;
+    if (!translationReady) return;
     await generateContractWord(currentData);
   };
 
@@ -247,18 +254,18 @@ export function ContractPreview({
           {contractStatus !== 'ASSINADO' && contractStatus !== 'CANCELADO' && contractStatus !== 'REPROVADO' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline">
-                  <Download className="h-4 w-4 mr-1" />
-                  Baixar
+                <Button size="sm" variant="outline" disabled={!translationReady}>
+                  {!translationReady ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
+                  {!translationReady ? 'Traduzindo' : 'Baixar'}
                   <ChevronDown className="h-3 w-3 ml-1" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
-                <DropdownMenuItem onClick={handleDownloadPDF} disabled={translate.isPending}>
+                <DropdownMenuItem onClick={handleDownloadPDF} disabled={!translationReady}>
                   <FileText className="h-4 w-4 mr-2" />
                   PDF
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleDownloadWord}>
+                <DropdownMenuItem onClick={handleDownloadWord} disabled={!translationReady}>
                   <FileText className="h-4 w-4 mr-2" />
                   Word (.docx)
                 </DropdownMenuItem>
@@ -266,7 +273,7 @@ export function ContractPreview({
             </DropdownMenu>
           )}
           {canDownload && (contractStatus === 'ASSINADO') && (
-            <Button size="sm" onClick={handleDownloadPDF}>
+            <Button size="sm" onClick={handleDownloadPDF} disabled={!translationReady}>
               <Download className="h-4 w-4 mr-1" />
               Baixar PDF
             </Button>
