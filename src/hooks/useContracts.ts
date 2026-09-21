@@ -478,16 +478,6 @@ export function useContracts() {
 
       await ensureContractPayments(contract);
 
-      const pendingInvoiceArgs: { p_contract_id: string; p_created_by_user_id?: string } = {
-        p_contract_id: contract.id,
-      };
-      if (user?.id) {
-        pendingInvoiceArgs.p_created_by_user_id = user.id;
-      }
-
-      const { error: invoiceError } = await supabase.rpc('create_pending_invoice_for_contract', pendingInvoiceArgs);
-      if (invoiceError) throw invoiceError;
-
       return contract;
     },
     onSuccess: () => {
