@@ -483,7 +483,8 @@ export function useContracts() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contracts'] });
       queryClient.invalidateQueries({ queryKey: ['payments'] });
-      toast({ title: 'Contrato aprovado e pagamentos gerados' });
+      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      toast({ title: 'Contrato aprovado, pagamentos e fatura pendente gerados' });
     },
     onError: (error) => {
       toast({ title: 'Erro ao aprovar contrato', description: error.message, variant: 'destructive' });

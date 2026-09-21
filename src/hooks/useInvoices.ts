@@ -17,7 +17,7 @@ export interface Invoice {
   vat_amount: number;
   total_amount: number;
   additional_costs: Record<string, number> | null;
-  status: 'EMITIDA' | 'ENVIADA' | 'CANCELADA';
+  status: 'PENDENTE' | 'EMITIDA' | 'ENVIADA' | 'CANCELADA';
   issued_at: string;
   sent_at: string | null;
   file_url: string | null;
@@ -169,9 +169,11 @@ export function useInvoices() {
   });
 
   // Estatísticas
+  const pendingInvoices = invoicesQuery.data?.filter(i => i.status === 'PENDENTE') ?? [];
   const issuedInvoices = invoicesQuery.data?.filter(i => i.status === 'EMITIDA') ?? [];
   const sentInvoices = invoicesQuery.data?.filter(i => i.status === 'ENVIADA') ?? [];
   
+  const totalPending = pendingInvoices.reduce((sum, i) => sum + i.total_amount, 0);
   const totalIssued = issuedInvoices.reduce((sum, i) => sum + i.total_amount, 0);
   const totalSent = sentInvoices.reduce((sum, i) => sum + i.total_amount, 0);
 
@@ -183,8 +185,10 @@ export function useInvoices() {
     updateInvoice,
     markAsSent,
     cancelInvoice,
+    pendingInvoices,
     issuedInvoices,
     sentInvoices,
+    totalPending,
     totalIssued,
     totalSent,
   };
