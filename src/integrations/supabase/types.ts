@@ -3902,6 +3902,10 @@ export type Database = {
         Args: { p_payment_id: string }
         Returns: string
       }
+      create_pending_invoice_for_contract: {
+        Args: { p_contract_id: string; p_created_by_user_id?: string }
+        Returns: string
+      }
       current_conversation_log_session: { Args: never; Returns: number }
       get_user_roles: {
         Args: { _user_id: string }

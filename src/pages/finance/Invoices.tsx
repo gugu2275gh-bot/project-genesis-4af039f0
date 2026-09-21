@@ -272,6 +272,7 @@ function EditExtrasDialog({
 }
 
 const STATUS_BADGES = {
+  PENDENTE: { label: 'Pendente', variant: 'secondary' as const, icon: Receipt },
   EMITIDA: { label: 'Emitida', variant: 'outline' as const, icon: FileText },
   ENVIADA: { label: 'Enviada', variant: 'default' as const, icon: Send },
   CANCELADA: { label: 'Cancelada', variant: 'destructive' as const, icon: Ban },
@@ -285,8 +286,10 @@ export default function Invoices() {
     updateInvoice,
     markAsSent,
     cancelInvoice,
+    pendingInvoices,
     issuedInvoices,
     sentInvoices,
+    totalPending,
     totalIssued,
     totalSent,
   } = useInvoices();
@@ -593,7 +596,7 @@ export default function Invoices() {
       header: '',
       cell: (item) => (
         <div className="flex gap-2">
-          {item.status === 'EMITIDA' && (
+          {(item.status === 'PENDENTE' || item.status === 'EMITIDA') && (
             <>
               <Button 
                 size="sm" 
@@ -894,7 +897,7 @@ export default function Invoices() {
         const totalVat = valid.reduce((s, i) => s + (i.vat_amount || 0), 0);
         const totalBase = valid.reduce((s, i) => s + (i.amount_without_vat || 0), 0);
         return (
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Emitidas</CardTitle>
@@ -919,11 +922,22 @@ export default function Invoices() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Aguardando Envio</CardTitle>
+                <CardTitle className="text-sm font-medium">Pendentes</CardTitle>
                 <Receipt className="h-4 w-4 text-amber-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-amber-500">{issuedInvoices.length}</div>
+                <div className="text-2xl font-bold text-amber-500">{pendingInvoices.length}</div>
+                <p className="text-xs text-muted-foreground">€{totalPending.toFixed(2)}</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Aguardando Envio</CardTitle>
+                <FileText className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{issuedInvoices.length}</div>
                 <p className="text-xs text-muted-foreground">€{totalIssued.toFixed(2)}</p>
               </CardContent>
             </Card>
@@ -1008,6 +1022,7 @@ function InvoicesTable({ invoices, columns }: { invoices: Invoice[]; columns: Co
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Todos</SelectItem>
+                  <SelectItem value="PENDENTE">Pendente</SelectItem>
                 <SelectItem value="EMITIDA">Emitida</SelectItem>
                 <SelectItem value="ENVIADA">Enviada</SelectItem>
                 <SelectItem value="CANCELADA">Cancelada</SelectItem>
