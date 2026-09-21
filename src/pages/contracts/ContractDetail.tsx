@@ -277,7 +277,8 @@ export default function ContractDetail() {
 
     // Pre-sort each group's installments
     for (const key of groupOrder) {
-      const gp = groupsMap.get(key)!;
+      const gp = groupsMap.get(key);
+      if (!gp) continue;
       gp.sort((a: any, b: any) => {
         const an = a.installment_number ?? 9999;
         const bn = b.installment_number ?? 9999;
@@ -288,17 +289,40 @@ export default function ContractDetail() {
       });
     }
 
+    const isPaymentInstallment = (payment: any) => payment.payment_form === 'PARCELADO';
+
+    const formatPaymentCountLabel = (singleCount: number, installmentCountValue: number) => {
+      const parts: string[] = [];
+      if (singleCount > 0) {
+        parts.push(`${singleCount} ${singleCount === 1 ? 'pagamento' : 'pagamentos'}`);
+      }
+      if (installmentCountValue > 0) {
+        parts.push(`${installmentCountValue} ${installmentCountValue === 1 ? 'parcela' : 'parcelas'}`);
+      }
+      return parts.join(' + ');
+    };
+
     // Build consolidated due-date summary across ALL groups: sum amounts whenever
-    // multiple payments (installments or single) share the same due date.
-    const dueMap = new Map<string, { total: number; count: number; date: Date }>();
+    // multiple payments share the same due date, without calling unique payments installments.
+    const dueMap = new Map<string, { total: number; singleCount: number; installmentCount: number; date: Date }>();
     for (const key of groupOrder) {
-      const gp = groupsMap.get(key)!;
+      const gp = groupsMap.get(key);
+      if (!gp) continue;
       for (const p of gp) {
         if (!p.due_date) continue;
         const dateKey = p.due_date as string;
-        const cur = dueMap.get(dateKey) || { total: 0, count: 0, date: new Date(`${dateKey}T12:00:00`) };
+        const cur = dueMap.get(dateKey) || {
+          total: 0,
+          singleCount: 0,
+          installmentCount: 0,
+          date: new Date(`${dateKey}T12:00:00`),
+        };
         cur.total += Number(p.amount ?? 0);
-        cur.count += 1;
+        if (isPaymentInstallment(p)) {
+          cur.installmentCount += 1;
+        } else {
+          cur.singleCount += 1;
+        }
         dueMap.set(dateKey, cur);
       }
     }
@@ -312,15 +336,16 @@ export default function ContractDetail() {
       for (const [, v] of allDueEntries) {
         const dateStr = format(v.date, 'dd/MM/yyyy', { locale: ptBR });
         const amountStr = formatMoney(v.total) || '';
-        const parcelaLabel = v.count > 1 ? `${v.count} parcelas` : `1 parcela`;
-        summaryBlock.push(`  • ${dateStr} — Total a pagar: ${amountStr} (${parcelaLabel})`);
+        const paymentCountLabel = formatPaymentCountLabel(v.singleCount, v.installmentCount);
+        summaryBlock.push(`  • ${dateStr} — Total a pagar nesta data: ${amountStr} (${paymentCountLabel})`);
       }
     }
 
     const groupBlocks = groupOrder.map((key) => {
-      const groupPayments = groupsMap.get(key)!;
+      const groupPayments = groupsMap.get(key);
+      if (!groupPayments || groupPayments.length === 0) return '';
       const first = groupPayments[0];
-      const isInstallments = groupPayments.length > 1 || first.payment_form === 'PARCELADO';
+      const isInstallments = isPaymentInstallment(first);
 
       const leadId = first.opportunities?.leads?.id || first.opportunities?.lead_id;
       const linkedLead = contractLeadLinks?.find((cl: any) => cl.lead_id === leadId)?.leads;
