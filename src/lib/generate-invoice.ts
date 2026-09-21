@@ -6,6 +6,8 @@ export interface InvoiceLineItem {
   quantity: number;
   amount: number;
   discountPct?: number;
+  /** Serviços relativos a este item — uma linha descritiva por serviço */
+  services?: string[];
 }
 
 export interface InvoiceData {
@@ -186,7 +188,17 @@ export function generateInvoice(data: InvoiceData): Blob {
     const descLines = item.description
       ? doc.splitTextToSize(item.description, colX.unid - colX.concepto - 4)
       : [""];
-    const rowH = Math.max(rowMinH, descLines.length * 4 + 2);
+    // Sub-linhas: um serviço por linha, recuadas e em fonte menor
+    const serviceLines: string[] = [];
+    (item.services || []).forEach((svc) => {
+      if (!svc?.trim()) return;
+      const wrapped: string[] = doc.splitTextToSize(
+        `· ${svc.trim()}`,
+        colX.unid - colX.concepto - 10
+      );
+      wrapped.forEach((w) => serviceLines.push(w));
+    });
+    const rowH = Math.max(rowMinH, descLines.length * 4 + serviceLines.length * 3.6 + 2);
     // date
     if (item.date) doc.text(item.date, colX.fecha + 2, ry + 5);
     // description
@@ -200,6 +212,18 @@ export function generateInvoice(data: InvoiceData): Blob {
     // abonos (total line)
     const lineTotal = item.amount * (item.quantity || 1) * (1 - (item.discountPct || 0) / 100);
     doc.text(fmt(lineTotal || 0), colX.abonos + 22, ry + 5, { align: "right" });
+    // serviços do item
+    if (serviceLines.length > 0) {
+      doc.setFontSize(7);
+      doc.setTextColor(...BRAND.mutedText);
+      let sy = ry + 5 + descLines.length * 4;
+      serviceLines.forEach((line) => {
+        doc.text(line, colX.concepto + 6, sy);
+        sy += 3.6;
+      });
+      doc.setFontSize(9);
+      doc.setTextColor(...BRAND.darkText);
+    }
     ry += rowH;
   });
 

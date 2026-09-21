@@ -137,11 +137,29 @@ async function handleDownloadInvoice(inv: Invoice) {
     const notes: string | undefined = (contract as any)?.opportunities?.leads?.contacts?.payment_notes;
     extras = parsePaymentNotesExtras(notes);
   }
+  // Serviços relativos à fatura (lead principal + leads adicionais do contrato)
+  const invoiceServices: string[] = [];
+  if (inv.contract_id) {
+    const { data: contractServices } = await supabase
+      .from('contracts')
+      .select(
+        'opportunities:opportunity_id(leads:lead_id(service_interest, service_types:service_type_id(name))), contract_leads(leads:lead_id(service_interest, service_types:service_type_id(name)))'
+      )
+      .eq('id', inv.contract_id)
+      .maybeSingle();
+    const pushService = (lead: any) => {
+      const name = lead?.service_types?.name || lead?.service_interest;
+      if (name && !invoiceServices.includes(name)) invoiceServices.push(name);
+    };
+    pushService((contractServices as any)?.opportunities?.leads);
+    ((contractServices as any)?.contract_leads || []).forEach((cl: any) => pushService(cl?.leads));
+  }
   const extraItems = Object.entries(extras).map(([desc, amt]) => ({
     date: issueDate,
     description: desc,
     quantity: 1,
     amount: Number(amt) || 0,
+    services: invoiceServices,
   }));
   const pagosDelegados = Object.values(extras).reduce((s, v) => s + (Number(v) || 0), 0);
   // Total do PDF = serviço + IVA (sobre serviço) + taxas (taxas não entram no IVA)
@@ -159,6 +177,7 @@ async function handleDownloadInvoice(inv: Invoice) {
         description: inv.service_description,
         quantity: 1,
         amount: inv.amount_without_vat,
+        services: invoiceServices,
       },
       ...extraItems,
     ],
