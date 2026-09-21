@@ -111,7 +111,7 @@ async function callOpenAICompatible(provider: string, model: string, prompt: str
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
     body: JSON.stringify(payload),
-  })
+  }, timeoutMs)
   const data = await resp.json()
   if (!resp.ok) throw new Error(data?.error?.message || `HTTP ${resp.status}`)
   return data?.choices?.[0]?.message?.content || ''
