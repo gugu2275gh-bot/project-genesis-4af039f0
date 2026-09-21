@@ -50,7 +50,8 @@ async function requireAdmin(req: Request) {
 
   const service = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   const { data: roles } = await service.from('user_roles').select('role').eq('user_id', userId)
-  if (!(roles || []).some((r: any) => r.role === 'ADMIN')) return { error: 'forbidden', status: 403 }
+  const allowedRoles = new Set(['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA', 'FINANCEIRO', 'JURIDICO', 'ATENCAO_CLIENTE'])
+  if (!(roles || []).some((r: any) => allowedRoles.has(r.role))) return { error: 'forbidden', status: 403 }
   return { service }
 }
 
