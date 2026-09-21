@@ -166,13 +166,21 @@ ${text}
       { provider: 'lovable', model: 'google/gemini-2.5-flash' },
     ]
 
+    const startedAt = Date.now()
     let lastError = ''
     for (const item of attempts) {
+      const elapsed = Date.now() - startedAt
+      if (elapsed > TOTAL_BUDGET_MS) {
+        lastError = lastError || 'tempo limite de tradução atingido'
+        console.warn('[AI_TRANSLATE] orçamento esgotado, interrompendo cascata', { elapsed })
+        break
+      }
+      const remaining = Math.min(ATTEMPT_TIMEOUT_MS, TOTAL_BUDGET_MS - elapsed)
       try {
         const raw =
           item.provider === 'gemini'
-            ? await callGemini(item.model, prompt)
-            : await callOpenAICompatible(item.provider, item.model, prompt)
+            ? await callGemini(item.model, prompt, remaining)
+            : await callOpenAICompatible(item.provider, item.model, prompt, remaining)
         const parsed = parseJsonLoose(raw)
         const translations: Record<string, string> = {}
         for (const l of langs) if (typeof parsed[l] === 'string') translations[l] = parsed[l]
@@ -183,7 +191,8 @@ ${text}
         console.warn('[AI_TRANSLATE] falha em', item.provider, item.model, lastError)
       }
     }
-    return json({ error: `Não foi possível traduzir: ${lastError}` }, 502)
+    return json({ error: `Não foi possível traduzir agora: ${lastError}` }, 503)
+
   } catch (e) {
     console.error('[AI_TRANSLATE] erro inesperado', e)
     return json({ error: e instanceof Error ? e.message : 'erro inesperado' }, 500)
