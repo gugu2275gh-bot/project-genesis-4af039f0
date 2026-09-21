@@ -104,6 +104,33 @@ function formatCurrency(amount: number, currency: string = 'EUR'): string {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format(amount);
 }
 
+const DOCUMENT_TYPE_ES: Record<string, string> = {
+  PASSAPORTE: 'PASAPORTE',
+  PASSPORT: 'PASAPORTE',
+  RG: 'DOCUMENTO DE IDENTIDAD',
+  CPF: 'CPF',
+  CEDULA: 'CÉDULA DE IDENTIDAD',
+  'CÉDULA': 'CÉDULA DE IDENTIDAD',
+};
+
+function documentTypeSpanish(value?: string): string {
+  const normalized = String(value || '').trim().toUpperCase();
+  return DOCUMENT_TYPE_ES[normalized] || normalized || 'PASAPORTE / NIE / DNI / NIF';
+}
+
+const EXCLUDED_COSTS = [
+  'Tasas administrativas, notariales, judiciales, traducciones juradas (traducción al inglés), ni otros gastos derivados de gestiones ante terceros.',
+  'Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).',
+  'Costes relacionados con procedimientos contenciosos o incidentales posteriores.',
+];
+
+const NATIONALITY_EXCLUDED_COST = 'Los exámenes: DELE A2 para los extranjeros cuya lengua materna no sea el español (134€), CCSE todos los extranjeros deben realizarlo, sin importar su lengua materna deben aprobar en el (85€) y Tasa Ministerio de la Justicia (104.05€).';
+
+function excludedCostsParagraphs(includeNationalityExam = false): Paragraph[] {
+  const items = includeNationalityExam ? [...EXCLUDED_COSTS, NATIONALITY_EXCLUDED_COST] : EXCLUDED_COSTS;
+  return items.map((text, index) => numbered(String(index + 1), text));
+}
+
 function heading(text: string): Paragraph {
   return new Paragraph({
     children: [new TextRun({ text, bold: true, size: 24, font: 'Calibri' })],
@@ -165,7 +192,7 @@ function contractHeader(contractNumber: string, dateStr: string): Paragraph[] {
 }
 
 function contractParties(clientName: string, documentType: string, documentNumber: string): Paragraph[] {
-  const docLabel = documentType ? documentType.toUpperCase() : 'PASAPORTE / NIE / DNI / NIF';
+  const docLabel = documentTypeSpanish(documentType);
   return [
     heading('CONTRATO DE PRESTACIÓN DE SERVICIOS JURÍDICOS ENTRE:'),
     heading('PRESTADOR DEL SERVICIO'),
@@ -212,7 +239,7 @@ function buildHonorariosSection(data: ContractData): Paragraph[] {
         sections.push(emptyLine());
       } else {
         // Skip lines with zero values (e.g., "IVA: + € 0,00" or "Desconto: - € 0,00")
-        const isZeroValueLine = /^(IVA|Desconto).*[€$]\s*0[,.]00/.test(trimmed);
+        const isZeroValueLine = /^(IVA|Descuento|Desconto).*[€$]\s*0[,.]00/.test(trimmed);
         if (!isZeroValueLine) {
           sections.push(para(trimmed));
         }
@@ -247,7 +274,7 @@ function buildHonorariosSection(data: ContractData): Paragraph[] {
     sections.push(para('Beneficiarios incluidos en el presente contrato:', { bold: true }));
     for (const ben of data.beneficiaries) {
       const docInfo = ben.documentType && ben.documentNumber 
-        ? ` | ${ben.documentType}: ${ben.documentNumber}` 
+        ? ` | ${documentTypeSpanish(ben.documentType)}: ${ben.documentNumber}` 
         : '';
       const serviceInfo = ben.serviceName ? ` | Trámite: ${ben.serviceName}` : '';
       const valueInfo = ben.amount ? ` | Valor: ${formatCurrency(ben.amount, currency)}` : '';
@@ -488,9 +515,7 @@ function buildRegularizacionExtraordinaria(data: ContractData, dateStr: string):
     ...buildHonorariosSection(data),
     ...buildBankAccountSection(data),
     para('2.1. Los honorarios no incluyen:', { bold: true }),
-    bullet('Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.'),
-    bullet('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
-    bullet('Costes relacionados con procedimientos contenciosos o incidentales posteriores.'),
+    ...excludedCostsParagraphs(),
     emptyLine(),
     para('2.2. Retraso en el pago de los honorarios:', { bold: true }),
     para('En caso de retraso en el pago de los honorarios, el CLIENTE incurrirá en las siguientes consecuencias:'),
@@ -541,10 +566,7 @@ function buildNacionalidad(data: ContractData, dateStr: string): Paragraph[] {
     ...buildHonorariosSection(data),
     ...buildBankAccountSection(data),
     para('2.1. Los honorarios no incluyen:', { bold: true }),
-    bullet('Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.'),
-    bullet('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
-    bullet('Costes relacionados con procedimientos contenciosos o incidentales posteriores.'),
-    bullet('Los exámenes: DELE A2 para los extranjeros cuya lengua materna no sea el español (134€), CCSE todos los extranjeros deben realizarlo, sin importar su lengua materna deben aprobar en el (85€) y Tasa Ministerio de la Justicia (104.05€).'),
+    ...excludedCostsParagraphs(true),
     emptyLine(),
     para('2.2. Retraso en el pago de los honorarios:', { bold: true }),
     para('En caso de retraso en el pago de los honorarios, el CLIENTE incurrirá en las siguientes consecuencias:'),
@@ -588,9 +610,7 @@ function buildDocumentos(data: ContractData, dateStr: string): Paragraph[] {
     ...buildHonorariosSection(data),
     ...buildBankAccountSection(data),
     heading('2.1. Los honorarios no incluyen:'),
-    numbered('1', 'Tasas administrativas, notariales, judiciales, traducciones juradas (traducción al inglés), ni otros gastos derivados de gestiones ante terceros.'),
-    para('Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).'),
-    para('Costes relacionados con procedimientos contenciosos o incidentales posteriores.'),
+    ...excludedCostsParagraphs(),
     emptyLine(),
     heading('2. Retraso en el pago de los honorarios'),
     para('En caso de retraso en el pago de los honorarios, el CLIENTE incurrirá en las siguientes consecuencias:'),
@@ -657,7 +677,7 @@ function sectionsFromHeader(contractNumber: string, dateStr: string): ContractSe
 }
 
 function sectionsFromParties(clientName: string, documentType: string, documentNumber: string): ContractSection[] {
-  const docLabel = documentType ? documentType.toUpperCase() : 'PASAPORTE / NIE / DNI / NIF';
+  const docLabel = documentTypeSpanish(documentType);
   return [
     { type: 'heading', text: 'CONTRATO DE PRESTACIÓN DE SERVICIOS JURÍDICOS ENTRE:' },
     { type: 'heading', text: 'PRESTADOR DEL SERVICIO' },
@@ -733,7 +753,7 @@ function sectionsHonorarios(data: ContractData): ContractSection[] {
     sections.push({ type: 'paragraph', text: 'Beneficiarios incluidos en el presente contrato:', bold: true });
     for (const ben of data.beneficiaries) {
       const docInfo = ben.documentType && ben.documentNumber 
-        ? ` | ${ben.documentType}: ${ben.documentNumber}` 
+        ? ` | ${documentTypeSpanish(ben.documentType)}: ${ben.documentNumber}` 
         : '';
       const serviceInfo = ben.serviceName ? ` | Trámite: ${ben.serviceName}` : '';
       const valueInfo = ben.amount ? ` | Valor: ${formatCurrency(ben.amount, currency)}` : '';
@@ -977,6 +997,10 @@ export function getContractSections(data: ContractData): ContractSection[] {
     ...sectionsOctava(),
     ...sectionsNovena(),
   ];
+  const excludedCosts = (includeNationalityExam = false): ContractSection[] => {
+    const items = includeNationalityExam ? [...EXCLUDED_COSTS, NATIONALITY_EXCLUDED_COST] : EXCLUDED_COSTS;
+    return items.map((text, index) => ({ type: 'numbered' as const, text: `${index + 1}. ${text}` }));
+  };
 
   switch (data.template) {
     case 'REGULARIZACION_EXTRAORDINARIA':
@@ -988,9 +1012,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         ...honorarios,
         ...sectionsBankAccount(data),
         { type: 'paragraph', text: '2.1. Los honorarios no incluyen:', bold: true },
-        { type: 'bullet', text: 'Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.' },
-        { type: 'bullet', text: 'Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).' },
-        { type: 'bullet', text: 'Costes relacionados con procedimientos contenciosos o incidentales posteriores.' },
+        ...excludedCosts(),
         { type: 'empty', text: '' },
         { type: 'paragraph', text: '2.2. Retraso en el pago de los honorarios:', bold: true },
         { type: 'paragraph', text: 'En caso de retraso en el pago de los honorarios, el CLIENTE incurrirá en las siguientes consecuencias:' },
@@ -1021,10 +1043,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         ...honorarios,
         ...sectionsBankAccount(data),
         { type: 'paragraph', text: '2.1. Los honorarios no incluyen:', bold: true },
-        { type: 'bullet', text: 'Tasas administrativas, notariales, judiciales, traducciones juradas, ni otros gastos derivados de gestiones ante terceros.' },
-        { type: 'bullet', text: 'Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).' },
-        { type: 'bullet', text: 'Costes relacionados con procedimientos contenciosos o incidentales posteriores.' },
-        { type: 'bullet', text: 'Los exámenes: DELE A2 para los extranjeros cuya lengua materna no sea el español (134€), CCSE todos los extranjeros deben realizarlo, sin importar su lengua materna deben aprobar en el (85€) y Tasa Ministerio de la Justicia (104.05€).' },
+        ...excludedCosts(true),
         { type: 'empty', text: '' },
         { type: 'paragraph', text: '2.2. Retraso en el pago de los honorarios:', bold: true },
         { type: 'paragraph', text: 'En caso de retraso en el pago de los honorarios, el CLIENTE incurrirá en las siguientes consecuencias:' },
@@ -1051,9 +1070,7 @@ export function getContractSections(data: ContractData): ContractSection[] {
         ...honorarios,
         ...sectionsBankAccount(data),
         { type: 'heading', text: '2.1. Los honorarios no incluyen:' },
-        { type: 'numbered', text: '1. Tasas administrativas, notariales, judiciales, traducciones juradas (traducción al inglés), ni otros gastos derivados de gestiones ante terceros.' },
-        { type: 'paragraph', text: 'Intervención de otros profesionales (procuradores, agentes inmobiliarios, etc.).' },
-        { type: 'paragraph', text: 'Costes relacionados con procedimientos contenciosos o incidentales posteriores.' },
+        ...excludedCosts(),
         { type: 'empty', text: '' },
         { type: 'heading', text: '2. Retraso en el pago de los honorarios' },
         { type: 'paragraph', text: 'En caso de retraso en el pago de los honorarios, el CLIENTE incurrirá en las siguientes consecuencias:' },

@@ -50,7 +50,8 @@ async function requireAdmin(req: Request) {
 
   const service = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   const { data: roles } = await service.from('user_roles').select('role').eq('user_id', userId)
-  if (!(roles || []).some((r: any) => r.role === 'ADMIN')) return { error: 'forbidden', status: 403 }
+  const allowedRoles = new Set(['ADMIN', 'MANAGER', 'SUPERVISOR', 'DIRETORIA', 'FINANCEIRO', 'JURIDICO', 'ATENCAO_CLIENTE'])
+  if (!(roles || []).some((r: any) => allowedRoles.has(r.role))) return { error: 'forbidden', status: 403 }
   return { service }
 }
 
@@ -128,6 +129,7 @@ Deno.serve(async (req) => {
 REGRAS:
 - Mantenha exatamente o mesmo tom, formatação, quebras de linha e emojis.
 - NÃO traduza nem altere marcadores entre chaves duplas (ex.: {{NOME}}) nem nomes próprios como "CB Asesoria".
+- Preserve exatamente números, datas, percentuais, valores monetários, documentos, nomes de bancos, IBANs, telefones e endereços.
 - Não adicione comentários nem explicações.
 - Responda SOMENTE com um JSON no formato {"codigo_do_idioma": "tradução"} contendo exatamente estas chaves: ${langs.map((l) => `"${l}"`).join(', ')}.
 

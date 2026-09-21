@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Download, Edit, X, FileText, ChevronDown, Save } from 'lucide-react';
 import { getContractSections, generateContractDocument, generateContractWord, type ContractData, type ContractSection, type BeneficiaryData, type BankAccountData, type PaymentData } from '@/lib/generate-contract';
+import { useAgentTranslate } from '@/hooks/useAgentTranslate';
 
 export interface ContractPreviewEditData {
   contractNumber: string;
@@ -57,6 +58,49 @@ export function ContractPreview({
   const [editedPaymentConditions, setEditedPaymentConditions] = useState(paymentConditions || '');
   const [editedPayments, setEditedPayments] = useState<PaymentData[]>(payments || []);
   const [editedDate, setEditedDate] = useState(date ? date.toISOString().split('T')[0] : '');
+  const [spanishDynamicText, setSpanishDynamicText] = useState<Record<string, string>>({});
+  const [translatedKeys, setTranslatedKeys] = useState<string[]>([]);
+  const translate = useAgentTranslate();
+
+  const translationSource = useMemo(() => {
+    const entries: Array<[string, string | undefined]> = [
+      ['serviceDescription', serviceDescription],
+      ['paymentConditions', isEditing ? editedPaymentConditions : paymentConditions],
+      ...(beneficiaries || []).map((beneficiary, index) => [`beneficiary_${index}`, beneficiary.serviceName] as [string, string | undefined]),
+    ];
+    return entries.filter((entry): entry is [string, string] => Boolean(entry[1]?.trim()));
+  }, [serviceDescription, paymentConditions, isEditing, editedPaymentConditions, beneficiaries]);
+
+  useEffect(() => {
+    let active = true;
+    if (translationSource.length === 0) {
+      setSpanishDynamicText({});
+      setTranslatedKeys([]);
+      return () => { active = false; };
+    }
+
+    const translateDynamicText = async () => {
+      setSpanishDynamicText({});
+      setTranslatedKeys([]);
+      const translated = await Promise.all(translationSource.map(async ([key, text]) => {
+        try {
+          const result = await translate.mutateAsync({ text, source: 'pt-BR', targets: ['es'] });
+          return [key, result.es || ''] as const;
+        } catch {
+          return [key, ''] as const;
+        }
+      }));
+      if (active) {
+        setSpanishDynamicText(Object.fromEntries(translated));
+        setTranslatedKeys(translated.filter(([, text]) => Boolean(text)).map(([key]) => key));
+      }
+    };
+
+    void translateDynamicText();
+    return () => { active = false; };
+  }, [translationSource]);
+
+  const translationReady = translationSource.every(([key]) => translatedKeys.includes(key));
 
   const currentData: ContractData = {
     template,
@@ -65,14 +109,17 @@ export function ContractPreview({
     documentNumber: isEditing ? editedDocument : documentNumber,
     contractNumber: isEditing ? editedContractNumber : contractNumber,
     date,
-    serviceDescription,
+    serviceDescription: spanishDynamicText.serviceDescription,
     feeAmount: isEditing && editedFeeAmount ? parseFloat(editedFeeAmount) : feeAmount,
     vatRate,
     totalAmount: isEditing && editedFeeAmount ? parseFloat(editedFeeAmount) * (1 + (vatRate || 0)) : totalAmount,
-    paymentConditions: isEditing ? editedPaymentConditions : paymentConditions,
+    paymentConditions: spanishDynamicText.paymentConditions,
     paymentMethod,
     bankAccount,
-    beneficiaries,
+    beneficiaries: beneficiaries?.map((beneficiary, index) => ({
+      ...beneficiary,
+      serviceName: spanishDynamicText[`beneficiary_${index}`],
+    })),
     phone,
     email,
     address,
@@ -83,10 +130,12 @@ export function ContractPreview({
   const sections = getContractSections(currentData);
 
   const handleDownloadPDF = async () => {
+    if (!translationReady) return;
     await generateContractDocument(currentData);
   };
 
   const handleDownloadWord = async () => {
+    if (!translationReady) return;
     await generateContractWord(currentData);
   };
 
@@ -207,18 +256,18 @@ export function ContractPreview({
           {contractStatus !== 'ASSINADO' && contractStatus !== 'CANCELADO' && contractStatus !== 'REPROVADO' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline">
-                  <Download className="h-4 w-4 mr-1" />
-                  Baixar
+                <Button size="sm" variant="outline" disabled={!translationReady}>
+                  {!translationReady ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
+                  {!translationReady ? 'Traduzindo' : 'Baixar'}
                   <ChevronDown className="h-3 w-3 ml-1" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
-                <DropdownMenuItem onClick={handleDownloadPDF}>
+                <DropdownMenuItem onClick={handleDownloadPDF} disabled={!translationReady}>
                   <FileText className="h-4 w-4 mr-2" />
                   PDF
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleDownloadWord}>
+                <DropdownMenuItem onClick={handleDownloadWord} disabled={!translationReady}>
                   <FileText className="h-4 w-4 mr-2" />
                   Word (.docx)
                 </DropdownMenuItem>
@@ -226,7 +275,7 @@ export function ContractPreview({
             </DropdownMenu>
           )}
           {canDownload && (contractStatus === 'ASSINADO') && (
-            <Button size="sm" onClick={handleDownloadPDF}>
+            <Button size="sm" onClick={handleDownloadPDF} disabled={!translationReady}>
               <Download className="h-4 w-4 mr-1" />
               Baixar PDF
             </Button>
