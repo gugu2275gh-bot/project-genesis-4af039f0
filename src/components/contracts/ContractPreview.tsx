@@ -80,6 +80,8 @@ export function ContractPreview({
     }
 
     const translateDynamicText = async () => {
+      setSpanishDynamicText({});
+      setTranslatedKeys([]);
       const translated = await Promise.all(translationSource.map(async ([key, text]) => {
         try {
           const result = await translate.mutateAsync({ text, source: 'pt-BR', targets: ['es'] });
@@ -90,7 +92,7 @@ export function ContractPreview({
       }));
       if (active) {
         setSpanishDynamicText(Object.fromEntries(translated));
-        setTranslatedKeys(translated.map(([key]) => key));
+        setTranslatedKeys(translated.filter(([, text]) => Boolean(text)).map(([key]) => key));
       }
     };
 

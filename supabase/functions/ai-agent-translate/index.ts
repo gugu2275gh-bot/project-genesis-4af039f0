@@ -129,6 +129,7 @@ Deno.serve(async (req) => {
 REGRAS:
 - Mantenha exatamente o mesmo tom, formatação, quebras de linha e emojis.
 - NÃO traduza nem altere marcadores entre chaves duplas (ex.: {{NOME}}) nem nomes próprios como "CB Asesoria".
+- Preserve exatamente números, datas, percentuais, valores monetários, documentos, nomes de bancos, IBANs, telefones e endereços.
 - Não adicione comentários nem explicações.
 - Responda SOMENTE com um JSON no formato {"codigo_do_idioma": "tradução"} contendo exatamente estas chaves: ${langs.map((l) => `"${l}"`).join(', ')}.
 
