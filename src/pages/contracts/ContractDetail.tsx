@@ -272,7 +272,8 @@ export default function ContractDetail() {
         groupsMap.set(k, []);
         groupOrder.push(k);
       }
-      groupsMap.get(k)!.push(p);
+      const currentGroup = groupsMap.get(k);
+      if (currentGroup) currentGroup.push(p);
     }
 
     // Pre-sort each group's installments
