@@ -6,6 +6,8 @@ export interface InvoiceLineItem {
   quantity: number;
   amount: number;
   discountPct?: number;
+  /** Serviços relativos a este item — uma linha descritiva por serviço */
+  services?: string[];
 }
 
 export interface InvoiceData {
