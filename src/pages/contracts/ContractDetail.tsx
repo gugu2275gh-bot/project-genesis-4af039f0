@@ -570,7 +570,11 @@ export default function ContractDetail() {
   useEffect(() => {
     if (contract) {
       const c = contract as any;
-      const installmentConditions = contract.installment_conditions || generatedPaymentDetails || filteredPaymentNotes || '';
+      const storedInstallmentConditions = contract.installment_conditions || '';
+      const hasGeneratedSummary = storedInstallmentConditions.includes('Resumo de Vencimentos:');
+      const installmentConditions = generatedPaymentDetails && hasGeneratedSummary
+        ? generatedPaymentDetails
+        : storedInstallmentConditions || generatedPaymentDetails || filteredPaymentNotes || '';
       
       setFormData({
         scope_summary: contract.scope_summary || '',
