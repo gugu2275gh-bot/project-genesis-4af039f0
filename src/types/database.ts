@@ -73,7 +73,7 @@ export type ContractStatus =
   | 'ASSINADO'
   | 'CANCELADO';
 
-export type ContractTemplate = 'NACIONALIDADE' | 'GENERICO' | 'REGULARIZACION_EXTRAORDINARIA' | 'DOCUMENTOS';
+export type ContractTemplate = 'NACIONALIDADE' | 'NACIONALIDAD_RESIDENCIA' | 'GENERICO' | 'REGULARIZACION_EXTRAORDINARIA' | 'DOCUMENTOS';
 
 export type PaymentMethod = 
   | 'CARTAO'
@@ -501,6 +501,7 @@ export const CONTRACT_PAYMENT_STATUS_LABELS: Record<ContractPaymentStatus, strin
 
 export const CONTRACT_TEMPLATE_LABELS: Record<ContractTemplate, string> = {
   NACIONALIDADE: 'Nacionalidad',
+  NACIONALIDAD_RESIDENCIA: 'Nacionalidade Espanhola por residência',
   REGULARIZACION_EXTRAORDINARIA: 'Regularización Extraordinaria',
   DOCUMENTOS: 'Documentos / Certificados',
   GENERICO: 'Contrato Genérico',

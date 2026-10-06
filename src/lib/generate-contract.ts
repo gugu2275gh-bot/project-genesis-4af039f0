@@ -1034,6 +1034,33 @@ export function getContractSections(data: ContractData): ContractSection[] {
         ...sectionsSignature(data.clientName),
       ];
 
+    case 'NACIONALIDAD_RESIDENCIA':
+      return [
+        ...header, ...parties,
+        { type: 'heading', text: 'PRIMERA. Objeto del Contrato' },
+        { type: 'paragraph', text: 'El presente contrato tiene por objeto la prestación de servicios jurídicos de extranjería por parte de CB ASESORÍA,' },
+        { type: 'paragraph', text: 'TRAMITACION TELEMÁTICA DE LA SOLICITUD DE LA NACIONALIDAD ESPAÑOLA POR RESIDENCIA', bold: true },
+        { type: 'paragraph', text: 'Los servicios serán ejecutados por el equipo profesional de CB ASESORÍA, bajo la dirección técnica correspondiente, sin que estén vinculados a una persona concreta salvo acuerdo expreso por escrito.' },
+        ...honorarios,
+        ...sectionsBankAccount(data),
+        { type: 'paragraph', text: '2.1. Los honorarios no incluyen:', bold: true },
+        ...excludedCosts(true),
+        { type: 'empty', text: '' },
+        { type: 'paragraph', text: '2.2. Retraso en el pago de los honorarios:', bold: true },
+        { type: 'paragraph', text: 'En caso de retraso en el pago de los honorarios, el CLIENTE incurrirá en las siguientes consecuencias:' },
+        { type: 'paragraph', text: 'a) Se aplicará un interés moratorio equivalente al 1,5% mensual sobre el importe adeudado, acumulable por cada mes natural completo de retraso, sin perjuicio de los intereses legales que puedan corresponder conforme a la normativa vigente.' },
+        { type: 'paragraph', text: 'b) Además, el CLIENTE deberá abonar una multa contractual equivalente al 5% del importe total adeudado en concepto de penalización por mora, sin necesidad de requerimiento previo.' },
+        { type: 'paragraph', text: 'c) CB ASESORÍA podrá suspender temporalmente la prestación de los servicios contratados hasta que se regularice el pago, sin que ello genere derecho a indemnización o reclamación alguna por parte del CLIENTE.' },
+        ...common,
+        { type: 'heading', text: 'DÉCIMA. Política de Devolución de Honorarios' },
+        ...sectionsDevolucion(),
+        { type: 'heading', text: 'UNDÉCIMA. Legislación Aplicable y Jurisdicción' },
+        ...sectionsLegislacion(),
+        { type: 'heading', text: 'DUODÉCIMA. Información de Contacto y Notificaciones' },
+        ...sectionsContacto(data),
+        ...sectionsSignature(data.clientName),
+      ];
+
     case 'NACIONALIDADE':
       return [
         ...header, ...parties,
@@ -1228,6 +1255,8 @@ export async function generateContractDocument(data: ContractData): Promise<void
     ? 'Regularizacion_Extraordinaria'
     : data.template === 'NACIONALIDADE'
     ? 'Nacionalidad'
+    : data.template === 'NACIONALIDAD_RESIDENCIA'
+    ? 'Nacionalidad_Espanola_Residencia'
     : 'Geral_Tramites';
 
   const fileName = `Contrato_${templateName}_${data.clientName.replace(/\s+/g, '_')}_${data.contractNumber || 'SN'}.pdf`;
@@ -1317,6 +1346,8 @@ export async function generateContractWord(data: ContractData): Promise<void> {
     ? 'Regularizacion_Extraordinaria'
     : data.template === 'NACIONALIDADE'
     ? 'Nacionalidad'
+    : data.template === 'NACIONALIDAD_RESIDENCIA'
+    ? 'Nacionalidad_Espanola_Residencia'
     : 'Geral_Tramites';
 
   const fileName = `Contrato_${templateName}_${data.clientName.replace(/\s+/g, '_')}_${data.contractNumber || 'SN'}.docx`;
