@@ -1102,14 +1102,30 @@ export default function ContractDetail() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Modelo do Contrato</p>
+                {isEditing ? (
+                  <Select
+                    value={formData.contract_template || 'DOCUMENTOS'}
+                    onValueChange={(v) => setFormData((prev: any) => ({ ...prev, contract_template: v }))}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NACIONALIDADE">Nacionalidad Española por Residencia</SelectItem>
+                      <SelectItem value="NACIONALIDAD_RESIDENCIA">Nacionalidade Espanhola por residência</SelectItem>
+                      <SelectItem value="REGULARIZACION_EXTRAORDINARIA">Regularización Extraordinaria</SelectItem>
+                      <SelectItem value="DOCUMENTOS">Geral Trámites</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
                 <p className="font-medium">{
                   {
                     NACIONALIDADE: 'Nacionalidad Española por Residencia',
+                    NACIONALIDAD_RESIDENCIA: 'Nacionalidade Espanhola por residência',
                     REGULARIZACION_EXTRAORDINARIA: 'Regularización Extraordinaria',
                     DOCUMENTOS: 'Geral Trámites',
                     GENERICO: 'Geral Trámites',
                   }[((contract as any).contract_template || 'DOCUMENTOS') as string] || 'Geral Trámites'
                 }</p>
+                )}
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Status</p>
